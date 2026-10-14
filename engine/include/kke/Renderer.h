@@ -15,6 +15,22 @@ namespace kke {
 
 class Window;
 
+// The image the overlay (UI) draws into this frame, and how to draw into it
+// again after leaving its pass: kke::RmlVulkanRenderInterface's UI layers
+// switch to their own images and back (ENG-G09).
+struct OverlayTarget {
+    VkImage image = VK_NULL_HANDLE;
+    VkFramebuffer framebuffer = VK_NULL_HANDLE;
+    // Keeps the colour, clears depth and stencil; the image must be in
+    // COLOR_ATTACHMENT_OPTIMAL when it begins, and ends in PRESENT_SRC.
+    VkRenderPass resumePass = VK_NULL_HANDLE;
+    VkFormat colorFormat = VK_FORMAT_UNDEFINED;
+    VkFormat depthFormat = VK_FORMAT_UNDEFINED;
+    VkExtent2D extent{};
+    // Usable as a copy source (after enableCapture()).
+    bool readable = false;
+};
+
 // Owns the frame lifecycle only — acquire, record, submit, present, plus
 // GPU timing. It does NOT own any Pipeline or Mesh: those are "modules'"
 // business (see Module.h / Application.h). This is deliberate — a renderer
@@ -69,6 +85,9 @@ public:
     // The pass renderOverlay() draws in (always single-sampled, full
     // resolution): UI pipelines (RmlUi, ImGui) are created against this.
     VkRenderPass overlayRenderPass() const { return m_swapChain->renderPass(); }
+    // The image the overlay draws into this frame (call between beginFrame
+    // and endFrame).
+    OverlayTarget overlayTarget() const;
 
     // Multisample anti-aliasing for the 3D pass: 1 (off), 2, 4 or 8,
     // clamped to what the device supports. Must be set before any scene

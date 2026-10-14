@@ -38,8 +38,13 @@ small { font-size: 12dp; }
     border-radius: 10dp;
     padding: 18dp;
 }
+/* Frosted glass: the 3D scene behind shows through, blurred, and the
+   panel floats on a soft shadow (RmlUi layers, ENG-G09). */
 .glass {
-    decorator: linear-gradient(170deg, #1d2542f0, #0f1322f0);
+    background-color: transparent;
+    decorator: linear-gradient(170deg, #1d2542b8, #0f1322cc);
+    backdrop-filter: blur(10dp);
+    box-shadow: #00000099 0 8dp 24dp;
     border: 1dp #3a4a7a;
     border-radius: 12dp;
 }
@@ -149,7 +154,8 @@ scrollbarvertical sliderarrowdec, scrollbarvertical sliderarrowinc { height: 0; 
 .anim-pulse { animation: 1.6s sine-in-out infinite pulse; }
 
 /* ---------- modal ---------- */
-.modal-backdrop { position: absolute; left: 0; top: 0; width: 100%; height: 100%; background-color: #05070ecc; z-index: 50; }
+.modal-backdrop { position: absolute; left: 0; top: 0; width: 100%; height: 100%; background-color: #05070e99; z-index: 50;
+                  backdrop-filter: blur(4dp) grayscale(0.7); }
 .modal {
     position: absolute; left: 50%; top: 42%; width: 420dp; max-width: 90%;
     margin-left: -210dp; z-index: 51;
@@ -161,9 +167,7 @@ scrollbarvertical sliderarrowdec, scrollbarvertical sliderarrowinc { height: 0; 
    controls spatially (RmlUi's nav). The focus ring shows where you are. */
 button, .button, .tab, .menu-item, .slot, .binding, .chip, .device, [data-event-click],
 input.checkbox, input.radio, input.range, input.text, select { tab-index: auto; nav: auto; }
-/* Focus ring. Not box-shadow: our Vulkan RmlUi renderer doesn't
-   implement RmlUi's layer/filter path (BUGS.md BUG-052), so a box-shadow
-   paints the element white and a copy at the screen origin. */
+/* Focus ring: the border colour plus a soft glow (box-shadow). */
 button:focus, .button:focus, .slot:focus, .binding:focus, .chip:focus, .device:focus,
-input.checkbox:focus, input.range:focus, select:focus selectvalue { border-color: #ffcf5c; }
+input.checkbox:focus, input.range:focus, select:focus selectvalue { border-color: #ffcf5c; box-shadow: #ffcf5c66 0 0 10dp 1dp; }
 .tab:focus, .menu-item:focus, .add:focus, [data-event-click]:focus { background-color: #34427a; color: #ffffff; }

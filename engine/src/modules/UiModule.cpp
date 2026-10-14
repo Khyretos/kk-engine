@@ -490,8 +490,13 @@ void UiModule::renderOverlay(const RenderContext& ctx) {
 
     // RenderContext only carries what 3D drawing needs, so the frame's size
     // and the safe area's corner come from renderUi(), which ran this frame.
-    m_renderInterface->beginFrame(ctx.cmd, glm::vec2(m_frameSize.x, m_frameSize.y), glm::vec2(m_origin.x, m_origin.y));
+    m_renderInterface->beginFrame(ctx.cmd, glm::vec2(m_frameSize.x, m_frameSize.y), glm::vec2(m_origin.x, m_origin.y),
+                                  m_app->renderer().overlayTarget());
     m_context->Render();
+    m_renderInterface->endFrame();
+    // A backdrop-filter over the 3D scene reads the frame's own image, which
+    // needs a swapchain that can be copied from (recreated next frame).
+    if (m_renderInterface->takeReadableRequest()) m_app->renderer().enableCapture();
 }
 
 void UiModule::onEvent(const SDL_Event& event) {

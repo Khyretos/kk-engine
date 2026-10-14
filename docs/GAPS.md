@@ -53,7 +53,7 @@ Status: ⬜ not started, 🔨 in progress, ✅ done.
 | ENG-G07 | Lighting | 16 lights (`Lighting::kMaxLights`); point lights can have a range (`Light::range`, smooth falloff, 0 = everywhere); the first 4 that cast shadows get a point-shadow slot; a Lua `light.*` API (`point`, `move`, `set`, `remove`, `count`). | ✅ |
 | ENG-G06 | Lighting | Sky reflections: the fill light prefiltered once per sky into a 128 x 64 equirect map with 6 roughness levels (`kke::EnvMap`, GGX importance sampling), sampled per pixel along the reflection and weighted by Karis's analytic environment BRDF; flat ambient when there is no sky. | ✅ |
 | ENG-G08 | Models | GPU skinning in `ModelModule`: `shaders/skin.comp` writes each visible skinned part's vertex buffer every drawn frame (paused too), jiggle zones included; the CPU builds only the bone matrices (`kke/GpuSkin.h`). `KKE_CPU_SKINNING=1` keeps the CPU path. | ✅ |
-| ENG-G09 | UI | RmlUi Vulkan `filter`, `box-shadow`, `backdrop-filter` (silently ignored today). | ⬜ |
+| ENG-G09 | UI | RmlUi Vulkan `filter`, `box-shadow`, `backdrop-filter` and `mask-image`: RmlUi's layer API in `RmlVulkanRenderInterface` (full-frame layer images, filters as full-screen passes in `shaders/rml_filter.frag`, `kke/RmlFilters.h`); rmlui_demo's glass panels use them. | ✅ |
 | ENG-G17 | Rendering | Tone mapping as one post pass on an HDR scene target, 10-bit output (#35). | ⬜ |
 | ENG-G18 | Rendering | Particle system v2: emitters and a Lua API (#22). | ⬜ |
 | ENG-G12 | Physics | Liquids: transparency, refraction and thickness; meltable solids from meshes and refreezing. | ⬜ |

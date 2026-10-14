@@ -132,6 +132,38 @@ RmlVulkanRenderInterface::RmlVulkanRenderInterface(VulkanDevice& device, VkRende
     m_gradientPipeline = std::make_unique<Pipeline>(
         device, renderPass, "shaders/rml_ui.vert.spv", "shaders/rml_gradient.frag.spv", config);
 
+    // Textures saved from a layer (box-shadows) hold linear colour already.
+    config.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(RmlPushConstants) };
+    m_layerTexturePipeline = std::make_unique<Pipeline>(
+        device, renderPass, "shaders/rml_ui.vert.spv", "shaders/rml_layer.frag.spv", config);
+
+    // Layer passes (ENG-G09): one full-screen triangle, the filter in
+    // fragment push constants, the source layer in set 0 and a mask in set 1.
+    PipelineConfig layer;
+    layer.useVertexInput = false;
+    layer.cullMode = VK_CULL_MODE_NONE;
+    layer.depthTestEnable = false;
+    layer.depthWriteEnable = false;
+    layer.pushConstantRange = { VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(RmlFilterPush) };
+    layer.descriptorSetLayouts = { m_textureSetLayout, m_textureSetLayout };
+    m_filterReplace = std::make_unique<Pipeline>(
+        device, renderPass, "shaders/rml_fullscreen.vert.spv", "shaders/rml_filter.frag.spv", layer);
+    layer.blendEnable = true;
+    layer.premultipliedAlpha = true;
+    m_filterBlend = std::make_unique<Pipeline>(
+        device, renderPass, "shaders/rml_fullscreen.vert.spv", "shaders/rml_filter.frag.spv", layer);
+    // Compositing onto a layer keeps to the clip mask, like every other draw.
+    if (m_stencilAvailable) {
+        layer.stencilTestEnable = true;
+        layer.stencilCompareOp = VK_COMPARE_OP_EQUAL;
+        layer.stencilPassOp = VK_STENCIL_OP_KEEP;
+    }
+    m_compositeBlend = std::make_unique<Pipeline>(
+        device, renderPass, "shaders/rml_fullscreen.vert.spv", "shaders/rml_filter.frag.spv", layer);
+    layer.blendEnable = false;
+    m_compositeReplace = std::make_unique<Pipeline>(
+        device, renderPass, "shaders/rml_fullscreen.vert.spv", "shaders/rml_filter.frag.spv", layer);
+
     if (m_stencilAvailable) {
         // Mask writers: same vertex stage, no color output, stencil only.
         config.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(RmlPushConstants) };
@@ -171,6 +203,7 @@ RmlVulkanRenderInterface::~RmlVulkanRenderInterface() {
     }
     m_gradients.clear();
     m_pendingDeletions.clear();
+    destroyLayerResources();
 
     for (auto& [handle, texture] : m_textures) {
         destroyTexture(texture);
@@ -319,7 +352,8 @@ void RmlVulkanRenderInterface::destroyTexture(CompiledTexture& texture) {
     texture = CompiledTexture{};
 }
 
-void RmlVulkanRenderInterface::beginFrame(VkCommandBuffer cmd, glm::vec2 screenSizePixels, glm::vec2 origin) {
+void RmlVulkanRenderInterface::beginFrame(VkCommandBuffer cmd, glm::vec2 screenSizePixels, glm::vec2 origin,
+                                          const OverlayTarget& target) {
     m_currentCmd = cmd;
     m_screenSize = screenSizePixels;
     m_origin = origin;
@@ -363,10 +397,26 @@ void RmlVulkanRenderInterface::beginFrame(VkCommandBuffer cmd, glm::vec2 screenS
     m_pipeline->bind(cmd);
     m_clipMaskEnabled = false;
     m_stencilRef = 0;
+    m_clipOps.clear();
     applyStencilState();
 
     VkRect2D fullScreen{ { 0, 0 }, { static_cast<uint32_t>(screenSizePixels.x), static_cast<uint32_t>(screenSizePixels.y) } };
     vkCmdSetScissor(cmd, 0, 1, &fullScreen);
+    m_scissor = fullScreen;
+
+    // Layer 0 is the frame's own image, whose pass is open. The layer
+    // images follow its size and formats (a resize, a readable swapchain).
+    m_base = target;
+    m_current = nullptr;
+    m_passOpen = true;
+    m_layerStack.clear();
+    if (target.image == VK_NULL_HANDLE) {
+        destroyLayerResources();
+    } else if (target.extent.width != m_layerExtent.width || target.extent.height != m_layerExtent.height ||
+               target.colorFormat != m_layerFormat || target.depthFormat != m_layerDepthFormat) {
+        destroyLayerResources();
+        createLayerResources();
+    }
 }
 
 Rml::CompiledGeometryHandle RmlVulkanRenderInterface::CompileGeometry(
@@ -397,24 +447,35 @@ void RmlVulkanRenderInterface::RenderGeometry(
 
     CompiledGeometry& geometry = *it->second;
 
+    const Pipeline* pipeline = m_pipeline.get();
     VkDescriptorSet descriptorSet = m_defaultTexture.descriptorSet;
     if (textureHandle != 0) {
         auto texIt = m_textures.find(textureHandle);
         if (texIt != m_textures.end()) {
             descriptorSet = texIt->second.descriptorSet;
+            if (texIt->second.linear) pipeline = m_layerTexturePipeline.get();
         }
     }
-    vkCmdBindDescriptorSets(m_currentCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->layout(),
+    if (pipeline != m_pipeline.get()) {
+        pipeline->bind(m_currentCmd);
+        applyStencilState();
+    }
+    vkCmdBindDescriptorSets(m_currentCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->layout(),
                              0, 1, &descriptorSet, 0, nullptr);
 
     RmlPushConstants pc{ m_projection * m_transform, glm::vec2(translation.x, translation.y), glm::vec2(0.0f) };
-    vkCmdPushConstants(m_currentCmd, m_pipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
+    vkCmdPushConstants(m_currentCmd, pipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
 
     VkBuffer vertexBuffers[] = { geometry.vertexBuffer->handle() };
     VkDeviceSize offsets[] = { 0 };
     vkCmdBindVertexBuffers(m_currentCmd, 0, 1, vertexBuffers, offsets);
     vkCmdBindIndexBuffer(m_currentCmd, geometry.indexBuffer->handle(), 0, VK_INDEX_TYPE_UINT32);
     vkCmdDrawIndexed(m_currentCmd, geometry.indexCount, 1, 0, 0, 0);
+    // The rest of the UI expects the regular pipeline.
+    if (pipeline != m_pipeline.get()) {
+        m_pipeline->bind(m_currentCmd);
+        applyStencilState();
+    }
 }
 
 void RmlVulkanRenderInterface::ReleaseGeometry(Rml::CompiledGeometryHandle geometryHandle) {
@@ -513,6 +574,7 @@ void RmlVulkanRenderInterface::EnableScissorRegion(bool enable) {
     if (!enable && m_currentCmd != VK_NULL_HANDLE) {
         VkRect2D fullScreen{ { 0, 0 }, { static_cast<uint32_t>(m_screenSize.x), static_cast<uint32_t>(m_screenSize.y) } };
         vkCmdSetScissor(m_currentCmd, 0, 1, &fullScreen);
+        m_scissor = fullScreen;
     }
 }
 
@@ -528,6 +590,7 @@ void RmlVulkanRenderInterface::SetScissorRegion(Rml::Rectanglei region) {
 
     VkRect2D rect{ { x, y }, { width, height } };
     vkCmdSetScissor(m_currentCmd, 0, 1, &rect);
+    m_scissor = rect;
 }
 
 void RmlVulkanRenderInterface::SetTransform(const Rml::Matrix4f* transform) {
@@ -651,7 +714,13 @@ void RmlVulkanRenderInterface::RenderToClipMask(Rml::ClipMaskOperation operation
                                                 Rml::Vector2f translation) {
     auto it = m_geometry.find(static_cast<uintptr_t>(geometryHandle));
     if (!m_stencilAvailable || it == m_geometry.end() || m_currentCmd == VK_NULL_HANDLE) return;
+    // A new mask starts the list again; an Intersect adds to it.
+    if (operation != Rml::ClipMaskOperation::Intersect) m_clipOps.clear();
+    m_clipOps.push_back({ operation, it->second.get(), glm::vec2(translation.x, translation.y), m_transform });
+    drawClipMask(m_clipOps.back());
+}
 
+void RmlVulkanRenderInterface::drawClipMask(const ClipMaskOp& op) {
     auto clearStencil = [this](uint32_t value) {
         VkClearAttachment clear{};
         clear.aspectMask = VK_IMAGE_ASPECT_STENCIL_BIT;
@@ -664,7 +733,7 @@ void RmlVulkanRenderInterface::RenderToClipMask(Rml::ClipMaskOperation operation
 
     Pipeline* writer = m_maskReplacePipeline.get();
     uint32_t writeRef = 1;
-    switch (operation) {
+    switch (op.operation) {
         case Rml::ClipMaskOperation::Set:
             clearStencil(0);
             writeRef = 1;
@@ -687,14 +756,13 @@ void RmlVulkanRenderInterface::RenderToClipMask(Rml::ClipMaskOperation operation
     vkCmdSetStencilReference(m_currentCmd, VK_STENCIL_FACE_FRONT_AND_BACK, writeRef);
     vkCmdBindDescriptorSets(m_currentCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, writer->layout(), 0, 1,
                              &m_defaultTexture.descriptorSet, 0, nullptr);
-    RmlPushConstants pc{ m_projection * m_transform, glm::vec2(translation.x, translation.y), glm::vec2(0.0f) };
+    RmlPushConstants pc{ m_projection * op.transform, op.translation, glm::vec2(0.0f) };
     vkCmdPushConstants(m_currentCmd, writer->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
-    CompiledGeometry& geometry = *it->second;
-    VkBuffer vertexBuffers[] = { geometry.vertexBuffer->handle() };
+    VkBuffer vertexBuffers[] = { op.geometry->vertexBuffer->handle() };
     VkDeviceSize offsets[] = { 0 };
     vkCmdBindVertexBuffers(m_currentCmd, 0, 1, vertexBuffers, offsets);
-    vkCmdBindIndexBuffer(m_currentCmd, geometry.indexBuffer->handle(), 0, VK_INDEX_TYPE_UINT32);
-    vkCmdDrawIndexed(m_currentCmd, geometry.indexCount, 1, 0, 0, 0);
+    vkCmdBindIndexBuffer(m_currentCmd, op.geometry->indexBuffer->handle(), 0, VK_INDEX_TYPE_UINT32);
+    vkCmdDrawIndexed(m_currentCmd, op.geometry->indexCount, 1, 0, 0, 0);
 
     m_pipeline->bind(m_currentCmd);
     applyStencilState();

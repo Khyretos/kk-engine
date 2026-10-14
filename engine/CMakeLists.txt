@@ -13,6 +13,8 @@ set(ENGINE_SOURCES
     src/LogoMesh.cpp
     src/LogoIntro.cpp
     src/RmlVulkanRenderInterface.cpp
+    src/RmlVulkanLayers.cpp
+    src/RmlFilters.cpp
     src/GameManifest.cpp
     src/EngineSettings.cpp
     src/ModelAsset.cpp
@@ -284,9 +286,11 @@ endif()
 
 # The startup intro (kke::LogoIntro) and the sky (kke::SkyRenderer) can run
 # in every game, so their shaders and the title font ship with the engine
-# rather than with each game. So do the cloth pair search (kke::ClothGpu)
-# and GPU skinning (kke::ModelModule).
-foreach(shader logo.vert logo.frag logo_backdrop.vert logo_backdrop.frag logo_text.vert logo_text.frag sky.vert sky.frag cloth_pairs.comp skin.comp)
+# rather than with each game. So do the cloth pair search (kke::ClothGpu),
+# GPU skinning (kke::ModelModule) and the UI layers' filters
+# (kke::RmlVulkanRenderInterface).
+foreach(shader logo.vert logo.frag logo_backdrop.vert logo_backdrop.frag logo_text.vert logo_text.frag sky.vert sky.frag cloth_pairs.comp skin.comp
+               rml_fullscreen.vert rml_filter.frag rml_layer.frag)
     engine_add_shader(kke_engine ${CMAKE_SOURCE_DIR}/shaders/${shader})
 endforeach()
 engine_copy_runtime_file(kke_engine ${CMAKE_SOURCE_DIR}/assets/fonts/NotoSans-Bold.ttf assets/fonts/NotoSans-Bold.ttf)

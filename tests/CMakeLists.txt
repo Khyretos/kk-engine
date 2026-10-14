@@ -103,6 +103,7 @@ add_executable(kke_tests
     test_jiggle.cpp
     test_auto_rig.cpp
     test_rml_data_binding.cpp
+    test_rml_filters.cpp
     test_frame_retire_queue.cpp
     test_anti_cheat.cpp
     test_fair_play.cpp
