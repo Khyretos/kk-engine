@@ -57,11 +57,16 @@ void main() {
         outColor = vec4(srgbToLinear(o) * c.a, c.a);
     } else if (pc.mode == 2) {
         // One direction of a separable Gaussian: offset is one texel along it.
+        // Taps i and i + 1 are one linear-filtered sample placed between them
+        // by their weights, so each side takes half the samples.
         vec4 sum = sampleRegion(inUv);
         float total = 1.0;
-        for (int i = 1; i <= pc.radius; ++i) {
-            float w = exp(-float(i * i) / (2.0 * pc.sigma * pc.sigma));
-            sum += (sampleRegion(inUv + pc.offset * float(i)) + sampleRegion(inUv - pc.offset * float(i))) * w;
+        for (int i = 1; i <= pc.radius; i += 2) {
+            float w1 = exp(-float(i * i) / (2.0 * pc.sigma * pc.sigma));
+            float w2 = i + 1 <= pc.radius ? exp(-float((i + 1) * (i + 1)) / (2.0 * pc.sigma * pc.sigma)) : 0.0;
+            float w = w1 + w2;
+            float at = (float(i) * w1 + float(i + 1) * w2) / w;
+            sum += (sampleRegion(inUv + pc.offset * at) + sampleRegion(inUv - pc.offset * at)) * w;
             total += 2.0 * w;
         }
         outColor = sum / total;

@@ -62,10 +62,21 @@ constexpr int kRmlFilterMask = 4;
 RmlFilter compileRmlFilter(const std::string& name, const Rml::Dictionary& parameters);
 // A colour as RmlUi gives it (straight alpha, sRGB) to linear, premultiplied.
 glm::vec4 rmlLinearPremultiplied(Rml::Colourb color);
+// One linear-filtered sample of rml_filter.frag's blur: taps i and i + 1
+// merged at the position their weights put between them.
+struct RmlBlurTap {
+    float offset = 0.0f;
+    float weight = 0.0f;
+};
+
 // The passes, per-pass sigma and radius for a Gaussian blur of this sigma (pixels).
 RmlBlurPlan rmlBlurPlan(float sigma);
+// Whether a blur of this sigma runs at half size (cheaper, and invisible at that width).
+bool rmlBlurAtHalfSize(float sigma);
 // The kernel weights for taps 0..radius, normalised over both arms, as rml_filter.frag computes them.
 std::vector<float> rmlBlurWeights(float sigma, int radius);
+// rml_filter.frag's blur samples on one side of the centre (whose weight is 1), not normalised.
+std::vector<RmlBlurTap> rmlBlurTaps(float sigma, int radius);
 // rml_filter.frag's colour-matrix mode on one linear, premultiplied colour.
 glm::vec4 rmlApplyColorMatrix(const glm::mat4& matrix, glm::vec4 color);
 

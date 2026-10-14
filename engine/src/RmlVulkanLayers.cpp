@@ -121,6 +121,11 @@ void RmlVulkanRenderInterface::createLayerResources() {
     passInfo.dependencyCount = 1;
     passInfo.pDependencies = &dependency;
     VK_CHECK(vkCreateRenderPass(dev, &passInfo, nullptr, &m_layerPass));
+    // Filter passes draw one triangle with no clip mask: depth and stencil
+    // are neither loaded nor cleared (same attachments, so still compatible).
+    a[1].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    a[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    VK_CHECK(vkCreateRenderPass(dev, &passInfo, nullptr, &m_postPass));
 
     VkImageCreateInfo depthInfo{};
     depthInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -147,8 +152,11 @@ void RmlVulkanRenderInterface::createLayerResources() {
                                   0, 1, 0, 1 };
     VK_CHECK(vkCreateImageView(dev, &viewInfo, nullptr, &m_layerDepthView));
 
-    for (auto& post : m_post) post = createLayerTarget();
-    m_mask = createLayerTarget();
+    for (auto& post : m_post) post = createLayerTarget(m_layerExtent);
+    m_mask = createLayerTarget(m_layerExtent);
+    // Wide blurs run at half size (blur()); these share the full-size depth image.
+    const VkExtent2D half{ std::max(1u, m_layerExtent.width / 2), std::max(1u, m_layerExtent.height / 2) };
+    for (auto& h : m_half) h = createLayerTarget(half);
 }
 
 // Waits for the GPU: only on a resize or a format change.
@@ -164,9 +172,15 @@ void RmlVulkanRenderInterface::destroyLayerResources() {
     }
     destroyLayerTarget(*m_mask);
     m_mask.reset();
+    for (auto& h : m_half) {
+        destroyLayerTarget(*h);
+        h.reset();
+    }
     vkDestroyImageView(dev, m_layerDepthView, nullptr);
     vmaDestroyImage(m_device.allocator(), m_layerDepth, m_layerDepthAllocation);
     vkDestroyRenderPass(dev, m_layerPass, nullptr);
+    vkDestroyRenderPass(dev, m_postPass, nullptr);
+    m_postPass = VK_NULL_HANDLE;
     m_layerDepthView = VK_NULL_HANDLE;
     m_layerDepth = VK_NULL_HANDLE;
     m_layerDepthAllocation = VK_NULL_HANDLE;
@@ -175,13 +189,15 @@ void RmlVulkanRenderInterface::destroyLayerResources() {
     m_layerFormat = m_layerDepthFormat = VK_FORMAT_UNDEFINED;
 }
 
-// A full-frame colour image: drawn into, sampled, copied from and to.
-std::unique_ptr<RmlVulkanRenderInterface::LayerTarget> RmlVulkanRenderInterface::createLayerTarget() {
+// A colour image (full-frame, or half size for wide blurs): drawn into,
+// sampled, copied from and to.
+std::unique_ptr<RmlVulkanRenderInterface::LayerTarget> RmlVulkanRenderInterface::createLayerTarget(VkExtent2D extent) {
     auto t = std::make_unique<LayerTarget>();
+    t->extent = extent;
     VkImageCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     info.imageType = VK_IMAGE_TYPE_2D;
-    info.extent = { m_layerExtent.width, m_layerExtent.height, 1 };
+    info.extent = { extent.width, extent.height, 1 };
     info.mipLevels = 1;
     info.arrayLayers = 1;
     info.format = m_layerFormat;
@@ -209,8 +225,8 @@ std::unique_ptr<RmlVulkanRenderInterface::LayerTarget> RmlVulkanRenderInterface:
     fb.renderPass = m_layerPass;
     fb.attachmentCount = static_cast<uint32_t>(attachments.size());
     fb.pAttachments = attachments.data();
-    fb.width = m_layerExtent.width;
-    fb.height = m_layerExtent.height;
+    fb.width = extent.width;
+    fb.height = extent.height;
     fb.layers = 1;
     VK_CHECK(vkCreateFramebuffer(m_device.device(), &fb, nullptr, &t->framebuffer));
 
@@ -243,14 +259,14 @@ void RmlVulkanRenderInterface::endPass() {
 // Begins drawing into a layer, or into the frame's own image again, and
 // restores what the pass switch reset: viewport, scissor, the regular
 // pipeline and the clip mask (the stencil is cleared by every begin).
-void RmlVulkanRenderInterface::beginPass(LayerTarget* target) {
+void RmlVulkanRenderInterface::beginPass(LayerTarget* target, bool filterPass) {
     std::array<VkClearValue, 2> clear{};
     clear[1].depthStencil = { 1.0f, 0 };
     VkRenderPassBeginInfo info{};
     info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     if (target) {
         transition(*target, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-        info.renderPass = m_layerPass;
+        info.renderPass = filterPass ? m_postPass : m_layerPass;
         info.framebuffer = target->framebuffer;
     } else {
         imageBarrier(m_currentCmd, m_base.image, m_baseLayout, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
@@ -258,17 +274,22 @@ void RmlVulkanRenderInterface::beginPass(LayerTarget* target) {
         info.renderPass = m_base.resumePass;
         info.framebuffer = m_base.framebuffer;
     }
-    info.renderArea = { { 0, 0 }, m_layerExtent };
+    // A filter pass only touches the scissor rectangle (scaled to a half-size target).
+    const VkRect2D area = filterPass ? filterArea(*target) : VkRect2D{ { 0, 0 }, m_layerExtent };
+    info.renderArea = area;
     info.clearValueCount = static_cast<uint32_t>(clear.size());
     info.pClearValues = clear.data();
     vkCmdBeginRenderPass(m_currentCmd, &info, VK_SUBPASS_CONTENTS_INLINE);
     m_passOpen = true;
     m_current = target;
 
-    VkViewport viewport{ 0.0f, 0.0f, static_cast<float>(m_layerExtent.width), static_cast<float>(m_layerExtent.height), 0.0f, 1.0f };
+    const VkExtent2D size = target ? target->extent : m_layerExtent;
+    VkViewport viewport{ 0.0f, 0.0f, static_cast<float>(size.width), static_cast<float>(size.height), 0.0f, 1.0f };
     vkCmdSetViewport(m_currentCmd, 0, 1, &viewport);
-    vkCmdSetScissor(m_currentCmd, 0, 1, &m_scissor);
-    for (const ClipMaskOp& op : m_clipOps) drawClipMask(op);
+    vkCmdSetScissor(m_currentCmd, 0, 1, filterPass ? &area : &m_scissor);
+    if (!filterPass) {
+        for (const ClipMaskOp& op : m_clipOps) drawClipMask(op);
+    }
     m_pipeline->bind(m_currentCmd);
     applyStencilState();
 }
@@ -281,6 +302,19 @@ VkRect2D RmlVulkanRenderInterface::clampedScissor() const {
                                   static_cast<int32_t>(m_layerExtent.width));
     const int32_t y1 = std::clamp(m_scissor.offset.y + static_cast<int32_t>(m_scissor.extent.height), y0,
                                   static_cast<int32_t>(m_layerExtent.height));
+    return { { x0, y0 }, { static_cast<uint32_t>(x1 - x0), static_cast<uint32_t>(y1 - y0) } };
+}
+
+// The scissor rectangle in a filter target's pixels: the same at full size,
+// halved and rounded outwards (one more pixel each side, for the bilinear
+// upsample) at half size.
+VkRect2D RmlVulkanRenderInterface::filterArea(const LayerTarget& target) const {
+    const VkRect2D r = clampedScissor();
+    if (target.extent.width == m_layerExtent.width) return r;
+    const int32_t w = static_cast<int32_t>(target.extent.width), h = static_cast<int32_t>(target.extent.height);
+    const int32_t x0 = std::clamp(r.offset.x / 2 - 1, 0, w), y0 = std::clamp(r.offset.y / 2 - 1, 0, h);
+    const int32_t x1 = std::clamp((r.offset.x + static_cast<int32_t>(r.extent.width) + 1) / 2 + 1, x0, w);
+    const int32_t y1 = std::clamp((r.offset.y + static_cast<int32_t>(r.extent.height) + 1) / 2 + 1, y0, h);
     return { { x0, y0 }, { static_cast<uint32_t>(x1 - x0), static_cast<uint32_t>(y1 - y0) } };
 }
 
@@ -333,7 +367,9 @@ void RmlVulkanRenderInterface::drawFullscreen(LayerTarget* destination, LayerTar
     endPass();
     transition(source, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     if (mask == m_mask->descriptorSet) transition(*m_mask, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-    beginPass(destination);
+    // A filter image (not a layer, not the frame's own image) gets a filter pass.
+    const auto isFilter = [&](const std::unique_ptr<LayerTarget>& t) { return t.get() == destination; };
+    beginPass(destination, destination && (std::any_of(m_post.begin(), m_post.end(), isFilter) || std::any_of(m_half.begin(), m_half.end(), isFilter)));
     pipeline.bind(m_currentCmd);
     // Only the composite pipelines test the clip mask (dynamic stencil state).
     if (&pipeline == m_compositeBlend.get() || &pipeline == m_compositeReplace.get()) applyStencilState();
@@ -347,19 +383,34 @@ void RmlVulkanRenderInterface::drawFullscreen(LayerTarget* destination, LayerTar
 }
 
 // A Gaussian blur of image, in place: per pass of rmlBlurPlan, vertically
-// into temp, then horizontally back.
+// into temp, then horizontally back. A wide blur (rmlBlurAtHalfSize) runs on
+// the half-size images instead: image is copied down (zero outside the
+// scissor rectangle), blurred at half the sigma, and scaled back up.
 void RmlVulkanRenderInterface::blur(float sigma, std::unique_ptr<LayerTarget>& image, std::unique_ptr<LayerTarget>& temp,
                                     const RmlFilterPush& region) {
-    const RmlBlurPlan plan = rmlBlurPlan(sigma);
+    const bool half = rmlBlurAtHalfSize(sigma);
+    LayerTarget& a = half ? *m_half[0] : *image;
+    LayerTarget& b = half ? *m_half[1] : *temp;
     RmlFilterPush push = region;
+    if (half) {
+        push.mode = kRmlFilterBlur; // radius 0: a copy that keeps to the region
+        push.radius = 0;
+        drawFullscreen(&a, *image, *m_filterReplace, push, VK_NULL_HANDLE);
+    }
+    const RmlBlurPlan plan = rmlBlurPlan(half ? sigma * 0.5f : sigma);
     push.mode = kRmlFilterBlur;
     push.sigma = plan.sigma;
     push.radius = plan.radius;
     for (int i = 0; i < plan.passes; ++i) {
-        push.offset = glm::vec2(0.0f, 1.0f / static_cast<float>(m_layerExtent.height));
-        drawFullscreen(temp.get(), *image, *m_filterReplace, push, VK_NULL_HANDLE);
-        push.offset = glm::vec2(1.0f / static_cast<float>(m_layerExtent.width), 0.0f);
-        drawFullscreen(image.get(), *temp, *m_filterReplace, push, VK_NULL_HANDLE);
+        push.offset = glm::vec2(0.0f, 1.0f / static_cast<float>(a.extent.height));
+        drawFullscreen(&b, a, *m_filterReplace, push, VK_NULL_HANDLE);
+        push.offset = glm::vec2(1.0f / static_cast<float>(a.extent.width), 0.0f);
+        drawFullscreen(&a, b, *m_filterReplace, push, VK_NULL_HANDLE);
+    }
+    if (half) {
+        push = region;
+        push.mode = kRmlFilterOpacity;
+        drawFullscreen(image.get(), a, *m_filterReplace, push, VK_NULL_HANDLE);
     }
 }
 
@@ -419,7 +470,7 @@ void RmlVulkanRenderInterface::applyFilters(Rml::Span<const Rml::CompiledFilterH
 Rml::LayerHandle RmlVulkanRenderInterface::PushLayer() {
     if (m_layerPass == VK_NULL_HANDLE || m_currentCmd == VK_NULL_HANDLE) return 0;
     const Rml::LayerHandle handle = m_layerStack.size() + 1;
-    while (m_layers.size() < handle) m_layers.push_back(createLayerTarget());
+    while (m_layers.size() < handle) m_layers.push_back(createLayerTarget(m_layerExtent));
     m_layerStack.push_back(handle);
     endPass();
     beginPass(m_layers[handle - 1].get());

@@ -101,6 +101,11 @@ RmlBlurPlan rmlBlurPlan(float sigma) {
     return plan;
 }
 
+// From sigma 3 on, halving the image loses no detail a blur would keep.
+bool rmlBlurAtHalfSize(float sigma) {
+    return sigma >= 3.0f;
+}
+
 // exp(-i^2 / (2 sigma^2)) for each tap, divided by the sum over both arms.
 std::vector<float> rmlBlurWeights(float sigma, int radius) {
     std::vector<float> w(static_cast<size_t>(std::max(0, radius)) + 1);
@@ -111,6 +116,19 @@ std::vector<float> rmlBlurWeights(float sigma, int radius) {
     }
     for (float& x : w) x /= total;
     return w;
+}
+
+// rml_filter.frag's loop: taps i and i + 1 as one sample at their weighted
+// position, so a linear-filtered fetch there returns both.
+std::vector<RmlBlurTap> rmlBlurTaps(float sigma, int radius) {
+    std::vector<RmlBlurTap> taps;
+    for (int i = 1; i <= radius; i += 2) {
+        const float w1 = std::exp(-static_cast<float>(i * i) / (2.0f * sigma * sigma));
+        const float w2 = i + 1 <= radius ? std::exp(-static_cast<float>((i + 1) * (i + 1)) / (2.0f * sigma * sigma)) : 0.0f;
+        const float w = w1 + w2;
+        taps.push_back({ (static_cast<float>(i) * w1 + static_cast<float>(i + 1) * w2) / w, w });
+    }
+    return taps;
 }
 
 // Un-premultiply, encode to sRGB, apply the matrix in premultiplied sRGB
