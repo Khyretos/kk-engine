@@ -49,11 +49,11 @@ explosion:
         radius: [0.5, 0.9], growth: 1.2, life: [0.35, 0.7], drag: 4, rise: 2 }
     - { kind: ring, count: 1, speed: [0, 0], flat: true, colors: [[6, 3.5, 1.5]], radius: [0.2, 0.2], growth: 14,
         life: [0.45, 0.45], thickness: 0.18 }
-    - { kind: spark, count: 50, speed: [6, 16], spread: 75, colors: [[9, 4.2, 1.2]], radius: [0.015, 0.025],
+    - { kind: spark, collide: true, count: 50, speed: [6, 16], spread: 75, colors: [[9, 4.2, 1.2]], radius: [0.015, 0.025],
         life: [0.5, 1.2], drag: 0.5, rise: -9.81, stretch: 0.04 }
     - { kind: smoke, count: 26, delay: 0.1, speed: [0.8, 3], spread: 90, jitter: 0.6, colors: [[0.12, 0.11, 0.1]],
         colorEnd: [0.4, 0.4, 0.4], brightness: 0.15, radius: [0.5, 0.9], growth: 1.4, opacity: 0.7, life: [3, 4.5], drag: 1.5, rise: 1 }
-    - { kind: flake, count: 18, speed: [4, 9], spread: 60, colors: [[0.2, 0.18, 0.16]], radius: [0.03, 0.07],
+    - { kind: flake, collide: true, count: 18, speed: [4, 9], spread: 60, colors: [[0.2, 0.18, 0.16]], radius: [0.03, 0.07],
         life: [2.5, 3.5], drag: 0.3, rise: -9.81, spin: [-8, 8], flip: [-12, 12], shape: shard }
 smoke_column:
   description: "Thick black smoke rising from something burning"
@@ -73,14 +73,14 @@ dust:
 impact_dirt:
   description: "Earth and stones kicked up by a hit"
   layers:
-    - { kind: flake, count: 22, speed: [2, 5], spread: 35, colors: [[0.36, 0.27, 0.18], [0.45, 0.38, 0.3]], radius: [0.02, 0.05],
+    - { kind: flake, collide: true, count: 22, speed: [2, 5], spread: 35, colors: [[0.36, 0.27, 0.18], [0.45, 0.38, 0.3]], radius: [0.02, 0.05],
         life: [1.5, 2.2], drag: 0.4, rise: -9.81, spin: [-6, 6], flip: [-10, 10], shape: shard }
     - { kind: smoke, count: 8, speed: [0.6, 1.6], spread: 40, colors: [[0.5, 0.42, 0.32]], radius: [0.12, 0.22],
         growth: 0.5, opacity: 0.45, life: [1, 1.6], drag: 2.5 }
 sparks:
   description: "A shower of sparks off metal"
   layers:
-    - { kind: spark, count: 36, speed: [3, 9], spread: 50, colors: [[9, 4.2, 1.2]], brightness: 0.4, radius: [0.012, 0.022],
+    - { kind: spark, collide: true, count: 36, speed: [3, 9], spread: 50, colors: [[9, 4.2, 1.2]], brightness: 0.4, radius: [0.012, 0.022],
         life: [0.25, 0.7], drag: 0.6, rise: -9.81, stretch: 0.035 }
 welding:
   description: "Steady sparks and a blue-white glow (move() it along the seam)"
@@ -98,21 +98,21 @@ muzzle_flash:
 wood_chips:
   description: "Splinters and dust from wood breaking"
   layers:
-    - { kind: flake, count: 26, speed: [2, 5], spread: 70, colors: [[0.62, 0.45, 0.26], [0.5, 0.34, 0.18], [0.78, 0.62, 0.42]],
+    - { kind: flake, collide: true, count: 26, speed: [2, 5], spread: 70, colors: [[0.62, 0.45, 0.26], [0.5, 0.34, 0.18], [0.78, 0.62, 0.42]],
         radius: [0.02, 0.05], life: [2.5, 3.5], drag: 0.6, rise: -9.81, spin: [-10, 10], flip: [-14, 14], shape: shard }
     - { kind: smoke, count: 6, speed: [0.5, 1.2], spread: 60, colors: [[0.7, 0.6, 0.48]], radius: [0.1, 0.18], growth: 0.4,
         opacity: 0.3, life: [1, 1.5], drag: 2.5 }
 stone_chips:
   description: "Grit and grey dust from stone breaking"
   layers:
-    - { kind: flake, count: 24, speed: [2, 6], spread: 70, colors: [[0.55, 0.55, 0.53], [0.42, 0.41, 0.4]], radius: [0.015, 0.04],
+    - { kind: flake, collide: true, count: 24, speed: [2, 6], spread: 70, colors: [[0.55, 0.55, 0.53], [0.42, 0.41, 0.4]], radius: [0.015, 0.04],
         life: [2, 3], drag: 0.3, rise: -9.81, spin: [-8, 8], flip: [-10, 10], shape: shard }
     - { kind: smoke, count: 10, speed: [0.6, 1.8], spread: 70, colors: [[0.68, 0.67, 0.65]], radius: [0.15, 0.28], growth: 0.6,
         opacity: 0.4, life: [1.5, 2.2], drag: 2.5 }
 glass_shatter:
   description: "Glinting slivers of glass"
   layers:
-    - { kind: flake, count: 40, speed: [2, 6], spread: 80, colors: [[0.85, 0.93, 0.95], [0.7, 0.85, 0.9]], radius: [0.01, 0.03],
+    - { kind: flake, collide: true, count: 40, speed: [2, 6], spread: 80, colors: [[0.85, 0.93, 0.95], [0.7, 0.85, 0.9]], radius: [0.01, 0.03],
         opacity: 0.8, life: [1.5, 2.5], drag: 0.3, rise: -9.81, spin: [-12, 12], flip: [-20, 20], shape: shard }
 splash:
   description: "A splash of water: droplets and a ring on the surface"
@@ -177,6 +177,21 @@ coins:
     - { kind: flake, count: 24, speed: [3, 6], spread: 30, up: true, colors: [[1, 0.78, 0.25]], radius: [0.035, 0.045],
         life: [3, 4], drag: 0.2, rise: -9.81, spin: [0, 0], flip: [-16, 16], shape: disc }
     - { kind: glow, count: 10, speed: [0.5, 1.5], spread: 180, colors: [[6, 4.5, 1.2]], radius: [0.03, 0.05], life: [0.3, 0.6], drag: 3 }
+firework_rocket:
+  description: "A rocket that climbs on a trail of sparks and bursts into fireworks where it runs out"
+  layers:
+    - { kind: spark, count: 1, up: true, spread: 6, speed: [15, 17], colors: [[10, 6, 2.5]], radius: [0.03, 0.03], life: [1.1, 1.3],
+        drag: 0.2, rise: -9.81, stretch: 0.06, onDeath: fireworks }
+    - { kind: glow, rate: 40, duration: 1.1, up: true, spread: 6, speed: [12, 14], colors: [[5, 3, 1]], colorEnd: [1, 0.3, 0.05],
+        radius: [0.04, 0.06], life: [0.3, 0.5], drag: 1.2, rise: -6 }
+dust_devil:
+  description: "A whirl of dust and leaves spinning up round its spot (start() it and let it wander)"
+  layers:
+    - { kind: smoke, rate: 18, up: true, spread: 20, speed: [0.6, 1.2], jitter: 0.8, colors: [[0.62, 0.55, 0.45]], brightness: 0.1,
+        radius: [0.2, 0.35], growth: 0.3, opacity: 0.35, life: [2, 3], drag: 0.8, rise: 0.9, vortex: 3, attract: 0.6,
+        sizeOverLife: [0.6, 1.4, 1.8], opacityOverLife: [0, 1, 1, 0] }
+    - { kind: flake, rate: 6, up: true, spread: 30, speed: [1, 2], jitter: 0.8, colors: [[0.55, 0.42, 0.2], [0.4, 0.35, 0.15]],
+        radius: [0.03, 0.05], life: [2.5, 3.5], drag: 0.8, rise: 1.2, flip: [-8, 8], flutter: 0.4, vortex: 4, attract: 0.8 }
 )YAML";
 
 ParticleEffects::Kind kindOf(const std::string& s, bool& ok) {
@@ -282,12 +297,54 @@ bool parseLayer(const nlohmann::json& j, ParticleLibrary::Layer& l, std::string&
         return false;
     }
     l.flat = j.value("flat", false);
+    // ENG-G18: curves, forces, collisions, sub-effects.
+    auto keys = [&](const char* key, std::vector<float>& out) {
+        if (!j.contains(key)) return true;
+        const nlohmann::json& a = j[key];
+        if (!a.is_array() || a.empty() || a.size() > 16) return false;
+        for (const nlohmann::json& v : a) {
+            if (!v.is_number()) return false;
+            out.push_back(v.get<float>());
+        }
+        return true;
+    };
+    if (!keys("sizeOverLife", l.sizeOverLife)) {
+        error = "sizeOverLife must be a list of 1 to 16 numbers";
+        return false;
+    }
+    if (!keys("opacityOverLife", l.opacityOverLife)) {
+        error = "opacityOverLife must be a list of 1 to 16 numbers";
+        return false;
+    }
+    if (j.contains("colorOverLife")) {
+        const nlohmann::json& a = j["colorOverLife"];
+        bool good = a.is_array() && !a.empty() && a.size() <= 16;
+        for (size_t i = 0; good && i < a.size(); ++i) {
+            glm::vec3 v;
+            good = vec3Of(a[i], v);
+            l.colorOverLife.push_back(v);
+        }
+        if (!good) {
+            error = "colorOverLife must be a list of 1 to 16 [r, g, b]";
+            return false;
+        }
+    }
+    l.vortex = number(j, "vortex", 0.0f);
+    l.attract = number(j, "attract", 0.0f);
+    l.collide = j.value("collide", false);
+    if (j.contains("onDeath")) {
+        if (!j["onDeath"].is_string() || j["onDeath"].get<std::string>().empty()) {
+            error = "onDeath must be the name of an effect";
+            return false;
+        }
+        l.onDeath = j["onDeath"].get<std::string>();
+    }
     return true;
 }
 
 } // namespace
 
-ParticleLibrary::ParticleLibrary(ParticleEffects& fx, uint32_t seed) : m_fx(fx), m_rng(seed ? seed : 1u) {
+ParticleLibrary::ParticleLibrary(ParticleSim& sim, uint32_t seed) : m_sim(sim), m_rng(seed ? seed : 1u) {
     nlohmann::json builtIn;
     std::string error;
     if (!datafile::parse(kBuiltIn, datafile::Format::Yaml, builtIn, &error) || !add(builtIn, &error))
@@ -347,7 +404,18 @@ bool ParticleLibrary::add(const nlohmann::json& effects, std::string* error) {
     if (!parseEffects(effects, parsed, error)) return false; // all or nothing
     // Replacing one in use: emitters keep a pointer to the map's entry,
     // which stays; their per-layer counters are resized in update().
-    for (auto& [name, e] : parsed) m_effects[name] = std::move(e);
+    for (auto& [name, e] : parsed) {
+        for (Layer& l : e.layers) {
+            if (!l.sizeOverLife.empty() || !l.colorOverLife.empty() || !l.opacityOverLife.empty())
+                l.curve = m_sim.addCurve({ l.sizeOverLife, l.colorOverLife, l.opacityOverLife });
+            if (!l.onDeath.empty()) {
+                auto it = std::find(m_deathNames.begin(), m_deathNames.end(), l.onDeath);
+                if (it == m_deathNames.end()) it = m_deathNames.insert(m_deathNames.end(), l.onDeath);
+                l.death = static_cast<uint16_t>(it - m_deathNames.begin() + 1);
+            }
+        }
+        m_effects[name] = std::move(e);
+    }
     return true;
 }
 
@@ -464,11 +532,17 @@ void ParticleLibrary::emitLayer(const Layer& l, const Spot& spot, int count) {
         p.floor = spot.floor;
         p.shape = l.shape;
         p.flat = l.flat;
+        p.origin = spot.position;
+        p.vortex = l.vortex * s;
+        p.attract = l.attract * s;
+        p.collide = l.collide;
+        p.curve = l.curve;
+        p.onDeath = l.death;
         p.angle = random01() * 6.2831853f;
         p.flipAngle = random01() * 6.2831853f;
         p.seed = random01();
         if (p.kind == ParticleEffects::Kind::Ring && l.flat) p.position.y = std::max(p.position.y, spot.floor + 0.02f);
-        m_fx.emit(p);
+        m_sim.emit(p);
     }
 }
 
@@ -505,7 +579,15 @@ void ParticleLibrary::update(float dt, const glm::vec3& wind) {
     }
     m_emitters.erase(std::remove_if(m_emitters.begin(), m_emitters.end(), [](const Emitter& e) { return e.endsAt >= 0.0f && e.age >= e.endsAt; }),
                      m_emitters.end());
-    m_fx.update(dt, wind);
+    m_sim.update(dt, wind);
+    if (m_sim.deaths().empty()) return;
+    // Copied: play() runs update(0), which starts the sim's list again.
+    const std::vector<ParticleSim::Death> deaths = m_sim.deaths();
+    for (size_t i = 0; i < deaths.size() && i < static_cast<size_t>(kMaxDeathsPerUpdate); ++i) {
+        const ParticleSim::Death& d = deaths[i];
+        if (d.onDeath == 0 || d.onDeath > m_deathNames.size()) continue;
+        play(m_deathNames[d.onDeath - 1], Spot{ d.position, glm::vec3(0.0f, 1.0f, 0.0f), d.velocity, 1.0f, d.floor });
+    }
 }
 
 } // namespace kke

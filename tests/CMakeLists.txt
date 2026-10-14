@@ -100,6 +100,7 @@ add_executable(kke_tests
     test_tone_map_cpu.cpp
     test_color_formats.cpp
     test_script_fx.cpp
+    test_particle_sim.cpp
     test_sky.cpp
     test_envmap.cpp
     test_gpu_skin.cpp

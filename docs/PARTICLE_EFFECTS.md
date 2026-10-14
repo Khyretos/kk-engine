@@ -143,6 +143,8 @@ effect has a steady stream (start it) or only bursts (play it).
 | `heal` | green sparkles rising round a character |
 | `shockwave` | a ring of force across the ground, kicking up dust |
 | `coins` | gold coins bursting out and spinning to the ground |
+| `firework_rocket` | a rocket climbing on a trail of sparks that bursts into `fireworks` where it runs out |
+| `dust_devil` | a whirl of dust and leaves spinning up round its spot |
 
 `ParticleLibrary::builtInYaml()` is the whole set as YAML: the best
 place to start your own.
@@ -182,6 +184,21 @@ brightness, 0..1), `radius`, `growth`, `opacity`, `life`, `drag`, `rise`,
 shard), `flat`. Ranges (`speed`, `radius`, `life`, `spin`, `flip`) take
 one number or `[min, max]`.
 
+Since ENG-G18 a layer can also have:
+
+| Field | What |
+|---|---|
+| `sizeOverLife: [0.5, 1.5, 2]` | the radius times these, from birth to death (keys evenly spaced, 1 to 16) |
+| `colorOverLife: [[6, 3, 1], [1, 0.2, 0]]` | the colour through its life, instead of `colors`/`colorEnd` |
+| `opacityOverLife: [0, 1, 1, 0]` | the fade, instead of the kind's own (in, hold, out) |
+| `vortex: 3` | m/s of swirl round the vertical line through the spot (negative turns the other way): a dust devil, a portal |
+| `attract: 1` | m/s² pull toward the spot (negative pushes away) |
+| `collide: true` | bounces off the world (sparks, glows), settles on it (flakes), slides along it (smoke), where the game has physics: one ray per particle per frame, at most 512 a frame |
+| `onDeath: fireworks` | plays that effect where each particle dies (a rocket bursting, a drop splashing); at most 64 a frame |
+
+`dust_devil` and `firework_rocket` use them, and the impact effects
+(`explosion`, `sparks`, the chips and the glass) collide.
+
 A mistake names the effect and what's wrong ("effect 'puff': unknown
 kind 'plasma'"), and nothing from that file is added.
 `ParticleLibrary::validate()` checks a file without adding it (for a
@@ -199,7 +216,8 @@ themselves.
 
 ## Cost
 
-The simulation and the quads are rebuilt on the CPU every frame, so keep
+The simulation (`kke::ParticleSim`, the CPU half, tested without a GPU)
+and the quads are rebuilt on the CPU every frame, so keep
 the count in the thousands. On the GPU the cost that matters is
 overdraw: large puffs close to the camera are what to watch. Smoke is
 drawn at full resolution with no extra passes. Glows, flakes and rings

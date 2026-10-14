@@ -652,6 +652,21 @@ ParticleLibrary& ScriptModule::fxLibrary() {
     if (!m_fxLibrary) {
         m_fxEffects = std::make_unique<ParticleEffects>(*m_app, kFxParticles);
         m_fxLibrary = std::make_unique<ParticleLibrary>(*m_fxEffects);
+#if KKE_ENABLE_JOLT
+        // Layers with collide: true bounce off (and flakes settle on) the physics world.
+        if (auto* rbm = m_app->getModule<RigidBodyModule>()) {
+            m_fxEffects->sim().setCollider([rbm](const glm::vec3& from, const glm::vec3& to, glm::vec3& hit, glm::vec3& normal) {
+                const glm::vec3 d = to - from;
+                const float len = glm::length(d);
+                if (len < 1e-5f) return false;
+                const RigidWorld::RayHit h = rbm->world().raycast(from, d / len, len);
+                if (!h.hit) return false;
+                hit = h.point;
+                normal = h.normal;
+                return true;
+            });
+        }
+#endif
     }
     return *m_fxLibrary;
 }
