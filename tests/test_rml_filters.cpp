@@ -116,6 +116,36 @@ TEST(RmlFilters, BlurWeightsSumToOneAndFallOff) {
     EXPECT_NEAR(total, 1.0f, 1e-5f);
 }
 
+TEST(RmlFilters, WideBlursRunAtHalfSize) {
+    EXPECT_FALSE(rmlBlurAtHalfSize(2.5f));
+    EXPECT_TRUE(rmlBlurAtHalfSize(3.0f));
+    EXPECT_TRUE(rmlBlurAtHalfSize(12.0f));
+}
+
+TEST(RmlFilters, PairedTapsMatchTheKernel) {
+    // A row of texels blurred at texel 20 with every tap, and with the
+    // shader's merged samples read by linear interpolation: the same value.
+    std::vector<float> row(41);
+    for (size_t i = 0; i < row.size(); ++i) row[i] = static_cast<float>((i * 37) % 11) / 10.0f;
+    for (int radius : { 6, 7, 18 }) {
+        const float sigma = static_cast<float>(radius) / 3.0f;
+        const std::vector<float> w = rmlBlurWeights(sigma, radius);
+        float direct = w[0] * row[20];
+        for (int i = 1; i <= radius; ++i) direct += w[static_cast<size_t>(i)] * (row[static_cast<size_t>(20 + i)] + row[static_cast<size_t>(20 - i)]);
+        const auto lerp = [&](float at) {
+            const int i = static_cast<int>(std::floor(at));
+            const float f = at - static_cast<float>(i);
+            return row[static_cast<size_t>(i)] * (1.0f - f) + row[static_cast<size_t>(i + 1)] * f;
+        };
+        float sum = row[20], total = 1.0f;
+        for (const RmlBlurTap& t : rmlBlurTaps(sigma, radius)) {
+            sum += (lerp(20.0f + t.offset) + lerp(20.0f - t.offset)) * t.weight;
+            total += 2.0f * t.weight;
+        }
+        EXPECT_NEAR(sum / total, direct, 1e-5f) << "radius " << radius;
+    }
+}
+
 TEST(RmlFilters, PushBlockMatchesTheShader) {
     EXPECT_EQ(offsetof(RmlFilterPush, color), 64u);
     EXPECT_EQ(offsetof(RmlFilterPush, offset), 80u);
