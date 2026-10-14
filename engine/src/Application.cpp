@@ -105,6 +105,21 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
         setResourceBudget(computeBudget(defaults, usableCpuCount()));
     }
     m_renderer = std::make_unique<Renderer>(m_window);
+    {
+        // A CPU-only Vulkan device draws every pixel and triangle on the CPU:
+        // the automatic target moves to software-gpu (kke/HardwareTarget.h),
+        // and the budget with it.
+        VkPhysicalDeviceProperties props{};
+        vkGetPhysicalDeviceProperties(m_renderer->device().physicalDevice(), &props);
+        const TargetChoice refined = refineForSoftwareGpu(m_target, m_renderer->device().isSoftwareRasterizer(), props.deviceName);
+        if (refined.target != m_target.target) {
+            m_target = refined;
+            log::get("Application")->info("Hardware target: {} ({})", m_target.target->name, m_target.reason);
+            EngineSettings defaults = targetDefaultSettings();
+            if (const char* all = dev::env("KKE_USE_EVERYTHING"); all && *all == '1') defaults.performance.useEverything = true;
+            setResourceBudget(computeBudget(defaults, usableCpuCount()));
+        }
+    }
     m_renderer->setRenderScale(m_budget.renderScale);
     {
         // MSAA is baked into every scene pipeline, so it's chosen here,

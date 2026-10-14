@@ -28,6 +28,11 @@ std::vector<HardwareTarget> builtinTargets() {
           "Old laptops, integrated graphics, 2 cores or less than 6 GB of RAM: no MSAA or shadows (1024 shadow tiles if turned on), 75% render scale, 60 fps cap.", 60.0f,
           R"({ "graphics": { "msaa": 1, "shadowResolution": 1024, "shadows": false, "frameRateLimit": 60 },
                "performance": { "renderScale": 0.75 } })" },
+        { "software-gpu", "PC without a Vulkan GPU",
+          "The only Vulkan device is the CPU (Mesa lavapipe: a graphics chip without a Vulkan driver, such as Intel HD 4000-series on Windows): "
+          "no MSAA or shadows, 75% render scale (the UI stays sharp), no fps cap. Measured on 4 cores: racing 11.6 -> 16.4 fps.", 30.0f,
+          R"({ "graphics": { "msaa": 1, "shadowResolution": 1024, "shadows": false, "frameRateLimit": 0 },
+               "performance": { "renderScale": 0.75 } })" },
         { "steam-deck", "Steam Deck",
           "Valve Steam Deck (LCD and OLED): fullscreen at the 1280x800 panel, 2x MSAA, 1024 shadow tiles, 60 fps cap, UI 25% larger for a 7-inch screen.", 60.0f,
           R"({ "graphics": { "fullscreen": true, "vsync": true, "msaa": 2, "shadowResolution": 1024, "frameRateLimit": 60, "uiScale": 1.25 },
@@ -125,10 +130,10 @@ EngineSettings settingsForTarget(const HardwareTarget& target) {
 TargetChoice chooseHardwareTarget(const platform::DeviceHints& h, const std::string& requested, const std::string& buildDefault) {
     auto pick = [](const char* name, std::string reason) { return TargetChoice{ findHardwareTarget(name), std::move(reason) }; };
     if (!requested.empty()) {
-        if (const HardwareTarget* t = findHardwareTarget(requested)) return { t, "KKE_TARGET=" + requested };
+        if (const HardwareTarget* t = findHardwareTarget(requested)) return { t, "KKE_TARGET=" + requested, true };
     }
     if (!buildDefault.empty()) {
-        if (const HardwareTarget* t = findHardwareTarget(buildDefault)) return { t, "built with KKE_DEFAULT_TARGET=" + buildDefault };
+        if (const HardwareTarget* t = findHardwareTarget(buildDefault)) return { t, "built with KKE_DEFAULT_TARGET=" + buildDefault, true };
     }
     if (h.os == "Android") return pick("android", "Android");
     if (h.os == "iOS" || h.os == "iPadOS") return pick("ios", h.os);
@@ -140,6 +145,11 @@ TargetChoice chooseHardwareTarget(const platform::DeviceHints& h, const std::str
     if ((h.logicalCores > 0 && h.logicalCores <= 2) || (h.systemRamMb > 0 && h.systemRamMb < 6 * 1024))
         return pick("desktop-low", std::to_string(h.logicalCores) + " cores, " + std::to_string(h.systemRamMb) + " MB RAM");
     return pick("desktop", "no specific device recognised");
+}
+
+TargetChoice refineForSoftwareGpu(const TargetChoice& choice, bool softwareRasterizer, const std::string& deviceName) {
+    if (!softwareRasterizer || choice.asked || (choice.target->name != "desktop" && choice.target->name != "desktop-low")) return choice;
+    return { findHardwareTarget("software-gpu"), "the only Vulkan device is a CPU: " + deviceName, false };
 }
 
 TargetChoice detectHardwareTarget() {
