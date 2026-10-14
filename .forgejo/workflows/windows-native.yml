@@ -2,6 +2,9 @@
 # soucouyant cross-builds the package (MinGW-w64, in the kke-vm image); the PC (Windows 10) then runs the
 # unit tests and every demo on it natively, in minutes instead of the VM's hours.
 # The VM job (vm-tests.yml) stays as the fallback for when the PC is off.
+# The text reports (summary, test results, benchmark JSON; no screenshots)
+# are also pushed to the windows-results branch, so they can be read
+# without signing in to download the artifact.
 # Runs nightly and by hand; the 'quick' input reduces demo duration to 8 s each.
 name: Windows (native)
 
@@ -96,3 +99,39 @@ jobs:
         with:
           name: windows-native
           path: results/
+
+  publish:
+    needs: test
+    if: always() && needs.test.result != 'skipped'
+    runs-on: soucouyant
+    timeout-minutes: 15
+    container:
+      image: git.kreative-kompas.com/khyretos/kke-ci:1
+    steps:
+      - uses: https://code.forgejo.org/forgejo/download-artifact@v4
+        with:
+          name: windows-native
+          path: results
+
+      - name: Push the text reports to the windows-results branch
+        run: |
+          set -e
+          url="${{ github.server_url }}/${{ github.repository }}"
+          auth="Authorization: token ${{ github.token }}"
+          git init -q history
+          if git -C history -c http.extraHeader="$auth" fetch -q --depth=1 "$url" windows-results 2>/dev/null; then
+            git -C history checkout -q -b windows-results FETCH_HEAD
+          else
+            git -C history checkout -q --orphan windows-results
+          fi
+          run="runs/$(date -u +%Y-%m-%dT%H%MZ)-${GITHUB_SHA::10}"
+          mkdir -p "history/$run"
+          (cd results && find . -type f \( -name '*.md' -o -name '*.json' -o -name '*.txt' -o -name '*.log' \) ! -name 'password*') |
+            while read -r f; do mkdir -p "history/$run/$(dirname "$f")"; cp "results/$f" "history/$run/$f"; done
+          echo "- $run: ${{ github.ref_name }}, test job ${{ needs.test.result }}" >> history/index.md
+          cd history
+          git config user.name "forgejo-actions"
+          git config user.email "forgejo-actions@kreative-kompas.com"
+          git add -A
+          git commit -q -m "Windows results for ${GITHUB_SHA::10} (${{ github.ref_name }})"
+          git -c http.extraHeader="$auth" push -q "$url" HEAD:refs/heads/windows-results
