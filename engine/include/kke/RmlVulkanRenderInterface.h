@@ -179,29 +179,31 @@ private:
         VkFramebuffer framebuffer = VK_NULL_HANDLE;
         VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
         VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
+        VkExtent2D extent{};
     };
     void createLayerResources();
     void destroyLayerResources();
-    std::unique_ptr<LayerTarget> createLayerTarget();
+    std::unique_ptr<LayerTarget> createLayerTarget(VkExtent2D extent);
     void destroyLayerTarget(LayerTarget& target);
     LayerTarget* layerTarget(Rml::LayerHandle handle); // nullptr = the frame's own image
     Rml::LayerHandle topLayer() const;
     void transition(LayerTarget& target, VkImageLayout layout);
     void endPass();
-    void beginPass(LayerTarget* target); // nullptr = the frame's own image
+    void beginPass(LayerTarget* target, bool filterPass = false); // nullptr = the frame's own image
     void copyToPostprocess(Rml::LayerHandle source);
     void drawFullscreen(LayerTarget* destination, LayerTarget& source, const Pipeline& pipeline, const RmlFilterPush& push,
                         VkDescriptorSet mask);
     void blur(float sigma, std::unique_ptr<LayerTarget>& image, std::unique_ptr<LayerTarget>& temp, const RmlFilterPush& region);
     void applyFilters(Rml::Span<const Rml::CompiledFilterHandle> filters);
     VkRect2D clampedScissor() const;
+    VkRect2D filterArea(const LayerTarget& target) const;
 
     OverlayTarget m_base;
     VkImageLayout m_baseLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     LayerTarget* m_current = nullptr; // the open pass's target; nullptr = the frame's own image
     bool m_passOpen = false;
     bool m_readableRequest = false, m_readableAsked = false;
-    VkRenderPass m_layerPass = VK_NULL_HANDLE;
+    VkRenderPass m_layerPass = VK_NULL_HANDLE, m_postPass = VK_NULL_HANDLE;
     VkExtent2D m_layerExtent{};
     VkFormat m_layerFormat = VK_FORMAT_UNDEFINED, m_layerDepthFormat = VK_FORMAT_UNDEFINED;
     VkImage m_layerDepth = VK_NULL_HANDLE;
@@ -211,6 +213,7 @@ private:
     std::vector<Rml::LayerHandle> m_layerStack;         // pushed this frame; empty = the frame's own image
     std::array<std::unique_ptr<LayerTarget>, 3> m_post;  // filter ping-pong; [0] holds the result
     std::unique_ptr<LayerTarget> m_mask;                 // the last SaveLayerAsMaskImage
+    std::array<std::unique_ptr<LayerTarget>, 2> m_half;  // half-size images for wide blurs
     std::unordered_map<uintptr_t, RmlFilter> m_filters;
     uintptr_t m_nextFilterHandle = 1;
     std::unique_ptr<Pipeline> m_layerTexturePipeline;               // RenderGeometry with a saved layer texture

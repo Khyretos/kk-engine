@@ -45,6 +45,7 @@ limitations. 🔴 Not started / stub.
 |---|---|---|
 | Vulkan core (device, swapchain, render passes) | 🟢 | |
 | Vulkan validation layers in dev builds | 🟢 | Every demo swept with validation active every session; this is how several real GPU-resource-lifetime bugs (see `BUGS.md` BUG-002) were actually found, not guessed. |
+| OpenGL 4.x backend (GPUs without a Vulkan driver, such as Intel HD 4000-series on Windows) | ⬜ | Planned for after every gap in `docs/GAPS.md` is closed (Kees, 2026-10-14). Until then such PCs render through Mesa lavapipe on the CPU. |
 | Mesh rendering, cube/box geometry | 🟢 | `kke::Mesh::createCube()`, and the more general `PhysicsModule::buildGridBox()` for arbitrary box shapes (see Physics section). |
 | Vertex format | 🟢 | `position/color/normal/uv` — real UV mapping, flat-shading-correct (see `BUGS.md` BUG-006 for the smooth-shading bug this replaced). |
 | PBR materials (Cook-Torrance) | 🟢 | Real metallic/roughness, per-object, verified via real pixel-value comparisons (not just visual impression) after finding and fixing a methodology bug in the first verification attempt. |
