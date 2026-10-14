@@ -26,7 +26,7 @@ The chapters go from simplest to most involved:
 | [Input](input.md) | Your own controls, hold and release, reading the standard actions, binding keys and pads in C++ |
 | [Moving things](moving.md) | Tuning the character, a ball you steer, a pet that follows you, patrols, launch pads |
 | [Cameras](cameras.md) | First person, third person, orbit, top-down, isometric, side-on, fixed and cinematic cameras; screen shake |
-| [Gameplay](gameplay.md) | Trigger zones and doors, shooting with rays, explosions, lamps, a full round with a HUD, a timer and a saved best |
+| [Gameplay](gameplay.md) | Trigger zones and doors, shooting with rays, explosions, lamps, particle effects, a full round with a HUD, a timer and a saved best |
 | [Algorithms](algorithms.md) | Maze generation, terrain from noise, A* pathfinding, flocking |
 | [Animation and IK](animation.md) | Procedural motion, springs, two-bone IK, blend spaces, look-at and foot placement on a skeleton |
 | [Physics](physics.md) | Bounce and friction, things that really break, physics from C++ |

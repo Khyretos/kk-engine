@@ -85,6 +85,30 @@ switches the ring.
 
 `light.set` changes any of colour, intensity, range and shadows later, `on = false` switches a lamp off but keeps it, and everything a script placed goes away when the script is reloaded or stops.
 
+## Effects
+
+Fire, smoke, sparks, explosions, rain and about twenty more are ready
+by name (`fx.names()` lists them, [the particle effects
+page](../PARTICLE_EFFECTS.md) shows each). `fx.play` fires one once,
+`fx.start` keeps one going until `fx.stop` and `fx.move` takes it along,
+and `fx.define` adds your own from a Lua table; here a campfire burns on
+a stone, **F** throws fireworks, and a puff of your own drifts in the
+wind.
+
+![A campfire burning on a stone and a grey puff drifting beside it](media/effects.jpg)
+
+```lua title="effects.lua"
+--8<-- "docs/cookbook/recipes/effects.lua"
+```
+
+[Download effects.lua](recipes/effects.lua){ .md-button }
+
+Options for `play`, `start` and `move`: `normal` (which way a burst
+sprays), `velocity` (of what it comes off), `scale` (2 = twice as big)
+and `floor` (the ground's height: sparks bounce there). A script's
+effects stop emitting when it is reloaded or stops; what is already in
+the air finishes.
+
 ## A whole round
 
 Everything together: a goal (knock the pillars over), a clock, a HUD, a

@@ -116,6 +116,11 @@ mood.current()   mood.list()
 local lamp = light.point { pos = Vec(0, 2, 0), color = Vec(1, 0.8, 0.5), intensity = 2, range = 8, shadows = true }
 light.move(lamp, Vec(1, 2, 0))   light.set(lamp, { on = false })   light.remove(lamp)   light.count()
 
+-- Effects by name: fire, smoke, sparks, explosion, rain, ... (docs/PARTICLE_EFFECTS.md, effects.lua)
+fx.play("explosion", hitPos, { normal = hitNormal })   -- once
+local fire = fx.start("campfire", Vec(0, 0, 0))        -- keeps going: fx.move(fire, pos), fx.stop(fire)
+fx.define("my_puff", { layers = { { kind = "smoke", rate = 3, colors = { { 0.6, 0.6, 0.6 } } } } })   fx.names()   fx.wind(Vec(1, 0, 0))
+
 -- Sound
 local M = audio.materials()   -- M.Stone, M.Wood, M.Metal, M.Glass, ...: give bodies material = M.Wood
 audio.impact(pos, M.Metal, 0.8)   -- play one now (loudness 0..1)
@@ -157,6 +162,7 @@ game's `scripts/` folder, then change it.
 | your own key, hold to charge | `throw.lua` |
 | toggle on press vs. while held | `toggle.lua` |
 | lamps: place, move, colour and switch lights | `lamps.lua` |
+| particle effects: a campfire, fireworks on a key, your own effect | `effects.lua` |
 | show which button to press (pictures per device) | `prompts.lua` |
 | steer something relative to the camera | `roll_ball.lua` |
 | a follower (pet, companion, homing) | `pet.lua` |

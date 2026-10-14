@@ -4,6 +4,8 @@
 #include "kke/DevTools.h"
 #include "kke/Log.h"
 #include "kke/Mood.h"
+#include "kke/ParticleEffects.h"
+#include "kke/ParticleLibrary.h"
 #include "kke/net/ScriptSpawns.h"
 #include "kke/SphereImpostors.h"
 #include "kke/modules/InputModule.h"
@@ -19,6 +21,7 @@
 #include <imgui.h>
 #include <lauxlib.h>
 #include <lua.h>
+#include <nlohmann/json.hpp>
 
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -235,6 +238,84 @@ void ScriptModule::bindAll() {
     vm.registerFunction("light", "count", [this](lua_State* L) {
         lua_pushinteger(L, static_cast<lua_Integer>(m_lights.count(m_vm->currentSource())));
         return 1;
+    });
+
+    // fx.*: particle effects by name (kke/ParticleLibrary.h, docs/PARTICLE_EFFECTS.md), made on first use;
+    // emitters a script starts stop when it goes (kke/ScriptFx.h)
+    auto spotAt = [](lua_State* L, int pos, int opts) {
+        ParticleLibrary::Spot s;
+        s.position = ScriptVM::toVec3(L, pos);
+        s.normal = ScriptVM::fieldVec3(L, opts, "normal", s.normal);
+        s.velocity = ScriptVM::fieldVec3(L, opts, "velocity", s.velocity);
+        s.scale = ScriptVM::fieldNumber(L, opts, "scale", s.scale);
+        s.floor = ScriptVM::fieldNumber(L, opts, "floor", s.floor);
+        return s;
+    };
+    auto unknown = [](lua_State* L, const char* name) {
+        lua_pushnil(L);
+        lua_pushfstring(L, "no effect named '%s' (fx.names() lists them)", name);
+        return 2;
+    };
+    vm.registerFunction("fx", "play", [this, spotAt, unknown](lua_State* L) {
+        const char* name = luaL_checkstring(L, 1);
+        if (!fxLibrary().play(name, spotAt(L, 2, 3))) return unknown(L, name);
+        lua_pushboolean(L, 1);
+        return 1;
+    });
+    vm.registerFunction("fx", "start", [this, spotAt, unknown](lua_State* L) {
+        const char* name = luaL_checkstring(L, 1);
+        const ParticleLibrary::EmitterId id = fxLibrary().start(name, spotAt(L, 2, 3));
+        if (!id) return unknown(L, name);
+        m_fx.track(id, m_vm->currentSource());
+        lua_pushinteger(L, static_cast<lua_Integer>(id));
+        return 1;
+    });
+    auto ownFx = [this](lua_State* L, const char* what) {
+        const auto id = static_cast<ParticleLibrary::EmitterId>(luaL_checkinteger(L, 1));
+        if (!m_fx.owns(id, m_vm->currentSource())) luaL_error(L, "%s: %d is not an effect this script started", what, static_cast<int>(id));
+        return id;
+    };
+    vm.registerFunction("fx", "move", [this, spotAt, ownFx](lua_State* L) {
+        const ParticleLibrary::EmitterId id = ownFx(L, "fx.move");
+        fxLibrary().move(id, spotAt(L, 2, 3));
+        return 0;
+    });
+    vm.registerFunction("fx", "stop", [this, ownFx](lua_State* L) {
+        const ParticleLibrary::EmitterId id = ownFx(L, "fx.stop");
+        fxLibrary().stop(id);
+        m_fx.forget(id);
+        return 0;
+    });
+    vm.registerFunction("fx", "count", [this](lua_State* L) {
+        lua_pushinteger(L, static_cast<lua_Integer>(m_fx.count(m_vm->currentSource())));
+        return 1;
+    });
+    vm.registerFunction("fx", "names", [this](lua_State* L) {
+        const std::vector<std::string> names = fxLibrary().names();
+        lua_createtable(L, static_cast<int>(names.size()), 0);
+        for (size_t i = 0; i < names.size(); ++i) {
+            lua_pushstring(L, names[i].c_str());
+            lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
+        }
+        return 1;
+    });
+    vm.registerFunction("fx", "define", [this](lua_State* L) {
+        const char* name = luaL_checkstring(L, 1);
+        luaL_checktype(L, 2, LUA_TTABLE);
+        nlohmann::json effects = nlohmann::json::object();
+        effects[name] = ScriptVM::toJson(L, 2);
+        std::string error;
+        if (!fxLibrary().add(effects, &error)) {
+            lua_pushnil(L);
+            lua_pushstring(L, error.c_str());
+            return 2;
+        }
+        lua_pushboolean(L, 1);
+        return 1;
+    });
+    vm.registerFunction("fx", "wind", [this](lua_State* L) {
+        m_fxWind = ScriptVM::toVec3(L, 1);
+        return 0;
     });
 
     // input.*
@@ -554,6 +635,8 @@ void ScriptModule::update(const UpdateContext& ctx) {
     if (!idx.empty()) m_batch->upload(v, idx);
     m_glassIndices = gidx.size();
     if (!gidx.empty()) m_glass->upload(gv, gidx);
+    // fx.*: emit for what scripts started this frame, then move every particle.
+    if (m_fxLibrary) m_fxLibrary->update(ctx.dt, m_fxWind);
 }
 
 void ScriptModule::render(const RenderContext& ctx) {
@@ -562,6 +645,15 @@ void ScriptModule::render(const RenderContext& ctx) {
 
 void ScriptModule::renderTranslucent(const RenderContext& ctx) {
     if (m_glassIndices) m_glass->drawTranslucent(ctx, glm::mat4(1.0f), 0.05f);
+    if (m_fxEffects) m_fxEffects->draw(ctx);
+}
+
+ParticleLibrary& ScriptModule::fxLibrary() {
+    if (!m_fxLibrary) {
+        m_fxEffects = std::make_unique<ParticleEffects>(*m_app, kFxParticles);
+        m_fxLibrary = std::make_unique<ParticleLibrary>(*m_fxEffects);
+    }
+    return *m_fxLibrary;
 }
 
 void ScriptModule::renderShadow(const ShadowRenderContext& ctx) {

@@ -18,6 +18,7 @@
 #include "kke/Application.h"
 #include "kke/DataFile.h"
 #include "kke/Log.h"
+#include "kke/ParticleLibrary.h"
 #include "kke/net/ScriptSpawns.h"
 #include "kke/RmlTextSafety.h"
 #include "kke/modules/ModelModule.h"
@@ -876,6 +877,9 @@ void ScriptModule::releaseScript(const std::string& source) {
 #endif
     m_scenes.erase(std::remove_if(m_scenes.begin(), m_scenes.end(), [&](const Scene& s) { return mine(s.source); }), m_scenes.end());
     m_lights.releaseAll(m_app->lighting(), source);
+    // Its effects stop emitting; what is already in the air finishes.
+    for (ScriptFx::EmitterId id : m_fx.releaseAll(source))
+        if (m_fxLibrary) m_fxLibrary->stop(id);
 }
 
 void ScriptModule::releaseAll() {
@@ -891,6 +895,8 @@ void ScriptModule::releaseAll() {
     for (const Scene& s : m_scenes) add(s.source);
     for (const std::string& s : sources) releaseScript(s);
     m_lights.clear(m_app->lighting());
+    m_fx.clear();
+    if (m_fxLibrary) m_fxLibrary->stopAll();
 }
 
 } // namespace kke
