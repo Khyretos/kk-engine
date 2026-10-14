@@ -32,6 +32,11 @@ For a fountain of tens of thousands of GPU particles, see
 
 ## Use it
 
+From Lua, every effect in the library is `fx.play(name, pos)` or
+`fx.start(name, pos)` away, and `fx.define` adds your own
+([docs/SCRIPTING.md](SCRIPTING.md), the cookbook's
+[effects.lua](cookbook/recipes/effects.lua)). From C++:
+
 ```cpp
 #include "kke/ParticleEffects.h"
 

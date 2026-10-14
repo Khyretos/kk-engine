@@ -4,6 +4,7 @@
 #include "kke/Module.h"
 #include "kke/SceneLoader.h"
 #include "kke/ScriptCalls.h"
+#include "kke/ScriptFx.h"
 #include "kke/ScriptLights.h"
 #include "kke/ScriptStore.h"
 #include "kke/ScriptTables.h"
@@ -24,6 +25,8 @@ class EventListener;
 namespace kke {
 
 class DynamicMeshRenderer;
+class ParticleEffects;
+class ParticleLibrary;
 
 // Lua gameplay scripts in a game, Garry's Mod style (docs/SCRIPTING.md).
 //
@@ -58,6 +61,8 @@ class DynamicMeshRenderer;
 //                onClick                                   (UiModule, RmlUi)
 //   scene.*      list, load, unload, spawnPoint            (ModelModule + scenes/)
 //   light.*      point, move, set, remove, count: lamps     (kke/ScriptLights.h)
+//   fx.*         play, start, move, stop, count, names, define, wind: particle
+//                effects by name (kke/ParticleLibrary.h, kke/ScriptFx.h)
 //   net.*        role, isServer, connected, playerId, players, send
 //                                                          (NetModule)
 //   audio.*      impact(pos, material, intensity), materials   (AudioModule)
@@ -171,6 +176,13 @@ private:
     std::unique_ptr<Rml::EventListener> m_clickListener;
     std::vector<Scene> m_scenes;
     ScriptLights m_lights; // light.*: lamps scripts placed (kke/ScriptLights.h)
+    // fx.*: one particle pool and library for every script, made on first use.
+    static constexpr size_t kFxParticles = 8000;
+    std::unique_ptr<ParticleEffects> m_fxEffects;
+    std::unique_ptr<ParticleLibrary> m_fxLibrary;
+    ScriptFx m_fx; // which script started which emitter
+    glm::vec3 m_fxWind{0.0f};
+    ParticleLibrary& fxLibrary();
     int m_nextId = 1;
     AssetCatalog m_catalog;
     bool m_catalogScanned = false;

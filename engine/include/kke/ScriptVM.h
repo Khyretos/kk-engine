@@ -3,6 +3,7 @@
 #include "kke/LuaApi.h"
 
 #include <glm/glm.hpp>
+#include <nlohmann/json_fwd.hpp>
 
 #include <chrono>
 #include <cstdint>
@@ -160,6 +161,11 @@ public:
     static bool fieldBool(lua_State* L, int table, const char* key, bool fallback);
     static glm::vec3 fieldVec3(lua_State* L, int table, const char* key, const glm::vec3& fallback);
     static std::string fieldString(lua_State* L, int table, const char* key, const std::string& fallback);
+    // A Lua value as JSON, for data written as a Lua table (fx.define's
+    // effects): a table with keys 1..n is an array, {x, y, z} or a Vec is
+    // [x, y, z], any other table an object (keys as strings); a table
+    // inside itself becomes null. Functions and userdata become null.
+    static nlohmann::json toJson(lua_State* L, int index);
 
     // Used by the internals; public for the C trampolines.
     void reportError(const std::string& source, const std::string& message);

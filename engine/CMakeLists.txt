@@ -142,6 +142,7 @@ set(ENGINE_SOURCES
     src/Mood.cpp
     src/ShadowMap.cpp
     src/ScriptLights.cpp
+    src/ScriptFx.cpp
     src/Texture.cpp
     src/TextureMips.cpp
     src/MarketplaceIndex.cpp

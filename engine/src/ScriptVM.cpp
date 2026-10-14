@@ -5,11 +5,13 @@
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <set>
 #include <sstream>
 
 namespace kke {
@@ -796,6 +798,68 @@ glm::vec3 ScriptVM::fieldVec3(lua_State* L, int table, const char* key, const gl
     const glm::vec3 v = lua_isnumber(L, -1) ? glm::vec3(float(lua_tonumber(L, -1))) : toVec3(L, -1, fallback);
     lua_pop(L, 1);
     return v;
+}
+
+namespace {
+nlohmann::json luaToJson(lua_State* L, int index, std::set<const void*>& path) {
+    index = lua_absindex(L, index);
+    switch (lua_type(L, index)) {
+    case LUA_TBOOLEAN: return lua_toboolean(L, index) != 0;
+    case LUA_TNUMBER:
+        if (lua_isinteger(L, index)) return static_cast<int64_t>(lua_tointeger(L, index));
+        return lua_tonumber(L, index);
+    case LUA_TSTRING: return std::string(lua_tostring(L, index));
+    case LUA_TTABLE: break;
+    default: return nullptr;
+    }
+    const void* self = lua_topointer(L, index);
+    if (!path.insert(self).second) return nullptr; // inside itself
+    const lua_Integer n = static_cast<lua_Integer>(lua_rawlen(L, index));
+    lua_Integer keys = 0;
+    lua_pushnil(L);
+    while (lua_next(L, index)) {
+        ++keys;
+        lua_pop(L, 1);
+    }
+    // A Vec or {x, y, z}: exactly those three numbers.
+    nlohmann::json out;
+    if (keys == 3 && n == 0) {
+        lua_getfield(L, index, "x");
+        lua_getfield(L, index, "y");
+        lua_getfield(L, index, "z");
+        if (lua_isnumber(L, -3) && lua_isnumber(L, -2) && lua_isnumber(L, -1))
+            out = nlohmann::json::array({ lua_tonumber(L, -3), lua_tonumber(L, -2), lua_tonumber(L, -1) });
+        lua_pop(L, 3);
+        if (!out.is_null()) {
+            path.erase(self);
+            return out;
+        }
+    }
+    if (n > 0 && keys == n) {
+        out = nlohmann::json::array();
+        for (lua_Integer i = 1; i <= n; ++i) {
+            lua_rawgeti(L, index, i);
+            out.push_back(luaToJson(L, -1, path));
+            lua_pop(L, 1);
+        }
+    } else {
+        out = nlohmann::json::object();
+        lua_pushnil(L);
+        while (lua_next(L, index)) {
+            lua_pushvalue(L, -2); // a copy of the key: lua_tostring would change a number key in place
+            const char* key = lua_tostring(L, -1);
+            if (key) out[key] = luaToJson(L, -2, path);
+            lua_pop(L, 2);
+        }
+    }
+    path.erase(self);
+    return out;
+}
+} // namespace
+
+nlohmann::json ScriptVM::toJson(lua_State* L, int index) {
+    std::set<const void*> path;
+    return luaToJson(L, index, path);
 }
 
 std::string ScriptVM::fieldString(lua_State* L, int table, const char* key, const std::string& fallback) {
