@@ -1,19 +1,17 @@
 [
- {
-  "name": "g03-pixels",
-  "role": "worker/cpp-games",
-  "mode": "patch",
-  "out": "engine/src/Texture.cpp",
-  "focus": [
-   "^void Texture::createFromPixels",
-   "createImage\\(chain\\.data\\(\\)"
-  ],
-  "prompt": "ENG-G03: normal, roughness and metallic maps are data, not colours, so they must be uploaded as VK_FORMAT_R8G8B8A8_UNORM (the shader reads the stored numbers) with mips averaged as stored. Colour textures stay exactly as they are. Texture.h now declares `void createFromPixels(const uint8_t* rgbaPixels, uint32_t width, uint32_t height, bool srgb = true);`. In Texture.cpp's definition of createFromPixels:\n1. Add the parameter: `void Texture::createFromPixels(const uint8_t* rgbaPixels, uint32_t width, uint32_t height, bool srgb) {` (no default in the .cpp).\n2. Change `const bool cutout = hasTransparentTexels(chain.data(), baseTexels);` to `const bool cutout = srgb && hasTransparentTexels(chain.data(), baseTexels);` (the alpha-test fix is for colour cutouts only).\n3. Replace the single line `downsampleRgba8Srgb(chain.data() + offset, w, h, chain.data() + next, nw, nh);` with two lines:\n   `if (srgb) downsampleRgba8Srgb(chain.data() + offset, w, h, chain.data() + next, nw, nh);`\n   `else downsampleRgba8Linear(chain.data() + offset, w, h, chain.data() + next, nw, nh);`\n   The `if (cutout) scaleAlphaToCoverage(...)` line after it stays as it is.\n4. In the `createImage(...)` call, replace `VK_FORMAT_R8G8B8A8_SRGB` with `srgb ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM`.\nChange nothing else.",
-  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g03lin.py pixels",
-  "precheck": false,
-  "context": [
-   "engine/include/kke/Texture.h"
-  ],
-  "max_tokens": 4000
- }
+  {
+    "name": "g03-pixels",
+    "role": "worker/cpp-games",
+    "mode": "patch",
+    "out": "engine/src/Texture.cpp",
+    "focus": [
+      "^void Texture::createFromPixels",
+      "createImage\\(chain\\.data\\(\\)"
+    ],
+    "prompt": "ENG-G03: normal, roughness and metallic maps are data, not colours, so they must be uploaded as VK_FORMAT_R8G8B8A8_UNORM (the shader reads the stored numbers) with mips averaged as stored. Colour textures stay exactly as they are. Texture.h now declares `void createFromPixels(const uint8_t* rgbaPixels, uint32_t width, uint32_t height, bool srgb = true);`. In Texture.cpp's definition of createFromPixels:\n1. Add the parameter: `void Texture::createFromPixels(const uint8_t* rgbaPixels, uint32_t width, uint32_t height, bool srgb) {` (no default in the .cpp).\n2. Change `const bool cutout = hasTransparentTexels(chain.data(), baseTexels);` to `const bool cutout = srgb && hasTransparentTexels(chain.data(), baseTexels);` (the alpha-test fix is for colour cutouts only).\n3. Replace the single line `downsampleRgba8Srgb(chain.data() + offset, w, h, chain.data() + next, nw, nh);` with two lines:\n   `if (srgb) downsampleRgba8Srgb(chain.data() + offset, w, h, chain.data() + next, nw, nh);`\n   `else downsampleRgba8Linear(chain.data() + offset, w, h, chain.data() + next, nw, nh);`\n   The `if (cutout) scaleAlphaToCoverage(...)` line after it stays as it is.\n4. In the `createImage(...)` call, replace `VK_FORMAT_R8G8B8A8_SRGB` with `srgb ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM`.\nChange nothing else.",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g03lin.py pixels",
+    "precheck": false,
+    "context": ["engine/include/kke/Texture.h"],
+    "max_tokens": 4000
+  }
 ]
