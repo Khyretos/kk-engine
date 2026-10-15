@@ -1,14 +1,14 @@
 [
- {
-  "mode": "new",
-  "review": false,
-  "name": "g18a-scriptfx1x",
-  "role": "worker/cpp-games",
-  "out": "engine/src/ScriptFx.cpp",
-  "prompt": "Kreative Kompas Engine (C++20, Vulkan, Lua 5.4): ENG-G18 part 1 gives Lua scripts particle effects by name: fx.play, fx.start, fx.move, fx.stop, fx.count, fx.names, fx.define (an effect as a Lua table) and fx.wind, on kke::ParticleLibrary. The new source file for kke/ScriptFx.h.  Write the new file engine/src/ScriptFx.cpp: exactly this text, copied as it is, nothing added or left out.\n```\n#include \"kke/ScriptFx.h\"\n\n#include <algorithm>\n\nnamespace kke {\n\nvoid ScriptFx::track(EmitterId id, const std::string& owner) { m_entries.push_back({ id, owner }); }\n\nbool ScriptFx::owns(EmitterId id, const std::string& owner) const {\n    return std::any_of(m_entries.begin(), m_entries.end(), [&](const Entry& e) { return e.id == id && e.owner == owner; });\n}\n\nvoid ScriptFx::forget(EmitterId id) {\n    m_entries.erase(std::remove_if(m_entries.begin(), m_entries.end(), [&](const Entry& e) { return e.id == id; }), m_entries.end());\n}\n\nstd::vector<ScriptFx::EmitterId> ScriptFx::releaseAll(const std::string& owner) {\n    std::vector<EmitterId> ids;\n    for (const Entry& e : m_entries)\n        if (e.owner == owner) ids.push_back(e.id);\n    m_entries.erase(std::remove_if(m_entries.begin(), m_entries.end(), [&](const Entry& e) { return e.owner == owner; }), m_entries.end());\n    return ids;\n}\n\nstd::vector<ScriptFx::EmitterId> ScriptFx::clear() {\n    std::vector<EmitterId> ids;\n    for (const Entry& e : m_entries) ids.push_back(e.id);\n    m_entries.clear();\n    return ids;\n}\n\nsize_t ScriptFx::count(const std::string& owner) const {\n    return static_cast<size_t>(std::count_if(m_entries.begin(), m_entries.end(), [&](const Entry& e) { return e.owner == owner; }));\n}\n\n} // namespace kke\n```\n\nAnswer with the file's contents only, in one ```cpp fence: no shell commands and no other file.",
-  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g09.py g18ascriptfx1x",
-  "precheck": false,
-  "context": [],
-  "max_tokens": 1247
- }
+  {
+    "mode": "new",
+    "review": false,
+    "name": "g18a-scriptfx1x",
+    "role": "worker/cpp-games",
+    "out": "engine/src/ScriptFx.cpp",
+    "prompt": "Kreative Kompas Engine (C++20, Vulkan, Lua 5.4): ENG-G18 part 1 gives Lua scripts particle effects by name: fx.play, fx.start, fx.move, fx.stop, fx.count, fx.names, fx.define (an effect as a Lua table) and fx.wind, on kke::ParticleLibrary. The new source file for kke/ScriptFx.h.  Write the new file engine/src/ScriptFx.cpp: exactly this text, copied as it is, nothing added or left out.\n```\n#include \"kke/ScriptFx.h\"\n\n#include <algorithm>\n\nnamespace kke {\n\nvoid ScriptFx::track(EmitterId id, const std::string& owner) { m_entries.push_back({ id, owner }); }\n\nbool ScriptFx::owns(EmitterId id, const std::string& owner) const {\n    return std::any_of(m_entries.begin(), m_entries.end(), [&](const Entry& e) { return e.id == id && e.owner == owner; });\n}\n\nvoid ScriptFx::forget(EmitterId id) {\n    m_entries.erase(std::remove_if(m_entries.begin(), m_entries.end(), [&](const Entry& e) { return e.id == id; }), m_entries.end());\n}\n\nstd::vector<ScriptFx::EmitterId> ScriptFx::releaseAll(const std::string& owner) {\n    std::vector<EmitterId> ids;\n    for (const Entry& e : m_entries)\n        if (e.owner == owner) ids.push_back(e.id);\n    m_entries.erase(std::remove_if(m_entries.begin(), m_entries.end(), [&](const Entry& e) { return e.owner == owner; }), m_entries.end());\n    return ids;\n}\n\nstd::vector<ScriptFx::EmitterId> ScriptFx::clear() {\n    std::vector<EmitterId> ids;\n    for (const Entry& e : m_entries) ids.push_back(e.id);\n    m_entries.clear();\n    return ids;\n}\n\nsize_t ScriptFx::count(const std::string& owner) const {\n    return static_cast<size_t>(std::count_if(m_entries.begin(), m_entries.end(), [&](const Entry& e) { return e.owner == owner; }));\n}\n\n} // namespace kke\n```\n\nAnswer with the file's contents only, in one ```cpp fence: no shell commands and no other file.",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g09.py g18ascriptfx1x",
+    "precheck": false,
+    "context": [],
+    "max_tokens": 1247
+  }
 ]

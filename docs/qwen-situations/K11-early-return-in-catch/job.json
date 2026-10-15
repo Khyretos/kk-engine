@@ -1,19 +1,17 @@
 [
- {
-  "name": "g03-applin",
-  "role": "worker/cpp-games",
-  "mode": "patch",
-  "out": "engine/src/Application.cpp",
-  "focus": [
-   "^const Texture\\* Application::cachedTexture",
-   "^VkDescriptorSet Application::textureSet"
-  ],
-  "prompt": "ENG-G03: normal, roughness and metallic maps are data, not colours, so they must be uploaded as VK_FORMAT_R8G8B8A8_UNORM (the shader reads the stored numbers) with mips averaged as stored. Colour textures stay exactly as they are. Application.h now declares `const Texture* cachedTexture(const std::string& path, bool linearData = false);`. Rewrite the definition of Application::cachedTexture:\n1. Signature: `const Texture* Application::cachedTexture(const std::string& path, bool linearData) {`\n2. If `!linearData`: keep today's two lines inside that if: `if (!textureSet(path)) return nullptr;` and `return m_textureCache[path].texture.get();`\n3. Then the comment `// Data maps share the cache under their own key and need no set.` and `const std::string key = \"linear:\" + path;`\n4. If `m_textureCache.find(key)` finds an entry, return its `texture.get()`.\n5. `CachedTexture entry;` then in a try block `entry.texture = std::make_unique<Texture>(m_renderer->device(), path, Texture::LinearData{});`, catching `const std::exception& e` with `log::get(\"Textures\")->warn(\"texture '{}' failed to load ({}); drawn without it\", path, e.what());` (a failed file is remembered as nullptr, like textureSet does).\n6. `const Texture* texture = entry.texture.get();`, `m_textureCache[key] = std::move(entry);` and `return texture;`\nDo not call textureSet for the linear key: a data map needs no descriptor set. Change nothing else.",
-  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g03lin.py app",
-  "precheck": false,
-  "context": [
-   "engine/include/kke/Application.h"
-  ],
-  "max_tokens": 4000
- }
+  {
+    "name": "g03-applin",
+    "role": "worker/cpp-games",
+    "mode": "patch",
+    "out": "engine/src/Application.cpp",
+    "focus": [
+      "^const Texture\\* Application::cachedTexture",
+      "^VkDescriptorSet Application::textureSet"
+    ],
+    "prompt": "ENG-G03: normal, roughness and metallic maps are data, not colours, so they must be uploaded as VK_FORMAT_R8G8B8A8_UNORM (the shader reads the stored numbers) with mips averaged as stored. Colour textures stay exactly as they are. Application.h now declares `const Texture* cachedTexture(const std::string& path, bool linearData = false);`. Rewrite the definition of Application::cachedTexture:\n1. Signature: `const Texture* Application::cachedTexture(const std::string& path, bool linearData) {`\n2. If `!linearData`: keep today's two lines inside that if: `if (!textureSet(path)) return nullptr;` and `return m_textureCache[path].texture.get();`\n3. Then the comment `// Data maps share the cache under their own key and need no set.` and `const std::string key = \"linear:\" + path;`\n4. If `m_textureCache.find(key)` finds an entry, return its `texture.get()`.\n5. `CachedTexture entry;` then in a try block `entry.texture = std::make_unique<Texture>(m_renderer->device(), path, Texture::LinearData{});`, catching `const std::exception& e` with `log::get(\"Textures\")->warn(\"texture '{}' failed to load ({}); drawn without it\", path, e.what());` (a failed file is remembered as nullptr, like textureSet does).\n6. `const Texture* texture = entry.texture.get();`, `m_textureCache[key] = std::move(entry);` and `return texture;`\nDo not call textureSet for the linear key: a data map needs no descriptor set. Change nothing else.",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g03lin.py app",
+    "precheck": false,
+    "context": ["engine/include/kke/Application.h"],
+    "max_tokens": 4000
+  }
 ]
