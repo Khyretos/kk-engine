@@ -1,0 +1,33 @@
+[2026-10-16 06:16:39.228][engine][Application][Goblin Horde][info]: Hardware target: desktop (no specific device recognised); platform backend: desktop
+[2026-10-16 06:16:39.228][engine][Application][Goblin Horde][info]: UI profile: desktop
+[2026-10-16 06:16:39.228][engine][Governor][Goblin Horde][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 1.00
+[2026-10-16 06:16:39.231][engine][VulkanDevice][Goblin Horde][info]: using device: llvmpipe (LLVM 22.1.8, 256 bits)
+[2026-10-16 06:16:39.293][engine][SwapChain][Goblin Horde][info]: colour output: format 50 (8-bit sRGB)
+[2026-10-16 06:16:39.293][engine][Application][Goblin Horde][info]: Hardware target: software-gpu (the only Vulkan device is a CPU: llvmpipe (LLVM 22.1.8, 256 bits))
+[2026-10-16 06:16:39.293][engine][Governor][Goblin Horde][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+[2026-10-16 06:16:39.294][engine][Application][Goblin Horde][info]: MSAA 1x (software rasteriser)
+[2026-10-16 06:16:39.380][engine][Application][Goblin Horde][info]: mood 'sunset' (assets/moods/sunset.yaml)
+[2026-10-16 06:16:39.380][engine][Benchmark][Goblin Horde][info]: benchmark: 3 s warm-up, then 20 s measured, uncapped (no vsync, no frame cap)
+[2026-10-16 06:16:39.381][engine][Settings][Goblin Horde][info]: no settings file at 'settings.json' (using defaults)
+[2026-10-16 06:16:39.381][engine][Governor][Goblin Horde][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+[2026-10-16 06:16:39.428][engine][ClothGpu][Goblin Horde][info]: no compute queue of its own on this GPU: cloth pairs are searched on the CPU (KKE_CLOTH_GPU=shared to try the graphics queue)
+[2026-10-16 06:16:39.428][engine][RigidBodies][Goblin Horde][info]: Jolt rigid-body world ready (65536 max bodies)
+[rmlui] Loaded font face 'Noto Sans' [regular] from 'assets/fonts/NotoSans-Regular.ttf'.
+[rmlui] Loaded font face 'Noto Sans' [bold] from 'assets/fonts/NotoSans-Bold.ttf'.
+[rmlui] Loaded font face 'Noto Sans' [italic] from 'assets/fonts/NotoSans-Italic.ttf'.
+[rmlui] Loaded font face 'Noto Color Emoji' [regular] from 'assets/fonts/NotoColorEmoji.ttf'.
+[ui] RmlUi initialised with real Vulkan rendering (text via glyph textures, <img>/background-image via stb_image, both real now -- see RmlVulkanRenderInterface.h)
+[2026-10-16 06:16:39.569][engine][Audio][Goblin Horde][info]: Audio ready: 48000 Hz, 32 voices, output: Speakers (Realtek High Definition Audio) (WASAPI)
+[2026-10-16 06:16:39.593][engine][Horde][Goblin Horde][info]: no asset folder (assets/synty or KKE_ASSETS_DIR): everyone is the UAL mannequin
+[2026-10-16 06:16:39.896][engine][Horde][Goblin Horde][info]: the whole Universal Animation Library (UAL1.fbx) not found: some moves fall back to simpler clips
+[2026-10-16 06:16:39.896][engine][Horde][Goblin Horde][info]: UAL2.fbx not found: one sword swing for everything, no bows or spells (assets/animations/UAL2.fbx)
+[2026-10-16 06:16:39.897][engine][Horde][Goblin Horde][info]: clips not in the animation library (a fallback plays): Bow_Aim_Down, Bow_Aim_Neutral, Bow_Aim_Up, Bow_Notch, Bow_RapidShoot_Loop, Bow_Shoot, Celebration, Death02, Hit_Knockback, Hit_Shoulder_L, Hit_Shoulder_R, Hit_Stomach, Idle_Rail_Call, Idle_Shield_Loop, Idle_Tired_Loop, Jog_Bwd_Loop, Jog_Left_Loop, Jog_Right_Loop, Kick, KipUp, LayToIdle, Melee_Knee, MonsterTransformation, OverhandThrow, Shield_Dash, Spell_Double_Enter, Spell_Double_Shoot_Loop, Sword_Block, Sword_Dash, Sword_GroundPound, Sword_Heavy_A, Sword_Heavy_B, Sword_Heavy_C, Sword_Heavy_D, Sword_Light_B, Sword_Light_C, Sword_Regular_A, Sword_Regular_B, Sword_Regular_C, Walk_Bwd_Loop
+[2026-10-16 06:16:39.897][engine][Horde][Goblin Horde][info]: animation library: 15 clips kept for the fight
+[2026-10-16 06:16:40.013][engine][Models][Goblin Horde][info]: loaded 'horde/ual#0.95,0.72,0.25': 2 mesh part(s), 13744 triangles, 2 material(s), 66 bone(s), 0 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-10-16 06:16:40.015][engine][Horde][Goblin Horde][info]: the fight starts at wave 1: 1 playing here, 0 online
+[2026-10-16 06:16:40.015][engine][Horde][Goblin Horde][info]: 5 goblin types (19 looks), 4 bosses, 11 characters, 4 weapons; up to 60 goblins alive, 12 ragdolls
+[2026-10-16 06:16:40.015][engine][Governor][Goblin Horde][info]: budget: 2 worker thread(s), frame cap 0, background cap 0, render scale 0.75
+[2026-10-16 06:16:40.016][engine][Input][Goblin Horde][info]: touch controls: stick left, look look.rate, button horde.attack, button horde.roll, button horde.heavy, button horde.block, button horde.aim, button horde.swap, pause
+[2026-10-16 06:16:43.620][engine][Models][Goblin Horde][info]: loaded 'horde/ual#0.35,0.55,0.22': 2 mesh part(s), 13744 triangles, 2 material(s), 66 bone(s), 0 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-10-16 06:17:03.282][engine][Benchmark][Goblin Horde][info]: benchmark: 6 screenshot(s) in C:/forgejo-runner/work/7da67414937f17b3/hostexecutor/results/bench/run_20261016_060631/reports/shots
+[2026-10-16 06:17:03.282][engine][Benchmark][Goblin Horde][info]: benchmark: 141 frames, 8.3 fps avg, 6.4 fps 1% low, 0 hitch(es), verdict too slow; report C:\forgejo-runner\work\7da67414937f17b3\hostexecutor\results\bench\run_20261016_060631\reports\goblin_horde.json

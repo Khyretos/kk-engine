@@ -5,3 +5,4 @@
 - runs/2026-10-14T1114Z-bb6d6daf51: claude/particle-v2, test job success
 - runs/2026-10-14T1159Z-6f2c0ab4a5: claude/particle-instanced, test job success
 - runs/2026-10-15T0420Z-03036e2d5e: main, test job success
+- runs/2026-10-16T0419Z-ef9f975bc1: main, test job success

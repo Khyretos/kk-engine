@@ -1,0 +1,49 @@
+[2026-10-16 06:07:33.736][engine][Application][Kreative Kompas Engine - Physics Demo][info]: Hardware target: desktop (no specific device recognised); platform backend: desktop
+[2026-10-16 06:07:33.736][engine][Application][Kreative Kompas Engine - Physics Demo][info]: UI profile: desktop
+[2026-10-16 06:07:33.736][engine][Governor][Kreative Kompas Engine - Physics Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 1.00
+[2026-10-16 06:07:33.740][engine][VulkanDevice][Kreative Kompas Engine - Physics Demo][info]: using device: llvmpipe (LLVM 22.1.8, 256 bits)
+[2026-10-16 06:07:33.799][engine][SwapChain][Kreative Kompas Engine - Physics Demo][info]: colour output: format 50 (8-bit sRGB)
+[2026-10-16 06:07:33.799][engine][Application][Kreative Kompas Engine - Physics Demo][info]: Hardware target: software-gpu (the only Vulkan device is a CPU: llvmpipe (LLVM 22.1.8, 256 bits))
+[2026-10-16 06:07:33.799][engine][Governor][Kreative Kompas Engine - Physics Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+[2026-10-16 06:07:33.800][engine][Application][Kreative Kompas Engine - Physics Demo][info]: MSAA 1x (software rasteriser)
+[2026-10-16 06:07:33.802][engine][Application][Kreative Kompas Engine - Physics Demo][info]: mood 'studio' (assets/moods/studio.yaml)
+[2026-10-16 06:07:33.802][engine][Benchmark][Kreative Kompas Engine - Physics Demo][info]: benchmark: 3 s warm-up, then 20 s measured, uncapped (no vsync, no frame cap)
+[2026-10-16 06:07:33.849][engine][Physics][Kreative Kompas Engine - Physics Demo][info]: Task system: 2 worker(s) (4 usable cores)
+[2026-10-16 06:07:33.849][engine][Physics][Kreative Kompas Engine - Physics Demo][info]: FEMFX constraint solver memory: 67.2 MB
+[2026-10-16 06:07:33.878][engine][Physics][Kreative Kompas Engine - Physics Demo][info]: FEMFX scene created (ground + 6 object(s), cap=512)
+[2026-10-16 06:07:33.924][engine][Audio][Kreative Kompas Engine - Physics Demo][info]: Audio ready: 48000 Hz, 32 voices, output: Speakers (Realtek High Definition Audio) (WASAPI)
+[rmlui] Loaded font face 'Noto Sans' [regular] from 'assets/fonts/NotoSans-Regular.ttf'.
+[rmlui] Loaded font face 'Noto Sans' [bold] from 'assets/fonts/NotoSans-Bold.ttf'.
+[rmlui] Loaded font face 'Noto Sans' [italic] from 'assets/fonts/NotoSans-Italic.ttf'.
+[rmlui] Loaded font face 'Noto Color Emoji' [regular] from 'assets/fonts/NotoColorEmoji.ttf'.
+[ui] RmlUi initialised with real Vulkan rendering (text via glyph textures, <img>/background-image via stb_image, both real now -- see RmlVulkanRenderInterface.h)
+[2026-10-16 06:07:33.957][engine][GameShell][Kreative Kompas Engine - Physics Demo][info]: no settings file at 'settings.json' (using defaults)
+[2026-10-16 06:07:33.957][engine][Governor][Kreative Kompas Engine - Physics Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+[2026-10-16 06:07:33.966][engine][Governor][Kreative Kompas Engine - Physics Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 0, render scale 0.75
+[2026-10-16 06:07:33.966][engine][Input][Kreative Kompas Engine - Physics Demo][info]: touch controls: stick left, button phys.spawn, button phys.scene, button phys.clear, button phys.next, button phys.material, button camera.zoom, pause
+[2026-10-16 06:07:34.911][engine][Physics][Kreative Kompas Engine - Physics Demo][info]: perf: 1.9 fps, 1.9 ticks/s, step avg 0.24 ms max 0.38 ms, render prep 0.02 ms, 6 object(s) / 6 piece(s), 6 awake piece(s), 24 faces drawn
+[2026-10-16 06:07:35.916][engine][Physics][Kreative Kompas Engine - Physics Demo][info]: perf: 24.9 fps, 49.8 ticks/s, step avg 0.07 ms max 0.12 ms, render prep 0.01 ms, 6 object(s) / 6 piece(s), 6 awake piece(s), 24 faces drawn
+[2026-10-16 06:07:36.921][engine][Physics][Kreative Kompas Engine - Physics Demo][info]: perf: 24.9 fps, 49.7 ticks/s, step avg 0.14 ms max 0.22 ms, render prep 0.01 ms, 6 object(s) / 6 piece(s), 3 awake piece(s), 24 faces drawn
+[2026-10-16 06:07:37.925][engine][Physics][Kreative Kompas Engine - Physics Demo][info]: perf: 24.9 fps, 49.8 ticks/s, step avg 0.06 ms max 0.18 ms, render prep 0.01 ms, 6 object(s) / 6 piece(s), 0 awake piece(s), 24 faces drawn
+[2026-10-16 06:07:38.926][engine][Physics][Kreative Kompas Engine - Physics Demo][info]: perf: 25.0 fps, 50.0 ticks/s, step avg 0.03 ms max 0.05 ms, render prep 0.00 ms, 6 object(s) / 6 piece(s), 0 awake piece(s), 24 faces drawn
+[2026-10-16 06:07:39.928][engine][Physics][Kreative Kompas Engine - Physics Demo][info]: perf: 24.9 fps, 49.9 ticks/s, step avg 0.03 ms max 0.05 ms, render prep 0.00 ms, 6 object(s) / 6 piece(s), 0 awake piece(s), 24 faces drawn
+[2026-10-16 06:07:40.930][engine][Physics][Kreative Kompas Engine - Physics Demo][info]: perf: 25.0 fps, 49.9 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 6 object(s) / 6 piece(s), 0 awake piece(s), 24 faces drawn
+[2026-10-16 06:07:41.967][engine][Physics][Kreative Kompas Engine - Physics Demo][info]: perf: 25.1 fps, 50.1 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 6 object(s) / 6 piece(s), 0 awake piece(s), 24 faces drawn
+[2026-10-16 06:07:42.969][engine][Physics][Kreative Kompas Engine - Physics Demo][info]: perf: 24.9 fps, 49.9 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 6 object(s) / 6 piece(s), 0 awake piece(s), 24 faces drawn
+[2026-10-16 06:07:44.007][engine][Physics][Kreative Kompas Engine - Physics Demo][info]: perf: 25.1 fps, 50.1 ticks/s, step avg 0.03 ms max 0.05 ms, render prep 0.00 ms, 6 object(s) / 6 piece(s), 0 awake piece(s), 24 faces drawn
+[2026-10-16 06:07:45.044][engine][Physics][Kreative Kompas Engine - Physics Demo][info]: perf: 25.1 fps, 50.1 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 6 object(s) / 6 piece(s), 0 awake piece(s), 24 faces drawn
+[2026-10-16 06:07:46.081][engine][Physics][Kreative Kompas Engine - Physics Demo][info]: perf: 25.1 fps, 50.2 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 6 object(s) / 6 piece(s), 0 awake piece(s), 24 faces drawn
+[2026-10-16 06:07:47.120][engine][Physics][Kreative Kompas Engine - Physics Demo][info]: perf: 25.0 fps, 50.1 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 6 object(s) / 6 piece(s), 0 awake piece(s), 24 faces drawn
+[2026-10-16 06:07:48.121][engine][Physics][Kreative Kompas Engine - Physics Demo][info]: perf: 25.0 fps, 49.9 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 6 object(s) / 6 piece(s), 0 awake piece(s), 24 faces drawn
+[2026-10-16 06:07:49.159][engine][Physics][Kreative Kompas Engine - Physics Demo][info]: perf: 25.1 fps, 50.1 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 6 object(s) / 6 piece(s), 0 awake piece(s), 24 faces drawn
+[2026-10-16 06:07:50.195][engine][Physics][Kreative Kompas Engine - Physics Demo][info]: perf: 25.1 fps, 50.2 ticks/s, step avg 0.03 ms max 0.06 ms, render prep 0.00 ms, 6 object(s) / 6 piece(s), 0 awake piece(s), 24 faces drawn
+[2026-10-16 06:07:51.232][engine][Physics][Kreative Kompas Engine - Physics Demo][info]: perf: 25.1 fps, 50.2 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 6 object(s) / 6 piece(s), 0 awake piece(s), 24 faces drawn
+[2026-10-16 06:07:52.270][engine][Physics][Kreative Kompas Engine - Physics Demo][info]: perf: 25.0 fps, 50.1 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 6 object(s) / 6 piece(s), 0 awake piece(s), 24 faces drawn
+[2026-10-16 06:07:53.308][engine][Physics][Kreative Kompas Engine - Physics Demo][info]: perf: 25.1 fps, 50.1 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 6 object(s) / 6 piece(s), 0 awake piece(s), 24 faces drawn
+[2026-10-16 06:07:54.344][engine][Physics][Kreative Kompas Engine - Physics Demo][info]: perf: 25.1 fps, 50.2 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 6 object(s) / 6 piece(s), 0 awake piece(s), 24 faces drawn
+[2026-10-16 06:07:55.345][engine][Physics][Kreative Kompas Engine - Physics Demo][info]: perf: 25.0 fps, 50.0 ticks/s, step avg 0.03 ms max 0.05 ms, render prep 0.00 ms, 6 object(s) / 6 piece(s), 0 awake piece(s), 24 faces drawn
+[2026-10-16 06:07:56.381][engine][Physics][Kreative Kompas Engine - Physics Demo][info]: perf: 25.1 fps, 50.2 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 6 object(s) / 6 piece(s), 0 awake piece(s), 24 faces drawn
+[2026-10-16 06:07:57.164][engine][Benchmark][Kreative Kompas Engine - Physics Demo][info]: benchmark: 6 screenshot(s) in C:/forgejo-runner/work/7da67414937f17b3/hostexecutor/results/bench/run_20261016_060631/reports/shots
+[2026-10-16 06:07:57.165][engine][Benchmark][Kreative Kompas Engine - Physics Demo][info]: benchmark: 487 frames, 25.1 fps avg, 24.3 fps 1% low, 0 hitch(es), verdict struggles; report C:\forgejo-runner\work\7da67414937f17b3\hostexecutor\results\bench\run_20261016_060631\reports\physics_demo.json
+[2026-10-16 06:07:57.168][engine][Audio][Kreative Kompas Engine - Physics Demo][info]: Audio: 12 impacts played, 0 skipped (cooldown/cap), 0 breaks, 0 footsteps, voices dropped 0 stolen 0; room RT60 1.61 s wet 0.00
+[2026-10-16 06:07:57.192][engine][Physics][Kreative Kompas Engine - Physics Demo][info]: FEMFX scene destroyed
