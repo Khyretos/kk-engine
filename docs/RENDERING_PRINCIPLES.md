@@ -229,7 +229,7 @@ every frame, so there is no noise to hide and nothing is blended over
 frames. It reads the finished frame and is used by the next one (light
 arrives one frame late, reprojected; where that frame didn't see a
 surface, the sky alone lights it, as without GI): the one temporal
-dependency, and Kees's call (asked 2026-10-17). Half resolution, read
+dependency, accepted for it (Kees, 2026-10-17). Half resolution, read
 back with depth-aware weights so it never bleeds across edges. Cost on
 the RX 9070 XT at 844 x 1384 with 4x MSAA: 0.29 ms (synty_demo, 722 to
 611 fps); on lavapipe it halves the frame rate, which is why it is off by
