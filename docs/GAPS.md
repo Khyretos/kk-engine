@@ -60,7 +60,7 @@ Status: ⬜ not started, 🔨 in progress, ✅ done.
 | ENG-G10 | Physics | FEMFX <-> Jolt bridge leftovers: rubble breaking again, same-step pushes from heavy FEMFX bodies. | ⬜ |
 | ENG-G13 | Network | FEMFX breakables per machine; relay and join codes (#44); world saves (#45); shared roles (#46). | ⬜ |
 | ENG-G14 | Mods | Pack system in every game and a mod screen (#61). | ⬜ |
-| ENG-G19 | Animation | 2D blend spaces, CCD for long chains, rest-pose matching, an animation demo (#24). Part 1 done: 2D blend spaces (`Animator::addBlendState2D`, gradient band, polar), goblin_horde heroes strafe with one. | 🔨 |
+| ENG-G19 | Animation | 2D blend spaces, CCD for long chains, rest-pose matching, an animation demo (#24). Part 1 done: 2D blend spaces (`Animator::addBlendState2D`, gradient band, polar), goblin_horde heroes strafe with one. Part 2 done: CCD with bend limits and damping (`solveCcd`, `ccdPoints`). | 🔨 |
 | ENG-G11 | Physics | FEMFX on ARM/WebAssembly through a SIMDe port. | ⬜ |
 | ENG-G15 | Platforms | macOS bundle and `.icns`, Windows `.exe` icon build, phone player builds (#56), code signing (#57). | ⬜ |
 | ENG-G16 | Content | Synty packs beyond POLYGON Prototype in the demos; asset browser leftovers. | ⬜ |
@@ -100,7 +100,7 @@ by area. The goal is parity with the big engines and more.
 | ENG-F19 | 2D | 2D toolkit: tilemaps, sprite animation, 2D lights, 2D physics, parallax | ⬜ |
 | ENG-F20 | XR | OpenXR (VR/AR) on the Vulkan renderer | ⬜ |
 | ENG-F21 | Animation | 2D blend trees (1D and 2D blend spaces; G19) | ✅ |
-| ENG-F22 | Animation | IK solver (two-bone, foot, hand and look IK exist; CCD missing) | 🟡 |
+| ENG-F22 | Animation | IK solver (two-bone, foot, hand, look, FABRIK and CCD with bend limits; G19) | ✅ |
 | ENG-F23 | Animation | Motion capture import and clean-up | ⬜ |
 | ENG-F24 | Animation | Procedural animation (docs/PROCEDURAL_ANIMATION.md) | ✅ |
 | ENG-F25 | Animation | Facial animation, blend shapes | ⬜ |
