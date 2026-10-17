@@ -220,6 +220,22 @@ ambient) and [#21](https://github.com/Khyretos/kk-engine/issues/21)
 applies to both. Any future ray tracing uses Vulkan's vendor-neutral
 `VK_KHR_ray_query`/compute, with a raster fallback.
 
+**Screen-space GI (ENG-F01, 2026-10-17).** An optional setting
+(`globalIllumination`, off by default; `KKE_GI=1`) for light bounced
+between nearby surfaces and shadow in corners and under things, kept to
+this rule: a visibility bitmask (Therrien et al. 2023) over 4 fixed
+directions and 8 fixed distances per pixel, the same for every pixel and
+every frame, so there is no noise to hide and nothing is blended over
+frames. It reads the finished frame and is used by the next one (light
+arrives one frame late, reprojected; where that frame didn't see a
+surface, the sky alone lights it, as without GI): the one temporal
+dependency, and Kees's call (asked 2026-10-17). Half resolution, read
+back with depth-aware weights so it never bleeds across edges. Cost on
+the RX 9070 XT at 844 x 1384 with 4x MSAA: 0.29 ms (synty_demo, 722 to
+611 fps); on lavapipe it halves the frame rate, which is why it is off by
+default. `KKE_GI_VIEW=1` shows what it sees: lit surfaces turn grey by how
+much sky they see.
+
 ### 7. Tone mapping, exposure and colour management
 
 **Argument.** (Fox Engine videos, 33 "tone mapping & exposure

@@ -9,6 +9,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/packing.hpp>
 #include <algorithm>
+#include <cstdlib>
 #include <cstring>
 
 namespace kke {
@@ -54,8 +55,10 @@ struct LightingUBOData {
     glm::mat4 pointShadowViewProj[ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces]; // light * kPointFaces + face (ShadowMap::pointFaceViewProj)
     glm::vec4 pointShadowTiles[ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces];    // that face's tile of the point map: x, y, width, height in 0..1
     glm::vec4 envMap; // x = the reflections' top mip (levels - 1), 0 = no map: reflect the ambient SH
+    glm::mat4 giViewProj; // the camera the screen-space GI images were made with (ENG-F01)
+    glm::vec4 gi;         // x = 1 when they hold a frame's result, yz = their size in pixels, w = KKE_GI_VIEW
 };
-static_assert(sizeof(LightingUBOData) == Lighting::kMaxLights * 3 * 16 + 2 * 16 + 2 * 64 + 7 * 16 + 9 * 16 + 2 * ShadowMap::kCascades * 16 + ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces * (64 + 16) + 16, "must match shaders/lighting_ubo.glsl");
+static_assert(sizeof(LightingUBOData) == Lighting::kMaxLights * 3 * 16 + 2 * 16 + 2 * 64 + 7 * 16 + 9 * 16 + 2 * ShadowMap::kCascades * 16 + ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces * (64 + 16) + 16 + 64 + 16, "must match shaders/lighting_ubo.glsl");
 static_assert(ShadowMap::kMaxPointShadows <= Lighting::kMaxLights, "every point-shadow slot needs a light");
 
 } // namespace
@@ -65,7 +68,7 @@ LightingBuffer::LightingBuffer(VulkanDevice& device) : m_device(device) {
     // vertex and fragment stages (vertex doesn't currently need it, but
     // costs nothing to allow now rather than needing a second layout
     // later for e.g. per-vertex light-space transforms for shadows).
-    std::array<VkDescriptorSetLayoutBinding, 2> bindings{};
+    std::array<VkDescriptorSetLayoutBinding, 4> bindings{};
     bindings[0].binding = 0;
     bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     bindings[0].descriptorCount = 1;
@@ -75,6 +78,11 @@ LightingBuffer::LightingBuffer(VulkanDevice& device) : m_device(device) {
     bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     bindings[1].descriptorCount = 1;
     bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    // Bindings 2 and 3: screen-space GI's light and depth (setScreenGi).
+    bindings[2] = bindings[1];
+    bindings[2].binding = 2;
+    bindings[3] = bindings[1];
+    bindings[3].binding = 3;
 
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -86,7 +94,7 @@ LightingBuffer::LightingBuffer(VulkanDevice& device) : m_device(device) {
     // module shares these, there's no per-object growth the way
     // RmlVulkanRenderInterface's texture pool needs.
     const std::array<VkDescriptorPoolSize, 2> poolSizes{ { { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kSlotCount },
-                                                          { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, kSlotCount } } };
+                                                          { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 3 * kSlotCount } } };
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     poolInfo.maxSets = kSlotCount;
@@ -134,18 +142,23 @@ LightingBuffer::~LightingBuffer() {
 
 void LightingBuffer::writeEnvironment(uint32_t slot) {
     const Texture& map = m_envMap ? *m_envMap : *m_placeholder;
-    VkDescriptorImageInfo info{};
-    info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    info.imageView = map.imageView();
-    info.sampler = map.sampler();
-    VkWriteDescriptorSet write{};
-    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    write.dstSet = m_descriptorSets[slot];
-    write.dstBinding = 1;
-    write.descriptorCount = 1;
-    write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    write.pImageInfo = &info;
-    vkUpdateDescriptorSets(m_device.device(), 1, &write, 0, nullptr);
+    // Without GI the placeholder (0, 0, 0, 1) reads as no bounce, all visible.
+    const bool gi = m_giLight && m_giDepth && m_giSampler;
+    std::array<VkDescriptorImageInfo, 3> info{};
+    info[0] = { map.sampler(), map.imageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+    info[1] = gi ? VkDescriptorImageInfo{ m_giSampler, m_giLight, VK_IMAGE_LAYOUT_GENERAL }
+                 : VkDescriptorImageInfo{ m_placeholder->sampler(), m_placeholder->imageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+    info[2] = gi ? VkDescriptorImageInfo{ m_giSampler, m_giDepth, VK_IMAGE_LAYOUT_GENERAL } : info[1];
+    std::array<VkWriteDescriptorSet, 3> write{};
+    for (uint32_t i = 0; i < 3; ++i) {
+        write[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write[i].dstSet = m_descriptorSets[slot];
+        write[i].dstBinding = 1 + i;
+        write[i].descriptorCount = 1;
+        write[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        write[i].pImageInfo = &info[i];
+    }
+    vkUpdateDescriptorSets(m_device.device(), static_cast<uint32_t>(write.size()), write.data(), 0, nullptr);
 }
 
 void LightingBuffer::update(const Lighting& lighting, const glm::vec3& cameraPos, const glm::mat4& lightViewProj, const glm::mat4& viewProj,
@@ -205,6 +218,12 @@ void LightingBuffer::update(const Lighting& lighting, const glm::vec3& cameraPos
     data.fogParams = glm::vec4(f.heightFalloff, f.height, std::clamp(f.maxOpacity, 0.0f, 1.0f), f.sunScatter);
 
     data.envMap = glm::vec4(m_envMap && m_envLevels > 1 ? static_cast<float>(m_envLevels - 1) : 0.0f, 0.0f, 0.0f, 0.0f);
+    data.giViewProj = m_giViewProj;
+    static const float view = [] {
+        const char* v = std::getenv("KKE_GI_VIEW"); // 1: lit surfaces show the GI's visibility alone (a check)
+        return v ? static_cast<float>(std::atoi(v)) : 0.0f;
+    }();
+    data.gi = glm::vec4(m_giLight ? 1.0f : 0.0f, m_giSize.x, m_giSize.y, m_giLight ? view : 0.0f);
 
     m_buffers[m_slot]->upload(&data, sizeof(data));
     // This slot's set is free now (setFrame came after the frame's fence wait).

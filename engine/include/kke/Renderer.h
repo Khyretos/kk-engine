@@ -74,6 +74,26 @@ public:
     // Ends the render pass, submits, and presents.
     void endFrame();
 
+    // The scene's depth kept for passes after the 3D one to read (ENG-F01,
+    // global illumination): stored and sampleable when on, thrown away when
+    // off (the default: no bandwidth spent). Takes effect on the next frame.
+    void setSceneDepthReadable(bool readable);
+    bool sceneDepthReadable() const { return m_depthReadable; }
+    // Ends the 3D pass early, so work can read this frame's scene before the
+    // overlay pass opens (beginOverlayPass() ends it if nobody did). After
+    // it, sceneImages() are readable: the colour in SHADER_READ_ONLY, the
+    // depth (when readable) in DEPTH_STENCIL_READ_ONLY, both written and
+    // visible to compute and fragment shaders.
+    void endScenePass();
+    struct SceneImages {
+        VkImageView color = VK_NULL_HANDLE; // single-sample HDR (kSceneColorFormat)
+        VkImageView depth = VK_NULL_HANDLE; // depth aspect only; null unless sceneDepthReadable()
+        VkExtent2D extent{};
+        uint32_t depthSamples = 1;          // multisampled with MSAA: read sample 0 (sampler2DMS)
+    };
+    // This frame's scene images (between beginFrame and endFrame).
+    SceneImages sceneImages() const;
+
     // 3D resolution relative to the window (resource governor, 1.6).
     // Clamped to 0.5..1. Takes effect on the next frame.
     void setRenderScale(float scale);
@@ -241,9 +261,12 @@ private:
     float m_renderScale = 1.0f;
     uint32_t m_msaa = 1;
     bool m_inScenePass = false;
+    bool m_depthReadable = false;
+    bool m_overlayOpen = false; // beginOverlayPass() opened the swapchain's pass this frame
     VkRenderPass m_scenePass = VK_NULL_HANDLE;
     VkFormat m_scenePassFormats[2] = {};
     uint32_t m_scenePassSamples = 0;
+    bool m_scenePassDepthStored = false;
     struct SceneTarget {
         VkExtent2D extent{};
         // color: single-sample, read by the tone-map pass. msaaColor: only with
@@ -251,6 +274,7 @@ private:
         VkImage color = VK_NULL_HANDLE, depth = VK_NULL_HANDLE, msaaColor = VK_NULL_HANDLE;
         VmaAllocation colorAlloc = VK_NULL_HANDLE, depthAlloc = VK_NULL_HANDLE, msaaColorAlloc = VK_NULL_HANDLE;
         VkImageView colorView = VK_NULL_HANDLE, depthView = VK_NULL_HANDLE, msaaColorView = VK_NULL_HANDLE;
+        VkImageView depthSampleView = VK_NULL_HANDLE; // depth aspect only, when the depth is readable
         VkFramebuffer framebuffer = VK_NULL_HANDLE;
     };
     SceneTarget m_sceneTargets[kMaxFramesInFlight];

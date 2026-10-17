@@ -1,5 +1,6 @@
 #include "kke/Application.h"
 #include "kke/SkyRenderer.h"
+#include "ScreenGiPass.h"
 #include "kke/Mood.h"
 #include "kke/EngineSettings.h"
 #include "kke/LogoIntro.h"
@@ -140,6 +141,10 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
         if (!m_toneMapperOverride) log::get("Application")->warn("KKE_TONEMAP={} is not agx, aces, reinhard or none; ignored", env);
     }
     m_lightingBuffer = std::make_unique<LightingBuffer>(m_renderer->device());
+    if (const char* env = dev::env("KKE_GI"); env && env[0] == '1') {
+        m_screenGiEnv = true;
+        setScreenGi(true);
+    }
     m_mood = std::make_unique<Mood>();
     if (const char* env = dev::env("KKE_MOOD"); env && *env) m_moodOverride = env;
 
@@ -996,7 +1001,20 @@ void Application::run() {
         if (frameBegun) {
             // After beginFrame's fence wait: this frame slot's buffers are
             // free, while the other slot may still be drawing on the GPU.
+            // Screen-space GI: last frame's result for the first view's shading
+            // (one view only), its images sized for this frame first.
+            const bool giOn = m_screenGiOn && viewCount == 1;
+            if (giOn) {
+                if (!m_screenGi) m_screenGi = std::make_unique<ScreenGiPass>(m_renderer->device());
+                m_screenGi->prepare(sceneExtent);
+            }
+            const bool giReady = giOn && m_screenGi->ready();
             for (uint32_t i = 0; i < viewCount; ++i) {
+                if (i == 0 && giReady)
+                    drawViews[i].lighting->setScreenGi(m_screenGi->light(), m_screenGi->depth(), m_screenGi->sampler(), m_screenGi->viewProj(),
+                                                       m_screenGi->size());
+                else
+                    drawViews[i].lighting->setScreenGi(VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE, glm::mat4(1.0f), glm::vec2(0.0f));
                 drawViews[i].lighting->setFrame(m_renderer->currentFrameIndex());
                 drawViews[i].lighting->setEnvironmentMap(m_skyRenderer ? m_skyRenderer->reflections() : nullptr,
                                                          m_skyRenderer ? m_skyRenderer->reflectionLevels() : 0);
@@ -1123,6 +1141,13 @@ void Application::run() {
                     safeInvoke(m, "renderTranslucent", [&] { m->renderTranslucent(renderCtx); });
                 }
             }
+            // GI from this frame's scene, for the next frame's shading.
+            if (giOn && drawScene) {
+                m_renderer->endScenePass();
+                m_screenGi->record(cmd, m_renderer->currentFrameIndex(), m_renderer->sceneImages(), view, proj, m_screenGiSettings);
+            } else if (m_screenGi) {
+                m_screenGi->invalidate();
+            }
             // The overlay covers the whole window with the first camera.
             renderCtx.view = view;
             renderCtx.proj = proj;
@@ -1166,6 +1191,13 @@ void Application::run() {
     }
     if (m_bench) writeBenchmarkReport();
     startQuitWatchdog();
+}
+
+void Application::setScreenGi(bool on) {
+    m_screenGiOn = on || m_screenGiEnv;
+    // The scene's depth is kept only while something reads it.
+    m_renderer->setSceneDepthReadable(m_screenGiOn);
+    if (!m_screenGiOn && m_screenGi) m_screenGi->invalidate();
 }
 
 void Application::setResourceBudget(const ResourceBudget& budget) {

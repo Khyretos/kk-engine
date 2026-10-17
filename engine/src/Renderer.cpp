@@ -318,7 +318,8 @@ VkRenderPass Renderer::createSceneCompatiblePass(VkImageLayout colorFinalLayout)
     a[1].format = depth;
     a[1].samples = samples;
     a[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    a[1].storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    // Kept only when a pass after this one reads it (setSceneDepthReadable).
+    a[1].storeOp = m_depthReadable ? VK_ATTACHMENT_STORE_OP_STORE : VK_ATTACHMENT_STORE_OP_DONT_CARE;
     a[1].stencilLoadOp = m_swapChain->hasStencil() ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     a[1].stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     a[1].initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -352,7 +353,8 @@ VkRenderPass Renderer::createSceneCompatiblePass(VkImageLayout colorFinalLayout)
     dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
     dependency.dstSubpass = 0;
     dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
-                              VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+                              VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
+                              VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT; // compute reading last frame's images (endScenePass)
     dependency.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
     dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
     dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
@@ -373,11 +375,14 @@ VkRenderPass Renderer::createSceneCompatiblePass(VkImageLayout colorFinalLayout)
 
 void Renderer::createScenePass() {
     VkFormat color = kSceneColorFormat, depth = m_swapChain->depthFormat();
-    if (m_scenePass && m_scenePassFormats[0] == color && m_scenePassFormats[1] == depth && m_scenePassSamples == m_msaa) return;
+    if (m_scenePass && m_scenePassFormats[0] == color && m_scenePassFormats[1] == depth && m_scenePassSamples == m_msaa &&
+        m_scenePassDepthStored == m_depthReadable)
+        return;
     if (m_scenePass) vkDestroyRenderPass(m_device->device(), m_scenePass, nullptr);
     m_scenePassFormats[0] = color;
     m_scenePassFormats[1] = depth;
     m_scenePassSamples = m_msaa;
+    m_scenePassDepthStored = m_depthReadable;
     // The pass leaves the 3D image as an attachment; beginOverlayPass()
     // moves it to SHADER_READ_ONLY with a barrier that makes the pass's
     // writes visible to the tone-map pass (a final-layout transition here
@@ -394,6 +399,7 @@ void Renderer::destroySceneTarget(uint32_t frame) {
     if (t.colorView) vkDestroyImageView(dev, t.colorView, nullptr);
     if (t.depthView) vkDestroyImageView(dev, t.depthView, nullptr);
     if (t.msaaColorView) vkDestroyImageView(dev, t.msaaColorView, nullptr);
+    if (t.depthSampleView) vkDestroyImageView(dev, t.depthSampleView, nullptr);
     if (t.color) vmaDestroyImage(m_device->allocator(), t.color, t.colorAlloc);
     if (t.msaaColor) vmaDestroyImage(m_device->allocator(), t.msaaColor, t.msaaColorAlloc);
     if (t.depth) vmaDestroyImage(m_device->allocator(), t.depth, t.depthAlloc);
@@ -406,7 +412,8 @@ void Renderer::ensureSceneTarget(uint32_t frame) {
     createScenePass();
     VkExtent2D e = renderExtent();
     SceneTarget& t = m_sceneTargets[frame];
-    if (t.framebuffer && t.extent.width == e.width && t.extent.height == e.height) return;
+    if (t.framebuffer && t.extent.width == e.width && t.extent.height == e.height && (t.depthSampleView != VK_NULL_HANDLE) == m_depthReadable)
+        return;
     destroySceneTarget(frame);
     t.extent = e;
 
@@ -438,9 +445,19 @@ void Renderer::ensureSceneTarget(uint32_t frame) {
     const VkSampleCountFlagBits samples = static_cast<VkSampleCountFlagBits>(m_msaa);
     makeImage(m_scenePassFormats[0], VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
               VK_IMAGE_ASPECT_COLOR_BIT, VK_SAMPLE_COUNT_1_BIT, t.color, t.colorAlloc, t.colorView);
-    makeImage(m_scenePassFormats[1], VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+    makeImage(m_scenePassFormats[1], VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | (m_depthReadable ? VK_IMAGE_USAGE_SAMPLED_BIT : 0),
               VK_IMAGE_ASPECT_DEPTH_BIT | (m_swapChain->hasStencil() ? VK_IMAGE_ASPECT_STENCIL_BIT : 0), samples, t.depth,
               t.depthAlloc, t.depthView);
+    if (m_depthReadable) {
+        // Shaders read depth only: a view of that aspect alone.
+        VkImageViewCreateInfo vi{};
+        vi.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        vi.image = t.depth;
+        vi.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        vi.format = m_scenePassFormats[1];
+        vi.subresourceRange = { VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1 };
+        VK_CHECK(vkCreateImageView(m_device->device(), &vi, nullptr, &t.depthSampleView));
+    }
     std::vector<VkImageView> views;
     if (m_msaa > 1) {
         makeImage(m_scenePassFormats[0], VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_IMAGE_ASPECT_COLOR_BIT, samples, t.msaaColor,
@@ -504,33 +521,61 @@ void Renderer::beginRenderPass() {
 
     vkCmdBeginRenderPass(cmd, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
     m_inScenePass = true;
+    m_overlayOpen = false;
     setFullViewport(cmd, extent);
 }
 
-void Renderer::beginOverlayPass() {
-    if (!m_inScenePass) {
-        // Same pass continues: only undo a split-screen view's viewport.
-        setFullViewport(m_commandBuffers[m_currentFrame], m_swapChain->extent());
-        return;
-    }
+void Renderer::setSceneDepthReadable(bool readable) { m_depthReadable = readable; }
+
+Renderer::SceneImages Renderer::sceneImages() const {
+    const SceneTarget& t = m_sceneTargets[m_currentFrame];
+    return SceneImages{ t.colorView, t.depthSampleView, t.extent, m_scenePassSamples };
+}
+
+void Renderer::endScenePass() {
+    if (!m_inScenePass) return;
     m_inScenePass = false;
     VkCommandBuffer cmd = m_commandBuffers[m_currentFrame];
     vkCmdEndRenderPass(cmd);
 
     // The 3D image: attachment -> sampled, its writes (and the MSAA
-    // resolve) finished and visible before the tone-map pass reads it.
-    VkImageMemoryBarrier b{};
-    b.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    b.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    b.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-    b.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    b.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    b.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    b.image = m_sceneTargets[m_currentFrame].color;
-    b.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
-    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0,
-                         nullptr, 1, &b);
+    // resolve) finished and visible before the tone-map pass (and any
+    // compute between) reads it. The depth too, when it is kept.
+    const SceneTarget& t = m_sceneTargets[m_currentFrame];
+    std::array<VkImageMemoryBarrier, 2> b{};
+    b[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    b[0].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    b[0].dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    b[0].oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    b[0].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    b[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    b[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    b[0].image = t.color;
+    b[0].subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+    b[1] = b[0];
+    b[1].srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    b[1].oldLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    b[1].newLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+    b[1].image = t.depth;
+    VkImageAspectFlags aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
+    if (m_swapChain->hasStencil()) aspect |= VK_IMAGE_ASPECT_STENCIL_BIT;
+    b[1].subresourceRange = { aspect, 0, 1, 0, 1 };
+    const bool depth = t.depthSampleView != VK_NULL_HANDLE;
+    VkPipelineStageFlags src = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    if (depth) src |= VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+    vkCmdPipelineBarrier(cmd, src, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr,
+                         depth ? 2u : 1u, b.data());
+}
+
+void Renderer::beginOverlayPass() {
+    if (!m_inScenePass && m_overlayOpen) {
+        // Same pass continues: only undo a split-screen view's viewport.
+        setFullViewport(m_commandBuffers[m_currentFrame], m_swapChain->extent());
+        return;
+    }
+    endScenePass();
+    m_overlayOpen = true;
+    VkCommandBuffer cmd = m_commandBuffers[m_currentFrame];
 
     // The swapchain's own pass: it clears the image (the acquire semaphore
     // is waited on at COLOR_ATTACHMENT_OUTPUT, which its dependency chains

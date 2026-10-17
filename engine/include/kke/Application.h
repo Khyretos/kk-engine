@@ -12,6 +12,7 @@
 #include "kke/ResourceGovernor.h"
 #include "kke/HardwareTarget.h"
 #include "kke/UiProfile.h"
+#include "kke/ScreenGi.h"
 #include "kke/ShadowMap.h"
 #include "kke/Texture.h"
 
@@ -34,6 +35,7 @@ namespace kke {
 class BenchRecorder;
 struct BenchOptions;
 class SkyRenderer;
+class ScreenGiPass;
 struct Mood;
 
 // A basic orbit-style camera. Not a module itself — nearly every module
@@ -259,6 +261,14 @@ public:
     // The mood last set (name empty before any), e.g. for AudioModule's ambience.
     const Mood& mood() const { return *m_mood; }
     LightingBuffer& lightingBuffer() { return *m_lightingBuffer; }
+    // Screen-space global illumination (ENG-F01, kke/ScreenGi.h): light
+    // bounced off what is on screen and shadow in corners and under things,
+    // one frame late. Off by default (a compute pass, and the depth kept);
+    // the graphics setting "globalIllumination" or KKE_GI=1 turn it on. With
+    // one view only (split screen draws without it).
+    void setScreenGi(bool on);
+    bool screenGi() const { return m_screenGiOn; }
+    ScreenGiSettings& screenGiSettings() { return m_screenGiSettings; }
     // The shadow map sampler's descriptor SET LAYOUT (not the set
     // itself -- that's bound automatically via RenderContext, see
     // Module.h) -- needed by any module drawing through cube.frag at
@@ -435,6 +445,9 @@ private:
     Lighting m_lighting;
     std::optional<ToneMapper> m_toneMapperOverride; // KKE_TONEMAP
     std::unique_ptr<LightingBuffer> m_lightingBuffer;
+    std::unique_ptr<ScreenGiPass> m_screenGi; // made the first time GI is on
+    bool m_screenGiOn = false, m_screenGiEnv = false; // KKE_GI=1 keeps it on whatever the settings say
+    ScreenGiSettings m_screenGiSettings;
     std::vector<View> m_views;
     // Views after the first: each its own lighting block (camera position
     // and view-projection differ per view).

@@ -284,10 +284,14 @@ vec3 shadeSurfaceAA(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 
     // (kke::EnvMap) along the reflection, weighted by the environment BRDF:
     // metals and glancing angles mirror the sky, and what is reflected is
     // not also scattered (the split sum, Karis 2013).
+    // With screen-space GI (ENG-F01) the sky is shaded by what hides it and
+    // the light bounced off what is near is added.
     float NdotV = max(dot(N, V), 1e-4);
     vec3 envSpecular = envBRDFApprox(F0, roughness, NdotV);
-    vec3 ambient = ambientIrradiance(N) * albedo * (vec3(1.0) - envSpecular) * (1.0 - metallic)
-                 + skyReflection(reflect(-V, N), roughness) * envSpecular;
+    vec4 gi = screenGiAt(fragPosWorld);
+    vec3 ambient = (ambientIrradiance(N) * gi.a + gi.rgb) * albedo * (vec3(1.0) - envSpecular) * (1.0 - metallic)
+                 + skyReflection(reflect(-V, N), roughness) * envSpecular * gi.a;
+    if (lighting.gi.w > 0.5) return vec3(gi.a); // KKE_GI_VIEW=1: the visibility alone (grey: no light to bounce)
 
     vec3 color = ambient + Lo;
     return applyFog(color, fragPosWorld);
