@@ -1,0 +1,23 @@
+[2026-10-17 18:26:49.748][engine][Application][Kreative Kompas Engine - Cloth Demo][info]: Hardware target: desktop (no specific device recognised); platform backend: desktop
+[2026-10-17 18:26:49.748][engine][Application][Kreative Kompas Engine - Cloth Demo][info]: UI profile: desktop
+[2026-10-17 18:26:49.749][engine][Governor][Kreative Kompas Engine - Cloth Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 1.00
+[2026-10-17 18:26:49.752][engine][VulkanDevice][Kreative Kompas Engine - Cloth Demo][info]: using device: llvmpipe (LLVM 22.1.8, 256 bits)
+[2026-10-17 18:26:49.811][engine][SwapChain][Kreative Kompas Engine - Cloth Demo][info]: colour output: format 50 (8-bit sRGB)
+[2026-10-17 18:26:49.812][engine][Application][Kreative Kompas Engine - Cloth Demo][info]: Hardware target: software-gpu (the only Vulkan device is a CPU: llvmpipe (LLVM 22.1.8, 256 bits))
+[2026-10-17 18:26:49.812][engine][Governor][Kreative Kompas Engine - Cloth Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+[2026-10-17 18:26:49.812][engine][Application][Kreative Kompas Engine - Cloth Demo][info]: MSAA 1x (software rasteriser)
+[2026-10-17 18:26:49.814][engine][Application][Kreative Kompas Engine - Cloth Demo][info]: mood 'studio' (assets/moods/studio.yaml)
+[2026-10-17 18:26:49.814][engine][Benchmark][Kreative Kompas Engine - Cloth Demo][info]: benchmark: 3 s warm-up, then 20 s measured, uncapped (no vsync, no frame cap)
+[rmlui] Loaded font face 'Noto Sans' [regular] from 'assets/fonts/NotoSans-Regular.ttf'.
+[rmlui] Loaded font face 'Noto Sans' [bold] from 'assets/fonts/NotoSans-Bold.ttf'.
+[rmlui] Loaded font face 'Noto Sans' [italic] from 'assets/fonts/NotoSans-Italic.ttf'.
+[rmlui] Loaded font face 'Noto Color Emoji' [regular] from 'assets/fonts/NotoColorEmoji.ttf'.
+[ui] RmlUi initialised with real Vulkan rendering (text via glyph textures, <img>/background-image via stb_image, both real now -- see RmlVulkanRenderInterface.h)
+[2026-10-17 18:26:49.886][engine][ClothGpu][Kreative Kompas Engine - Cloth Demo][info]: no compute queue of its own on this GPU: cloth pairs are searched on the CPU (KKE_CLOTH_GPU=shared to try the graphics queue)
+[2026-10-17 18:26:49.987][engine][ClothDemo][Kreative Kompas Engine - Cloth Demo][info]: hair scene: 6 heads, 960 guide strands, 38400 hairs drawn
+[2026-10-17 18:26:49.991][engine][GameShell][Kreative Kompas Engine - Cloth Demo][info]: no settings file at 'settings.json' (using defaults)
+[2026-10-17 18:26:49.991][engine][Governor][Kreative Kompas Engine - Cloth Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+[2026-10-17 18:26:49.999][engine][Governor][Kreative Kompas Engine - Cloth Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 0, render scale 0.75
+[2026-10-17 18:26:49.999][engine][Input][Kreative Kompas Engine - Cloth Demo][info]: touch controls: stick left, button cloth.redrop, button cloth.protection, button cloth.gusts, button cloth.scene, button cloth.scene_back, button camera.zoom, pause
+[2026-10-17 18:27:31.876][engine][Benchmark][Kreative Kompas Engine - Cloth Demo][info]: benchmark: 1 screenshot(s) in C:/forgejo-runner/work/a46b6748ae6343af/hostexecutor/results/bench/run_20261017_182026/reports/shots
+[2026-10-17 18:27:31.876][engine][Benchmark][Kreative Kompas Engine - Cloth Demo][info]: benchmark: 2 frames, 0.1 fps avg, 0.1 fps 1% low, 0 hitch(es), verdict too slow; report C:\forgejo-runner\work\a46b6748ae6343af\hostexecutor\results\bench\run_20261017_182026\reports\cloth_hair.json
