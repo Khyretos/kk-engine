@@ -47,6 +47,7 @@ KKE_ANIM_MOVE=0,1 KKE_ANIM_CIRCLE=8 ./anim_demo   # walk in circles by itself
 | `KKE_ANIM_MOVE=x,y` | hold the move stick there (x right, y forward, -1 to 1): for checks without a controller |
 | `KKE_ANIM_CIRCLE=<s>` | turn that stick round once every `<s>` seconds, through every direction of the blend space |
 | `KKE_ANIM_REST=1` | start with "Show the rest pose" on |
+| `KKE_ANIM_MIRROR=1` | start with the polished floor (with `KKE_REFLECTIONS=screen` it reflects the scene) |
 | `KKE_ANIMATIONS_DIR=<folder>` | where to look for `UAL1_Standard.fbx` and `UAL2.fbx` |
 | `KKE_SKIP_INTRO=1` | skip the logo intro (engine-wide) |
 

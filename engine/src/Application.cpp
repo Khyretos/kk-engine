@@ -1,5 +1,6 @@
 #include "kke/Application.h"
 #include "kke/SkyRenderer.h"
+#include "ReflectionPass.h"
 #include "ScreenGiPass.h"
 #include "kke/RayScene.h"
 #include "kke/Mood.h"
@@ -142,6 +143,11 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
         if (!m_toneMapperOverride) log::get("Application")->warn("KKE_TONEMAP={} is not agx, aces, reinhard or none; ignored", env);
     }
     m_lightingBuffer = std::make_unique<LightingBuffer>(m_renderer->device());
+    // KKE_REFLECTIONS=off|screen|kke|classic: that, whatever the settings say.
+    if (const char* env = dev::env("KKE_REFLECTIONS"); env && *env) {
+        m_reflectionsEnv = reflectionsFromName(env, Reflections::Off);
+        setReflections(*m_reflectionsEnv);
+    }
     if (const char* env = dev::env("KKE_GI"); env && env[0] == '1') {
         m_screenGiEnv = true;
         setScreenGi(true);
@@ -1017,12 +1023,25 @@ void Application::run() {
                 m_screenGi->prepare(sceneExtent);
             }
             const bool giReady = giOn && m_screenGi->ready();
+            // Reflections the same way (ENG-F02).
+            const bool reflOn = m_reflections != Reflections::Off && viewCount == 1;
+            if (reflOn) {
+                if (!m_reflectionPass) m_reflectionPass = std::make_unique<ReflectionPass>(m_renderer->device());
+                m_reflectionPass->prepare(sceneExtent);
+            }
+            const bool reflReady = reflOn && m_reflectionPass->ready();
             for (uint32_t i = 0; i < viewCount; ++i) {
                 if (i == 0 && giReady)
                     drawViews[i].lighting->setScreenGi(m_screenGi->light(), m_screenGi->depth(), m_screenGi->sampler(), m_screenGi->viewProj(),
                                                        m_screenGi->size());
                 else
                     drawViews[i].lighting->setScreenGi(VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE, glm::mat4(1.0f), glm::vec2(0.0f));
+                if (i == 0 && reflReady)
+                    drawViews[i].lighting->setReflections(m_reflectionPass->light(), m_reflectionPass->depth(), m_reflectionPass->sampler(),
+                                                          m_reflectionPass->viewProj(), m_reflectionPass->size(), m_reflectionSettings.maxRoughness);
+                else
+                    drawViews[i].lighting->setReflections(VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE, glm::mat4(1.0f), glm::vec2(0.0f),
+                                                          m_reflectionSettings.maxRoughness);
                 drawViews[i].lighting->setFrame(m_renderer->currentFrameIndex());
                 drawViews[i].lighting->setEnvironmentMap(m_skyRenderer ? m_skyRenderer->reflections() : nullptr,
                                                          m_skyRenderer ? m_skyRenderer->reflectionLevels() : 0);
@@ -1156,6 +1175,12 @@ void Application::run() {
             } else if (m_screenGi) {
                 m_screenGi->invalidate();
             }
+            if (reflOn && drawScene) {
+                m_renderer->endScenePass();
+                m_reflectionPass->record(cmd, m_renderer->currentFrameIndex(), m_renderer->sceneImages(), view, proj, m_reflectionSettings);
+            } else if (m_reflectionPass) {
+                m_reflectionPass->invalidate();
+            }
             // The overlay covers the whole window with the first camera.
             renderCtx.view = view;
             renderCtx.proj = proj;
@@ -1204,8 +1229,23 @@ void Application::run() {
 void Application::setScreenGi(bool on) {
     m_screenGiOn = on || m_screenGiEnv;
     // The scene's depth is kept only while something reads it.
-    m_renderer->setSceneDepthReadable(m_screenGiOn);
+    m_renderer->setSceneDepthReadable(m_screenGiOn || m_reflections != Reflections::Off);
     if (!m_screenGiOn && m_screenGi) m_screenGi->invalidate();
+}
+
+void Application::setReflections(Reflections mode) {
+    m_reflections = m_reflectionsEnv ? *m_reflectionsEnv : mode;
+    // Kke and classic trace rays only where the device can; screen space works everywhere.
+    m_renderer->setSceneDepthReadable(m_screenGiOn || m_reflections != Reflections::Off);
+    if (m_reflections == Reflections::Off && m_reflectionPass) m_reflectionPass->invalidate();
+}
+
+Reflections reflectionsFromName(const std::string& name, Reflections fallback) {
+    if (name == "off") return Reflections::Off;
+    if (name == "screen") return Reflections::Screen;
+    if (name == "kke") return Reflections::Kke;
+    if (name == "classic") return Reflections::Classic;
+    return fallback;
 }
 
 void Application::setResourceBudget(const ResourceBudget& budget) {

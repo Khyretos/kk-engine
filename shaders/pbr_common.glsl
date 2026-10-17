@@ -190,6 +190,12 @@ float specularAAKernel(vec3 normalWorld) {
 
 vec3 shadeSurfaceAA(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 posWorld, vec4 posLightSpace, float specAAKernel);
 
+// What a lit opaque surface writes as its alpha (ENG-F02): 2 + smoothness.
+// Translucent shaders, particles and the sky write 1 or less, so the
+// reflections pass (shaders/reflect.glsl) knows a reflecting surface by
+// alpha >= 2 and how sharp it is from the rest, with no extra target.
+float reflectionMark(float roughness) { return 2.0 + clamp(1.0 - roughness, 0.0, 1.0); }
+
 // Full lighting for one surface point: PBR (GGX) for up to 4 lights,
 // shadow on light 0, ambient from the sky, fog; returns scene light. Shared by every
 // lit mesh shader (cube.frag, model.frag) so they can't drift apart.
@@ -289,8 +295,16 @@ vec3 shadeSurfaceAA(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 
     float NdotV = max(dot(N, V), 1e-4);
     vec3 envSpecular = envBRDFApprox(F0, roughness, NdotV);
     vec4 gi = screenGiAt(fragPosWorld);
+    // Reflections (ENG-F02): on smooth surfaces what the ray met, over the
+    // sky, sharper surfaces trusting it more.
+    vec3 reflected = skyReflection(reflect(-V, N), roughness) * gi.a;
+    if (roughness < lighting.refl.w) {
+        vec4 scene = screenReflectionAt(fragPosWorld);
+        reflected = mix(reflected, scene.rgb, scene.a * (1.0 - roughness / lighting.refl.w));
+        if (lighting.gi.w > 1.5) return scene.rgb * scene.a; // KKE_GI_VIEW=2: smooth surfaces show what they reflect, alone
+    }
     vec3 ambient = (ambientIrradiance(N) * gi.a + gi.rgb) * albedo * (vec3(1.0) - envSpecular) * (1.0 - metallic)
-                 + skyReflection(reflect(-V, N), roughness) * envSpecular * gi.a;
+                 + reflected * envSpecular;
     if (lighting.gi.w > 0.5) return vec3(gi.a); // KKE_GI_VIEW=1: the visibility alone (grey: no light to bounce)
 
     vec3 color = ambient + Lo;

@@ -64,6 +64,18 @@ public:
     // bounce light and visibility, and its view depth (both in GENERAL
     // layout), made with camera `viewProj`, `size` pixels. Null `light`: no
     // GI, the shaders use the sky alone. Written by each update() like the map.
+    // Reflections (ENG-F02, set 0 bindings 4 and 5): the previous frame's
+    // reflected light (a = 1 where found) and its view depth, as for GI;
+    // surfaces smoother than 1 - maxRoughness mix it over the sky. Null: none.
+    void setReflections(VkImageView light, VkImageView depth, VkSampler sampler, const glm::mat4& viewProj, const glm::vec2& size,
+                        float maxRoughness) {
+        m_reflLight = light;
+        m_reflDepth = depth;
+        m_reflSampler = sampler;
+        m_reflViewProj = viewProj;
+        m_reflSize = size;
+        m_reflMaxRoughness = maxRoughness;
+    }
     void setScreenGi(VkImageView light, VkImageView depth, VkSampler sampler, const glm::mat4& viewProj, const glm::vec2& size) {
         m_giLight = light;
         m_giDepth = depth;
@@ -93,7 +105,7 @@ private:
     std::unique_ptr<Buffer> m_buffers[kSlotCount];
     uint32_t m_slot = 0;
 
-    void writeEnvironment(uint32_t slot); // bindings 1-3 of that slot: m_envMap and the GI images, or m_placeholder
+    void writeEnvironment(uint32_t slot); // bindings 1-5 of that slot: m_envMap, the GI and reflection images, or m_placeholder
     std::unique_ptr<Texture> m_placeholder; // 1x1 black, bound while there is no map
     const Texture* m_envMap = nullptr;
     uint32_t m_envLevels = 0;
@@ -101,6 +113,11 @@ private:
     VkSampler m_giSampler = VK_NULL_HANDLE;
     glm::mat4 m_giViewProj{1.0f};
     glm::vec2 m_giSize{0.0f};
+    VkImageView m_reflLight = VK_NULL_HANDLE, m_reflDepth = VK_NULL_HANDLE;
+    VkSampler m_reflSampler = VK_NULL_HANDLE;
+    glm::mat4 m_reflViewProj{1.0f};
+    glm::vec2 m_reflSize{0.0f};
+    float m_reflMaxRoughness = 0.3f;
 };
 
 } // namespace kke

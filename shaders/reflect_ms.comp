@@ -1,0 +1,5 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+// Reflections in screen space, multisampled depth: sample 0 (shaders/reflect.glsl).
+#define DEPTH_MS
+#include "reflect.glsl"

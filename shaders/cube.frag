@@ -22,5 +22,5 @@ void main() {
     // Albedo textures are VK_FORMAT_R8G8B8A8_SRGB, so sampling already
     // returns linear values; vertex colors need converting here.
     vec3 albedo = srgbToLinear(fragColor) * texture(albedoTexture, fragUV).rgb;
-    outColor = vec4(shadeSurface(albedo, fragMetallicRoughness, fragNormalWorld, fragPosWorld, fragPosLightSpace), 1.0);
+    outColor = vec4(shadeSurface(albedo, fragMetallicRoughness, fragNormalWorld, fragPosWorld, fragPosLightSpace), reflectionMark(fragMetallicRoughness.y));
 }
