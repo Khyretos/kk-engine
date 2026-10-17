@@ -125,6 +125,7 @@ set(ENGINE_SOURCES
     src/ParticleMotion.cpp
     src/ScreenGi.cpp
     src/ScreenGiPass.cpp
+    src/ReflectionMarch.cpp
     src/ReflectionPass.cpp
     src/RayScene.cpp
     src/RaySelfTest.cpp
