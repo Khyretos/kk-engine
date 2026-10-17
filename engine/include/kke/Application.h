@@ -12,6 +12,7 @@
 #include "kke/ResourceGovernor.h"
 #include "kke/HardwareTarget.h"
 #include "kke/UiProfile.h"
+#include "kke/Reflections.h"
 #include "kke/ScreenGi.h"
 #include "kke/ShadowMap.h"
 #include "kke/Texture.h"
@@ -36,6 +37,7 @@ class BenchRecorder;
 struct BenchOptions;
 class SkyRenderer;
 class ScreenGiPass;
+class ReflectionPass;
 struct Mood;
 
 // A basic orbit-style camera. Not a module itself — nearly every module
@@ -269,6 +271,13 @@ public:
     void setScreenGi(bool on);
     bool screenGi() const { return m_screenGiOn; }
     ScreenGiSettings& screenGiSettings() { return m_screenGiSettings; }
+    // Reflections on smooth surfaces (ENG-F02, kke/Reflections.h).
+    // Kke and Classic fall back to Screen without ray query
+    // (VulkanDevice::rayQuery). The graphics setting "reflections" or
+    // KKE_REFLECTIONS=off|screen|kke|classic choose it. One view only.
+    void setReflections(Reflections mode);
+    Reflections reflections() const { return m_reflections; }
+    ReflectionSettings& reflectionSettings() { return m_reflectionSettings; }
     // The shadow map sampler's descriptor SET LAYOUT (not the set
     // itself -- that's bound automatically via RenderContext, see
     // Module.h) -- needed by any module drawing through cube.frag at
@@ -448,6 +457,10 @@ private:
     std::unique_ptr<ScreenGiPass> m_screenGi; // made the first time GI is on
     bool m_screenGiOn = false, m_screenGiEnv = false; // KKE_GI=1 keeps it on whatever the settings say
     ScreenGiSettings m_screenGiSettings;
+    std::unique_ptr<ReflectionPass> m_reflectionPass; // made the first time reflections are on
+    Reflections m_reflections = Reflections::Off;
+    std::optional<Reflections> m_reflectionsEnv; // KKE_REFLECTIONS
+    ReflectionSettings m_reflectionSettings;
     std::vector<View> m_views;
     // Views after the first: each its own lighting block (camera position
     // and view-projection differ per view).
