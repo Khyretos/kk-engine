@@ -4,7 +4,7 @@ Written 2026-10-12 from ROADMAP.md (🟡 and 🔴 rows), BUGS.md (open rows),
 ACTION_PLAN.md, the open pull requests on Forgejo and the engine part of
 the Kreative Kompanion big-projects plan (E0 and E1; its E2 feature list,
 demo games, docs rewrite, MCP server and assistant model come after this
-list). Each gap is one task: a branch, a pull request, and a row here that
+list; after them, OpenGL and the editor follow [plans/backends-and-editor.md](plans/backends-and-editor.md)). Each gap is one task: a branch, a pull request, and a row here that
 moves to "Done" with its PR number.
 
 How a task is done: the local Coder (Ollama `qwen3.5:9b-q8_0` on
