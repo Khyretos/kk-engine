@@ -1,0 +1,176 @@
+{
+ "platform": "Windows",
+ "passed": true,
+ "failed": [],
+ "facts": {
+  "Runner": "Kees's PC (native, lavapipe)"
+ },
+ "unit_tests": {
+  "tests": 1132,
+  "failures": 0,
+  "errors": 0,
+  "failed": []
+ },
+ "benchmark": {
+  "file": "C:\\forgejo-runner\\work\\e525b68b9dbb3ad5\\hostexecutor\\results\\bench\\kke-benchmark-20261017_060641.json",
+  "demos": [
+   {
+    "id": "showcase_walk",
+    "status": "ok",
+    "fps_avg": 4.073,
+    "reason": "normal exit"
+   },
+   {
+    "id": "showcase_stress",
+    "status": "ok",
+    "fps_avg": 4.042,
+    "reason": "normal exit"
+   },
+   {
+    "id": "physics_demo",
+    "status": "ok",
+    "fps_avg": 25.017,
+    "reason": "normal exit"
+   },
+   {
+    "id": "melt_demo",
+    "status": "ok",
+    "fps_avg": 9.362,
+    "reason": "normal exit"
+   },
+   {
+    "id": "jiggle_demo",
+    "status": "ok",
+    "fps_avg": 14.909,
+    "reason": "normal exit"
+   },
+   {
+    "id": "sea_demo",
+    "status": "ok",
+    "fps_avg": 16.539,
+    "reason": "normal exit"
+   },
+   {
+    "id": "audio_demo",
+    "status": "ok",
+    "fps_avg": 11.983,
+    "reason": "normal exit"
+   },
+   {
+    "id": "rmlui_demo",
+    "status": "ok",
+    "fps_avg": 17.869,
+    "reason": "normal exit"
+   },
+   {
+    "id": "imgui_demo",
+    "status": "ok",
+    "fps_avg": 34.688,
+    "reason": "normal exit"
+   },
+   {
+    "id": "sandbox",
+    "status": "ok",
+    "fps_avg": 30.187,
+    "reason": "normal exit"
+   },
+   {
+    "id": "synty_demo",
+    "status": "ok",
+    "fps_avg": 28.819,
+    "reason": "normal exit"
+   },
+   {
+    "id": "climb_race",
+    "status": "ok",
+    "fps_avg": 8.564,
+    "reason": "normal exit"
+   },
+   {
+    "id": "flying_pileup",
+    "status": "ok",
+    "fps_avg": 11.771,
+    "reason": "normal exit"
+   },
+   {
+    "id": "procedural_demo",
+    "status": "ok",
+    "fps_avg": 9.495,
+    "reason": "normal exit"
+   },
+   {
+    "id": "cloth_stress",
+    "status": "ok",
+    "fps_avg": 9.072,
+    "reason": "normal exit"
+   },
+   {
+    "id": "cloth_hair",
+    "status": "ok",
+    "fps_avg": 0.133,
+    "reason": "normal exit"
+   },
+   {
+    "id": "cloth_tour",
+    "status": "ok",
+    "fps_avg": 10.028,
+    "reason": "normal exit"
+   },
+   {
+    "id": "farm_demo",
+    "status": "ok",
+    "fps_avg": 19.697,
+    "reason": "normal exit"
+   },
+   {
+    "id": "pet_companion",
+    "status": "ok",
+    "fps_avg": 19.344,
+    "reason": "normal exit"
+   },
+   {
+    "id": "platoon",
+    "status": "ok",
+    "fps_avg": 7.249,
+    "reason": "normal exit"
+   },
+   {
+    "id": "duel",
+    "status": "ok",
+    "fps_avg": 10.609,
+    "reason": "normal exit"
+   },
+   {
+    "id": "goblin_horde",
+    "status": "ok",
+    "fps_avg": 8.292,
+    "reason": "normal exit"
+   },
+   {
+    "id": "racing_pileup",
+    "status": "ok",
+    "fps_avg": 4.899,
+    "reason": "normal exit"
+   },
+   {
+    "id": "tennis_singles",
+    "status": "ok",
+    "fps_avg": 3.174,
+    "reason": "normal exit"
+   },
+   {
+    "id": "tennis_doubles",
+    "status": "ok",
+    "fps_avg": 3.171,
+    "reason": "normal exit"
+   },
+   {
+    "id": "cookbook",
+    "status": "ok",
+    "fps_avg": 14.345,
+    "reason": "normal exit"
+   }
+  ],
+  "gpu": "llvmpipe (LLVM 22.1.8, 256 bits)"
+ }
+}
