@@ -10,3 +10,4 @@
 - runs/2026-10-17T1239Z-ce69567150: claude/gpu-particles, test job success
 - runs/2026-10-17T1304Z-38c71b4feb: claude/blend2d, test job success
 - runs/2026-10-17T1419Z-d94c2e12da: claude/ccd-limits, test job success
+- runs/2026-10-17T1500Z-2523a2d914: claude/blend2d, test job success
