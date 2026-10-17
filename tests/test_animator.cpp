@@ -167,3 +167,76 @@ TEST(Animator, SetProgressHoldsTheClipThere) {
     a.update(0.0f);
     EXPECT_TRUE(a.finished());
 }
+
+// ENG-G19: 2D blend spaces (gradient band interpolation, Johansen 2009).
+namespace {
+kke::BlendSpace2D compass(bool polar) {
+    kke::BlendSpace2D s;
+    s.polar = polar;
+    // x = sideways, y = forward (m/s): idle, forward, right, back, left.
+    s.points = { { 0, { 0.0f, 0.0f } }, { 1, { 0.0f, 2.0f } }, { 2, { 2.0f, 0.0f } }, { 3, { 0.0f, -2.0f } }, { 4, { -2.0f, 0.0f } } };
+    return s;
+}
+} // namespace
+
+TEST(BlendSpace2D, EachPointIsItsOwnClipAndWeightsSumToOne) {
+    for (bool polar : { true, false }) {
+        const kke::BlendSpace2D s = compass(polar);
+        std::vector<float> w;
+        for (size_t i = 0; i < s.points.size(); ++i) {
+            kke::blendSpace2DWeights(s, s.points[i].at, w);
+            for (size_t j = 0; j < w.size(); ++j) EXPECT_NEAR(w[j], i == j ? 1.0f : 0.0f, 1e-4f) << polar << " " << i << " " << j;
+        }
+        for (glm::vec2 at : { glm::vec2(0.7f, 1.1f), glm::vec2(-3.0f, 0.4f), glm::vec2(0.1f, -0.2f), glm::vec2(5.0f, 5.0f) }) {
+            kke::blendSpace2DWeights(s, at, w);
+            float sum = 0.0f;
+            for (float x : w) {
+                EXPECT_GE(x, 0.0f);
+                sum += x;
+            }
+            EXPECT_NEAR(sum, 1.0f, 1e-5f);
+        }
+    }
+}
+
+// Walking round a circle at full speed: the weights change smoothly (no
+// jump from one clip to the next like the old strafe thresholds), and in
+// polar mode idle never joins in.
+TEST(BlendSpace2D, SmoothRoundTheCircleAndNoIdleAtFullSpeed) {
+    const kke::BlendSpace2D s = compass(true);
+    std::vector<float> w, before;
+    float worstStep = 0.0f, worstIdle = 0.0f;
+    for (int i = 0; i <= 720; ++i) {
+        const float a = glm::radians(i * 0.5f);
+        kke::blendSpace2DWeights(s, glm::vec2(std::sin(a), std::cos(a)) * 2.0f, w);
+        if (!before.empty())
+            for (size_t j = 0; j < w.size(); ++j) worstStep = std::max(worstStep, std::fabs(w[j] - before[j]));
+        worstIdle = std::max(worstIdle, w[0]);
+        before = w;
+    }
+    EXPECT_LT(worstStep, 0.02f);
+    EXPECT_LT(worstIdle, 1e-3f);
+    // Halfway between forward and right: half each.
+    kke::blendSpace2DWeights(s, glm::vec2(std::sqrt(2.0f)), w);
+    EXPECT_NEAR(w[1], 0.5f, 0.02f);
+    EXPECT_NEAR(w[2], 0.5f, 0.02f);
+    // Cartesian blending lets idle into a full-speed diagonal; polar is why it's the default.
+    kke::blendSpace2DWeights(compass(false), glm::vec2(std::sqrt(2.0f)), w);
+    EXPECT_GT(w[0], 0.05f);
+}
+
+TEST(Animator, BlendSpace2DFollowsBothParameters) {
+    kke::ModelData m = model();
+    kke::AnimationSet set(m);
+    kke::Animator anim(set);
+    kke::BlendSpace2D s;
+    s.points = { { 0, { 0.0f, 0.0f } }, { 1, { 0.0f, 2.0f } } }; // idle at rest, walk (60 degrees) forward
+    const int move = anim.addBlendState2D("move", s);
+    anim.play(move, 0.0f);
+    anim.setParameter2(glm::vec2(0.0f, 1.0f));
+    anim.update(0.016f);
+    EXPECT_NEAR(yawDegrees(anim.pose()[0]), 30.0f, 0.5f);
+    anim.setParameter2(glm::vec2(0.0f, 2.0f));
+    anim.update(0.016f);
+    EXPECT_NEAR(yawDegrees(anim.pose()[0]), 60.0f, 0.5f);
+}
