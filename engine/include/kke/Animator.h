@@ -84,12 +84,30 @@ struct BlendSpace1D {
     std::vector<Point> points; // sorted by value
 };
 
+// Clips spread over two parameters (ENG-G19), usually the velocity in the
+// character's own frame: x = sideways (right +), y = forward (m/s). Idle at
+// (0, 0), walk forward at (0, 1.4), jog left at (-3, 0), back at (0, -2)...
+// Any layout: every clip gets a weight by gradient band interpolation
+// (Johansen 2009, what Unity's freeform blend trees use), smooth as the
+// parameters move and exactly one clip on each point. `polar` (the
+// default) measures direction as an angle and speed as a length, so a
+// full-speed diagonal blends forward and right only, never idle. All
+// weighted clips play at one shared phase, like BlendSpace1D.
+struct BlendSpace2D {
+    struct Point { int clip; glm::vec2 at; };
+    std::vector<Point> points;
+    bool polar = true;
+};
+// The weight of each point (same order) at `at`; they sum to 1.
+void blendSpace2DWeights(const BlendSpace2D& space, glm::vec2 at, std::vector<float>& weights);
+
 class Animator {
 public:
     explicit Animator(const AnimationSet& set);
 
     int addClipState(const std::string& name, int clip, bool loop = true, float speed = 1.0f);
     int addBlendState(const std::string& name, BlendSpace1D space, bool loop = true);
+    int addBlendState2D(const std::string& name, BlendSpace2D space, bool loop = true);
     int findState(const std::string& name) const;
 
     // Switch state, crossfading over `fade` seconds. Re-playing the current
@@ -106,6 +124,8 @@ public:
     void setProgress(float fraction);
     // The blend-space parameter (e.g. ground speed in m/s).
     void setParameter(float value) { m_param = value; }
+    // A 2D blend space's parameters (e.g. sideways and forward speed, m/s).
+    void setParameter2(glm::vec2 value) { m_param2 = value; }
 
     void update(float dt);
     const Pose& pose() const { return m_pose; }
@@ -119,6 +139,7 @@ private:
         std::string name;
         int clip = -1;
         BlendSpace1D space;
+        BlendSpace2D space2; // used when it has points
         bool loop = true;
         float speed = 1.0f;
     };
@@ -132,6 +153,8 @@ private:
     float m_phase = 0.0f, m_prevPhase = 0.0f;
     float m_fade = 0.0f, m_fadeLength = 0.0f;
     float m_param = 0.0f;
+    glm::vec2 m_param2{0.0f};
+    mutable std::vector<float> m_weights; // a 2D space's, this update
     bool m_held = false; // setProgress() since the last update()
     glm::vec3 m_rootDelta{0.0f};
     Pose m_pose, m_scratchA, m_scratchB;
