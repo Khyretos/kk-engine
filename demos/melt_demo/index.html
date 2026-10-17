@@ -1,0 +1,5449 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A modular, open-source Vulkan game engine in C++17, with Lua scripting.">
+      
+      
+      
+        <link rel="canonical" href="https://khyretos.github.io/kk-engine/demos/melt_demo/">
+      
+      
+        <link rel="prev" href="../physics_demo/">
+      
+      
+        <link rel="next" href="../particles_demo/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="https://raw.githubusercontent.com/Khyretos/kk-engine/main/assets/branding/logo-128.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Melting - Kreative Kompas Engine</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="deep-orange" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#melt-demo" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Kreative Kompas Engine" class="md-header__button md-logo" aria-label="Kreative Kompas Engine" data-md-component="logo">
+      
+  <img src="https://raw.githubusercontent.com/Khyretos/kk-engine/main/assets/branding/logo-128.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Kreative Kompas Engine
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Melting
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="deep-orange" data-md-color-accent="amber"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="deep-orange" data-md-color-accent="amber"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Khyretos/kk-engine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Khyretos/kk-engine
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../BUILDING/" class="md-tabs__link">
+          
+  
+  
+  Getting started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../tutorials/" class="md-tabs__link">
+          
+  
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../cookbook/" class="md-tabs__link">
+          
+  
+  
+  Cookbook
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+  Demos
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../PLAY_TO_MAKE/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/lua-api/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../devlog/" class="md-tabs__link">
+          
+  
+  
+  Project
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Kreative Kompas Engine" class="md-nav__button md-logo" aria-label="Kreative Kompas Engine" data-md-component="logo">
+      
+  <img src="https://raw.githubusercontent.com/Khyretos/kk-engine/main/assets/branding/logo-128.png" alt="logo">
+
+    </a>
+    Kreative Kompas Engine
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Khyretos/kk-engine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Khyretos/kk-engine
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../BUILDING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install and build
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Make your own game
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../AI_ASSISTANTS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Make games with an AI assistant
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/01-walk-around/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    1. Walk around
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/02-break-things/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    2. Break things
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/03-pickups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3. Script a pickup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/04-sound/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    4. Add sound
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cookbook
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Cookbook
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cookbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/first-steps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First steps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Input
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/moving/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Moving things
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/cameras/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cameras
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/gameplay/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gameplay
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/algorithms/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/animation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Animation and IK
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/physics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/audio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sound
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/networking/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multiplayer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/play-to-make/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Play to make
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cookbook/cpp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    C++
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demos
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Demos
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The demos
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_2" id="__nav_5_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start here
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Start here
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../template/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Starter game
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../first_lua_game/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First Lua game
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cookbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cookbook player
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_3" id="__nav_5_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Games
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Games
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../climb_race/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Climb Race
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../racing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Racing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../flying_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Flying
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../party/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Party
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../duel/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Duel
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tennis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tennis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../goblin_horde/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Goblin Horde
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_4" id="__nav_5_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AI and companions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    AI and companions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../farm_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Farm
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pet_companion/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pet companion
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../platoon/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Platoon
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../command_kit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command kit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../procedural_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Procedural animation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5_5" id="__nav_5_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics, water and sound
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Physics, water and sound
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../physics_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics (FEMFX)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Melting
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Melting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#run-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#controls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Controls
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Controls">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-settings-panel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The settings panel
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-plays" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it plays
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it works
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How it works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#startup-and-the-frame" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Startup and the frame
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#setting-up-a-block-reset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Setting up a block: reset()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-liquid-kkeparticlefluid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The liquid: kke::ParticleFluid
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-solid-kkemeltvolume" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The solid: kke::MeltVolume
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#collapsing-meltvolumecollapse" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Collapsing: MeltVolume::collapse()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-blocks-surface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The block's surface
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#drawing-the-liquid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Drawing the liquid
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#design-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Design decisions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tuning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#engine-features-it-uses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Engine features it uses
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#assets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Assets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#make-a-game-like-this" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Make a game like this
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../particles_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sea_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sea
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../jiggle_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jiggle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cloth_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloth and hair
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../audio_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sound
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../synty_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Synty characters and ragdolls
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_6" id="__nav_5_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Showcases and tools
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Showcases and tools
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../showcase/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    kke_demo showcase
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sandbox/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sandbox
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rmlui_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RmlUi demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../imgui_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ImGui demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PLAY_TO_MAKE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Play to make
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SCRIPTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scripting in Lua
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MOVEMENT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Movement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../AI/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AI (animals, enemies, companions)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../COMBAT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Melee combat and crowds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PROCEDURAL_ANIMATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Procedural animation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../EQUIPMENT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Equipment and body awareness
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../INPUT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Input
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TOUCH/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Touch controls
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../GAME_SHELL/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Menus, pause and settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../LOBBY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start menu and joining
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../OUTFITS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Outfits
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DEMO_PANEL/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Settings panel
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../COMMANDS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Commands and orders
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../AUDIO/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audio
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../NETWORKING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Networking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SERVER_HOSTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hosting a server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TOOLS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The kke_ tools
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../STORAGE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Saving data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ANTI_CHEAT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anti-cheat
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DRM/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kreative DRM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MODDING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DLC and mods
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ASSETS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Asset folders and naming
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SCENES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scenes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SHOWCASE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The kke_demo showcase
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../JIGGLE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jiggle physics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../AUTO_RIG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Auto-rigging a body
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PHYSICS_BRIDGE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics bridge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../BREAKABLES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Breakable props
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PARTICLE_EFFECTS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle effects
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../RAGDOLLS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ragdolls
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CLOTH/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../HAIR/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hair
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/lua-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lua API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DATA_FILES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    JSON or YAML data files
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../OPTIMIZATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Optimization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MOODS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Moods (sky, fog, look)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../RENDERING_PRINCIPLES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rendering principles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../BENCHMARKS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../BAKING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Baking every download (one command)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../COOKED_ART/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cooked art (private builds with Synty art)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../BAKING_FOR_FRIENDS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Baking the benchmark with the art, for friends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PERFORMANCE_NOTES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PLATFORMS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Platforms and hardware targets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ANDROID/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Android
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../VM_TESTS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Windows and Android in VMs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SCALING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scaling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DEPENDENCIES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dependencies and licences
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../HARDWARE_TESTS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PLAYTEST_CHECKLIST/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Playtest checklist
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Project
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../devlog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Devlog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../GO_TO_MARKET/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Going to market
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../RELEASES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Downloadable builds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../HISTORY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development history
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DOCS_SITE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    This site
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#run-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#controls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Controls
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Controls">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-settings-panel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The settings panel
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-plays" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it plays
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it works
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How it works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#startup-and-the-frame" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Startup and the frame
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#setting-up-a-block-reset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Setting up a block: reset()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-liquid-kkeparticlefluid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The liquid: kke::ParticleFluid
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-solid-kkemeltvolume" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The solid: kke::MeltVolume
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#collapsing-meltvolumecollapse" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Collapsing: MeltVolume::collapse()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-blocks-surface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The block's surface
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#drawing-the-liquid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Drawing the liquid
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#design-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Design decisions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tuning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#engine-features-it-uses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Engine features it uses
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#assets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Assets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#make-a-game-like-this" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Make a game like this
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/Khyretos/kk-engine/edit/main/games/melt_demo/README.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="melt-demo">Melt demo<a class="headerlink" href="#melt-demo" title="Permanent link">&para;</a></h1>
+<p>Lava pours from a spout onto a half-metre block standing on dark stone.
+The block's material decides what happens: ice melts into water that runs
+off and chills the lava into black crust; wax and chocolate soften, slump
+and harden again as they cool; aluminium soaks up heat, glows, and only
+then melts. The liquid is drawn as one smooth, glowing surface, and one
+button switches back to the raw particles underneath.</p>
+<p>The demo teaches two engine pieces that work together: a particle liquid
+with temperature (<code>kke::ParticleFluid</code>, Position Based Fluids) and a voxel
+solid that heats up and melts into more liquid (<code>kke::MeltVolume</code>), plus
+screen-space fluid rendering (<code>kke::FluidSurfaceRenderer</code>) to make
+particles read as a liquid. Start here for lava, water, slime, mud or
+honey in a game, for things that melt, burn away or erode, or for any
+effect where a solid turns into a liquid.</p>
+<p><img alt="Lava pouring onto a block, melting it" src="https://raw.githubusercontent.com/Khyretos/kk-engine/main/website/static/media/melt.webp" /></p>
+<h2 id="run-it">Run it<a class="headerlink" href="#run-it" title="Permanent link">&para;</a></h2>
+<p>The executable is <code>melt_demo</code> (<code>kke_add_game(melt_demo ...)</code> in
+<a href="https://github.com/Khyretos/kk-engine/blob/main/games/melt_demo/CMakeLists.txt">CMakeLists.txt</a>: <code>add_executable</code> on desktop, a shared
+library on Android). The root <code>CMakeLists.txt</code> always adds it: it needs no
+optional library (not FEMFX, not Jolt) and no asset pack.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>cmake<span class="w"> </span>--build<span class="w"> </span>build<span class="w"> </span>--target<span class="w"> </span>melt_demo
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>build/bin
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>./melt_demo
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="nv">KKE_SKIP_INTRO</span><span class="o">=</span><span class="m">1</span><span class="w"> </span>./melt_demo<span class="w">      </span><span class="c1"># skip the logo intro</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="nv">KKE_MELT_PRESET</span><span class="o">=</span><span class="m">3</span><span class="w"> </span>./melt_demo<span class="w">     </span><span class="c1"># start with the aluminium block</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>KKE_MELT_PRESET=0..3</code></td>
+<td>the starting block: 0 ice, 1 wax, 2 chocolate, 3 aluminium (clamped to that range)</td>
+</tr>
+<tr>
+<td><code>KKE_SKIP_INTRO=1</code></td>
+<td>skip the logo intro (engine-wide)</td>
+</tr>
+</tbody>
+</table>
+<p>Rebindings are saved to <code>melt_demo_input.json</code> (the name passed to
+<code>InputModule</code> in <a href="https://github.com/Khyretos/kk-engine/blob/main/games/melt_demo/main.cpp">main.cpp</a>).</p>
+<h2 id="controls">Controls<a class="headerlink" href="#controls" title="Permanent link">&para;</a></h2>
+<p>The actions are made in <code>MeltDemoModule::defineInput</code>
+(<a href="https://github.com/Khyretos/kk-engine/blob/main/games/melt_demo/MeltDemoModule.cpp">MeltDemoModule.cpp</a>), in the "Melt" group and the
+<code>game</code> input context.</p>
+<table>
+<thead>
+<tr>
+<th>Action</th>
+<th>Keyboard / mouse</th>
+<th>Controller</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Pour lava on / off (<code>melt.pour</code>)</td>
+<td>Space</td>
+<td>A (south)</td>
+</tr>
+<tr>
+<td>Next block, and start over (<code>melt.block</code>)</td>
+<td>B</td>
+<td>RB (right shoulder)</td>
+</tr>
+<tr>
+<td>Smooth liquid surface on / off (<code>melt.smooth</code>)</td>
+<td>L</td>
+<td>Y (north)</td>
+</tr>
+<tr>
+<td>Reset (<code>melt.reset</code>)</td>
+<td>R</td>
+<td>X (west)</td>
+</tr>
+<tr>
+<td>Turn the camera (<code>camera.orbit</code>)</td>
+<td>left-drag</td>
+<td>right stick</td>
+</tr>
+<tr>
+<td>Pan the camera</td>
+<td>right-drag</td>
+<td>no controller binding yet</td>
+</tr>
+<tr>
+<td>Zoom (<code>camera.zoom</code>)</td>
+<td>mouse wheel</td>
+<td>d-pad up (closer) / down (further)</td>
+</tr>
+<tr>
+<td>Settings panel (<code>panel.toggle</code>)</td>
+<td>F3 or Esc, or click it</td>
+<td>View (Back)</td>
+</tr>
+<tr>
+<td>Developer panels (ImGui)</td>
+<td>F1, developer builds only</td>
+<td>no controller binding yet</td>
+</tr>
+</tbody>
+</table>
+<p>The camera uses the orbit camera's default <code>Viewer</code> controls (left-drag
+orbits, right-drag pans, scroll zooms) and <code>setPadControls(true)</code> in
+<a href="https://github.com/Khyretos/kk-engine/blob/main/games/melt_demo/main.cpp">main.cpp</a> for the right stick and d-pad. Button names are
+positions, so on a PlayStation pad A is Cross, Y is Triangle and X is
+Square.</p>
+<h3 id="the-settings-panel">The settings panel<a class="headerlink" href="#the-settings-panel" title="Permanent link">&para;</a></h3>
+<p>The settings are a <code>kke::DemoPanelModule</code> titled "Melt", drawn with RmlUi
+(<a href="../../DEMO_PANEL/">docs/DEMO_PANEL.md</a>). It starts open at the
+left edge with the game keeping the controls; the mouse can click and drag
+any row. <code>panel.toggle</code> (View on a pad, F3 on the keyboard) makes it
+Active: up and down pick a row, left and right change it (hold to sweep),
+A presses, B or Esc hands control back. On the keyboard it reads the
+arrows, Enter and Esc directly. While it is Active, player 1's <code>game</code>
+context is off, so A does not also toggle the pour and the d-pad does not
+zoom. The last row, "Hide panel", collapses it.
+Esc works like a pause menu: it opens the panel with the keyboard on
+it, and Esc again goes back to the game. So Esc does not close the
+window; the panel's "Quit" row, just above "Hide panel", does.
+<code>setEscapeMenu(false)</code> gives Esc back to a game that needs it.</p>
+<table>
+<thead>
+<tr>
+<th>Row</th>
+<th>Kind</th>
+<th>Range</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Controls line</td>
+<td>text</td>
+<td>the four actions as button prompts for the device in hand</td>
+</tr>
+<tr>
+<td>Block</td>
+<td>choice</td>
+<td>the four presets; changing it resets</td>
+</tr>
+<tr>
+<td>Pour lava</td>
+<td>toggle</td>
+<td></td>
+</tr>
+<tr>
+<td>Smooth liquid surface</td>
+<td>toggle</td>
+<td></td>
+</tr>
+<tr>
+<td>Smoothing</td>
+<td>slider, shown only while the surface is smooth</td>
+<td>0.01 to 0.2 m, step 0.01</td>
+</tr>
+<tr>
+<td>Pour rate</td>
+<td>slider</td>
+<td>30 to 400 drops/s, step 10</td>
+</tr>
+<tr>
+<td>Lava temperature</td>
+<td>slider</td>
+<td>800 to 1400 C, step 20</td>
+</tr>
+<tr>
+<td>Reset</td>
+<td>button</td>
+<td></td>
+</tr>
+<tr>
+<td>Status</td>
+<td>live text</td>
+<td>block left (%), liquid particles / 3,000</td>
+</tr>
+<tr>
+<td>Budget warning</td>
+<td>text, shown only when full</td>
+<td>"Liquid budget full: reset to pour again"</td>
+</tr>
+<tr>
+<td>Timings</td>
+<td>live text</td>
+<td>fluid and melt ms per step, block surface triangles</td>
+</tr>
+<tr>
+<td>Note</td>
+<td>note</td>
+<td>what each material does</td>
+</tr>
+</tbody>
+</table>
+<p>With a <code>DemoPanelModule</code> in the app, the engine's ImGui windows start
+hidden; F1 shows them in developer builds.</p>
+<h2 id="how-it-plays">How it plays<a class="headerlink" href="#how-it-plays" title="Permanent link">&para;</a></h2>
+<p>It is a sandbox with no goal. Lava pours at 120 drops a second from 1.5 m
+above the block. The block is 0.5 m on each side. What you should see:</p>
+<table>
+<thead>
+<tr>
+<th>Block</th>
+<th>Melts at</th>
+<th>Starts at</th>
+<th>What happens</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Ice (melts to water)</td>
+<td>0 C</td>
+<td>-15 C</td>
+<td>eats inward from where the lava lands; the water runs off and cools the lava around it into crust</td>
+</tr>
+<tr>
+<td>Wax (softens, re-hardens)</td>
+<td>60 C</td>
+<td>20 C</td>
+<td>slumps; the molten wax stiffens as it cools and sets again below 45 C</td>
+</tr>
+<tr>
+<td>Chocolate</td>
+<td>35 C</td>
+<td>18 C</td>
+<td>melts fastest (highest melt rate); sets again below 25 C</td>
+</tr>
+<tr>
+<td>Aluminium (glows, then melts)</td>
+<td>660 C</td>
+<td>20 C</td>
+<td>conducts heat quickly, so the whole block warms and glows before any of it runs; the melt glows too</td>
+</tr>
+</tbody>
+</table>
+<p>Lava itself cools as it gives its heat away and crusts over below 550 C:
+it turns dark and rough and stops flowing.</p>
+<p>Nothing floats: a piece of the block that's no longer joined to the
+ground (its middle melted out, an undercut corner) falls and lands on
+whatever is below it, and hot wax, chocolate and aluminium sag into any
+hole under them before they melt (<code>MeltMaterial::softening</code>: 15, 8 and
+40 degrees under the melting point). The panel says "collapsing" while
+something falls.</p>
+<p>The liquid has a budget of 3,000 particles (<code>kMaxParticles</code>), shared by
+the lava and the melt. When it is full, no more lava comes out of the
+spout and melted voxels stop turning into particles; the panel says so.
+Reset (or picking another block) starts over.</p>
+<h2 id="how-it-works">How it works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h2>
+<h3 id="startup-and-the-frame">Startup and the frame<a class="headerlink" href="#startup-and-the-frame" title="Permanent link">&para;</a></h3>
+<p><a href="https://github.com/Khyretos/kk-engine/blob/main/games/melt_demo/main.cpp">main.cpp</a> creates the <code>Application</code> (1280 x 720), sets the mood
+<code>dusk</code> (the comment: "the hot, glowing melt reads best against a darker
+sky") and adds the modules in this order:</p>
+<ol>
+<li><code>InputModule</code> (<code>melt_demo_input.json</code>)</li>
+<li><code>UiModule</code> (RmlUi, for the panel)</li>
+<li><code>AudioModule</code>, its ImGui window hidden: it plays the mood's ambience
+   loop (the melt itself makes no sound)</li>
+<li><code>OrbitCameraModule</code> (distance 2.8 m, pitch -0.35, yaw 0.6, target (0, 0.45, 0)), <code>setPadControls(true)</code></li>
+<li><code>kke_melt::MeltDemoModule</code>, the demo</li>
+<li><code>DemoPanelModule("Melt")</code></li>
+<li><code>DebugControlModule</code>, its ImGui window hidden</li>
+<li><code>StatsModule</code></li>
+</ol>
+<p><code>MeltDemoModule::init</code> defines the input, creates the sphere and fluid
+surface renderers (the surface's blur radius set to 2.5 particle radii),
+builds a 6 x 6 m ground quad at y = 0, reads <code>KKE_MELT_PRESET</code>, calls
+<code>reset()</code> and builds the panel.</p>
+<p>Each frame:</p>
+<table>
+<thead>
+<tr>
+<th>Hook</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>fixedUpdate</code> (fixed step)</td>
+<td>emit lava from the spout, <code>ParticleFluid::step</code>, <code>MeltVolume::step</code>, time both</td>
+</tr>
+<tr>
+<td><code>update</code></td>
+<td>read the actions; if the block melted, rebuild its surface mesh and upload it</td>
+</tr>
+<tr>
+<td><code>prepass</code></td>
+<td>colour every particle from its material and temperature; render the particles into the fluid surface's offscreen targets</td>
+</tr>
+<tr>
+<td><code>renderShadow</code></td>
+<td>the block only</td>
+</tr>
+<tr>
+<td><code>render</code></td>
+<td>the ground, the block, then the smooth surface or the raw spheres</td>
+</tr>
+</tbody>
+</table>
+<h3 id="setting-up-a-block-reset">Setting up a block: <code>reset()</code><a class="headerlink" href="#setting-up-a-block-reset" title="Permanent link">&para;</a></h3>
+<p><code>reset()</code> throws away the old simulation and builds a new one from the
+current preset:</p>
+<ol>
+<li>A <code>ParticleFluid</code> with 3 cm particles, container walls from
+   (-2.8, -1, -2.8) to (2.8, 10, 2.8), the ground plane at y = 0, 2
+   substeps, low contact friction (0.02) and slow cooling to 20 C air.</li>
+<li>Two liquid materials: <code>kLava</code> (0) and <code>kMelt</code> (1). Lava is runny at
+   1200 C, thicker as it cools, and solid below 550 C. The melt gets the
+   preset's own <code>FluidMaterial</code>.</li>
+<li>A <code>MeltVolume</code> of 24 x 24 x 24 voxels of 2.5 cm, filled with a
+   20 x 20 x 20 block (<code>fillBox</code>) at the preset's start temperature, with
+   the preset's melting point, heat capacity, melt rate and conduction.
+   Melted matter comes out as <code>kMelt</code> particles at 2 C above the melting
+   point.</li>
+<li>The block becomes a collider of the fluid: a lambda that returns the
+   block's signed distance.</li>
+</ol>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">kke</span><span class="o">::</span><span class="n">MeltVolume</span><span class="o">*</span><span class="w"> </span><span class="n">block</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">m_block</span><span class="p">.</span><span class="n">get</span><span class="p">();</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">m_fluid</span><span class="o">-&gt;</span><span class="n">addCollider</span><span class="p">([</span><span class="n">block</span><span class="p">](</span><span class="k">const</span><span class="w"> </span><span class="n">glm</span><span class="o">::</span><span class="n">vec3</span><span class="o">&amp;</span><span class="w"> </span><span class="n">pos</span><span class="p">,</span><span class="w"> </span><span class="n">glm</span><span class="o">::</span><span class="n">vec3</span><span class="o">&amp;</span><span class="w"> </span><span class="n">n</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">block</span><span class="o">-&gt;</span><span class="n">signedDistance</span><span class="p">(</span><span class="n">pos</span><span class="p">,</span><span class="w"> </span><span class="n">n</span><span class="p">);</span><span class="w"> </span><span class="p">});</span>
+</code></pre></div>
+<p>That one line is the whole coupling for collisions: the fluid does not
+know what a voxel is, only a distance and a normal.</p>
+<h3 id="the-liquid-kkeparticlefluid">The liquid: <code>kke::ParticleFluid</code><a class="headerlink" href="#the-liquid-kkeparticlefluid" title="Permanent link">&para;</a></h3>
+<p><a href="https://github.com/Khyretos/kk-engine/blob/main/engine/include/kke/ParticleFluid.h">kke/ParticleFluid.h</a>,
+<a href="https://github.com/Khyretos/kk-engine/blob/main/engine/src/ParticleFluid.cpp">ParticleFluid.cpp</a>. Position Based
+Fluids (Macklin and Muller, SIGGRAPH 2013), the method behind NVIDIA Flex.
+Each substep:</p>
+<ol>
+<li>Apply gravity and predict every particle's new position.</li>
+<li>Sort particles by grid cell (a counting sort), so neighbours sit next
+   to each other in memory, and build a neighbour list once. The kernel
+   radius is 4 particle radii (12 cm here).</li>
+<li>Run a few Jacobi iterations that move each particle to bring its
+   density back to the rest density (1000 kg/m3). This is what keeps the
+   liquid from compressing.</li>
+<li>Collide with the ground, the container walls and every collider (the
+   block's distance field).</li>
+<li>Set velocity from the change in position, then apply XSPH viscosity:
+   each particle shares some of its neighbours' velocity. The share goes
+   from <code>viscosityHot</code> to <code>viscosityCold</code> as the particle cools.</li>
+</ol>
+<p>Each particle also carries a temperature. It diffuses between neighbours
+(<code>heatDiffusion = 3</code>) and cools toward the air (<code>coolingRate = 0.05</code>).
+This is how water from the ice chills the lava: they are in the same
+simulation, so their temperatures mix. Below its material's
+<code>solidifyTemperature</code> a particle is "frozen": its velocity is damped
+every substep and it moves with its neighbours, but it still falls if
+nothing holds it up. That is the crust.</p>
+<p>Lava is emitted in <code>fixedUpdate</code> as a stream about 8 cm wide leaving the
+spout at 1.5 m/s. An accumulator (<code>m_emitAccum</code>) turns the pour rate into
+whole particles per step. <code>ParticleFluid::add</code> returns false at the
+budget, and the loop stops.</p>
+<h3 id="the-solid-kkemeltvolume">The solid: <code>kke::MeltVolume</code><a class="headerlink" href="#the-solid-kkemeltvolume" title="Permanent link">&para;</a></h3>
+<p><a href="https://github.com/Khyretos/kk-engine/blob/main/engine/include/kke/MeltVolume.h">kke/MeltVolume.h</a>,
+<a href="https://github.com/Khyretos/kk-engine/blob/main/engine/src/MeltVolume.cpp">MeltVolume.cpp</a>. A voxel grid holding
+density (1 solid, 0 empty) and temperature. <code>step(dt, fluid)</code> does three
+things:</p>
+<ol>
+<li><strong>Heat exchange with the liquid.</strong> Every particle within reach of a
+   solid voxel (its radius plus 1.5 voxels) trades heat with it, both
+   ways. The voxel's change is divided by <code>heatCapacity</code>, the particle's
+   by <code>liquidHeatCapacity</code>. So the lava cools as it melts the block,
+   which is why it crusts on top of it.</li>
+<li><strong>Conduction.</strong> Each solid voxel moves toward the average of its solid
+   neighbours at a rate set by <code>conduction</code>. Aluminium's high conduction
+   (4) spreads heat through the whole block before any of it melts.</li>
+<li><strong>Melting with latent heat.</strong> A voxel above its melting point loses
+   density in proportion to the excess, and its temperature is set back
+   to the melting point. The comment in the header: "a voxel at its
+   melting point can't get hotter; extra heat goes into losing density
+   instead. That one rule is why melting looks gradual and eats inward
+   from the contact." Lost density accumulates per voxel; each time it
+   adds up to one particle's worth, a new <code>kMelt</code> particle is added at
+   that voxel.</li>
+</ol>
+<p>For collisions the volume keeps a signed distance field, built with a
+two-pass chamfer transform over the voxels. It is rebuilt only when a
+voxel crosses from solid to empty (density 0.5), not on every step that
+melts a little (<a href="../../OPTIMIZATION/">docs/OPTIMIZATION.md</a> #32).
+Outside the grid the distance keeps growing, so the grid's own edge is not
+an invisible wall (BUG-049 in BUGS.md).</p>
+<h3 id="collapsing-meltvolumecollapse">Collapsing: <code>MeltVolume::collapse()</code><a class="headerlink" href="#collapsing-meltvolumecollapse" title="Permanent link">&para;</a></h3>
+<p><code>step()</code> calls it after melting. A flood fill over the voxels you see
+(density above 0.5, 6-connected) labels each solid piece; any piece not
+touching the bottom row (the ground) falls under gravity a cell at a
+time, its soft fringe with it, until the cell below holds something that
+isn't itself, then it merges with what it landed on. Soft voxels (within
+<code>softening</code> degrees of melting) creep down into an empty cell below at
+<code>sagSpeed</code> m/s. It runs only after something melted or while something
+is falling (about 0.1 ms for 24x24x24), and tests in
+<code>tests/test_melt_volume.cpp</code> (<code>LoosePiecesFallAndLand</code>,
+<code>SoftMaterialSagsIntoAHole</code>) hold it to "nothing left in the air,
+nothing lost on the way down".</p>
+<h3 id="the-blocks-surface">The block's surface<a class="headerlink" href="#the-blocks-surface" title="Permanent link">&para;</a></h3>
+<p><code>update()</code> calls <code>MeltVolume::rebuildMesh()</code>, which only does work when
+something melted. It extracts the surface at density 0.5 by marching
+tetrahedra: each cell is split into six tetrahedra, which needs 16 cases
+instead of marching cubes' 256-entry tables and never leaves cracks.
+Normals come from the density gradient, so the surface is smooth. Each
+vertex also gets a <code>glow</code> value (0 cold to 1 at the melting point).</p>
+<p>The demo turns that into vertex colours: aluminium keeps its colour and
+puts the glow in <code>uv.x</code> (the dynamic mesh shader reads <code>uv.x</code> as
+incandescent glow); the other materials are tinted toward their liquid
+colour, so they look wet as they near melting. The mesh is drawn with
+<code>kke::DynamicMeshRenderer</code> (metallic 0.8 for aluminium).</p>
+<h3 id="drawing-the-liquid">Drawing the liquid<a class="headerlink" href="#drawing-the-liquid" title="Permanent link">&para;</a></h3>
+<p>The colours are worked out once per frame in <code>prepass</code>:</p>
+<ul>
+<li>Lava above 550 C mixes from dark to deep orange and glows in
+  proportion to <code>(T - 550) / 650</code>. Below 550 C it is dark rock with
+  roughness 0.95 and no glow.</li>
+<li>Melt particles take the preset's liquid colour; molten aluminium also
+  glows above 550 C.</li>
+</ul>
+<p>Then one of two paths draws them:</p>
+<ul>
+<li><strong>Smooth surface (default).</strong> <code>kke::FluidSurfaceRenderer</code>
+  (<a href="https://github.com/Khyretos/kk-engine/blob/main/engine/include/kke/FluidSurface.h">kke/FluidSurface.h</a>),
+  screen-space fluid rendering (van der Laan, Green and Sainz, 2009). In
+  <code>prepass</code>, the particles are drawn as spheres of 1.6 radii into an
+  offscreen linear depth and colour target; a compute pass blurs the
+  depth with a bilateral filter of a fixed size in world units that stops
+  at depth jumps, so touching particles fuse and separate blobs stay
+  apart. In <code>render</code>, a full-screen pass rebuilds positions and normals
+  from the blurred depth, lights them with Fresnel and glow, and writes
+  real depth so the block and ground still hide it.</li>
+<li><strong>Raw particles.</strong> <code>kke::SphereImpostorRenderer</code> draws each particle as
+  a lit sphere impostor of 1.25 radii ("a little overlap reads as one
+  liquid, not marbles").</li>
+</ul>
+<p><code>prepass</code> returns early when <code>ctx.sceneCovered</code> is set (a full-screen
+opaque menu is up), because its work only feeds <code>render()</code>
+(<a href="../../RENDERING_PRINCIPLES/">docs/RENDERING_PRINCIPLES.md</a>).</p>
+<h2 id="design-decisions">Design decisions<a class="headerlink" href="#design-decisions" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Position Based Fluids for the liquid.</strong> The header says PBF is
+  "stable at large time steps, no pressure explosions, and it 'feels'
+  right long before it is physically exact, which is the goal".</li>
+<li><strong>A separate liquid solver, not FEMFX.</strong> docs/HISTORY.md says "FEMFX
+  has no liquids, so this is separate from it". Both engine pieces are
+  pure CPU and know nothing about drawing, so they are unit-tested
+  (<code>tests/test_particle_fluid.cpp</code>, <code>tests/test_melt_volume.cpp</code>) and can
+  be reused with any renderer.</li>
+<li><strong>Latent heat as one rule.</strong> See "The solid" above: a voxel at its
+  melting point spends extra heat on losing density. It gives gradual,
+  inward melting without a thermodynamics solver; the header says "it
+  isn't a thermodynamics solver".</li>
+<li><strong>Marching tetrahedra, not marching cubes.</strong> 16 cases, no lookup
+  tables, no ambiguous cases, watertight
+  (<a href="../../OPTIMIZATION/">docs/OPTIMIZATION.md</a> #19).</li>
+<li><strong>A real signed distance field for collisions.</strong> The header: "a
+  particle that lands deep inside is pushed straight back out in one
+  step instead of shooting up".</li>
+<li><strong>The liquid surface in screen space instead of a mesh.</strong> OPTIMIZATION
+  #20: meshing particles costs CPU every frame and grows with volume; the
+  screen-space method costs per pixel. The trade-off, from
+  docs/HISTORY.md: the surface is opaque (no thickness-based transparency
+  or refraction yet) and shows some vertical streaking from the separable
+  blur. <code>L</code> switches to raw particles to compare.</li>
+<li><strong>Small XSPH factors.</strong> The comment in <code>reset()</code>: large values "average
+  every particle's velocity with its neighbours so hard that a whole blob
+  moves like one rigid body: a column of lava could never slump".</li>
+<li><strong>Lava holds more heat than it passes on.</strong> <code>liquidHeatCapacity = 3</code>;
+  the comment says "at 1.0 every drop crusted on touch and sealed the
+  block in a black shell". It was tuned headless in simulated time: ice
+  about 60% left at 5 s, about 8% at 25 s.</li>
+<li><strong>Two substeps.</strong> The comment: "a 1.5 m drop reaches ~6 m/s: 120 Hz
+  keeps it from tunnelling".</li>
+<li><strong>Low contact friction.</strong> The comment: "high contact friction made
+  piles stand with vertical walls".</li>
+<li><strong>A fixed particle budget.</strong> 3,000 particles, "the liquid budget
+  (docs/OPTIMIZATION.md rule 5)". When full, pouring and melting stop
+  adding particles instead of the frame rate falling.</li>
+<li><strong>Tuned by eye.</strong> The comment above <code>kPresets</code>: "values tuned by eye to
+  'feel' right in a ~1 minute pour, not measured from real materials
+  (relative melting points and behaviour are real)".</li>
+<li><strong>The settings panel is RmlUi.</strong> Commit 944d596 moved the ImGui window
+  to <code>kke::DemoPanelModule</code> so a controller can reach every setting
+  (<a href="../../DEMO_PANEL/">docs/DEMO_PANEL.md</a>).</li>
+</ul>
+<h2 id="tuning">Tuning<a class="headerlink" href="#tuning" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>What</th>
+<th>Where</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kPresets</code>: melting point, start temperature, heat capacity, melt rate, conduction</td>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/melt_demo/MeltDemoModule.cpp">MeltDemoModule.cpp</a></td>
+<td>per material: higher heat capacity or lower melt rate = slower melting; higher conduction = heat spreads before it melts</td>
+</tr>
+<tr>
+<td>each preset's <code>FluidMaterial</code> (viscosity hot / cold, hot and solidify temperatures)</td>
+<td><code>kPresets</code></td>
+<td>how runny the melt is and whether it sets again</td>
+</tr>
+<tr>
+<td>lava <code>solidifyTemperature = 550</code>, viscosity 0.03 / 0.15</td>
+<td><code>reset()</code></td>
+<td>higher solid point = crusts sooner</td>
+</tr>
+<tr>
+<td><code>liquidHeatCapacity = 3</code></td>
+<td><code>reset()</code></td>
+<td>lower = lava crusts on contact; higher = lava melts more before cooling</td>
+</tr>
+<tr>
+<td><code>coolingRate = 0.05</code>, <code>heatDiffusion = 3</code></td>
+<td><code>reset()</code></td>
+<td>how fast particles lose heat to the air and to each other</td>
+</tr>
+<tr>
+<td><code>friction = 0.02</code>, <code>substeps = 2</code></td>
+<td><code>reset()</code></td>
+<td>higher friction = sand-like piles; fewer substeps = fast streams tunnel</td>
+</tr>
+<tr>
+<td><code>kParticleRadius = 0.03</code></td>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/melt_demo/MeltDemoModule.cpp">MeltDemoModule.cpp</a></td>
+<td>smaller = finer liquid, many more particles for the same volume</td>
+</tr>
+<tr>
+<td><code>kMaxParticles = 3000</code></td>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/melt_demo/MeltDemoModule.cpp">MeltDemoModule.cpp</a></td>
+<td>the budget; cost grows about linearly</td>
+</tr>
+<tr>
+<td>block grid 24^3, cell 2.5 cm</td>
+<td><code>reset()</code></td>
+<td>finer = smoother melting, cost grows with the cube</td>
+</tr>
+<tr>
+<td><code>m_pourRate = 120</code>, <code>m_lavaTemperature = 1200</code></td>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/melt_demo/MeltDemoModule.h">MeltDemoModule.h</a></td>
+<td>the panel's starting values</td>
+</tr>
+<tr>
+<td><code>blurWorldRadius = 2.5 r</code>, <code>depthFalloff = 2 r</code></td>
+<td><code>init()</code></td>
+<td>how much particles merge; the "Smoothing" slider sets the first</td>
+</tr>
+<tr>
+<td><code>kSpout = (0, 1.5, 0)</code>, stream 8 cm wide at 1.5 m/s</td>
+<td><code>fixedUpdate</code></td>
+<td>where and how the lava arrives</td>
+</tr>
+</tbody>
+</table>
+<h2 id="engine-features-it-uses">Engine features it uses<a class="headerlink" href="#engine-features-it-uses" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Header / module</th>
+<th>Doc</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Particle liquid with temperature</td>
+<td><code>kke::ParticleFluid</code> (<a href="https://github.com/Khyretos/kk-engine/blob/main/engine/include/kke/ParticleFluid.h">kke/ParticleFluid.h</a>)</td>
+<td><a href="../../OPTIMIZATION/">OPTIMIZATION.md</a> #18</td>
+</tr>
+<tr>
+<td>Meltable voxel solid</td>
+<td><code>kke::MeltVolume</code> (<a href="https://github.com/Khyretos/kk-engine/blob/main/engine/include/kke/MeltVolume.h">kke/MeltVolume.h</a>)</td>
+<td><a href="../../OPTIMIZATION/">OPTIMIZATION.md</a> #19, #32</td>
+</tr>
+<tr>
+<td>Screen-space liquid surface</td>
+<td><code>kke::FluidSurfaceRenderer</code> (<a href="https://github.com/Khyretos/kk-engine/blob/main/engine/include/kke/FluidSurface.h">kke/FluidSurface.h</a>)</td>
+<td><a href="../../OPTIMIZATION/">OPTIMIZATION.md</a> #20</td>
+</tr>
+<tr>
+<td>Offscreen work before the main pass</td>
+<td><code>Module::prepass</code>, <code>PrepassContext::sceneCovered</code> (<a href="https://github.com/Khyretos/kk-engine/blob/main/engine/include/kke/Module.h">kke/Module.h</a>)</td>
+<td><a href="../../RENDERING_PRINCIPLES/">RENDERING_PRINCIPLES.md</a></td>
+</tr>
+<tr>
+<td>Sphere impostors, meshes updated from the CPU</td>
+<td><code>kke::SphereImpostorRenderer</code>, <code>kke::DynamicMeshRenderer</code> (<a href="https://github.com/Khyretos/kk-engine/blob/main/engine/include/kke/SphereImpostors.h">kke/SphereImpostors.h</a>)</td>
+<td></td>
+</tr>
+<tr>
+<td>Actions, bindings, prompts</td>
+<td><code>kke::InputModule</code></td>
+<td><a href="../../INPUT/">INPUT.md</a></td>
+</tr>
+<tr>
+<td>Settings panel</td>
+<td><code>kke::DemoPanelModule</code></td>
+<td><a href="../../DEMO_PANEL/">DEMO_PANEL.md</a></td>
+</tr>
+<tr>
+<td>Orbit camera with pad controls</td>
+<td><code>kke::OrbitCameraModule</code></td>
+<td><a href="../../DEMO_PANEL/">DEMO_PANEL.md</a></td>
+</tr>
+<tr>
+<td>Sky, sun, colour look</td>
+<td><code>Application::setMood("dusk")</code></td>
+<td><a href="../../MOODS/">MOODS.md</a></td>
+</tr>
+<tr>
+<td>Performance and pause panels (F1)</td>
+<td><code>kke::StatsModule</code>, <code>kke::DebugControlModule</code></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p>None of the liquid or melting pieces are exposed to Lua
+(<a href="../../SCRIPTING/">docs/SCRIPTING.md</a> has no fluid functions).</p>
+<h2 id="assets">Assets<a class="headerlink" href="#assets" title="Permanent link">&para;</a></h2>
+<p>None. The ground, the block and the liquid are all built in code. The
+only files it loads are the mood's: the sky picture (Poly Haven "Qwantani
+Dusk 2 (Pure Sky)", CC0), fetched by the build for every demo, and the
+<code>night_crickets</code> ambience loop (<code>assets/ambience/night_crickets.flac</code>,
+CC0, in the repository), which the build copies next to every game
+(<a href="../../SCENES/">docs/SCENES.md</a> "Moods"). No Synty pack is used.</p>
+<p>Only <code>AudioModule</code> plays mood ambience, which is why <a href="https://github.com/Khyretos/kk-engine/blob/main/games/melt_demo/main.cpp">main.cpp</a>
+adds one (BUG-079 in BUGS.md, fixed). Without the file it logs a warning
+and the demo is silent.</p>
+<h2 id="make-a-game-like-this">Make a game like this<a class="headerlink" href="#make-a-game-like-this" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Copy the folder.</strong> <code>cp -r games/melt_demo games/my_lava</code>, rename the
+   target in <a href="https://github.com/Khyretos/kk-engine/blob/main/games/melt_demo/CMakeLists.txt">CMakeLists.txt</a> (including the <code>game.json</code>
+   copy), the namespace <code>kke_melt</code> and <code>name()</code>, and add
+   <code>add_subdirectory(games/my_lava)</code> to the root <code>CMakeLists.txt</code>.
+   <code>tools/new_game</code> makes Lua-only games from <code>games/template</code>; liquids
+   have no Lua bindings, so this starts from C++.</li>
+<li><strong>Decide on your liquids.</strong> Up to eight <code>FluidMaterial</code>s share one
+   <code>ParticleFluid</code>. Water: low viscosity, no solidify temperature. Honey
+   or mud: high cold viscosity. Lava: a solidify temperature.</li>
+<li><strong>Give the liquid a world to hit.</strong> Anything that can return a signed
+   distance and a normal can be a collider (<code>addCollider</code>): a box, a
+   ramp, a heightfield. Set <code>boundsMin</code> / <code>boundsMax</code> to your level's size.</li>
+<li><strong>Add meltable things.</strong> One <code>MeltVolume</code> per object, positioned by its
+   <code>origin</code>. Each needs its own <code>step</code> call and its own collider line.
+   Keep the grid small: its cost grows with the cube of its size.</li>
+<li><strong>Choose a look.</strong> Keep <code>FluidSurfaceRenderer</code> for a liquid, or draw
+   the spheres for a granular look (sand, pellets).</li>
+<li><strong>Add rules.</strong> <code>solidFraction()</code> tells you how much of a block is left,
+   so "melt the ice door to get through" is a check against it.</li>
+<li><strong>Read next:</strong> <a href="../../OPTIMIZATION/">OPTIMIZATION.md</a> (rule 5 on
+   budgets), <a href="../../DEMO_PANEL/">DEMO_PANEL.md</a>,
+   <a href="../../RENDERING_PRINCIPLES/">RENDERING_PRINCIPLES.md</a>.</li>
+</ol>
+<p>Pitfalls the code shows:</p>
+<ul>
+<li>The fluid's budget is shared: melt particles count against it too. A
+  game that pours forever must remove old particles (<code>removeIf</code>) or it
+  stops pouring.</li>
+<li>Keep XSPH viscosity at or below about 0.15, or blobs move as rigid
+  lumps.</li>
+<li>Fast streams need substeps (or smaller time steps), or they pass
+  through thin colliders.</li>
+<li>Timings here come from <code>std::chrono</code> around each step and are smoothed;
+  the demo was tuned on a software GPU at about 8 FPS
+  (<a href="../../HARDWARE_TESTS/">docs/HARDWARE_TESTS.md</a> HW-012), so
+  check speed on real hardware.</li>
+<li>Prepass work must check <code>sceneCovered</code> if it only feeds the 3D scene.</li>
+</ul>
+<h2 id="files">Files<a class="headerlink" href="#files" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>What is in it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/melt_demo/main.cpp">main.cpp</a></td>
+<td>The application, the mood, the module list and the camera</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/melt_demo/MeltDemoModule.h">MeltDemoModule.h</a></td>
+<td>The module, the <code>BlockPreset</code> struct, all state</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/melt_demo/MeltDemoModule.cpp">MeltDemoModule.cpp</a></td>
+<td>The four presets, reset, pouring, stepping, the block mesh, particle colours, drawing, input actions, the settings panel</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/melt_demo/game.json">game.json</a></td>
+<td>Marketplace manifest (id, title, tags, modules)</td>
+</tr>
+<tr>
+<td><a href="https://github.com/Khyretos/kk-engine/blob/main/games/melt_demo/CMakeLists.txt">CMakeLists.txt</a></td>
+<td>The executable, its shaders (including <code>fluid_depth</code>, <code>fluid_blur</code>, <code>fluid_composite</code>), the manifest, and <code>kke_use_ui</code> (the RmlUi shaders and fonts)</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../physics_demo/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Physics (FEMFX)">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Physics (FEMFX)
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../particles_demo/" class="md-footer__link md-footer__link--next" aria-label="Next: Particles">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Particles
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      MIT licence. KKE is written by Claude (Anthropic) working in the repository.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/Khyretos/kk-engine" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://ko-fi.com/khyretos" target="_blank" rel="noopener" title="ko-fi.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M11.351 2.715c-2.7 0-4.986.025-6.83.26C2.078 3.285 0 5.154 0 8.61c0 3.506.182 6.13 1.585 8.493 1.584 2.701 4.233 4.182 7.662 4.182h.83c4.209 0 6.494-2.234 7.637-4a9.5 9.5 0 0 0 1.091-2.338C21.792 14.688 24 12.22 24 9.208v-.415c0-3.247-2.13-5.507-5.792-5.87-1.558-.156-2.65-.208-6.857-.208m0 1.947c4.208 0 5.09.052 6.571.182 2.624.311 4.13 1.584 4.13 4v.39c0 2.156-1.792 3.844-3.87 3.844h-.935l-.156.649c-.208 1.013-.597 1.818-1.039 2.546-.909 1.428-2.545 3.064-5.922 3.064h-.805c-2.571 0-4.831-.883-6.078-3.195-1.09-2-1.298-4.155-1.298-7.506 0-2.181.857-3.402 3.012-3.714 1.533-.233 3.559-.26 6.39-.26m6.547 2.287c-.416 0-.65.234-.65.546v2.935c0 .311.234.545.65.545 1.324 0 2.051-.754 2.051-2s-.727-2.026-2.052-2.026m-10.39.182c-1.818 0-3.013 1.48-3.013 3.142 0 1.533.858 2.857 1.949 3.897.727.701 1.87 1.429 2.649 1.896a1.47 1.47 0 0 0 1.507 0c.78-.467 1.922-1.195 2.623-1.896 1.117-1.039 1.974-2.364 1.974-3.897 0-1.662-1.247-3.142-3.039-3.142-1.065 0-1.792.545-2.338 1.298-.493-.753-1.246-1.298-2.312-1.298"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.footer", "search.suggest", "search.highlight", "content.code.copy", "content.action.edit"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

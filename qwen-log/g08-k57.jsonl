@@ -1,0 +1,2 @@
+{"name": "g08-k57", "out": ".scratch/k57.md", "gpu_seconds": 3.9, "tokens": 193, "prompt_tokens": 2573, "skills": ["work-habits", "shared/SKILL", "worker/docs/SKILL", "_model-notes/qwen3/SKILL", "shared/models-and-gpus"], "lines": 1, "review": "skipped", "model": "qwen3.5:9b-q8_0-64k", "at": "2026-10-13T20:47:06"}
+{"name": "g08-k57", "out": ".scratch/k57.md", "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g08rows.py k57", "check_attempts": 1, "check_passed": true, "at": "2026-10-13T20:47:06"}

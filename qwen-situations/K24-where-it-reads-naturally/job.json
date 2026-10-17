@@ -1,0 +1,16 @@
+[
+ {
+  "name": "ssz-presets",
+  "role": "worker/cpp-games",
+  "mode": "patch",
+  "out": "engine/src/HardwareTarget.cpp",
+  "prompt": "Cascaded shadow maps put 4 tiles per view in one shadow map; each tile is 2048 texels across, so one view's map is 4096 x 4096 (64 MB). A new graphics setting, shadowResolution (1024 or 2048), sets the tile size; the low-end, handheld and phone presets use 1024. In builtinTargets(), add `\"shadowResolution\": 1024` to the `\"graphics\"` object of five presets: desktop-low, steam-deck, handheld-pc, android and ios. Put it right after the `\"msaa\"` entry in each, as `\"msaa\": 1, \"shadowResolution\": 1024,` (keep each preset's own msaa value). In each of those five description strings, after the part about MSAA or shadows, add `, 1024 shadow tiles` where it reads naturally (keep it one string). Change nothing else; the desktop preset stays \"{}\".",
+  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_ssz.py presets",
+  "precheck": false,
+  "context": [],
+  "max_tokens": 2500,
+  "focus": [
+   "^std::vector<HardwareTarget> builtinTargets"
+  ]
+ }
+]

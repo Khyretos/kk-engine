@@ -1,0 +1,15 @@
+[
+ {
+  "name": "g05-split",
+  "role": "worker/cpp-games",
+  "mode": "patch",
+  "out": "engine/src/ShadowMap.cpp",
+  "prompt": "ENG-G05 (cascaded shadow maps for the directional key light). Write the bodies of ShadowMap::cascadeSplit and ShadowMap::cascadeSpheres (each now only has `return {};` or `return 0.0f;`). Change nothing else.\ncascadeSplit(i, nearPlane, shadowDistance): `t = i / kCascades` (as floats); `even = nearPlane + (shadowDistance - nearPlane) * t`; `log = nearPlane * std::pow(shadowDistance / nearPlane, t)`; return `0.8f * log + 0.2f * even`.\ncascadeSpheres(eye, forward, tanHalfFovY, aspect, nearPlane, shadowDistance): `fwd = glm::normalize(forward)`; `k2 = tanHalfFovY * tanHalfFovY * (1.0f + aspect * aspect)` (a frustum corner at distance d is d * sqrt(k2) off the axis; say so in a comment). For each slice i in 0..kCascades-1: `n = cascadeSplit(i, ...)`, `f = cascadeSplit(i + 1, ...)`. If `k2 >= (f - n) / (f + n)` (a wide slice: the far rectangle's circle holds the near one) the centre distance is `f` and the radius `f * std::sqrt(k2)`; else the centre distance is `0.5f * (f + n) * (1.0f + k2)` and the radius `0.5f * std::sqrt((f - n) * (f - n) + 2.0f * (f * f + n * n) * k2 + (f + n) * (f + n) * k2 * k2)`. Store `glm::vec4(eye + fwd * centreDistance, radius)` in the returned std::array.",
+  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g05.py split",
+  "precheck": false,
+  "context": [
+   "engine/include/kke/ShadowMap.h"
+  ],
+  "max_tokens": 4000
+ }
+]

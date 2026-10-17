@@ -1,0 +1,12 @@
+[
+  {
+    "name": "b075-doc-trunk",
+    "role": "worker/docs",
+    "mode": "patch",
+    "out": "games/command_kit/README.md",
+    "focus": ["Scenery::place. with .collide"],
+    "prompt": "In games/command_kit/README.md, replace ONLY the three-line bullet that starts '- `Scenery::place` with `collide` uses the whole bounding box' with a bullet saying: `Scenery::place` with `collide` gives a model a box over its bounds, except trees (names containing `_Tree`), which collide on a trunk-sized column of their full height, so units walk under the canopy. Code names in backticks, lines under 80 characters, nothing else changes.",
+    "check": "python3 /tmp/claude-1000/-media-development/689ef2e5-dd4c-4322-9e2b-ee59fe58d080/scratchpad/jobs/chk_b075doc.py trunk",
+    "precheck": false
+  }
+]

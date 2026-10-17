@@ -1,0 +1,2 @@
+{"name": "macrows-k46", "out": ".scratch/k46.md", "gpu_seconds": 12.4, "tokens": 254, "prompt_tokens": 4922, "skills": ["work-habits", "shared/SKILL", "worker/docs/SKILL", "_model-notes/qwen3/SKILL", "shared/processes"], "lines": 1, "model": "qwen3.5:9b-q8_0-64k", "at": "2026-10-13T15:39:24"}
+{"name": "macrows-k46", "out": ".scratch/k46.md", "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_macrows.py k46", "check_attempts": 1, "check_passed": true, "at": "2026-10-13T15:39:24"}

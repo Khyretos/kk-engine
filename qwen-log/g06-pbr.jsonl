@@ -1,0 +1,2 @@
+{"name": "g06-pbr", "out": "shaders/pbr_common.glsl", "mode": "patch", "gpu_seconds": 6.9, "tokens": 377, "prompt_tokens": 2629, "skills": ["work-habits", "shared/SKILL", "worker/cpp-games/SKILL", "_model-notes/qwen3/SKILL"], "lines": 1, "attempts": 1, "model": "qwen3.5:9b-q8_0-64k", "at": "2026-10-13T18:00:53"}
+{"name": "g06-pbr", "out": "shaders/pbr_common.glsl", "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g06.py pbr", "check_attempts": 1, "check_passed": true, "at": "2026-10-13T18:00:55"}

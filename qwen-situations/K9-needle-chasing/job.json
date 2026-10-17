@@ -1,0 +1,17 @@
+[
+  {
+    "name": "g03-surf",
+    "role": "worker/cpp-games",
+    "mode": "patch",
+    "out": "engine/src/modules/ModelModule.cpp",
+    "focus": [
+      "^VkDescriptorSet ModelModule::textureSetFor",
+      "^ModelModule::ModelId ModelModule::load"
+    ],
+    "prompt": "ENG-G03 (normal and roughness/metallic maps for imported models). Define `ModelModule::surfaceSetFor` (declared in ModelModule.h; read the members it uses there) right after the one-line `VkDescriptorSet ModelModule::textureSetFor(...)` definition, with a blank line before it. It returns model.frag's set 2 for one combination of maps:\n1. Signature: `VkDescriptorSet ModelModule::surfaceSetFor(const std::string& albedo, const std::string& normal, const std::string& roughness, const std::string& metallic) {`\n2. `const std::string key = albedo + '\\n' + normal + '\\n' + roughness + '\\n' + metallic;` and return the cached set when `m_surfaceSets.find(key)` finds it.\n3. `const Texture& white = m_app->defaultWhiteTexture();` then `const Texture* maps[4] = { &white, m_flatNormal.get(), &white, &white };` and `const std::string* paths[4] = { &albedo, &normal, &roughness, &metallic };`. For each i in 0..3 whose path is not empty: `if (const Texture* t = m_app->cachedTexture(*paths[i])) maps[i] = t;`\n4. Allocate one set: a `VkDescriptorSetAllocateInfo alloc{};` with sType VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO, `alloc.descriptorPool = m_surfacePool;`, `alloc.descriptorSetCount = 1;`, `alloc.pSetLayouts = &m_surfaceLayout;` into `VkDescriptorSet set = VK_NULL_HANDLE;`.\n5. If vkAllocateDescriptorSets(m_device, &alloc, &set) is not VK_SUCCESS: `log::get(name())->warn(\"material set pool full; '{}' drawn with default maps\", albedo);` and `set = m_defaultSurface;`\n6. Otherwise write all four bindings in one call: `VkDescriptorImageInfo images[4];` and `VkWriteDescriptorSet writes[4]{};`; for uint32_t i in 0..3: `images[i] = { maps[i]->sampler(), maps[i]->imageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };` and writes[i] with sType VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, `writes[i].dstSet = set;`, `writes[i].dstBinding = i;`, descriptorCount 1, descriptorType VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, `writes[i].pImageInfo = &images[i];`; then `vkUpdateDescriptorSets(m_device, 4, writes, 0, nullptr);`\n7. `m_surfaceSets[key] = set;` and `return set;`\nChange nothing else.",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g03mm.py surf",
+    "precheck": false,
+    "context": ["engine/include/kke/modules/ModelModule.h"],
+    "max_tokens": 4000
+  }
+]

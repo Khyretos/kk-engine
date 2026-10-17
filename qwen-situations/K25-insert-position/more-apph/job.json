@@ -1,0 +1,16 @@
+[
+ {
+  "name": "g04-apph",
+  "role": "worker/cpp-games",
+  "mode": "patch",
+  "out": "engine/include/kke/Application.h",
+  "prompt": "ENG-G04 point-light shadows. Until now only the directional key light (lights[0]) casts shadows, through cascaded shadow maps (class kke::ShadowMap). Now each point light that casts shadows gets a cube of 6 faces around it (+X, -X, +Y, -Y, +Z, -Z), each a perspective view a little wider than 90 degrees, drawn into its own tile of a second ShadowMap (the point map): tile = light * ShadowMap::kPointFaces + face. C++20, glm, Vulkan (depth 0..1, clip-space Y flipped by proj[1][1] *= -1.0f like computeLightViewProj). Application gets a second shadow map for point-light shadows. Your SEARCH block is exactly these lines:\n```\n    std::unique_ptr<ShadowMap> m_shadowMap;\n```\nand your REPLACE block is those same lines followed by the new lines. Change nothing else; do not copy or move any other line.\nThe new lines: a comment `    // Point-light shadows: six faces per shadow-casting point light (ShadowMap::pointFaceViewProj).` and `    std::unique_ptr<ShadowMap> m_pointShadowMap;`",
+  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g04.py apph",
+  "precheck": false,
+  "context": [],
+  "max_tokens": 2500,
+  "focus": [
+   "std::unique_ptr<ShadowMap> m_shadowMap;"
+  ]
+ }
+]

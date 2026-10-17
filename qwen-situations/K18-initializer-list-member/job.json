@@ -1,0 +1,15 @@
+[
+ {
+  "name": "g05-grid",
+  "role": "worker/cpp-games",
+  "mode": "patch",
+  "out": "engine/src/ShadowMap.cpp",
+  "prompt": "ENG-G05 (cascaded shadow maps for the directional key light). Let the map hold up to 16 tiles (4 views x kCascades cascades) and keep it at most kMaxResolution across.\n1. Write the body of ShadowMap::gridFor(tiles) (it now only has `return 0;`): the smallest `grid` (starting at 1) with `grid * grid >= tiles`.\n2. The constructor's initializer list: add `m_baseTile(resolution)` before `m_tile(resolution)`.\n3. Rewrite ShadowMap::setTiles(tiles): `const uint32_t grid = gridFor(tiles);` and `const uint32_t tile = std::min(m_baseTile, kMaxResolution / grid);`; return false when both `grid == m_grid` and `tile == m_tile`; otherwise keep the existing `vkDeviceWaitIdle` line and its comment, `destroyTarget();`, set `m_grid = grid; m_tile = tile; m_resolution = m_tile * grid;`, `createTarget();`, return true. Drop the old `kMaxViews is 4` comment.\n4. ShadowMap::tileRect: the size is `static_cast<float>(m_tile) / static_cast<float>(m_resolution)` (same value as 1/m_grid, but exact for the texel grid); the rest stays.\n5. ShadowMap::beginTile: place the tile in whole texels: `const uint32_t t = tile % (m_grid * m_grid);`, `const uint32_t x = (t % m_grid) * m_tile, y = (t / m_grid) * m_tile;`; the viewport is `{ static_cast<float>(x), static_cast<float>(y), static_cast<float>(m_tile), static_cast<float>(m_tile), 0.0f, 1.0f }` and the scissor `{ { static_cast<int32_t>(x), static_cast<int32_t>(y) }, { m_tile, m_tile } }`. (With 3 tiles across, 4095 * (1/3) as a float rounds down to 1364, one texel off.) Add `#include <algorithm>` with the other system includes.",
+  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g05.py grid",
+  "precheck": false,
+  "context": [
+   "engine/include/kke/ShadowMap.h"
+  ],
+  "max_tokens": 4000
+ }
+]

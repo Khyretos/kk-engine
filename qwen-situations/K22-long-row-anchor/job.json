@@ -1,0 +1,16 @@
+[
+ {
+  "name": "g05-bug",
+  "role": "worker/docs",
+  "mode": "patch",
+  "out": "BUGS.md",
+  "prompt": "ENG-G05 (cascaded shadow maps). Add one row to the table whose header is `| ID | Area | Symptom | Root cause | Fix | Session |`, directly after the row that starts `| BUG-088 |`. The row is one line, cells in this order:\nID `BUG-089`; Area `Rendering / ShadowMap`; Symptom: every caster nearer the sun than the middle of the shadow map cast no shadow, so in a wide view about half the walls, steps and characters had none (cookbook maze.lua showed it); Root cause: `ShadowMap::computeLightViewProj` used `glm::ortho`, whose depth is -1..1 (OpenGL); Vulkan clips depth below 0, so those casters were never drawn into the map; Fix: `glm::orthoRH_ZO` (depth 0..1) and half the receiver bias in `computeShadow`, with the test `ShadowProjection.DepthCoversTheWholeBoxInVulkanRange` (ENG-G05); Session: `Found by the ENG-G05 picture check (2026-10-13)`. Put code names in backticks as shown. Change nothing else.",
+  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g05d.py bug",
+  "precheck": false,
+  "context": [],
+  "max_tokens": 2500,
+  "focus": [
+   "^\\| BUG-088 "
+  ]
+ }
+]

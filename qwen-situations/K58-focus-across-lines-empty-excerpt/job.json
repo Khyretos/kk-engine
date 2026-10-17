@@ -1,0 +1,16 @@
+[
+ {
+  "name": "g08-mcspawn",
+  "role": "worker/cpp-games",
+  "mode": "patch",
+  "out": "engine/src/modules/ModelModule.cpp",
+  "prompt": "ENG-G08: skinned meshes are skinned on the GPU. A compute shader (shaders/skin.comp) reads each model mesh's bind vertices and each instance's skin matrices and jiggle zones from storage buffers and writes kke::Vertex (11 floats: position, overlay position = bind position, normal, uv) into the vertex buffer the draw passes already read. kke/GpuSkin.h packs those buffers on the CPU and holds a CPU copy of the shader's maths for the tests. C++20, glm, Vulkan, GLSL 450 std430. spawn() makes the skinned parts' vertex buffers for the chosen path. Your SEARCH block is exactly these lines:\n```\n        SkinnedBuffers sb;\n        sb.cpu.resize(src.vertices.size());\n        for (auto& vb : sb.vertices) {\n            vb = std::make_unique<Buffer>(m_app->device(), sizeof(Vertex) * src.vertices.size(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,\n                                          VMA_MEMORY_USAGE_CPU_TO_GPU);\n        }\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n        SkinnedBuffers sb;\n        // GPU skinning: skin.comp writes these (device memory); the CPU path\n        // writes them from sb.cpu.\n        if (!m_gpuSkinning) sb.cpu.resize(src.vertices.size());\n        const VkBufferUsageFlags usage =\n            m_gpuSkinning ? VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT : VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;\n        for (auto& vb : sb.vertices) {\n            vb = std::make_unique<Buffer>(m_app->device(), sizeof(Vertex) * std::max<size_t>(1, src.vertices.size()), usage,\n                                          m_gpuSkinning ? VMA_MEMORY_USAGE_GPU_ONLY : VMA_MEMORY_USAGE_CPU_TO_GPU);\n        }\n```\nChange nothing else; do not copy or move any other line.\n",
+  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g08.py mcspawn",
+  "precheck": false,
+  "context": [],
+  "max_tokens": 1200,
+  "focus": [
+   "sb.cpu.resize\\(src.vertices.size\\(\\)\\);\\n        for \\(auto& vb : sb.vertices\\) \\{\\n            vb = std::make_unique<Buffer>\\(m_app->device\\(\\), sizeof\\(Vertex\\) \\* src.vertices.size\\(\\)"
+  ]
+ }
+]

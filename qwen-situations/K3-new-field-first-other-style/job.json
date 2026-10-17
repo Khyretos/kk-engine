@@ -1,0 +1,12 @@
+[
+  {
+    "name": "hair-stats-field",
+    "role": "worker/cpp-games",
+    "mode": "patch",
+    "out": "engine/include/kke/Hair.h",
+    "focus": ["struct HairStats"],
+    "prompt": "The test Hair.MotionGoesFromNaturalToSolid compared wall-clock milliseconds, which fails now and then on a busy CI machine. It now compares solver iterations instead, read from RigidWorld::hairStats(hair).iterations once after setHairMotion: 0 for solid hair (motion 0, the body is out of the physics world and not solved), fewer at motion 0.4 than at motion 1.0. Add one field to struct kke::HairStats: `uint32_t iterations = 0;` with a short comment above it saying it is the solver iterations per step summed over the hair's pieces, 0 when the hair is solid. Change nothing else.",
+    "check": "/tmp/claude-1000/-media-development/689ef2e5-dd4c-4322-9e2b-ee59fe58d080/scratchpad/kchk.sh \"$PWD\" 'Hair.SolidHairInWindIsLeftAlone'",
+    "precheck": false
+  }
+]
