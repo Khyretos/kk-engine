@@ -195,9 +195,26 @@ Since ENG-G18 a layer can also have:
 | `attract: 1` | m/s² pull toward the spot (negative pushes away) |
 | `collide: true` | bounces off the world (sparks, glows), settles on it (flakes), slides along it (smoke), where the game has physics: one ray per particle per frame, at most 512 a frame |
 | `onDeath: fireworks` | plays that effect where each particle dies (a rocket bursting, a drop splashing); at most 64 a frame |
+| `gpu: true` | the GPU moves this layer's particles (part 4, below): tens of thousands cost what a few hundred did; not with `collide`, `onDeath`, `attract` or the curves, and never sorted |
 
 `dust_devil` and `firework_rocket` use them, and the impact effects
-(`explosion`, `sparks`, the chips and the glass) collide.
+(`explosion`, `sparks`, the chips and the glass) collide. `rain`, `snow`,
+`leaves`, `confetti`, the stars of `fireworks` and `downpour` (a
+cloudburst of tens of thousands of drops) are `gpu`.
+
+### GPU particles
+
+A `gpu` layer's particle is written once, when it is born, into a slot on
+the GPU, and the vertex shader (`shaders/effect_gpu.vert`) works out where
+it is from its birth and the time, in closed form: drag toward the wind,
+rise or gravity, growth, spin, tumbling, flutter and swirl. Nothing is
+simulated or uploaded per frame, so a downpour of 28,000 drops runs about
+six times faster than the same layer on the CPU (OPTIMIZATION.md #42).
+The CPU copy of the same formulas, `kke::particleMotion`
+(`kke/ParticleMotion.h`), is tested against the stepped simulation. A GPU
+spark that reaches its floor is gone (rain hitting the ground) and a flake
+rests there. `ParticleEffects::setGpuParticles(false)` or
+`KKE_PARTICLES_CPU=1` moves them on the CPU instead, as ordinary particles.
 
 A mistake names the effect and what's wrong ("effect 'puff': unknown
 kind 'plasma'"), and nothing from that file is added.
@@ -218,7 +235,8 @@ themselves.
 
 The simulation (`kke::ParticleSim`, the CPU half, tested without a GPU)
 and the quads are rebuilt on the CPU every frame, so keep
-the count in the thousands. On the GPU the cost that matters is
+the count in the thousands; `gpu` layers cost the CPU nothing after
+their birth, so they can run in the tens of thousands. On the GPU the cost that matters is
 overdraw: large puffs close to the camera are what to watch. Smoke is
 drawn at full resolution with no extra passes. Glows, flakes and rings
 cost the same as smoke and sparks; each kind's pipeline is made only the
