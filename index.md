@@ -16,3 +16,4 @@
 - runs/2026-10-17T1633Z-efe5c2fbcb: claude/rest-match, test job success
 - runs/2026-10-17T1653Z-ccfd8c5402: claude/anim-demo, test job success
 - runs/2026-10-17T1712Z-b3fdd87635: claude/screen-gi, test job success
+- runs/2026-10-17T1731Z-404b989ac3: claude/screen-gi, test job success
