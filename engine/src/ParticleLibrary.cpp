@@ -126,30 +126,35 @@ splash:
 rain:
   description: "Rain over a 20 m square (move() it with the camera)"
   layers:
-    - { kind: spark, rate: 900, up: true, spread: 0, speed: [-9, -7], box: [10, 0.5, 10], colors: [[0.45, 0.5, 0.55]],
+    - { kind: spark, gpu: true, rate: 900, up: true, spread: 0, speed: [-9, -7], box: [10, 0.5, 10], colors: [[0.45, 0.5, 0.55]],
         brightness: 0.2, radius: [0.006, 0.009], life: [1.4, 1.4], drag: 0, rise: 0, stretch: 0.05 }
+downpour:
+  description: "A cloudburst over a 30 m square, tens of thousands of drops at once (the GPU moves them)"
+  layers:
+    - { kind: spark, gpu: true, rate: 20000, up: true, spread: 0, speed: [-11, -9], box: [15, 0.5, 15], colors: [[0.42, 0.47, 0.52]],
+        brightness: 0.2, radius: [0.005, 0.008], life: [1.4, 1.4], drag: 0, rise: 0, stretch: 0.045 }
 snow:
   description: "Snow drifting down over a 20 m square (move() it with the camera)"
   layers:
-    - { kind: flake, rate: 260, up: true, spread: 0, speed: [-1.2, -0.8], box: [10, 0.5, 10], colors: [[0.97, 0.98, 1]],
+    - { kind: flake, gpu: true, rate: 260, up: true, spread: 0, speed: [-1.2, -0.8], box: [10, 0.5, 10], colors: [[0.97, 0.98, 1]],
         radius: [0.012, 0.025], life: [8, 8], drag: 1, rise: -0.4, flutter: 0.5, shape: disc }
 leaves:
   description: "Autumn leaves tumbling down"
   layers:
-    - { kind: flake, rate: 6, up: true, spread: 0, speed: [-0.6, -0.3], box: [3, 0.3, 3],
+    - { kind: flake, gpu: true, rate: 6, up: true, spread: 0, speed: [-0.6, -0.3], box: [3, 0.3, 3],
         colors: [[0.8, 0.45, 0.12], [0.65, 0.25, 0.08], [0.85, 0.65, 0.2], [0.45, 0.5, 0.15]],
         radius: [0.04, 0.07], life: [10, 10], drag: 2, rise: -1.2, spin: [-1.5, 1.5], flip: [-4, 4], flutter: 0.9, shape: shard }
 confetti:
   description: "A burst of party confetti"
   layers:
-    - { kind: flake, count: 120, speed: [4, 8], spread: 35, up: true,
+    - { kind: flake, gpu: true, count: 120, speed: [4, 8], spread: 35, up: true,
         colors: [[0.95, 0.2, 0.3], [0.2, 0.6, 0.95], [0.98, 0.85, 0.2], [0.3, 0.85, 0.4], [0.75, 0.35, 0.9], [1, 0.55, 0.15]],
         radius: [0.02, 0.035], life: [5, 7], drag: 2.2, rise: -3, spin: [-6, 6], flip: [-12, 12], flutter: 0.6, shape: square }
 fireworks:
   description: "A firework bursting into a ball of coloured stars"
   layers:
     - { kind: glow, count: 1, speed: [0, 0], colors: [[14, 12, 9]], radius: [1, 1], life: [0.12, 0.12] }
-    - { kind: spark, count: 140, speed: [7, 10], spread: 180, colors: [[8, 1.6, 2.4], [2, 5, 9], [8, 6.4, 1.6], [2.4, 8, 3]],
+    - { kind: spark, gpu: true, count: 140, speed: [7, 10], spread: 180, colors: [[8, 1.6, 2.4], [2, 5, 9], [8, 6.4, 1.6], [2.4, 8, 3]],
         radius: [0.025, 0.035], life: [1.4, 2.2], drag: 1.2, rise: -2.5, stretch: 0.08 }
 magic:
   description: "Sparkles swirling up and a soft glow (a spell, a pickup, a portal)"
@@ -338,6 +343,16 @@ bool parseLayer(const nlohmann::json& j, ParticleLibrary::Layer& l, std::string&
             return false;
         }
         l.onDeath = j["onDeath"].get<std::string>();
+    }
+    l.gpu = j.value("gpu", false);
+    if (l.gpu) {
+        const char* cpuOnly = l.collide ? "collide" : !l.onDeath.empty() ? "onDeath" : l.attract != 0.0f ? "attract"
+                            : !l.sizeOverLife.empty() ? "sizeOverLife" : !l.colorOverLife.empty() ? "colorOverLife"
+                            : !l.opacityOverLife.empty() ? "opacityOverLife" : nullptr;
+        if (cpuOnly) {
+            error = std::string("a gpu layer can't use ") + cpuOnly + " (only the CPU does that): drop gpu or " + cpuOnly;
+            return false;
+        }
     }
     return true;
 }
@@ -542,7 +557,8 @@ void ParticleLibrary::emitLayer(const Layer& l, const Spot& spot, int count) {
         p.flipAngle = random01() * 6.2831853f;
         p.seed = random01();
         if (p.kind == ParticleEffects::Kind::Ring && l.flat) p.position.y = std::max(p.position.y, spot.floor + 0.02f);
-        m_sim.emit(p);
+        if (l.gpu) m_sim.emitGpu(p);
+        else m_sim.emit(p);
     }
 }
 

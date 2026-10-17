@@ -55,12 +55,12 @@ Status: ⬜ not started, 🔨 in progress, ✅ done.
 | ENG-G08 | Models | GPU skinning in `ModelModule`: `shaders/skin.comp` writes each visible skinned part's vertex buffer every drawn frame (paused too), jiggle zones included; the CPU builds only the bone matrices (`kke/GpuSkin.h`). `KKE_CPU_SKINNING=1` keeps the CPU path. | ✅ |
 | ENG-G09 | UI | RmlUi Vulkan `filter`, `box-shadow`, `backdrop-filter` and `mask-image`: RmlUi's layer API in `RmlVulkanRenderInterface` (full-frame layer images, filters as full-screen passes in `shaders/rml_filter.frag`, `kke/RmlFilters.h`); rmlui_demo's glass panels use them. | ✅ |
 | ENG-G17 | Rendering | Tone mapping as one post pass on an HDR scene target: the 3D pass draws scene light into an RGBA16F image and `shaders/tonemap_post.frag`, the first draw of the UI pass, applies the curve, exposure and look once per pixel and does the render-scale upscale (`kke/ToneMap.h` mirrors it on the CPU for clear colours and thumbnails). 10-bit output where the display offers it (A2B10G10R10; the tone-map pass and the UI encode sRGB themselves on such a UNORM swapchain). | ✅ |
-| ENG-G18 | Rendering | Particle system v2: emitters and a Lua API (#22). Part 1 done: `fx.*` in Lua (play, start, move, stop, define, wind). Part 2 done: `kke::ParticleSim` (the GPU-free half, tested), curves over life, vortex and attract, physics colliders, sub-effects (`onDeath`). Part 3 done: instanced draw (36% less CPU recording). Next: a GPU compute path with the CPU as fallback. | 🔨 |
+| ENG-G18 | Rendering | Particle system v2: emitters and a Lua API (#22). Part 1 done: `fx.*` in Lua (play, start, move, stop, define, wind). Part 2 done: `kke::ParticleSim` (the GPU-free half, tested), curves over life, vortex and attract, physics colliders, sub-effects (`onDeath`). Part 3 done: instanced draw (36% less CPU recording). Part 4 done: `gpu` layers moved by the GPU in closed form, written once at birth (a 28,000-drop downpour 6x faster), the CPU as fallback. | ✅ |
 | ENG-G12 | Physics | Liquids: transparency, refraction and thickness; meltable solids from meshes and refreezing. | ⬜ |
 | ENG-G10 | Physics | FEMFX <-> Jolt bridge leftovers: rubble breaking again, same-step pushes from heavy FEMFX bodies. | ⬜ |
 | ENG-G13 | Network | FEMFX breakables per machine; relay and join codes (#44); world saves (#45); shared roles (#46). | ⬜ |
 | ENG-G14 | Mods | Pack system in every game and a mod screen (#61). | ⬜ |
-| ENG-G19 | Animation | 2D blend spaces, CCD for long chains, rest-pose matching, an animation demo (#24). | ⬜ |
+| ENG-G19 | Animation | 2D blend spaces, CCD for long chains, rest-pose matching, an animation demo (#24). Part 1 done: 2D blend spaces (`Animator::addBlendState2D`, gradient band, polar), goblin_horde heroes strafe with one. Part 2 done: CCD with bend limits and damping (`solveCcd`, `ccdPoints`). Part 3 done: rest-pose matching in retargeting (limbs onto the source's rest directions). Part 4 done: games/anim_demo shows all three. | ✅ |
 | ENG-G11 | Physics | FEMFX on ARM/WebAssembly through a SIMDe port. | ⬜ |
 | ENG-G15 | Platforms | macOS bundle and `.icns`, Windows `.exe` icon build, phone player builds (#56), code signing (#57). | ⬜ |
 | ENG-G16 | Content | Synty packs beyond POLYGON Prototype in the demos; asset browser leftovers. | ⬜ |
@@ -99,12 +99,12 @@ by area. The goal is parity with the big engines and more.
 | ENG-F18 | Lighting | Screen-space reflections | ⬜ |
 | ENG-F19 | 2D | 2D toolkit: tilemaps, sprite animation, 2D lights, 2D physics, parallax | ⬜ |
 | ENG-F20 | XR | OpenXR (VR/AR) on the Vulkan renderer | ⬜ |
-| ENG-F21 | Animation | 2D blend trees (1D blend spaces exist; G19) | 🟡 |
-| ENG-F22 | Animation | IK solver (two-bone, foot, hand and look IK exist; CCD missing) | 🟡 |
+| ENG-F21 | Animation | 2D blend trees (1D and 2D blend spaces; G19) | ✅ |
+| ENG-F22 | Animation | IK solver (two-bone, foot, hand, look, FABRIK and CCD with bend limits; G19) | ✅ |
 | ENG-F23 | Animation | Motion capture import and clean-up | ⬜ |
 | ENG-F24 | Animation | Procedural animation (docs/PROCEDURAL_ANIMATION.md) | ✅ |
 | ENG-F25 | Animation | Facial animation, blend shapes | ⬜ |
-| ENG-F26 | Animation | Retargeting between skeletons (by bone name; rest-pose matching missing) | 🟡 |
+| ENG-F26 | Animation | Retargeting between skeletons (by bone name, with rest-pose matching, ENG-G19) | ✅ |
 | ENG-F27 | Animation | Runtime sequencer and cutscenes from Lua or the node scripter | ⬜ |
 | ENG-F28 | Animation | State machine with events and root motion (crossfading state machine and root motion exist; events missing) | 🟡 |
 | ENG-F29 | Physics | Soft bodies: cloth and jelly (docs/CLOTH.md, docs/JIGGLE.md) | ✅ |

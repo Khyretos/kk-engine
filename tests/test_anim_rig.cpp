@@ -1,13 +1,20 @@
 #include "kke/AnimRig.h"
+#include "kke/Animator.h"
 
 #include <gtest/gtest.h>
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <filesystem>
+#include <map>
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <string>
+#include <system_error>
+#include <tuple>
+#include <utility>
+#include <vector>
 
 using kke::ModelData;
 using kke::Pose;
@@ -407,6 +414,184 @@ TEST(AnimRig, PoseRetargetMatchesTheClipRetarget) {
     for (size_t b = 0; b < locals.size(); ++b)
         for (int c = 0; c < 4; ++c)
             for (int r = 0; r < 4; ++r) EXPECT_NEAR(locals[b][c][r], frame[b][c][r], 1e-4f) << b;
+}
+
+// ENG-G19 part 3: a character modelled in an A-pose (arms 45 degrees
+// down) playing T-pose clips. Without rest matching it keeps the 45
+// degrees in every frame; with it, the clip's rest is the target's.
+namespace {
+
+ModelData aPoseArms() {
+    ModelData m = arms();
+    for (kke::ModelBone& b : m.bones) {
+        const std::string n = b.name;
+        if (n == "upperarm_l") b.localRest = at(0.2f, 0, 0) * glm::rotate(glm::mat4(1.0f), glm::radians(-45.0f), glm::vec3(0, 0, 1));
+        if (n == "upperarm_r") b.localRest = at(-0.2f, 0, 0) * glm::rotate(glm::mat4(1.0f), glm::radians(45.0f), glm::vec3(0, 0, 1));
+    }
+    return m;
+}
+
+// Model-space matrices from a retarget's locals.
+std::vector<glm::mat4> chain(const ModelData& m, const std::vector<glm::mat4>& locals) {
+    std::vector<glm::mat4> w(locals.size());
+    for (size_t b = 0; b < locals.size(); ++b) w[b] = m.bones[b].parent >= 0 ? w[static_cast<size_t>(m.bones[b].parent)] * locals[b] : locals[b];
+    return w;
+}
+
+glm::vec3 between(const std::vector<glm::mat4>& w, int from, int to) { return glm::normalize(glm::vec3(w[to][3]) - glm::vec3(w[from][3])); }
+
+} // namespace
+
+TEST(AnimRig, RestMatchingLiftsAnAPoseIntoTheClipsTPose) {
+    const ModelData src = arms(), tgt = aPoseArms();
+    std::vector<glm::mat4> rest;
+    for (const kke::ModelBone& b : src.bones) rest.push_back(b.localRest);
+
+    const kke::PoseRetarget off(src, tgt, kke::matchBones(src, tgt), false);
+    std::vector<glm::mat4> locals;
+    off.apply(rest, locals);
+    glm::vec3 d = between(chain(tgt, locals), 2, 3); // left upper arm to elbow
+    EXPECT_NEAR(d.y, -std::sqrt(0.5f), 1e-3f) << "without matching, the A-pose stays";
+    EXPECT_FLOAT_EQ(off.restDifferenceDegrees(), 0.0f);
+
+    const kke::PoseRetarget on(src, tgt);
+    EXPECT_NEAR(on.restDifferenceDegrees(), 45.0f, 0.1f);
+    on.apply(rest, locals);
+    std::vector<glm::mat4> w = chain(tgt, locals);
+    for (auto [upper, lower, hand, side] : { std::tuple{ 2, 3, 4, 1.0f }, std::tuple{ 5, 6, 7, -1.0f } }) {
+        d = between(w, upper, lower);
+        EXPECT_NEAR(d.x, side, 1e-3f);
+        EXPECT_NEAR(d.y, 0.0f, 1e-3f);
+        EXPECT_NEAR(glm::length(between(w, lower, hand) - glm::vec3(side, 0, 0)), 0.0f, 1e-3f);
+        // The hand keeps its rest place on the forearm.
+        const glm::quat handLocal = glm::quat_cast(glm::mat3(locals[static_cast<size_t>(hand)]));
+        EXPECT_NEAR(std::abs(handLocal.w), 1.0f, 1e-4f);
+    }
+}
+
+TEST(AnimRig, RestMatchingStillCopiesTheMotion) {
+    const ModelData src = arms(), tgt = aPoseArms();
+    std::vector<glm::mat4> frame;
+    for (const kke::ModelBone& b : src.bones) frame.push_back(b.localRest);
+    // The clip raises the left arm 30 degrees and bends the elbow 90 forward.
+    frame[2] = frame[2] * glm::rotate(glm::mat4(1.0f), glm::radians(30.0f), glm::vec3(0, 0, 1));
+    frame[3] = frame[3] * glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(0, 1, 0));
+    std::vector<glm::mat4> want;
+    for (size_t b = 0; b < frame.size(); ++b) want.push_back(src.bones[b].parent >= 0 ? want[static_cast<size_t>(src.bones[b].parent)] * frame[b] : frame[b]);
+
+    const kke::PoseRetarget on(src, tgt);
+    std::vector<glm::mat4> locals;
+    on.apply(frame, locals);
+    const std::vector<glm::mat4> w = chain(tgt, locals);
+    EXPECT_LT(glm::length(between(w, 2, 3) - between(want, 2, 3)), 1e-3f) << "upper arm";
+    EXPECT_LT(glm::length(between(w, 3, 4) - between(want, 3, 4)), 1e-3f) << "forearm";
+}
+
+TEST(AnimRig, SkeletonsRestingAlikeAreLeftAsTheyWere) {
+    // UAL-like legs onto a target whose thigh axes differ but whose bones
+    // point the same way: rest matching turns nothing.
+    const ModelData src = legs();
+    ModelData tgt;
+    tgt.bones.push_back(bone("root", -1, glm::mat4(1.0f)));
+    tgt.bones.push_back(bone("pelvis", 0, at(0, 0.6f, 0)));
+    tgt.bones.push_back(bone("thigh_l", 1, at(-0.08f, 0, 0) * glm::rotate(glm::mat4(1.0f), glm::radians(-90.0f), glm::vec3(0, 0, 1))));
+    tgt.bones.push_back(bone("calf_l", 2, at(0.3f, 0, 0)));
+    tgt.bones.push_back(bone("foot_l", 3, at(0.3f, 0, 0)));
+    tgt.bones.push_back(bone("thigh_r", 1, at(0.08f, 0, 0)));
+    EXPECT_LT(kke::PoseRetarget(src, tgt).restDifferenceDegrees(), 0.01f);
+    EXPECT_LT(kke::PoseRetarget(src, src).restDifferenceDegrees(), 0.01f);
+}
+
+// The benchmark: UAL's walk on one character of every installed Synty
+// pack. How far each limb points from where the clip points it, with
+// rest matching off and on (printed; the worst must drop under 2 degrees).
+TEST(AnimRig, RestMatchingOnInstalledCharacters) {
+    namespace fs = std::filesystem;
+    const fs::path ual = fs::path(KKE_SOURCE_DIR) / "assets/animations/UAL1_Standard.fbx";
+    const fs::path synty = fs::path(KKE_SOURCE_DIR) / "assets/synty";
+    if (!fs::exists(ual) || !fs::exists(synty)) GTEST_SKIP() << "UAL or the Synty packs not installed";
+    const ModelData src = kke::loadModel(ual.string());
+    const kke::AnimationSet srcSet(src);
+    const int walk = srcSet.find("Walk_Loop");
+    ASSERT_GE(walk, 0);
+    std::vector<fs::path> characters;
+    for (const fs::directory_entry& pack : fs::directory_iterator(synty)) {
+        std::vector<fs::path> found;
+        std::error_code ec;
+        for (auto it = fs::recursive_directory_iterator(pack.path(), fs::directory_options::follow_directory_symlink, ec);
+             it != fs::recursive_directory_iterator(); it.increment(ec)) {
+            const std::string name = it->path().filename().string();
+            if (it->path().extension() == ".fbx" && (name.rfind("SK_Chr", 0) == 0 || name.rfind("SK_Character", 0) == 0)) found.push_back(it->path());
+        }
+        std::sort(found.begin(), found.end());
+        if (!found.empty()) characters.push_back(found.front());
+    }
+    std::sort(characters.begin(), characters.end());
+    if (characters.empty()) GTEST_SKIP() << "no Synty characters installed";
+    const char* limbs[] = { "upperarm_l", "lowerarm_l", "upperarm_r", "lowerarm_r", "thigh_l", "calf_l", "thigh_r", "calf_r" };
+    kke::ModelLoadOptions noAnims;
+    noAnims.loadAnimations = false;
+    float worstOff = 0.0f, worstOn = 0.0f, footMoved = 0.0f;
+    for (const fs::path& path : characters) {
+        const ModelData tgt = kke::loadModel(path.string(), noAnims);
+        const kke::BoneMatch match = kke::matchBones(src, tgt);
+        if (match.matched < 20) continue;
+        // The source's facing turned onto the target's, as the retarget does.
+        const glm::vec3 fs = kke::modelForward(src), ft = kke::modelForward(tgt);
+        const glm::quat turn = glm::angleAxis(std::atan2(fs.z * ft.x - fs.x * ft.z, glm::dot(fs, ft)), glm::vec3(0, 1, 0));
+        float errorOf[2] = {};
+        std::map<std::pair<int, size_t>, glm::mat3> footOff; // (frame, bone) with matching off
+        for (int on = 0; on < 2; ++on) {
+            const kke::PoseRetarget retarget(src, tgt, match, on == 1);
+            int frame = 0;
+            for (float t = 0.0f; t < srcSet.duration(walk); t += 0.1f, ++frame) {
+                Pose p;
+                srcSet.sample(walk, t, true, p);
+                const std::vector<glm::mat4> want = kke::poseToModel(src, p);
+                std::vector<glm::mat4> srcLocals, locals;
+                kke::poseToLocals(p, srcLocals);
+                retarget.apply(srcLocals, locals);
+                const std::vector<glm::mat4> got = chain(tgt, locals);
+                for (const char* limb : limbs) {
+                    int t0 = -1, s0 = -1;
+                    for (size_t b = 0; b < tgt.bones.size(); ++b)
+                        if (kke::canonicalBoneName(tgt.bones[b].name) == limb) t0 = static_cast<int>(b);
+                    if (t0 < 0 || (s0 = match.sourceOf[static_cast<size_t>(t0)]) < 0) continue;
+                    int t1 = -1;
+                    for (size_t b = 0; b < tgt.bones.size(); ++b)
+                        if (tgt.bones[b].parent == t0 && match.sourceOf[b] >= 0) t1 = static_cast<int>(b);
+                    if (t1 < 0) continue;
+                    const int s1 = match.sourceOf[static_cast<size_t>(t1)];
+                    const glm::vec3 a = turn * between(want, s0, s1), g = between(got, t0, t1);
+                    errorOf[on] = std::max(errorOf[on], glm::degrees(std::acos(std::clamp(glm::dot(a, g), -1.0f, 1.0f))));
+                }
+                // Feet keep their own slope (flat on the floor at rest), matching or not.
+                for (size_t b = 0; b < tgt.bones.size(); ++b) {
+                    if (kke::canonicalBoneName(tgt.bones[b].name).rfind("foot", 0) != 0) continue;
+                    // Each axis of the foot's frame, compared (the packs' bones carry scale, so no quaternions).
+                    const glm::mat3 r(glm::normalize(glm::vec3(got[b][0])), glm::normalize(glm::vec3(got[b][1])), glm::normalize(glm::vec3(got[b][2])));
+                    if (on == 0) {
+                        footOff[{ frame, b }] = r;
+                        continue;
+                    }
+                    for (int k = 0; k < 3; ++k) {
+                        const float d = std::clamp(glm::dot(r[k], footOff[{ frame, b }][k]), -1.0f, 1.0f);
+                        footMoved = std::max(footMoved, glm::degrees(std::acos(d)));
+                    }
+                }
+            }
+        }
+        std::printf("rest matching %-40s off %5.1f deg, on %5.1f deg (rest difference %.1f deg)\n", path.filename().string().c_str(),
+                    static_cast<double>(errorOf[0]), static_cast<double>(errorOf[1]),
+                    static_cast<double>(kke::PoseRetarget(src, tgt, match).restDifferenceDegrees()));
+        worstOff = std::max(worstOff, errorOf[0]);
+        worstOn = std::max(worstOn, errorOf[1]);
+    }
+    std::printf("rest matching, worst limb over %zu characters: off %.1f deg, on %.1f deg\n", characters.size(), static_cast<double>(worstOff),
+                static_cast<double>(worstOn));
+    std::printf("rest matching turned a foot by at most %.3f deg\n", static_cast<double>(footMoved));
+    EXPECT_LT(worstOn, 2.0f);
+    EXPECT_LT(footMoved, 0.1f); // float acos near 1
 }
 
 TEST(AnimRig, ModelForwardFromTheLegs) {

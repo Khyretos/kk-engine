@@ -40,9 +40,19 @@ void HordeModule::dressPuppet(Puppet& p, const Look* look, const glm::vec3& colo
     p.block = clipState("block", { "Sword_Block", "Idle_Shield_Loop" }, false, 0.6f);
     p.roll = clipState("roll", { "Roll" }, false, 0.75f);
     p.cheer = clipState("cheer", { "Celebration", "Idle_Loop" }, true);
-    p.strafeL = clipState("strafe_l", { "Jog_Left_Loop", "Walk_L_Loop" }, true);
-    p.strafeR = clipState("strafe_r", { "Jog_Right_Loop", "Walk_R_Loop" }, true);
-    p.back_ = clipState("back", { "Jog_Bwd_Loop", "Walk_Bwd_Loop" }, true);
+    // Aiming: one 2D blend over the velocity in the hero's own frame (x = right,
+    // y = forward, m/s), so the legs turn smoothly with the way it moves (ENG-G19).
+    const int left = r.clip(std::vector<std::string>{ "Jog_Left_Loop", "Walk_L_Loop" });
+    const int right = r.clip(std::vector<std::string>{ "Jog_Right_Loop", "Walk_R_Loop" });
+    const int back = r.clip(std::vector<std::string>{ "Jog_Bwd_Loop", "Walk_Bwd_Loop" });
+    if (idle >= 0 && walk >= 0 && jog >= 0 && left >= 0 && right >= 0 && back >= 0) {
+        kke::BlendSpace2D strafe;
+        strafe.points = { { idle, { 0.0f, 0.0f } }, { walk, { 0.0f, 1.4f } }, { jog, { 0.0f, 3.4f } },
+                          { left, { -3.0f, 0.0f } }, { right, { 3.0f, 0.0f } }, { back, { 0.0f, -3.0f } } };
+        p.strafe = a.addBlendState2D("strafe", strafe);
+    } else {
+        p.strafe = -1;
+    }
     if (p.move >= 0) a.play(p.move, 0.0f);
 }
 

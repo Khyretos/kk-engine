@@ -101,7 +101,7 @@ public:
         bool twoHanded = false;
         std::unique_ptr<kke::Animator> anim;
         int idle = -1, move = -1, hit = -1, knock = -1, getUp = -1, death = -1, block = -1, roll = -1, cheer = -1;
-        int strafeL = -1, strafeR = -1, back_ = -1;
+        int strafe = -1; // aiming: the legs go any way relative to the facing (a 2D blend)
         std::vector<int> moves;        // a state per move (foes) or per weapon move (heroes)
         int lastState = -1;
         float flinch = 0.0f;

@@ -337,6 +337,20 @@ clip only means something for the skeleton it was made for, so a
 mismatch should be visible, not silent. Try it in kke_demo's Character
 panel, or `KKE_CHARACTER=SK_Character_Father_01 ./kke_demo`.
 
+**2D blend spaces** (ENG-G19) blend clips placed over two parameters,
+usually the velocity in the character's own frame (x right, y forward,
+m/s): `Animator::addBlendState2D` with a `BlendSpace2D`, then
+`setParameter2` every frame. Every clip gets a weight by gradient band
+interpolation (Johansen 2009, the method behind Unity's freeform blend
+trees) instead of a triangulated grid (Unreal), so any layout works and
+the weights change smoothly; in the default polar mode direction is an
+angle and speed a length, so a full-speed diagonal blends forward and
+right only, never idle. All weighted clips run at one shared phase, so
+feet don't slide. goblin_horde's heroes strafe with one: walking round a
+circle the weights change by at most 0.006 per half degree, where the
+old left/right/back thresholds jumped from one clip to the next; it
+costs 3.6 µs an update for a 65-bone hero against 2.3 µs for a 1D space.
+
 **Root motion** is available as data: `AnimationSet::extractRootMotion`
 moves a bone's horizontal travel out of the clips into a track, the clip
 plays in place, and `Animator::rootMotion()` reports the travel each
@@ -344,14 +358,27 @@ update for the game to apply. Locomotion clips don't use it (the
 controller moves the capsule, and the blend space follows the measured
 speed); it's for authored moves such as a real vault clip.
 
+## Retargeting between rest poses
+
+`kke::retargetAnimations` and `kke::PoseRetarget` copy each bone's turn
+away from its rest pose. Two skeletons modelled in different rest poses
+(an A-pose character playing T-pose clips) would keep that difference in
+every frame, so rest matching (on by default, ENG-G19) first turns each
+arm and leg bone of the target to point the way the source's points at
+rest. Hands turn with the forearm, feet stay flat on the floor and the
+spine keeps its curve: those differences are the body's shape, not its
+pose. Pass `matchRest = false` to keep the old copy.
+
+Measured with UAL's walk on one character from each of 26 installed
+Synty packs (`AnimRig.RestMatchingOnInstalledCharacters`): the worst limb
+pointed 5 to 6.2 degrees away from the clip without matching (the
+werewolf's arms rest 30 degrees off UAL's), 0.0 with it, and no foot
+moved. `PoseRetarget::restDifferenceDegrees()` says how much was matched.
+
 ## Not done yet (next)
 
-- CCD for longer chains (*IK fundamentals with CCD*, 8pX6LeZdpOo); the
-  legs and arms use the analytic two-bone solve.
 - Animation layering (upper body over locomotion; *Animation layering
   pipelines*, Fsa2wxyQvzM, blocked below).
-- Rest-pose matching for retargeting between skeletons whose rest poses
-  differ a lot (A-pose vs T-pose arms); UAL and Synty are close enough.
 
 ## Transcripts
 
