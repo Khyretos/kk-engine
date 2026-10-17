@@ -1,0 +1,68 @@
+[2026-10-17 17:20:17.047][engine][Application][Pet Companion][info]: Hardware target: desktop (no specific device recognised); platform backend: desktop
+[2026-10-17 17:20:17.047][engine][Application][Pet Companion][info]: UI profile: desktop
+[2026-10-17 17:20:17.047][engine][Governor][Pet Companion][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 1.00
+[2026-10-17 17:20:17.050][engine][VulkanDevice][Pet Companion][info]: using device: llvmpipe (LLVM 22.1.8, 256 bits)
+[2026-10-17 17:20:17.109][engine][SwapChain][Pet Companion][info]: colour output: format 50 (8-bit sRGB)
+[2026-10-17 17:20:17.110][engine][Application][Pet Companion][info]: Hardware target: software-gpu (the only Vulkan device is a CPU: llvmpipe (LLVM 22.1.8, 256 bits))
+[2026-10-17 17:20:17.110][engine][Governor][Pet Companion][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+[2026-10-17 17:20:17.110][engine][Application][Pet Companion][info]: MSAA 1x (software rasteriser)
+[2026-10-17 17:20:17.195][engine][Application][Pet Companion][info]: mood 'clear_day' (assets/moods/clear_day.yaml)
+[2026-10-17 17:20:17.196][engine][Benchmark][Pet Companion][info]: benchmark: 3 s warm-up, then 20 s measured, uncapped (no vsync, no frame cap)
+[2026-10-17 17:20:17.196][engine][Settings][Pet Companion][info]: no settings file at 'settings.json' (using defaults)
+[2026-10-17 17:20:17.196][engine][Governor][Pet Companion][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+[2026-10-17 17:20:17.241][engine][ClothGpu][Pet Companion][info]: no compute queue of its own on this GPU: cloth pairs are searched on the CPU (KKE_CLOTH_GPU=shared to try the graphics queue)
+[2026-10-17 17:20:17.241][engine][RigidBodies][Pet Companion][info]: Jolt rigid-body world ready (65536 max bodies)
+[rmlui] Loaded font face 'Noto Sans' [regular] from 'assets/fonts/NotoSans-Regular.ttf'.
+[rmlui] Loaded font face 'Noto Sans' [bold] from 'assets/fonts/NotoSans-Bold.ttf'.
+[rmlui] Loaded font face 'Noto Sans' [italic] from 'assets/fonts/NotoSans-Italic.ttf'.
+[rmlui] Loaded font face 'Noto Color Emoji' [regular] from 'assets/fonts/NotoColorEmoji.ttf'.
+[ui] RmlUi initialised with real Vulkan rendering (text via glyph textures, <img>/background-image via stb_image, both real now -- see RmlVulkanRenderInterface.h)
+[2026-10-17 17:20:17.378][engine][Audio][Pet Companion][info]: Audio ready: 48000 Hz, 32 voices, output: Speakers (Realtek High Definition Audio) (WASAPI)
+[2026-10-17 17:20:17.396][engine][Scripts][Pet Companion][info]: 1 script(s) from '/workspace/khyretos/kk-engine/games/pet_companion/scripts'
+[2026-10-17 17:20:17.407][engine][Scenery][Pet Companion][info]: no asset packs found (assets/synty or KKE_ASSETS_DIR): the scene is blocks
+[2026-10-17 17:20:17.707][engine][Models][Pet Companion][info]: loaded 'C:\forgejo-runner\work\c37f8c9d96b53cde\tmp\kke-run\pkg\assets\animations\UAL1_Standard.fbx': 2 mesh part(s), 13744 triangles, 2 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-10-17 17:20:17.734][engine][Pet][Pet Companion][info]: your pet: Pug (coat 1), 0.55 m tall
+[2026-10-17 17:20:17.792][engine][Pet][Pet Companion][info]: navmesh: 90 polygons in 57 ms
+[2026-10-17 17:20:17.796][engine][Pet][Pet Companion][info]: the garden is ready: no dog model found, the dog is a block (0 pets to pick from), its brain the AI core's "dog"
+[2026-10-17 17:20:17.796][engine][Governor][Pet Companion][info]: budget: 2 worker thread(s), frame cap 0, background cap 0, render scale 0.75
+[2026-10-17 17:20:17.796][engine][Input][Pet Companion][info]: touch controls: stick left, stick right, button jump, button pet.drop, button crouch, button cmd.cancel, pause
+[rmlui:warn] Unable to load glyph at index '330' in font face 'Noto Color Emoji Regular'; FreeType error 0x7.
+[rmlui:warn] Unable to render glyph at index '330' in font face 'Noto Color Emoji Regular'; FreeType error 0x13.
+[rmlui:warn] Unable to load glyph at index '659' in font face 'Noto Color Emoji Regular'; FreeType error 0x7.
+[rmlui:warn] Unable to render glyph at index '659' in font face 'Noto Color Emoji Regular'; FreeType error 0x13.
+[rmlui:warn] Unable to load glyph at index '113' in font face 'Noto Color Emoji Regular'; FreeType error 0x7.
+[rmlui:warn] Unable to render glyph at index '113' in font face 'Noto Color Emoji Regular'; FreeType error 0x13.
+[rmlui:warn] Unable to load glyph at index '168' in font face 'Noto Color Emoji Regular'; FreeType error 0x7.
+[rmlui:warn] Unable to render glyph at index '168' in font face 'Noto Color Emoji Regular'; FreeType error 0x13.
+[rmlui:warn] Unable to load glyph at index '567' in font face 'Noto Color Emoji Regular'; FreeType error 0x7.
+[rmlui:warn] Unable to render glyph at index '567' in font face 'Noto Color Emoji Regular'; FreeType error 0x13.
+[rmlui:warn] Unable to load glyph at index '513' in font face 'Noto Color Emoji Regular'; FreeType error 0x7.
+[rmlui:warn] Unable to render glyph at index '513' in font face 'Noto Color Emoji Regular'; FreeType error 0x13.
+[rmlui:warn] Unable to load glyph at index '147' in font face 'Noto Color Emoji Regular'; FreeType error 0x7.
+[rmlui:warn] Unable to render glyph at index '147' in font face 'Noto Color Emoji Regular'; FreeType error 0x13.
+[rmlui:warn] Unable to load glyph at index '429' in font face 'Noto Color Emoji Regular'; FreeType error 0x7.
+[rmlui:warn] Unable to render glyph at index '429' in font face 'Noto Color Emoji Regular'; FreeType error 0x13.
+[rmlui:warn] Unable to load glyph at index '563' in font face 'Noto Color Emoji Regular'; FreeType error 0x7.
+[rmlui:warn] Unable to render glyph at index '563' in font face 'Noto Color Emoji Regular'; FreeType error 0x13.
+[rmlui:warn] Unable to load glyph at index '168' in font face 'Noto Color Emoji Regular'; FreeType error 0x7.
+[rmlui:warn] Unable to render glyph at index '168' in font face 'Noto Color Emoji Regular'; FreeType error 0x13.
+[rmlui:warn] Unable to load glyph at index '1146' in font face 'Noto Color Emoji Regular'; FreeType error 0x7.
+[rmlui:warn] Unable to render glyph at index '1146' in font face 'Noto Color Emoji Regular'; FreeType error 0x13.
+[2026-10-17 17:20:20.353][engine][Pet][Pet Companion][info]: demo: picking up the ball
+[2026-10-17 17:20:22.108][engine][Pet][Pet Companion][info]: demo: the ball is 0.00 m from the right palm
+[2026-10-17 17:20:22.108][engine][Pet][Pet Companion][info]: demo: threw the ball
+[2026-10-17 17:20:22.387][engine][Pet][Pet Companion][info]: tennis ball thrown
+[2026-10-17 17:20:22.667][engine][Pet][Pet Companion][info]: order: fetch
+[2026-10-17 17:20:22.667][engine][Pet][Pet Companion][info]: the dog goes after the tennis ball on its own
+[2026-10-17 17:20:22.667][engine][Scripts][Pet Companion][info]: pet.lua: the dog was told: fetch
+[2026-10-17 17:20:32.204][engine][Pet][Pet Companion][info]: got the tennis ball
+[2026-10-17 17:20:37.169][engine][Pet][Pet Companion][info]: fetch done
+[2026-10-17 17:20:37.169][engine][Scripts][Pet Companion][info]: pet.lua: fetches so far: 1
+[2026-10-17 17:20:37.224][engine][Pet][Pet Companion][info]: demo: fetch finished after 13.7 s, the ball is 0.8 m from the player
+[2026-10-17 17:20:37.224][engine][Pet][Pet Companion][info]: demo: fetched
+[2026-10-17 17:20:39.505][engine][Pet][Pet Companion][info]: order: fetch
+[2026-10-17 17:20:39.505][engine][Pet][Pet Companion][info]: demo: fetch the football outside the fence
+[2026-10-17 17:20:39.505][engine][Scripts][Pet Companion][info]: pet.lua: the dog was told: fetch
+[2026-10-17 17:20:40.978][engine][Benchmark][Pet Companion][info]: benchmark: 6 screenshot(s) in C:/forgejo-runner/work/c37f8c9d96b53cde/hostexecutor/results/bench/run_20261017_171122/reports/shots
+[2026-10-17 17:20:40.979][engine][Benchmark][Pet Companion][info]: benchmark: 347 frames, 18.1 fps avg, 16.5 fps 1% low, 0 hitch(es), verdict struggles; report C:\forgejo-runner\work\c37f8c9d96b53cde\hostexecutor\results\bench\run_20261017_171122\reports\pet_companion.json
+[2026-10-17 17:20:40.981][engine][Audio][Pet Companion][info]: Audio: 20 impacts played, 0 skipped (cooldown/cap), 0 breaks, 0 footsteps, voices dropped 0 stolen 0; room RT60 0.71 s wet 0.00
