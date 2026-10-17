@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <glm/glm.hpp>
+#include <volk.h>
 #include <string>
 #include <utility>
 #include <vector>
@@ -66,16 +67,23 @@ public:
     virtual void onSettingsChanged(const EngineSettings& settings) = 0;
 };
 
-// Implemented by a module that has things rays should see (ENG-F02, KKE
-// ray tracing): each frame, before the reflections pass, Application asks
-// every implementer to add stand-ins of what it draws to the frame's
-// kke::RayScene, and each stand-in's colour (linear albedo) to `colors`; an
-// instance's custom index is its colour's index there.
+// Implemented by a module that has things rays should see (ENG-F02): each
+// frame, before the reflections pass, Application asks every implementer to
+// add what it draws to the frame's kke::RayScene, and each instance's colour
+// (linear albedo) to `colors`; an instance's custom index is its colour's
+// index there. `classic`: the real geometry, posed (classic ray tracing,
+// refits recorded into `cmd`, frame slot `frame`); else simple stand-ins
+// (KKE ray tracing).
 class RayScene;
+struct RaySceneContext {
+    bool classic = false;
+    VkCommandBuffer cmd = VK_NULL_HANDLE;
+    uint32_t frame = 0;
+};
 class IRayContributor {
 public:
     virtual ~IRayContributor() = default;
-    virtual void addToRayScene(RayScene& scene, std::vector<glm::vec4>& colors) = 0;
+    virtual void addToRayScene(RayScene& scene, std::vector<glm::vec4>& colors, const RaySceneContext& context) = 0;
 };
 
 // Implemented by a physics module that can simulate ragdolls (FEMFX's

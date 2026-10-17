@@ -34,13 +34,13 @@ layout(set = 0, binding = 7) uniform Rays {
     mat4 viewToWorld;  // inverse view
     vec4 sunDirection; // xyz = towards the sun, w = ray budget this frame
     vec4 sunColor;     // rgb = colour x intensity
-    vec4 ambient;      // rgb = the sky's average light
+    vec4 ambient;      // rgb = the sky's average light, w = 1: classic ray tracing (no march, every smooth pixel)
 } rays;
 
 // The light a stand-in sends back along a ray: its colour under the sky and
 // half the sun (no normal on a stand-in: an average side).
 vec4 traceStandIns(vec3 viewOrigin, vec3 viewDir, float maxDist) {
-    if (atomicAdd(raysCast, 1u) >= uint(rays.sunDirection.w)) return vec4(0.0); // over budget: the sky
+    if (rays.ambient.w < 0.5 && atomicAdd(raysCast, 1u) >= uint(rays.sunDirection.w)) return vec4(0.0); // over budget: the sky
     vec3 o = (rays.viewToWorld * vec4(viewOrigin, 1.0)).xyz;
     vec3 d = normalize((rays.viewToWorld * vec4(viewDir, 0.0)).xyz);
     rayQueryEXT q;
@@ -94,6 +94,14 @@ void main() {
     vec3 R = reflect(-V, N);
     float depth = -c.z;
 
+#ifdef RAY_QUERY
+    if (rays.ambient.w > 0.5) {
+        // Classic ray tracing: the ray itself, through the real geometry.
+        imageStore(reflectOut, half_, traceStandIns(c.xyz + N * (0.01 * depth), R, 100.0));
+        imageStore(reflectDepthOut, half_, vec4(depth));
+        return;
+    }
+#endif
     // March along the ray's line on screen in equal steps (pixels, not
     // metres, so nothing between two samples is skipped near or far),
     // depth interpolated perspective-correctly; then four halvings.

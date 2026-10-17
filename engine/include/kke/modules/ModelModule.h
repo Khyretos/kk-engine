@@ -158,12 +158,13 @@ public:
     // Instances drawn through instancing last frame (N copies of one
     // model = one draw per mesh part), and toggling it (A/B comparisons).
     size_t instancedLastFrame() const { return m_instancedCount; }
-    // KKE ray tracing (ENG-F02): every visible instance as stand-ins, simple
-    // shapes rays can afford: a rigid part as about a tenth of its triangles
-    // (meshoptimizer), a skinned one as a box per bone posed like the bone.
-    // Each in the colour the part mostly shows (its texture's dominant colour
-    // as the mesh uses it, times the material's).
-    void addToRayScene(RayScene& scene, std::vector<glm::vec4>& colors) override;
+    // Ray tracing (ENG-F02): every visible instance, in the colour each part
+    // mostly shows (its texture's dominant colour as the mesh uses it, times
+    // the material's). KKE: stand-ins rays can afford, a rigid part as about
+    // a tenth of its triangles (meshoptimizer), a skinned one as a box per
+    // bone posed like the bone. Classic: the real triangles, skinned parts
+    // refitted each frame from their skinned vertices.
+    void addToRayScene(RayScene& scene, std::vector<glm::vec4>& colors, const RaySceneContext& context) override;
 
     void setInstancingEnabled(bool on) { m_instancing = on; }
     bool instancingEnabled() const { return m_instancing; }
@@ -282,6 +283,10 @@ private:
     };
     const StandIn& standInFor(ModelId id, RayScene& scene);
     std::unordered_map<ModelId, StandIn> m_standIns;
+    // Classic: each model's rigid parts at full detail, and each instance's skinned parts (refitted).
+    const StandIn& fullFor(ModelId id, RayScene& scene);
+    std::unordered_map<ModelId, StandIn> m_full;
+    std::unordered_map<InstanceId, std::vector<StandIn::Part>> m_skinnedRays;
     RayScene* m_standInScene = nullptr; // the scene m_standIns' geometry lives in
     void advanceClips(const UpdateContext& ctx);
     // False only when the instance certainly can't be seen through `f`.

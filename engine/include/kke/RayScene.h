@@ -35,6 +35,17 @@ public:
     Geometry addTriangles(const std::vector<glm::vec3>& positions, const std::vector<uint32_t>& indices);
     // An axis-aligned box of half extents `half` round the origin: a stand-in.
     Geometry addBox(const glm::vec3& half);
+    // Triangles whose vertices change every frame (a skinned character, for
+    // classic ray tracing), read from GPU buffers by address: `stride` bytes
+    // per vertex, the position (3 floats) first; uint32 indices. Built now
+    // (waits for the GPU); refit() follows the vertices each frame.
+    Geometry addDynamic(VkDeviceAddress vertices, uint32_t stride, uint32_t vertexCount, VkDeviceAddress indices, uint32_t indexCount);
+    // Records an update of a dynamic geometry to the vertices now at
+    // `vertices` (same count), into cmd before build(). The first refit of a
+    // frame waits for compute shaders' writes (GPU skinning) to finish.
+    void refit(VkCommandBuffer cmd, Geometry geometry, VkDeviceAddress vertices);
+    // Frees a geometry (when what it stood for is gone); its id is not reused.
+    void remove(Geometry geometry);
     size_t geometryCount() const { return m_geometries.size(); }
 
     // This frame's instances: clear(), add() each, then build().
@@ -55,6 +66,11 @@ private:
     struct Structure {
         std::unique_ptr<Buffer> buffer;
         VkAccelerationStructureKHR handle = VK_NULL_HANDLE;
+        // Dynamic geometry only: how it was built, to update it the same way.
+        std::unique_ptr<Buffer> scratch;
+        uint32_t stride = 0, vertexCount = 0, indexCount = 0;
+        VkDeviceAddress indices = 0;
+        uint64_t refitFrame = 0;
     };
     struct Top {
         std::unique_ptr<Buffer> instances, scratch, buffer;
@@ -70,6 +86,8 @@ private:
     std::vector<Structure> m_geometries;
     std::vector<VkDeviceAddress> m_geometryAddress;
     std::vector<VkAccelerationStructureInstanceKHR> m_instances;
+    uint64_t m_frame = 1;           // counts build() calls: the first refit of each frame waits for compute
+    bool m_refitBarrier = false;
     Top m_top[kSlots];
 };
 

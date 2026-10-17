@@ -427,14 +427,18 @@ ModelModule::InstanceId ModelModule::spawn(ModelId modelId, const glm::mat4& tra
         // GPU skinning: skin.comp writes these (device memory); the CPU path
         // writes them from sb.cpu.
         if (!m_gpuSkinning) sb.cpu.resize(src.vertices.size());
+        // With ray query they're also what classic ray tracing traces (RayScene::addDynamic).
+        const VkBufferUsageFlags rays = m_app->device().rayQuery() ? VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+                                                                         VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR
+                                                                   : 0;
         const VkBufferUsageFlags usage =
-            m_gpuSkinning ? VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT : VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+            (m_gpuSkinning ? VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT : VK_BUFFER_USAGE_VERTEX_BUFFER_BIT) | rays;
         for (auto& vb : sb.vertices) {
             vb = std::make_unique<Buffer>(m_app->device(), sizeof(Vertex) * std::max<size_t>(1, src.vertices.size()), usage,
                                           m_gpuSkinning ? VMA_MEMORY_USAGE_GPU_ONLY : VMA_MEMORY_USAGE_CPU_TO_GPU);
         }
         sb.indices = std::make_unique<Buffer>(Buffer::createDeviceLocal(m_app->device(), src.indices.data(),
-                                                                        src.indices.size() * sizeof(uint32_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT));
+                                                                        src.indices.size() * sizeof(uint32_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT | rays));
         sb.indexCount = static_cast<uint32_t>(src.indices.size());
         inst.skinned.push_back(std::move(sb));
     }
@@ -1260,14 +1264,69 @@ const ModelModule::StandIn& ModelModule::standInFor(ModelId id, RayScene& scene)
     return out;
 }
 
-void ModelModule::addToRayScene(RayScene& scene, std::vector<glm::vec4>& colors) {
+const ModelModule::StandIn& ModelModule::fullFor(ModelId id, RayScene& scene) {
+    if (auto it = m_full.find(id); it != m_full.end()) return it->second;
+    StandIn& out = m_full[id];
+    const auto model = m_models.find(id);
+    if (model == m_models.end()) return out;
+    const ModelData& data = model->second->data;
+    for (const ModelMesh& m : data.meshes) {
+        if (m.skinned || m.indices.size() < 3) continue;
+        std::vector<glm::vec3> positions;
+        positions.reserve(m.vertices.size());
+        for (const ModelVertex& v : m.vertices) positions.push_back(v.position);
+        out.parts.push_back({ scene.addTriangles(positions, m.indices), partColor(data, m), -1, glm::mat4(1.0f) });
+    }
+    return out;
+}
+
+void ModelModule::addToRayScene(RayScene& scene, std::vector<glm::vec4>& colors, const RaySceneContext& context) {
     if (&scene != m_standInScene) {
-        // A new scene: the stand-ins' geometry was the old one's.
+        // A new scene: the geometry was the old one's.
         m_standIns.clear();
+        m_full.clear();
+        m_skinnedRays.clear();
         m_standInScene = &scene;
     }
-    for (const auto& [iid, inst] : m_instances) {
+    if (context.classic) {
+        // Instances gone since last frame: their skinned geometry goes too.
+        for (auto it = m_skinnedRays.begin(); it != m_skinnedRays.end();) {
+            if (m_instances.count(it->first)) {
+                ++it;
+                continue;
+            }
+            for (const StandIn::Part& p : it->second) scene.remove(p.geometry);
+            it = m_skinnedRays.erase(it);
+        }
+    }
+    for (auto& [iid, inst] : m_instances) {
         if (!inst.visible) continue;
+        if (context.classic) {
+            for (const StandIn::Part& part : fullFor(inst.model, scene).parts) {
+                colors.push_back(part.color * glm::vec4(inst.tint, 1.0f));
+                scene.add(part.geometry, inst.transform, static_cast<uint32_t>(colors.size() - 1));
+            }
+            // Skinned parts: their skinned vertices (model space), refitted.
+            if (inst.skinned.empty()) continue;
+            std::vector<StandIn::Part>& parts = m_skinnedRays[iid];
+            const LoadedModel& lm = *m_models.at(inst.model);
+            size_t si = 0;
+            for (const GpuMesh& gm : lm.meshes) {
+                if (!gm.skinned) continue;
+                if (si >= inst.skinned.size()) break;
+                SkinnedBuffers& sb = inst.skinned[si];
+                const Buffer& vb = *sb.vertices[context.frame % Renderer::kMaxFramesInFlight];
+                const uint32_t count = static_cast<uint32_t>(lm.data.meshes[gm.meshIndex].vertices.size());
+                if (parts.size() <= si)
+                    parts.push_back({ scene.addDynamic(vb.deviceAddress(), sizeof(Vertex), count, sb.indices->deviceAddress(), sb.indexCount),
+                                      partColor(lm.data, lm.data.meshes[gm.meshIndex]), -1, glm::mat4(1.0f) });
+                scene.refit(context.cmd, parts[si].geometry, vb.deviceAddress());
+                colors.push_back(parts[si].color * glm::vec4(inst.tint, 1.0f));
+                scene.add(parts[si].geometry, inst.transform, static_cast<uint32_t>(colors.size() - 1));
+                ++si;
+            }
+            continue;
+        }
         const StandIn& standIn = standInFor(inst.model, scene);
         std::vector<glm::mat4> bones;
         for (const StandIn::Part& part : standIn.parts) {

@@ -25,7 +25,7 @@ struct RayParams {
     glm::mat4 viewToWorld;
     glm::vec4 sunDirection; // w = the ray budget
     glm::vec4 sunColor;
-    glm::vec4 ambient;
+    glm::vec4 ambient;      // w = 1: classic (every smooth pixel traced, no march)
 };
 
 } // namespace
@@ -277,7 +277,7 @@ void ReflectionPass::record(VkCommandBuffer cmd, uint32_t frame, const Renderer:
         }
         if (!colors.empty()) slot.colors->upload(colors.data(), colors.size() * sizeof(glm::vec4));
         RayParams params{ rays->viewToWorld, glm::vec4(glm::normalize(rays->sunDirection), static_cast<float>(rays->budget)),
-                          glm::vec4(rays->sunColor, 0.0f), glm::vec4(rays->ambient, 0.0f) };
+                          glm::vec4(rays->sunColor, 0.0f), glm::vec4(rays->ambient, rays->classic ? 1.0f : 0.0f) };
         slot.params->upload(&params, sizeof(params));
         // The count this slot's last frame read and wrote is done with before it's reset.
         VkMemoryBarrier before{};
