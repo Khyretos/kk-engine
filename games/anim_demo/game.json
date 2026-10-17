@@ -1,0 +1,19 @@
+{
+  "id": "engine.kke.anim_demo",
+  "title": "KKE Animation Demo",
+  "description": "The engine's animation tools side by side: a mannequin steered through a 2D blend space of walk and run in eight directions, two A-pose copies playing its pose with rest matching off and on, and two tentacles reaching for its head, FABRIK against CCD with bend limits. Needs the Universal Animation Library in assets/animations/.",
+  "version": "0.1.0",
+  "tags": ["demo", "animation", "blend space", "ik", "retargeting"],
+  "engine_version": "0.3",
+  "modules": [
+    "AnimDemo",
+    "Models",
+    "OrbitCamera",
+    "Audio",
+    "DebugControl",
+    "DemoPanel",
+    "Input",
+    "Stats",
+    "UI"
+  ]
+}

@@ -581,7 +581,7 @@ BoneMatch matchBones(const ModelData& source, const ModelData& target) {
 PoseRetarget::PoseRetarget(const ModelData& source, const ModelData& target)
     : PoseRetarget(source, target, matchBones(source, target)) {}
 
-PoseRetarget::PoseRetarget(const ModelData& source, const ModelData& target, const BoneMatch& match) : m_match(match) {
+PoseRetarget::PoseRetarget(const ModelData& source, const ModelData& target, const BoneMatch& match, bool matchRest) : m_match(match) {
     const size_t ns = source.bones.size(), nt = target.bones.size();
     if (m_match.sourceOf.size() != nt) {
         m_match = BoneMatch{};
@@ -638,6 +638,39 @@ PoseRetarget::PoseRetarget(const ModelData& source, const ModelData& target, con
     const float hs = source.boundsMax.y - source.boundsMin.y, ht = target.boundsMax.y - target.boundsMin.y;
     const float size = hs > 1e-4f && ht > 1e-4f ? hs / ht : 1.0f;
     m_placement = glm::mat4_cast(glm::inverse(m_turn)) * glm::scale(glm::mat4(1.0f), glm::vec3(size));
+
+    // Rest matching, for the limbs only: an arm or leg bone with one
+    // matched child points from itself to that child; turn the target's
+    // onto the source's (turned to face the target's way). A spine's curve
+    // or a foot's slope is the body's shape, not its pose: those keep their
+    // rest, and feet stay flat on the floor. Bones are listed parents first.
+    m_restFix.assign(nt, glm::quat(1, 0, 0, 0));
+    if (!matchRest) return;
+    std::vector<int> child(nt, -1), children(nt, 0);
+    for (size_t c = 0; c < nt; ++c) {
+        const int p = m_targetParent[c];
+        if (p < 0 || m_match.sourceOf[c] < 0) continue;
+        child[static_cast<size_t>(p)] = static_cast<int>(c);
+        ++children[static_cast<size_t>(p)];
+    }
+    for (size_t b = 0; b < nt; ++b) {
+        const int s = m_match.sourceOf[b], p = m_targetParent[b];
+        if (m_moves[b]) continue; // the root and pelvis carry the body: never tilted
+        const std::string name = canonicalBoneName(target.bones[b].name);
+        auto is = [&](const char* prefix) { return name.rfind(prefix, 0) == 0; };
+        if (is("foot") || is("ball") || is("toe")) continue;
+        // A hand and its fingers turn with the forearm, so they keep their
+        // rest place on it.
+        if (p >= 0) m_restFix[b] = m_restFix[static_cast<size_t>(p)];
+        if (s < 0 || children[b] != 1 || !(is("clavicle") || is("upperarm") || is("lowerarm") || is("thigh") || is("calf"))) continue;
+        const size_t c = static_cast<size_t>(child[b]), sc = static_cast<size_t>(m_match.sourceOf[c]);
+        const glm::vec3 want = m_turn * (m_sourceRestPos[sc] - m_sourceRestPos[static_cast<size_t>(s)]);
+        const glm::vec3 have = positionOf(m_targetRest[c]) - positionOf(m_targetRest[b]);
+        if (glm::length(want) < 1e-5f || glm::length(have) < 1e-5f) continue;
+        m_restFix[b] = rotationBetween(have, want);
+        const float w = std::clamp(std::abs(m_restFix[b].w), 0.0f, 1.0f);
+        m_restDifference = std::max(m_restDifference, glm::degrees(2.0f * std::acos(w)));
+    }
 }
 
 void PoseRetarget::apply(const std::vector<glm::mat4>& sourceLocals, std::vector<glm::mat4>& targetLocals) const {
@@ -659,7 +692,7 @@ void PoseRetarget::apply(const std::vector<glm::mat4>& sourceLocals, std::vector
             // the target's own rest.
             const size_t si = static_cast<size_t>(s);
             const glm::quat delta = rotationOf(srcWorld[si]) * glm::inverse(m_sourceRestRot[si]);
-            const glm::quat world = m_turn * delta * glm::inverse(m_turn) * m_targetRestRot[b];
+            const glm::quat world = m_turn * delta * glm::inverse(m_turn) * m_restFix[b] * m_targetRestRot[b];
             local.r = glm::normalize(glm::inverse(parentRot) * world);
             if (m_moves[b]) {
                 const glm::vec3 pos = positionOf(m_targetRest[b]) + m_turn * (positionOf(srcWorld[si]) - m_sourceRestPos[si]) * m_travel;
@@ -671,10 +704,10 @@ void PoseRetarget::apply(const std::vector<glm::mat4>& sourceLocals, std::vector
     }
 }
 
-std::vector<ModelAnimation> retargetAnimations(const ModelData& source, const ModelData& target, const BoneMatch& match) {
+std::vector<ModelAnimation> retargetAnimations(const ModelData& source, const ModelData& target, const BoneMatch& match, bool matchRest) {
     std::vector<ModelAnimation> out;
     if (match.sourceOf.size() != target.bones.size()) return out;
-    const PoseRetarget retarget(source, target, match);
+    const PoseRetarget retarget(source, target, match, matchRest);
     for (const ModelAnimation& clip : source.animations) {
         ModelAnimation a;
         a.name = clip.name;
