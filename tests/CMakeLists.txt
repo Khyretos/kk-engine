@@ -101,6 +101,7 @@ add_executable(kke_tests
     test_color_formats.cpp
     test_script_fx.cpp
     test_particle_sim.cpp
+    test_particle_motion.cpp
     test_sky.cpp
     test_envmap.cpp
     test_gpu_skin.cpp

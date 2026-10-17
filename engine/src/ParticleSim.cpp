@@ -55,6 +55,20 @@ void ParticleSim::emit(const Particle& p) {
     m_particles.push_back(p);
 }
 
+void ParticleSim::emitGpu(const Particle& p) {
+    if (!m_gpuBorn) {
+        emit(p);
+        return;
+    }
+    if (m_born.size() >= kMaxBorn) return; // nothing drew them for a long while (a covered scene): they'd be gone anyway
+    m_born.push_back({ p, m_time });
+}
+
+void ParticleSim::takeBorn(std::vector<Born>& out) {
+    out.clear();
+    out.swap(m_born);
+}
+
 void ParticleSim::smoke(const glm::vec3& position, const glm::vec3& velocity, const glm::vec3& color, float radius, float life, float opacity) {
     Particle p;
     p.kind = Kind::Smoke;
@@ -98,6 +112,8 @@ void ParticleSim::sparks(const glm::vec3& position, const glm::vec3& normal, int
 void ParticleSim::update(float dt, const glm::vec3& wind) {
     m_deaths.clear();
     if (dt <= 0.0f) return;
+    m_time += dt;
+    m_wind = wind;
     std::vector<glm::vec3> before;
     if (m_ray) before.resize(m_particles.size());
     for (size_t i = 0; i < m_particles.size(); ++i) {
@@ -214,6 +230,7 @@ void ParticleSim::collide(Particle& p, const glm::vec3& from) {
 void ParticleSim::clear() {
     m_particles.clear();
     m_deaths.clear();
+    m_born.clear();
 }
 
 } // namespace kke
