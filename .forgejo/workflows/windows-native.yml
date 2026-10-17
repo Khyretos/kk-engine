@@ -23,6 +23,63 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  # Dependencies come from pull mirrors on this Forgejo (khyretos/mirror-<name>,
+  # following GitHub every 8 hours): the runners' clones from GitHub kept
+  # failing ("the remote end hung up", 2026-10-17). Git's environment
+  # config, so nothing is written to any machine's git settings.
+  GIT_CONFIG_COUNT: 26
+  GIT_CONFIG_KEY_0: url.https://git.kreative-kompas.com/khyretos/mirror-genann.git.insteadOf
+  GIT_CONFIG_VALUE_0: https://github.com/codeplea/genann.git
+  GIT_CONFIG_KEY_1: url.https://git.kreative-kompas.com/khyretos/mirror-freetype.git.insteadOf
+  GIT_CONFIG_VALUE_1: https://github.com/freetype/freetype.git
+  GIT_CONFIG_KEY_2: url.https://git.kreative-kompas.com/khyretos/mirror-spdlog.git.insteadOf
+  GIT_CONFIG_VALUE_2: https://github.com/gabime/spdlog.git
+  GIT_CONFIG_KEY_3: url.https://git.kreative-kompas.com/khyretos/mirror-googletest.git.insteadOf
+  GIT_CONFIG_VALUE_3: https://github.com/google/googletest.git
+  GIT_CONFIG_KEY_4: url.https://git.kreative-kompas.com/khyretos/mirror-vulkanmemoryallocator.git.insteadOf
+  GIT_CONFIG_VALUE_4: https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
+  GIT_CONFIG_KEY_5: url.https://git.kreative-kompas.com/khyretos/mirror-glm.git.insteadOf
+  GIT_CONFIG_VALUE_5: https://github.com/g-truc/glm.git
+  GIT_CONFIG_KEY_6: url.https://git.kreative-kompas.com/khyretos/mirror-yaml-cpp.git.insteadOf
+  GIT_CONFIG_VALUE_6: https://github.com/jbeder/yaml-cpp.git
+  GIT_CONFIG_KEY_7: url.https://git.kreative-kompas.com/khyretos/mirror-joltphysics.git.insteadOf
+  GIT_CONFIG_VALUE_7: https://github.com/jrouwe/JoltPhysics.git
+  GIT_CONFIG_KEY_8: url.https://git.kreative-kompas.com/khyretos/mirror-vulkan-headers.git.insteadOf
+  GIT_CONFIG_VALUE_8: https://github.com/KhronosGroup/Vulkan-Headers.git
+  GIT_CONFIG_KEY_9: url.https://git.kreative-kompas.com/khyretos/mirror-sdl.git.insteadOf
+  GIT_CONFIG_VALUE_9: https://github.com/libsdl-org/SDL.git
+  GIT_CONFIG_KEY_10: url.https://git.kreative-kompas.com/khyretos/mirror-monocypher.git.insteadOf
+  GIT_CONFIG_VALUE_10: https://github.com/LoupVaillant/Monocypher.git
+  GIT_CONFIG_KEY_11: url.https://git.kreative-kompas.com/khyretos/mirror-enet.git.insteadOf
+  GIT_CONFIG_VALUE_11: https://github.com/lsalzman/enet.git
+  GIT_CONFIG_KEY_12: url.https://git.kreative-kompas.com/khyretos/mirror-miniaudio.git.insteadOf
+  GIT_CONFIG_VALUE_12: https://github.com/mackron/miniaudio.git
+  GIT_CONFIG_KEY_13: url.https://git.kreative-kompas.com/khyretos/mirror-rmlui.git.insteadOf
+  GIT_CONFIG_VALUE_13: https://github.com/mikke89/RmlUi.git
+  GIT_CONFIG_KEY_14: url.https://git.kreative-kompas.com/khyretos/mirror-json.git.insteadOf
+  GIT_CONFIG_VALUE_14: https://github.com/nlohmann/json.git
+  GIT_CONFIG_KEY_15: url.https://git.kreative-kompas.com/khyretos/mirror-stb.git.insteadOf
+  GIT_CONFIG_VALUE_15: https://github.com/nothings/stb.git
+  GIT_CONFIG_KEY_16: url.https://git.kreative-kompas.com/khyretos/mirror-imgui.git.insteadOf
+  GIT_CONFIG_VALUE_16: https://github.com/ocornut/imgui.git
+  GIT_CONFIG_KEY_17: url.https://git.kreative-kompas.com/khyretos/mirror-recastnavigation.git.insteadOf
+  GIT_CONFIG_VALUE_17: https://github.com/recastnavigation/recastnavigation.git
+  GIT_CONFIG_KEY_18: url.https://git.kreative-kompas.com/khyretos/mirror-hiredis.git.insteadOf
+  GIT_CONFIG_VALUE_18: https://github.com/redis/hiredis.git
+  GIT_CONFIG_KEY_19: url.https://git.kreative-kompas.com/khyretos/mirror-ufbx.git.insteadOf
+  GIT_CONFIG_VALUE_19: https://github.com/ufbx/ufbx.git
+  GIT_CONFIG_KEY_20: url.https://git.kreative-kompas.com/khyretos/mirror-opus.git.insteadOf
+  GIT_CONFIG_VALUE_20: https://github.com/xiph/opus.git
+  GIT_CONFIG_KEY_21: url.https://git.kreative-kompas.com/khyretos/mirror-rnnoise.git.insteadOf
+  GIT_CONFIG_VALUE_21: https://github.com/xiph/rnnoise.git
+  GIT_CONFIG_KEY_22: url.https://git.kreative-kompas.com/khyretos/mirror-speexdsp.git.insteadOf
+  GIT_CONFIG_VALUE_22: https://github.com/xiph/speexdsp.git
+  GIT_CONFIG_KEY_23: url.https://git.kreative-kompas.com/khyretos/mirror-meshoptimizer.git.insteadOf
+  GIT_CONFIG_VALUE_23: https://github.com/zeux/meshoptimizer.git
+  GIT_CONFIG_KEY_24: url.https://git.kreative-kompas.com/khyretos/mirror-volk.git.insteadOf
+  GIT_CONFIG_VALUE_24: https://github.com/zeux/volk.git
+  GIT_CONFIG_KEY_25: url.https://git.kreative-kompas.com/khyretos/mirror-wayland.git.insteadOf
+  GIT_CONFIG_VALUE_25: https://gitlab.freedesktop.org/wayland/wayland.git
   KKE_JOBS: "8"
   VERSION: windows-native
 
