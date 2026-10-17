@@ -1,6 +1,7 @@
 #include "kke/Animator.h"
 
 #include <gtest/gtest.h>
+#include <algorithm>
 #include <cmath>
 #include <glm/gtc/matrix_transform.hpp>
 
