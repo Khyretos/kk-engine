@@ -12,3 +12,4 @@
 - runs/2026-10-17T1419Z-d94c2e12da: claude/ccd-limits, test job success
 - runs/2026-10-17T1500Z-2523a2d914: claude/blend2d, test job success
 - runs/2026-10-17T1551Z-e70153c41a: claude/ccd-limits, test job success
+- runs/2026-10-17T1611Z-1607f6c1f7: claude/cloth-passes, test job success
