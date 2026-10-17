@@ -90,6 +90,24 @@ public:
 
     // Adds one (the oldest goes when full).
     void emit(const Particle& p);
+    // A particle that may live on the GPU (ENG-G18 part 4): with setGpuBorn(true)
+    // it is only recorded here, with its birth time, for kke::ParticleEffects
+    // to write once into a GPU ring (its motion is closed-form, see
+    // kke/ParticleMotion.h); otherwise it is emit()ted like any other. It must
+    // not need the CPU: no collide, onDeath, attract or curve.
+    void emitGpu(const Particle& p);
+    void setGpuBorn(bool on) { m_gpuBorn = on; }
+    bool gpuBorn() const { return m_gpuBorn; }
+    struct Born {
+        Particle particle;
+        float time; // time() when it was born
+    };
+    static constexpr size_t kMaxBorn = 262144; // waiting to be handed over, at most
+    // Hands over the particles emitGpu() recorded since the last call.
+    void takeBorn(std::vector<Born>& out);
+    // Seconds of update() so far, and the wind of the last one.
+    float time() const { return m_time; }
+    const glm::vec3& wind() const { return m_wind; }
     // A puff of smoke: `color` grey-white for tyres, near-black for an engine fire.
     void smoke(const glm::vec3& position, const glm::vec3& velocity, const glm::vec3& color, float radius = 0.35f, float life = 2.2f,
                float opacity = 0.55f);
@@ -122,6 +140,10 @@ private:
     RayFn m_ray;
     int m_raysPerFrame = 512;
     size_t m_rayCursor = 0; // where this frame's ray budget starts
+    bool m_gpuBorn = false;
+    std::vector<Born> m_born;
+    float m_time = 0.0f;
+    glm::vec3 m_wind{0.0f};
     uint32_t m_rng = 0x9e3779b9u;
 };
 
