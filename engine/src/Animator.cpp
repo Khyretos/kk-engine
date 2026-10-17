@@ -160,6 +160,67 @@ int Animator::addClipState(const std::string& name, int clip, bool loop, float s
     return static_cast<int>(m_states.size()) - 1;
 }
 
+namespace {
+// The signed angle from a to b (radians, -pi..pi); 0 when either has no length.
+float angleBetween(glm::vec2 a, glm::vec2 b) {
+    if (glm::dot(a, a) < 1e-12f || glm::dot(b, b) < 1e-12f) return 0.0f;
+    return std::atan2(a.x * b.y - a.y * b.x, glm::dot(a, b));
+}
+} // namespace
+
+// Gradient band interpolation: point i's weight is the smallest, over every
+// other point j, of how far `at` still is from j along the line i -> j
+// (1 at i, 0 at j, clamped), then all are made to sum to 1. In polar mode
+// that line is drawn in (speed, angle) space: speeds relative to the pair's
+// mean, angles scaled by 2 (Johansen's alpha), so direction counts as much
+// as speed and the origin (idle) only blends by speed.
+void blendSpace2DWeights(const BlendSpace2D& space, glm::vec2 at, std::vector<float>& weights) {
+    const auto& pts = space.points;
+    weights.assign(pts.size(), 0.0f);
+    float sum = 0.0f;
+    for (size_t i = 0; i < pts.size(); ++i) {
+        float w = 1.0f;
+        for (size_t j = 0; j < pts.size() && w > 0.0f; ++j) {
+            if (j == i) continue;
+            glm::vec2 ij, ip;
+            if (space.polar) {
+                const float mi = glm::length(pts[i].at), mj = glm::length(pts[j].at), m = glm::length(at);
+                const float mean = std::max(1e-6f, 0.5f * (mi + mj));
+                constexpr float kAngle = 2.0f;
+                const bool origin = mi < 1e-6f || mj < 1e-6f; // a line to idle is speed only
+                ij = glm::vec2((mj - mi) / mean, origin ? 0.0f : angleBetween(pts[i].at, pts[j].at) * kAngle);
+                ip = glm::vec2((m - mi) / mean, origin ? 0.0f : angleBetween(pts[i].at, at) * kAngle);
+            } else {
+                ij = pts[j].at - pts[i].at;
+                ip = at - pts[i].at;
+            }
+            const float len2 = glm::dot(ij, ij);
+            if (len2 < 1e-12f) continue; // two points in one place
+            w = std::min(w, std::clamp(1.0f - glm::dot(ip, ij) / len2, 0.0f, 1.0f));
+        }
+        weights[i] = w;
+        sum += w;
+    }
+    if (sum > 1e-6f) {
+        for (float& w : weights) w /= sum;
+        return;
+    }
+    // Nowhere inside the bands (should not happen): the nearest point.
+    size_t best = 0;
+    for (size_t i = 1; i < pts.size(); ++i)
+        if (glm::distance(pts[i].at, at) < glm::distance(pts[best].at, at)) best = i;
+    if (!pts.empty()) weights[best] = 1.0f;
+}
+
+int Animator::addBlendState2D(const std::string& name, BlendSpace2D space, bool loop) {
+    State s;
+    s.name = name;
+    s.space2 = std::move(space);
+    s.loop = loop;
+    m_states.push_back(std::move(s));
+    return static_cast<int>(m_states.size()) - 1;
+}
+
 int Animator::addBlendState(const std::string& name, BlendSpace1D space, bool loop) {
     std::sort(space.points.begin(), space.points.end(), [](const auto& a, const auto& b) { return a.value < b.value; });
     State s;
@@ -198,6 +259,13 @@ void Animator::setProgress(float fraction) {
 
 float Animator::stateDuration(const State& s) const {
     if (s.clip >= 0) return m_set->duration(s.clip) / std::max(1e-3f, s.speed);
+    if (!s.space2.points.empty()) {
+        // The weighted mean of the clips' lengths: one shared cycle.
+        blendSpace2DWeights(s.space2, m_param2, m_weights);
+        float d = 0.0f;
+        for (size_t i = 0; i < m_weights.size(); ++i) d += m_weights[i] * m_set->duration(s.space2.points[i].clip);
+        return d;
+    }
     const auto& pts = s.space.points;
     if (pts.empty()) return 0.0f;
     if (m_param <= pts.front().value) return m_set->duration(pts.front().clip);
@@ -221,10 +289,32 @@ void Animator::evaluate(const State& s, float time, float& phase, Pose& out) con
         m_set->sample(s.clip, time * s.speed, s.loop, out);
         return;
     }
-    const auto& pts = s.space.points;
-    if (pts.empty()) { out = m_set->restPose(); return; }
     // Shared phase: every clip in the space at the same fraction of its cycle.
     auto at = [&](int clip) { return phase * m_set->duration(clip); };
+    if (!s.space2.points.empty()) {
+        // Each clip with a weight, folded in one by one: blending the next
+        // at weight w / (weight so far + w) gives every clip its share.
+        blendSpace2DWeights(s.space2, m_param2, m_weights);
+        float total = 0.0f;
+        Pose clip;
+        for (size_t i = 0; i < m_weights.size(); ++i) {
+            const float w = m_weights[i];
+            if (w < 1e-4f) continue;
+            const int c = s.space2.points[i].clip;
+            if (total == 0.0f) {
+                m_set->sample(c, at(c), s.loop, out);
+            } else {
+                m_set->sample(c, at(c), s.loop, clip);
+                Pose mixed;
+                blendPoses(out, clip, w / (total + w), mixed);
+                out.swap(mixed);
+            }
+            total += w;
+        }
+        return;
+    }
+    const auto& pts = s.space.points;
+    if (pts.empty()) { out = m_set->restPose(); return; }
     if (pts.size() == 1 || m_param <= pts.front().value) { m_set->sample(pts.front().clip, at(pts.front().clip), s.loop, out); return; }
     if (m_param >= pts.back().value) { m_set->sample(pts.back().clip, at(pts.back().clip), s.loop, out); return; }
     for (size_t i = 0; i + 1 < pts.size(); ++i) {

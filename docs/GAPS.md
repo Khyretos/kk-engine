@@ -60,7 +60,7 @@ Status: ⬜ not started, 🔨 in progress, ✅ done.
 | ENG-G10 | Physics | FEMFX <-> Jolt bridge leftovers: rubble breaking again, same-step pushes from heavy FEMFX bodies. | ⬜ |
 | ENG-G13 | Network | FEMFX breakables per machine; relay and join codes (#44); world saves (#45); shared roles (#46). | ⬜ |
 | ENG-G14 | Mods | Pack system in every game and a mod screen (#61). | ⬜ |
-| ENG-G19 | Animation | 2D blend spaces, CCD for long chains, rest-pose matching, an animation demo (#24). | ⬜ |
+| ENG-G19 | Animation | 2D blend spaces, CCD for long chains, rest-pose matching, an animation demo (#24). Part 1 done: 2D blend spaces (`Animator::addBlendState2D`, gradient band, polar), goblin_horde heroes strafe with one. Part 2 done: CCD with bend limits and damping (`solveCcd`, `ccdPoints`). Part 3 done: rest-pose matching in retargeting (limbs onto the source's rest directions). Part 4 done: games/anim_demo shows all three. | ✅ |
 | ENG-G11 | Physics | FEMFX on ARM/WebAssembly through a SIMDe port. | ⬜ |
 | ENG-G15 | Platforms | macOS bundle and `.icns`, Windows `.exe` icon build, phone player builds (#56), code signing (#57). | ⬜ |
 | ENG-G16 | Content | Synty packs beyond POLYGON Prototype in the demos; asset browser leftovers. | ⬜ |
@@ -99,12 +99,12 @@ by area. The goal is parity with the big engines and more.
 | ENG-F18 | Lighting | Screen-space reflections | ⬜ |
 | ENG-F19 | 2D | 2D toolkit: tilemaps, sprite animation, 2D lights, 2D physics, parallax | ⬜ |
 | ENG-F20 | XR | OpenXR (VR/AR) on the Vulkan renderer | ⬜ |
-| ENG-F21 | Animation | 2D blend trees (1D blend spaces exist; G19) | 🟡 |
-| ENG-F22 | Animation | IK solver (two-bone, foot, hand and look IK exist; CCD missing) | 🟡 |
+| ENG-F21 | Animation | 2D blend trees (1D and 2D blend spaces; G19) | ✅ |
+| ENG-F22 | Animation | IK solver (two-bone, foot, hand, look, FABRIK and CCD with bend limits; G19) | ✅ |
 | ENG-F23 | Animation | Motion capture import and clean-up | ⬜ |
 | ENG-F24 | Animation | Procedural animation (docs/PROCEDURAL_ANIMATION.md) | ✅ |
 | ENG-F25 | Animation | Facial animation, blend shapes | ⬜ |
-| ENG-F26 | Animation | Retargeting between skeletons (by bone name; rest-pose matching missing) | 🟡 |
+| ENG-F26 | Animation | Retargeting between skeletons (by bone name, with rest-pose matching, ENG-G19) | ✅ |
 | ENG-F27 | Animation | Runtime sequencer and cutscenes from Lua or the node scripter | ⬜ |
 | ENG-F28 | Animation | State machine with events and root motion (crossfading state machine and root motion exist; events missing) | 🟡 |
 | ENG-F29 | Physics | Soft bodies: cloth and jelly (docs/CLOTH.md, docs/JIGGLE.md) | ✅ |

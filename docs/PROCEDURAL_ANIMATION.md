@@ -247,6 +247,23 @@ kke::solveFabrik(model, pose, tail, targetModelSpace, &pole);
 `fabrikPoints` does the same on bare joint positions (creatures drawn from
 primitives), and `kneePosition` gives the knee of a two-segment limb.
 
+When the chain must bend like a body does (a spine, a tentacle that can't
+fold back on itself), `solveCcd` (ENG-G19) keeps every joint within a bend
+limit, and a step limit per pass spreads the bend instead of curling the
+tip, which plain CCD does:
+
+```cpp
+kke::CcdSettings ccd;
+ccd.maxBendDegrees.assign(tail.bones.size() - 1, 25.0f); // per joint, root first
+ccd.maxStepDegrees = 4.0f;                                // damping
+kke::solveCcd(model, pose, tail, targetModelSpace, 1.0f, ccd);
+```
+
+Measured on 1000 random targets: FABRIK is faster (0.9 against 61 µs for 10
+joints) and reaches more, but leaves 60 to 90% of its solves past those
+limits; CCD never does. Damping 4 degrees a pass brings the sharpest bend of
+a 10-joint reach from 57 to 38 degrees. `ccdPoints` works on bare points.
+
 ## Layering clips: `blendPosesMasked`, `addPose`
 
 ```cpp

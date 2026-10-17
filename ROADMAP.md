@@ -136,7 +136,7 @@ limitations. 🔴 Not started / stub.
 
 | System | Status | Notes |
 |---|---|---|
-| Clip animation (`kke::Animator`, `kke::AnimRig`) | 🟡 | Clip sampling, 1D blend spaces, crossfading state machine, two-bone IK, biped foot placement, retargeting (docs/MOVEMENT.md). **Not yet:** 2D blend spaces, CCD for long chains, A-pose/T-pose rest matching, an animation demo (#24). |
+| Clip animation (`kke::Animator`, `kke::AnimRig`) | 🟡 | Clip sampling, 1D and 2D blend spaces (gradient band, ENG-G19), crossfading state machine, two-bone IK, biped foot placement, retargeting (docs/MOVEMENT.md). CCD with bend limits and A-pose/T-pose rest matching in retargeting (ENG-G19), all shown in games/anim_demo. **Not yet:** animation layering (upper body over locomotion). |
 | Character movement (`kke::Locomotion`) | 🟢 | Walk, run, jump, vault, climb, ledge hang and shimmy, ledge leaps, wall run; replayable from inputs for the network (`LocomotionReplay`) (docs/MOVEMENT.md). |
 | Procedural animation (`kke/ProceduralAnim.h`) | 🟢 | Gaits for any number of legs (walk/trot/gallop by speed), leg placement, look-at, FABRIK, masked and additive pose blending, active ragdolls on Jolt motors that stagger and get up; play blocks Shove / Look at; `games/procedural_demo` (docs/PROCEDURAL_ANIMATION.md). FEMFX-only builds fall back to a plain knock-over. |
 | AI core (`kke::ai`) | 🟡 | Perception, needs, utility decisions, steering and flocking, Recast/Detour navmesh, teaching by example, species in JSON/YAML, Lua `ai.*`; deterministic per seed. Used by farm_demo, pet_companion, platoon, duel and goblin_horde (docs/AI.md). **Not yet:** learning from rewards, tiled/dynamic navmesh, off-mesh links, area costs, DetourCrowd for hundreds. |

@@ -136,6 +136,26 @@ void solveFabrik(const ModelData& model, Pose& pose, const IkChain& chain, const
 void fabrikPoints(std::vector<glm::vec3>& points, const glm::vec3& target, const glm::vec3* pole = nullptr,
                   const FabrikSettings& settings = FabrikSettings{});
 
+// =====================================================================
+// CCD (ENG-G19), for long chains that must bend like a body does: each
+// pass turns every joint, from the tip back to the root, so the end
+// points at the target. Unlike FABRIK it can keep each joint within a bend
+// limit, and a step limit per pass (damping) spreads the bend along the
+// chain instead of curling the tip, the usual CCD artefact.
+struct CcdSettings {
+    int iterations = 30;
+    float tolerance = 1e-3f;        // metres: close enough
+    float maxStepDegrees = 180.0f;  // the most one joint turns in one pass; small (3-8) spreads the bend
+    // Per joint, root first: the most it bends away from the segment before
+    // it (the root: from its first direction). Missing entries: no limit.
+    std::vector<float> maxBendDegrees;
+};
+// On bare points (joint positions, root first), changed in place; lengths kept.
+void ccdPoints(std::vector<glm::vec3>& points, const glm::vec3& target, const CcdSettings& settings = CcdSettings{});
+// On a model's chain, like solveFabrik.
+void solveCcd(const ModelData& model, Pose& pose, const IkChain& chain, const glm::vec3& target, float weight = 1.0f,
+              const CcdSettings& settings = CcdSettings{});
+
 // Where the knee (or elbow) of a two-segment limb goes: `hip` to `foot`
 // with segment lengths `upper` and `lower`, bending toward `bend`.
 glm::vec3 kneePosition(const glm::vec3& hip, const glm::vec3& foot, float upper, float lower, const glm::vec3& bend);
