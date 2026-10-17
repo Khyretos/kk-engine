@@ -1,0 +1,37 @@
+[2026-10-17 14:54:16.470][engine][Application][Climb Race][info]: Hardware target: desktop (no specific device recognised); platform backend: desktop
+[2026-10-17 14:54:16.470][engine][Application][Climb Race][info]: UI profile: desktop
+[2026-10-17 14:54:16.470][engine][Governor][Climb Race][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 1.00
+[2026-10-17 14:54:16.473][engine][VulkanDevice][Climb Race][info]: using device: llvmpipe (LLVM 22.1.8, 256 bits)
+[2026-10-17 14:54:16.530][engine][SwapChain][Climb Race][info]: colour output: format 50 (8-bit sRGB)
+[2026-10-17 14:54:16.531][engine][Application][Climb Race][info]: Hardware target: software-gpu (the only Vulkan device is a CPU: llvmpipe (LLVM 22.1.8, 256 bits))
+[2026-10-17 14:54:16.531][engine][Governor][Climb Race][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+[2026-10-17 14:54:16.531][engine][Application][Climb Race][info]: MSAA 1x (software rasteriser)
+[2026-10-17 14:54:16.617][engine][Application][Climb Race][info]: mood 'golden_hour' (assets/moods/golden_hour.yaml)
+[2026-10-17 14:54:16.617][engine][Benchmark][Climb Race][info]: benchmark: 3 s warm-up, then 20 s measured, uncapped (no vsync, no frame cap)
+[2026-10-17 14:54:16.617][engine][Settings][Climb Race][info]: no settings file at 'settings.json' (using defaults)
+[2026-10-17 14:54:16.617][engine][Governor][Climb Race][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+[2026-10-17 14:54:16.665][engine][ClothGpu][Climb Race][info]: no compute queue of its own on this GPU: cloth pairs are searched on the CPU (KKE_CLOTH_GPU=shared to try the graphics queue)
+[2026-10-17 14:54:16.665][engine][RigidBodies][Climb Race][info]: Jolt rigid-body world ready (65536 max bodies)
+[rmlui] Loaded font face 'Noto Sans' [regular] from 'assets/fonts/NotoSans-Regular.ttf'.
+[rmlui] Loaded font face 'Noto Sans' [bold] from 'assets/fonts/NotoSans-Bold.ttf'.
+[rmlui] Loaded font face 'Noto Sans' [italic] from 'assets/fonts/NotoSans-Italic.ttf'.
+[rmlui] Loaded font face 'Noto Color Emoji' [regular] from 'assets/fonts/NotoColorEmoji.ttf'.
+[ui] RmlUi initialised with real Vulkan rendering (text via glyph textures, <img>/background-image via stb_image, both real now -- see RmlVulkanRenderInterface.h)
+[2026-10-17 14:54:16.804][engine][Audio][Climb Race][info]: Audio ready: 48000 Hz, 32 voices, output: Speakers (Realtek High Definition Audio) (WASAPI)
+[2026-10-17 14:54:17.129][engine][Models][Climb Race][info]: loaded 'C:\forgejo-runner\work\3ebd40c8aa10f1ed\tmp\kke-run\pkg\assets\animations\UAL1_Standard.fbx': 2 mesh part(s), 13744 triangles, 2 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-10-17 14:54:17.138][engine][ClimbRace][Climb Race][info]: people: no Synty packs (assets/synty or KKE_ASSETS_DIR), so everyone is the mannequin
+[2026-10-17 14:54:17.139][engine][Models][Climb Race][info]: loaded 'climb_race/climber': 2 mesh part(s), 13744 triangles, 2 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-10-17 14:54:17.165][engine][ClimbRace][Climb Race][info]: climber proportions from the skeleton: arm reach 0.54 m, shoulders 0.52 m up and 0.19 m out, leg 0.79 m
+[2026-10-17 14:54:17.167][engine][ClimbRace][Climb Race][info]: 6 mountains in C:/forgejo-runner/work/3ebd40c8aa10f1ed/tmp/kke-run/pkg/mountains
+[2026-10-17 14:54:17.251][engine][Application][Climb Race][info]: mood 'morning' (assets/moods/morning.yaml)
+[2026-10-17 14:54:17.252][engine][ClimbRace][Climb Race][info]: mountain Pebble Hill (seed 3): 12 m, 425 holds per face, 1 ledges, 4 faces
+[2026-10-17 14:54:17.300][engine][Models][Climb Race][info]: loaded 'climb_race/climber/0de0ab0800590a60ff02902e03d0eb0eb0e6': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-10-17 14:54:17.307][engine][Models][Climb Race][info]: loaded 'climb_race/climber/08c05c0380ff0730330590a60ff02902e03d': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-10-17 14:54:17.314][engine][Models][Climb Race][info]: loaded 'climb_race/climber/0f50cc0b00730d90590ff07309e038052085': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-10-17 14:54:17.321][engine][Models][Climb Race][info]: loaded 'climb_race/climber/0ab07504d0b80730ff0cc01f01f0a8099070': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-10-17 14:54:17.334][engine][ClimbRace][Climb Race][info]: mode: Race
+[2026-10-17 14:54:17.334][engine][ClimbRace][Climb Race][info]: race: 4 climbers: 1 playing here, 0 online, 3 CPU, on Pebble Hill (seed 3)
+[2026-10-17 14:54:17.334][engine][Governor][Climb Race][info]: budget: 2 worker thread(s), frame cap 0, background cap 0, render scale 0.75
+[2026-10-17 14:54:17.334][engine][Input][Climb Race][info]: touch controls: stick left, look look.rate, button jump, button grab.right, button grab.left, button foot.right, button foot.left, button letgo, pause
+[2026-10-17 14:54:40.739][engine][Benchmark][Climb Race][info]: benchmark: 6 screenshot(s) in C:/forgejo-runner/work/3ebd40c8aa10f1ed/hostexecutor/results/bench/run_20261017_144940/reports/shots
+[2026-10-17 14:54:40.739][engine][Benchmark][Climb Race][info]: benchmark: 156 frames, 8.6 fps avg, 7.9 fps 1% low, 0 hitch(es), verdict too slow; report C:\forgejo-runner\work\3ebd40c8aa10f1ed\hostexecutor\results\bench\run_20261017_144940\reports\climb_race.json
