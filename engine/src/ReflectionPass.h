@@ -3,12 +3,32 @@
 #include "kke/Reflections.h"
 #include "kke/Renderer.h"
 
+#include "kke/Buffer.h"
+
 #include <glm/glm.hpp>
 #include <volk.h>
 
+#include <memory>
+#include <vector>
+
 namespace kke {
 
+class RayScene;
 class VulkanDevice;
+
+// What KKE ray tracing needs beyond the screen (ENG-F02): the stand-ins built
+// this frame and their colours (an instance's custom index is its colour's
+// index), the camera's inverse view, the sun and sky that light a hit, and
+// how many rays may be cast this frame.
+struct ReflectionRays {
+    RayScene* scene = nullptr;
+    const std::vector<glm::vec4>* colors = nullptr; // linear albedo
+    glm::mat4 viewToWorld{1.0f};
+    glm::vec3 sunDirection{0.0f, 1.0f, 0.0f}; // towards the sun
+    glm::vec3 sunColor{0.0f};                  // colour x intensity
+    glm::vec3 ambient{0.0f};                   // the sky's average light
+    uint32_t budget = 0;
+};
 
 // What smooth surfaces reflect, found in screen space (ENG-F02): after the
 // scene pass, one compute dispatch over a half-resolution image
@@ -28,9 +48,11 @@ public:
     // of the frame, before anything reads them (a resize waits for the GPU).
     void prepare(VkExtent2D sceneExtent);
     // Records the pass into cmd, after Renderer::endScenePass() (the scene's
-    // images are readable then). `frame` is the frame-in-flight slot.
+    // images are readable then). `frame` is the frame-in-flight slot. With
+    // `rays` (KKE ray tracing, a ray-query device) rays the march leaves
+    // unsettled go on through rays->scene, built here first.
     void record(VkCommandBuffer cmd, uint32_t frame, const Renderer::SceneImages& scene, const glm::mat4& view, const glm::mat4& proj,
-                const ReflectionSettings& settings);
+                const ReflectionSettings& settings, const ReflectionRays* rays = nullptr);
     // Nothing recorded this frame (reflections off, split screen): the next frame
     // must not read what is there.
     void invalidate() { m_ready = false; }
@@ -51,6 +73,13 @@ private:
     void ensureImages(VkExtent2D full);
     void destroyImages();
     VkPipeline pipeline(bool multisampled);
+    // The ray-query variant (shaders/ray_reflect*.comp): its own set layout, made on first use.
+    void createRayPath();
+    VkPipeline rayPipeline(bool multisampled);
+    struct RaySlot {
+        std::unique_ptr<Buffer> colors, budget, params;
+        size_t colorCapacity = 0; // vec4s
+    };
 
     VulkanDevice& m_device;
     VkSampler m_nearest = VK_NULL_HANDLE, m_linear = VK_NULL_HANDLE;
@@ -64,6 +93,12 @@ private:
     bool m_fresh = true; // the images are UNDEFINED: no reads to wait for
     bool m_ready = false;
     glm::mat4 m_viewProj{1.0f};
+    VkDescriptorSetLayout m_raySetLayout = VK_NULL_HANDLE;
+    VkPipelineLayout m_rayLayout = VK_NULL_HANDLE;
+    VkPipeline m_rayPipelines[2] = { VK_NULL_HANDLE, VK_NULL_HANDLE };
+    VkDescriptorPool m_rayPool = VK_NULL_HANDLE;
+    VkDescriptorSet m_raySets[Renderer::kMaxFramesInFlight] = {};
+    RaySlot m_raySlots[Renderer::kMaxFramesInFlight];
 };
 
 } // namespace kke

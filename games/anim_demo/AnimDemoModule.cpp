@@ -118,6 +118,12 @@ void AnimDemoModule::init(kke::Application& app) {
     if (const char* circle = std::getenv("KKE_ANIM_CIRCLE")) m_circle = std::max(0.0f, static_cast<float>(std::atof(circle)));
     if (const char* rest = std::getenv("KKE_ANIM_REST")) m_showRest = rest[0] == '1';
     if (const char* mirror = std::getenv("KKE_ANIM_MIRROR")) m_mirrorFloor = mirror[0] == '1';
+    // KKE_ANIM_VIEW=distance,pitch,yaw (metres, radians): where the camera starts, for pictures.
+    if (const char* view = std::getenv("KKE_ANIM_VIEW")) {
+        float d = 0.0f, pitch = 0.0f, yaw = 0.0f;
+        if (std::sscanf(view, "%f,%f,%f", &d, &pitch, &yaw) == 3)
+            if (auto* orbit = app.getModule<kke::OrbitCameraModule>()) orbit->setView(glm::vec3(0.0f, 1.0f, 0.0f), d, pitch, yaw);
+    }
     if (auto* in = app.getModule<kke::InputModule>()) {
         kke::InputModule::defineCharacterActions(in->map(0));
         in->commitDefaults();

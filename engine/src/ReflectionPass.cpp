@@ -1,9 +1,11 @@
 #include "ReflectionPass.h"
 
+#include "kke/RayScene.h"
 #include "kke/ShaderUtils.h"
 #include "kke/VulkanCheck.h"
 #include "kke/VulkanDevice.h"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 
@@ -17,6 +19,14 @@ struct ReflectPush {
     glm::vec4 march;      // steps, thickness
 };
 static_assert(sizeof(ReflectPush) <= 128, "push constants: the guaranteed minimum is 128 bytes");
+
+// shaders/reflect.glsl's Rays block (binding 7).
+struct RayParams {
+    glm::mat4 viewToWorld;
+    glm::vec4 sunDirection; // w = the ray budget
+    glm::vec4 sunColor;
+    glm::vec4 ambient;
+};
 
 } // namespace
 
@@ -77,6 +87,11 @@ ReflectionPass::~ReflectionPass() {
     destroyImages();
     for (VkPipeline p : m_pipelines)
         if (p) vkDestroyPipeline(dev, p, nullptr);
+    for (VkPipeline p : m_rayPipelines)
+        if (p) vkDestroyPipeline(dev, p, nullptr);
+    if (m_rayPool) vkDestroyDescriptorPool(dev, m_rayPool, nullptr);
+    if (m_rayLayout) vkDestroyPipelineLayout(dev, m_rayLayout, nullptr);
+    if (m_raySetLayout) vkDestroyDescriptorSetLayout(dev, m_raySetLayout, nullptr);
     if (m_pool) vkDestroyDescriptorPool(dev, m_pool, nullptr);
     if (m_layout) vkDestroyPipelineLayout(dev, m_layout, nullptr);
     if (m_setLayout) vkDestroyDescriptorSetLayout(dev, m_setLayout, nullptr);
@@ -95,6 +110,71 @@ VkPipeline ReflectionPass::pipeline(bool multisampled) {
     cp.stage.module = comp;
     cp.stage.pName = "main";
     cp.layout = m_layout;
+    VK_CHECK(vkCreateComputePipelines(m_device.device(), VK_NULL_HANDLE, 1, &cp, nullptr, &p));
+    vkDestroyShaderModule(m_device.device(), comp, nullptr);
+    return p;
+}
+
+void ReflectionPass::createRayPath() {
+    if (m_raySetLayout) return;
+    VkDevice dev = m_device.device();
+    std::array<VkDescriptorSetLayoutBinding, 8> b{};
+    const VkDescriptorType types[8] = { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                                        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,          VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                                        VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                                        VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,         VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER };
+    for (uint32_t i = 0; i < 8; ++i) b[i] = { i, types[i], 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr };
+    VkDescriptorSetLayoutCreateInfo li{};
+    li.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    li.bindingCount = static_cast<uint32_t>(b.size());
+    li.pBindings = b.data();
+    VK_CHECK(vkCreateDescriptorSetLayout(dev, &li, nullptr, &m_raySetLayout));
+    VkPushConstantRange range{ VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ReflectPush) };
+    VkPipelineLayoutCreateInfo pl{};
+    pl.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pl.setLayoutCount = 1;
+    pl.pSetLayouts = &m_raySetLayout;
+    pl.pushConstantRangeCount = 1;
+    pl.pPushConstantRanges = &range;
+    VK_CHECK(vkCreatePipelineLayout(dev, &pl, nullptr, &m_rayLayout));
+    constexpr uint32_t n = Renderer::kMaxFramesInFlight;
+    const std::array<VkDescriptorPoolSize, 5> sizes{ { { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2 * n },
+                                                      { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 2 * n },
+                                                      { VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, n },
+                                                      { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2 * n },
+                                                      { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, n } } };
+    VkDescriptorPoolCreateInfo pi{};
+    pi.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    pi.maxSets = n;
+    pi.poolSizeCount = static_cast<uint32_t>(sizes.size());
+    pi.pPoolSizes = sizes.data();
+    VK_CHECK(vkCreateDescriptorPool(dev, &pi, nullptr, &m_rayPool));
+    std::array<VkDescriptorSetLayout, n> layouts;
+    layouts.fill(m_raySetLayout);
+    VkDescriptorSetAllocateInfo ai{};
+    ai.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    ai.descriptorPool = m_rayPool;
+    ai.descriptorSetCount = n;
+    ai.pSetLayouts = layouts.data();
+    VK_CHECK(vkAllocateDescriptorSets(dev, &ai, m_raySets));
+    for (RaySlot& slot : m_raySlots) {
+        slot.budget = std::make_unique<Buffer>(m_device, sizeof(uint32_t), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                                               VMA_MEMORY_USAGE_GPU_ONLY);
+        slot.params = std::make_unique<Buffer>(m_device, sizeof(RayParams), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    }
+}
+
+VkPipeline ReflectionPass::rayPipeline(bool multisampled) {
+    VkPipeline& p = m_rayPipelines[multisampled ? 1 : 0];
+    if (p) return p;
+    VkShaderModule comp = loadShaderModule(m_device, multisampled ? "shaders/ray_reflect_ms.comp.spv" : "shaders/ray_reflect.comp.spv");
+    VkComputePipelineCreateInfo cp{};
+    cp.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    cp.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    cp.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+    cp.stage.module = comp;
+    cp.stage.pName = "main";
+    cp.layout = m_rayLayout;
     VK_CHECK(vkCreateComputePipelines(m_device.device(), VK_NULL_HANDLE, 1, &cp, nullptr, &p));
     vkDestroyShaderModule(m_device.device(), comp, nullptr);
     return p;
@@ -150,7 +230,7 @@ void ReflectionPass::ensureImages(VkExtent2D full) {
 }
 
 void ReflectionPass::record(VkCommandBuffer cmd, uint32_t frame, const Renderer::SceneImages& scene, const glm::mat4& view,
-                          const glm::mat4& proj, const ReflectionSettings& s) {
+                          const glm::mat4& proj, const ReflectionSettings& s, const ReflectionRays* rays) {
     if (!scene.depth || !scene.color || scene.extent.width == 0 || scene.extent.height == 0) {
         m_ready = false;
         return;
@@ -160,10 +240,14 @@ void ReflectionPass::record(VkCommandBuffer cmd, uint32_t frame, const Renderer:
         return;
     }
     const bool ms = scene.depthSamples > 1;
-    const VkPipeline p = pipeline(ms);
+    const bool traced = rays && rays->scene && rays->colors && m_device.rayQuery();
+    const uint32_t slotIndex = frame % Renderer::kMaxFramesInFlight;
+    if (traced) createRayPath();
+    const VkPipeline p = traced ? rayPipeline(ms) : pipeline(ms);
+    const VkPipelineLayout layout = traced ? m_rayLayout : m_layout;
 
     // This slot's set: the slot's previous frame has finished (Renderer::beginFrame waited on it).
-    const VkDescriptorSet set = m_sets[frame % Renderer::kMaxFramesInFlight];
+    const VkDescriptorSet set = traced ? m_raySets[slotIndex] : m_sets[slotIndex];
     std::array<VkDescriptorImageInfo, 4> info{ { { m_nearest, scene.color, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL },
                                                  { m_nearest, scene.depth, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL },
                                                  { VK_NULL_HANDLE, m_light.view, VK_IMAGE_LAYOUT_GENERAL },
@@ -178,6 +262,60 @@ void ReflectionPass::record(VkCommandBuffer cmd, uint32_t frame, const Renderer:
         w[i].pImageInfo = &info[i];
     }
     vkUpdateDescriptorSets(m_device.device(), static_cast<uint32_t>(w.size()), w.data(), 0, nullptr);
+
+    if (traced) {
+        // The stand-ins' top-level structure for this frame, their colours,
+        // the light for a hit and a fresh ray count.
+        RaySlot& slot = m_raySlots[slotIndex];
+        rays->scene->build(cmd, slotIndex);
+        const std::vector<glm::vec4>& colors = *rays->colors;
+        const size_t count = std::max<size_t>(1, colors.size());
+        if (!slot.colors || slot.colorCapacity < count) {
+            slot.colorCapacity = std::max<size_t>(64, count * 2);
+            slot.colors = std::make_unique<Buffer>(m_device, slot.colorCapacity * sizeof(glm::vec4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                                                   VMA_MEMORY_USAGE_CPU_TO_GPU);
+        }
+        if (!colors.empty()) slot.colors->upload(colors.data(), colors.size() * sizeof(glm::vec4));
+        RayParams params{ rays->viewToWorld, glm::vec4(glm::normalize(rays->sunDirection), static_cast<float>(rays->budget)),
+                          glm::vec4(rays->sunColor, 0.0f), glm::vec4(rays->ambient, 0.0f) };
+        slot.params->upload(&params, sizeof(params));
+        // The count this slot's last frame read and wrote is done with before it's reset.
+        VkMemoryBarrier before{};
+        before.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+        before.srcAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+        before.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 1, &before, 0, nullptr, 0, nullptr);
+        vkCmdFillBuffer(cmd, slot.budget->handle(), 0, sizeof(uint32_t), 0u);
+        VkMemoryBarrier mb{};
+        mb.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+        mb.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        mb.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &mb, 0, nullptr, 0, nullptr);
+
+        const VkAccelerationStructureKHR tlas = rays->scene->topLevel(slotIndex);
+        VkWriteDescriptorSetAccelerationStructureKHR asw{};
+        asw.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
+        asw.accelerationStructureCount = 1;
+        asw.pAccelerationStructures = &tlas;
+        const VkDescriptorBufferInfo cb{ slot.colors->handle(), 0, VK_WHOLE_SIZE }, bb{ slot.budget->handle(), 0, VK_WHOLE_SIZE },
+            pb{ slot.params->handle(), 0, VK_WHOLE_SIZE };
+        std::array<VkWriteDescriptorSet, 4> rw{};
+        for (uint32_t i = 0; i < 4; ++i) {
+            rw[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            rw[i].dstSet = set;
+            rw[i].dstBinding = 4 + i;
+            rw[i].descriptorCount = 1;
+        }
+        rw[0].descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+        rw[0].pNext = &asw;
+        rw[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        rw[1].pBufferInfo = &cb;
+        rw[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        rw[2].pBufferInfo = &bb;
+        rw[3].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        rw[3].pBufferInfo = &pb;
+        vkUpdateDescriptorSets(m_device.device(), static_cast<uint32_t>(rw.size()), rw.data(), 0, nullptr);
+    }
 
     // Before writing: the last frame's lit shaders have finished reading
     // (or, new images, nothing has: they just get their layout).
@@ -198,13 +336,13 @@ void ReflectionPass::record(VkCommandBuffer cmd, uint32_t frame, const Renderer:
     m_fresh = false;
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, p);
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_layout, 0, 1, &set, 0, nullptr);
+    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, layout, 0, 1, &set, 0, nullptr);
     ReflectPush push{};
     push.proj = proj;
     push.sizeLimits = glm::vec4(static_cast<float>(scene.extent.width), static_cast<float>(scene.extent.height), 1.0f - s.maxRoughness,
                                 s.maxDistance);
     push.march = glm::vec4(static_cast<float>(s.steps), s.thickness, 0.0f, 0.0f);
-    vkCmdPushConstants(cmd, m_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ReflectPush), &push);
+    vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ReflectPush), &push);
     vkCmdDispatch(cmd, (m_extent.width + 7) / 8, (m_extent.height + 7) / 8, 1);
 
     // Written before the next frame's lit shaders read them.

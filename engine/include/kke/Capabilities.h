@@ -66,6 +66,18 @@ public:
     virtual void onSettingsChanged(const EngineSettings& settings) = 0;
 };
 
+// Implemented by a module that has things rays should see (ENG-F02, KKE
+// ray tracing): each frame, before the reflections pass, Application asks
+// every implementer to add stand-ins of what it draws to the frame's
+// kke::RayScene, and each stand-in's colour (linear albedo) to `colors`; an
+// instance's custom index is its colour's index there.
+class RayScene;
+class IRayContributor {
+public:
+    virtual ~IRayContributor() = default;
+    virtual void addToRayScene(RayScene& scene, std::vector<glm::vec4>& colors) = 0;
+};
+
 // Implemented by a physics module that can simulate ragdolls (FEMFX's
 // PhysicsModule is the first). Character code builds a kke::RagdollDesc
 // from its skeleton (kke/Ragdoll.h), hands it to whichever module offers

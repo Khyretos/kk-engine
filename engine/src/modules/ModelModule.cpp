@@ -3,8 +3,11 @@
 
 #include "kke/Application.h"
 #include "kke/GpuSkin.h"
+#include "kke/InteriorColor.h"
+#include "kke/MeshLod.h"
 #include "kke/Log.h"
 #include "kke/Picking.h"
+#include "kke/RayScene.h"
 #include "kke/ShaderUtils.h"
 #include "kke/VulkanCheck.h"
 
@@ -1178,6 +1181,106 @@ void ModelModule::shutdown() {
     m_surfacePool = VK_NULL_HANDLE;
     m_surfaceLayout = VK_NULL_HANDLE;
     m_flatNormal.reset();
+}
+
+namespace {
+
+float linearChannel(float c) { return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f); }
+
+// A mesh part's colour as it mostly looks: the material's colour times its
+// texture's dominant colour where the part's UVs fall (a Synty atlas holds
+// many colours; this is the one this part uses most).
+glm::vec4 partColor(const ModelData& data, const ModelMesh& mesh) {
+    glm::vec3 c(1.0f);
+    if (mesh.material < data.materials.size()) {
+        const ModelMaterial& m = data.materials[mesh.material];
+        c = m.baseColor;
+        if (!m.albedoTexture.empty()) {
+            std::vector<glm::vec2> uvs;
+            uvs.reserve(mesh.vertices.size());
+            for (const ModelVertex& v : mesh.vertices) uvs.push_back(v.uv);
+            const InteriorFill fill = interiorFillFromTexture(m.albedoTexture, uvs);
+            if (fill.valid) c *= glm::vec3(linearChannel(fill.dominant.r), linearChannel(fill.dominant.g), linearChannel(fill.dominant.b));
+        }
+    }
+    return glm::vec4(c, 1.0f);
+}
+
+} // namespace
+
+const ModelModule::StandIn& ModelModule::standInFor(ModelId id, RayScene& scene) {
+    if (auto it = m_standIns.find(id); it != m_standIns.end()) return it->second;
+    StandIn& out = m_standIns[id];
+    const auto model = m_models.find(id);
+    if (model == m_models.end()) return out;
+    const ModelData& data = model->second->data;
+    // Rigid parts: about a tenth of the triangles, seams and specks allowed to go.
+    SimplifyOptions opt;
+    opt.maxError = 0.05f;
+    opt.acrossSeams = true;
+    opt.prune = true;
+    bool anyRigid = false;
+    for (const ModelMesh& m : data.meshes) anyRigid = anyRigid || (!m.skinned && m.indices.size() >= 3);
+    if (anyRigid) {
+        const ModelData simple = simplifyModel(data, 0.1f, opt);
+        for (size_t i = 0; i < simple.meshes.size() && i < data.meshes.size(); ++i) {
+            const ModelMesh& m = simple.meshes[i];
+            if (m.skinned || m.indices.size() < 3) continue;
+            std::vector<glm::vec3> positions;
+            positions.reserve(m.vertices.size());
+            for (const ModelVertex& v : m.vertices) positions.push_back(v.position);
+            out.parts.push_back({ scene.addTriangles(positions, m.indices), partColor(data, data.meshes[i]), -1, glm::mat4(1.0f) });
+        }
+    }
+    // Skinned parts: a box per bone round the vertices it moves most, in the bone's own space.
+    const size_t bones = data.bones.size();
+    std::vector<glm::vec3> lo(bones, glm::vec3(1e30f)), hi(bones, glm::vec3(-1e30f));
+    std::vector<int> count(bones, 0), colorOf(bones, -1);
+    for (size_t mi = 0; mi < data.meshes.size(); ++mi) {
+        const ModelMesh& m = data.meshes[mi];
+        if (!m.skinned) continue;
+        for (const ModelVertex& v : m.vertices) {
+            int k = 0;
+            for (int j = 1; j < 4; ++j)
+                if (v.weights[j] > v.weights[k]) k = j;
+            const uint32_t b = v.joints[k];
+            if (b >= bones || v.weights[k] <= 0.0f) continue;
+            const glm::vec3 p = glm::vec3(data.bones[b].inverseBind * glm::vec4(v.position, 1.0f));
+            lo[b] = glm::min(lo[b], p);
+            hi[b] = glm::max(hi[b], p);
+            if (count[b]++ == 0) colorOf[b] = static_cast<int>(mi);
+        }
+    }
+    for (size_t b = 0; b < bones; ++b) {
+        if (count[b] < 6) continue;
+        const glm::vec3 half = glm::max((hi[b] - lo[b]) * 0.5f, glm::vec3(0.01f));
+        const glm::mat4 offset = glm::translate(glm::mat4(1.0f), (hi[b] + lo[b]) * 0.5f);
+        out.parts.push_back({ scene.addBox(half), partColor(data, data.meshes[static_cast<size_t>(colorOf[b])]), static_cast<int>(b), offset });
+    }
+    return out;
+}
+
+void ModelModule::addToRayScene(RayScene& scene, std::vector<glm::vec4>& colors) {
+    if (&scene != m_standInScene) {
+        // A new scene: the stand-ins' geometry was the old one's.
+        m_standIns.clear();
+        m_standInScene = &scene;
+    }
+    for (const auto& [iid, inst] : m_instances) {
+        if (!inst.visible) continue;
+        const StandIn& standIn = standInFor(inst.model, scene);
+        std::vector<glm::mat4> bones;
+        for (const StandIn::Part& part : standIn.parts) {
+            glm::mat4 at = inst.transform;
+            if (part.bone >= 0) {
+                if (bones.empty()) bones = currentBoneWorld(inst);
+                if (static_cast<size_t>(part.bone) >= bones.size()) continue;
+                at = at * bones[static_cast<size_t>(part.bone)];
+            }
+            colors.push_back(part.color * glm::vec4(inst.tint, 1.0f));
+            scene.add(part.geometry, at * part.offset, static_cast<uint32_t>(colors.size() - 1));
+        }
+    }
 }
 
 } // namespace kke

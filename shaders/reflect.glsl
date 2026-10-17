@@ -8,7 +8,9 @@
 // noise, nothing blended over frames (docs/RENDERING_PRINCIPLES.md). The next
 // frame's lit shaders read the result (screenReflectionAt, lighting_ubo.glsl).
 // reflect.comp and reflect_ms.comp include it (DEPTH_MS: sample 0 of a
-// multisampled depth).
+// multisampled depth); ray_reflect.comp and ray_reflect_ms.comp with
+// RAY_QUERY too (KKE ray tracing): a ray the march didn't settle goes on
+// through simple stand-ins of the scene (kke::RayScene), within a budget.
 
 layout(local_size_x = 8, local_size_y = 8) in;
 
@@ -22,6 +24,34 @@ float depthAt(ivec2 p) { return texelFetch(sceneDepth, p, 0).r; }
 #endif
 layout(set = 0, binding = 2, rgba16f) uniform writeonly image2D reflectOut;   // rgb = reflected light, a = 1 where found
 layout(set = 0, binding = 3, r32f) uniform writeonly image2D reflectDepthOut; // view depth (m), 0 = nothing to reflect
+
+#ifdef RAY_QUERY
+#extension GL_EXT_ray_query : require
+layout(set = 0, binding = 4) uniform accelerationStructureEXT standIns;
+layout(std430, set = 0, binding = 5) readonly buffer Colors { vec4 colors[]; }; // per stand-in: linear albedo
+layout(std430, set = 0, binding = 6) buffer Budget { uint raysCast; };          // reset to 0 each frame
+layout(set = 0, binding = 7) uniform Rays {
+    mat4 viewToWorld;  // inverse view
+    vec4 sunDirection; // xyz = towards the sun, w = ray budget this frame
+    vec4 sunColor;     // rgb = colour x intensity
+    vec4 ambient;      // rgb = the sky's average light
+} rays;
+
+// The light a stand-in sends back along a ray: its colour under the sky and
+// half the sun (no normal on a stand-in: an average side).
+vec4 traceStandIns(vec3 viewOrigin, vec3 viewDir, float maxDist) {
+    if (atomicAdd(raysCast, 1u) >= uint(rays.sunDirection.w)) return vec4(0.0); // over budget: the sky
+    vec3 o = (rays.viewToWorld * vec4(viewOrigin, 1.0)).xyz;
+    vec3 d = normalize((rays.viewToWorld * vec4(viewDir, 0.0)).xyz);
+    rayQueryEXT q;
+    rayQueryInitializeEXT(q, standIns, gl_RayFlagsOpaqueEXT, 0xFF, o, 0.02, d, maxDist);
+    while (rayQueryProceedEXT(q)) {
+    }
+    if (rayQueryGetIntersectionTypeEXT(q, true) != gl_RayQueryCommittedIntersectionTriangleEXT) return vec4(0.0);
+    vec3 albedo = colors[rayQueryGetIntersectionInstanceCustomIndexEXT(q, true)].rgb;
+    return vec4(albedo * (rays.ambient.rgb + 0.5 * rays.sunColor.rgb), 1.0);
+}
+#endif
 
 layout(push_constant) uniform Push {
     mat4 proj;      // the frame's projection (Vulkan's flipped Y)
@@ -77,10 +107,14 @@ void main() {
     vec2 s0 = (h0.xy / h0.w * 0.5 + 0.5) * pc.sizeLimits.xy, s1 = (h1.xy / h1.w * 0.5 + 0.5) * pc.sizeLimits.xy;
     float k0 = 1.0 / h0.w, k1 = 1.0 / h1.w; // 1 / view depth: linear on screen
     float prev = 0.0, hitT = -1.0;
+    bool leftScreen = false;
     for (int k = 1; k <= steps; ++k) {
         float f = float(k) / float(steps);
         vec2 px = mix(s0, s1, f);
-        if (px.x < 0.0 || px.y < 0.0 || px.x >= pc.sizeLimits.x || px.y >= pc.sizeLimits.y) break; // left the screen
+        if (px.x < 0.0 || px.y < 0.0 || px.x >= pc.sizeLimits.x || px.y >= pc.sizeLimits.y) {
+            leftScreen = true; // what it meets next is off screen
+            break;
+        }
         float rayZ = -1.0 / mix(k0, k1, f);
         vec4 sp = viewPos(ivec2(px));
         if (sp.w == 0.0) { prev = f; continue; } // sky there: keep going
@@ -98,7 +132,13 @@ void main() {
         prev = f;
     }
     if (hitT < 0.0) {
+#ifdef RAY_QUERY
+        // Only rays that left the screen: one that stayed on it and met
+        // nothing goes to the sky (stand-ins are coarser than what's drawn).
+        imageStore(reflectOut, half_, leftScreen ? traceStandIns(origin, R, maxDist) : vec4(0.0));
+#else
         imageStore(reflectOut, half_, vec4(0.0));
+#endif
         imageStore(reflectDepthOut, half_, vec4(depth));
         return;
     }

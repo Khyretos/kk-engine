@@ -1,5 +1,6 @@
 #pragma once
 
+#include "kke/Capabilities.h"
 #include "kke/Module.h"
 #include "kke/Buffer.h"
 #include "kke/JigglePhysics.h"
@@ -39,7 +40,7 @@ namespace kke {
 //   models.spawn(tree, glm::translate(glm::mat4(1), {3, 0, 0}));
 class SkinWorkers;
 
-class ModelModule : public Module {
+class ModelModule : public Module, public IRayContributor {
 public:
     using ModelId = uint32_t;     // 0 = invalid
     using InstanceId = uint32_t;  // 0 = invalid
@@ -157,6 +158,13 @@ public:
     // Instances drawn through instancing last frame (N copies of one
     // model = one draw per mesh part), and toggling it (A/B comparisons).
     size_t instancedLastFrame() const { return m_instancedCount; }
+    // KKE ray tracing (ENG-F02): every visible instance as stand-ins, simple
+    // shapes rays can afford: a rigid part as about a tenth of its triangles
+    // (meshoptimizer), a skinned one as a box per bone posed like the bone.
+    // Each in the colour the part mostly shows (its texture's dominant colour
+    // as the mesh uses it, times the material's).
+    void addToRayScene(RayScene& scene, std::vector<glm::vec4>& colors) override;
+
     void setInstancingEnabled(bool on) { m_instancing = on; }
     bool instancingEnabled() const { return m_instancing; }
 
@@ -263,6 +271,18 @@ private:
     void recordSkin(VkCommandBuffer cmd, Instance& inst, uint32_t slot);
     void uploadDeformed(Instance& inst, uint32_t frameIndex);
     std::vector<glm::mat4> currentBoneWorld(const Instance& inst) const;
+    struct StandIn {
+        struct Part {
+            uint32_t geometry = 0;  // RayScene::Geometry
+            glm::vec4 color{1.0f};  // linear albedo
+            int bone = -1;          // a box that follows this bone, or -1: rigid
+            glm::mat4 offset{1.0f}; // the box's centre in the bone's space
+        };
+        std::vector<Part> parts;
+    };
+    const StandIn& standInFor(ModelId id, RayScene& scene);
+    std::unordered_map<ModelId, StandIn> m_standIns;
+    RayScene* m_standInScene = nullptr; // the scene m_standIns' geometry lives in
     void advanceClips(const UpdateContext& ctx);
     // False only when the instance certainly can't be seen through `f`.
     bool mightBeVisible(const Instance& inst, const struct Frustum& f) const;

@@ -2,6 +2,7 @@
 #include "kke/SkyRenderer.h"
 #include "ReflectionPass.h"
 #include "ScreenGiPass.h"
+#include "kke/Capabilities.h"
 #include "kke/RayScene.h"
 #include "kke/Mood.h"
 #include "kke/EngineSettings.h"
@@ -1177,7 +1178,27 @@ void Application::run() {
             }
             if (reflOn && drawScene) {
                 m_renderer->endScenePass();
-                m_reflectionPass->record(cmd, m_renderer->currentFrameIndex(), m_renderer->sceneImages(), view, proj, m_reflectionSettings);
+                // KKE ray tracing: this frame's stand-ins from every module that has them.
+                ReflectionRays rays;
+                const bool traced = m_reflections == Reflections::Kke && m_renderer->device().rayQuery();
+                if (traced) {
+                    if (!m_rayScene) m_rayScene = std::make_unique<RayScene>(m_renderer->device());
+                    m_rayScene->clear();
+                    m_rayColors.clear();
+                    for (IRayContributor* c : findCapability<IRayContributor>()) c->addToRayScene(*m_rayScene, m_rayColors);
+                    rays.scene = m_rayScene.get();
+                    rays.colors = &m_rayColors;
+                    rays.viewToWorld = glm::inverse(view);
+                    const Light& sun = m_lighting.lights[0];
+                    if (sun.enabled && sun.isDirectional) {
+                        rays.sunDirection = -sun.direction;
+                        rays.sunColor = sun.color * sun.intensity;
+                    }
+                    rays.ambient = skyEnv ? skyEnv->ambientAverage : m_lighting.ambientColor;
+                    rays.budget = m_reflectionSettings.rayBudget;
+                }
+                m_reflectionPass->record(cmd, m_renderer->currentFrameIndex(), m_renderer->sceneImages(), view, proj, m_reflectionSettings,
+                                         traced ? &rays : nullptr);
             } else if (m_reflectionPass) {
                 m_reflectionPass->invalidate();
             }

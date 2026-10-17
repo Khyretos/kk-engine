@@ -38,6 +38,7 @@ struct BenchOptions;
 class SkyRenderer;
 class ScreenGiPass;
 class ReflectionPass;
+class RayScene;
 struct Mood;
 
 // A basic orbit-style camera. Not a module itself — nearly every module
@@ -461,6 +462,8 @@ private:
     Reflections m_reflections = Reflections::Off;
     std::optional<Reflections> m_reflectionsEnv; // KKE_REFLECTIONS
     ReflectionSettings m_reflectionSettings;
+    std::unique_ptr<RayScene> m_rayScene;    // KKE ray tracing's stand-ins, made the first time they're traced
+    std::vector<glm::vec4> m_rayColors;      // their colours this frame
     std::vector<View> m_views;
     // Views after the first: each its own lighting block (camera position
     // and view-projection differ per view).
