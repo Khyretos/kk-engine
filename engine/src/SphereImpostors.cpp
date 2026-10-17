@@ -82,22 +82,58 @@ DynamicMeshRenderer::DynamicMeshRenderer(Application& app) : m_app(app) {
     });
 }
 
+DynamicMeshRenderer::~DynamicMeshRenderer() { m_app.forgetRayDraws(this); }
+
 void DynamicMeshRenderer::upload(const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices) {
     m_vertices = vertices;
     m_indices = indices;
     ++m_version;
+    // Bounds and average colour, for KKE ray tracing's stand-in box.
+    m_lo = glm::vec3(1e30f);
+    m_hi = glm::vec3(-1e30f);
+    glm::vec3 sum(0.0f);
+    for (const Vertex& v : vertices) {
+        m_lo = glm::min(m_lo, v.position);
+        m_hi = glm::max(m_hi, v.position);
+        sum += glm::pow(glm::max(v.color, glm::vec3(0.0f)), glm::vec3(2.2f)); // sRGB vertex colours
+    }
+    m_color = vertices.empty() ? glm::vec3(1.0f) : sum / static_cast<float>(vertices.size());
+    if (vertices.empty()) m_lo = m_hi = glm::vec3(0.0f);
+}
+
+DynamicMeshRenderer::RayView DynamicMeshRenderer::rayView(uint32_t frame) const {
+    RayView v;
+    const FrameBuffers& fb = m_frames[frame % Renderer::kMaxFramesInFlight];
+    if (fb.vertices && fb.indices && m_app.device().rayQuery()) {
+        v.vertices = fb.vertices->deviceAddress();
+        v.indices = fb.indices->deviceAddress();
+        v.vertexBuffer = fb.vertices.get();
+    }
+    v.vertexCount = static_cast<uint32_t>(m_vertices.size());
+    v.indexCount = static_cast<uint32_t>(m_indices.size());
+    v.version = fb.version;
+    v.lo = m_lo;
+    v.hi = m_hi;
+    v.color = m_color;
+    return v;
 }
 
 void DynamicMeshRenderer::ensureUploaded(uint32_t f) {
     FrameBuffers& fb = m_frames[f];
     if (fb.version == m_version || m_indices.empty()) return;
+    // With ray query the buffers are also what classic ray tracing traces.
+    const VkBufferUsageFlags rays = m_app.device().rayQuery()
+                                        ? VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR
+                                        : 0;
     if (fb.vCap < m_vertices.size()) {
         fb.vCap = m_vertices.size() * 3 / 2 + 64;
-        fb.vertices = std::make_unique<Buffer>(m_app.device(), fb.vCap * sizeof(Vertex), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+        fb.vertices = std::make_unique<Buffer>(m_app.device(), fb.vCap * sizeof(Vertex), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | rays,
+                                               VMA_MEMORY_USAGE_CPU_TO_GPU);
     }
     if (fb.iCap < m_indices.size()) {
         fb.iCap = m_indices.size() * 3 / 2 + 192;
-        fb.indices = std::make_unique<Buffer>(m_app.device(), fb.iCap * sizeof(uint32_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+        fb.indices = std::make_unique<Buffer>(m_app.device(), fb.iCap * sizeof(uint32_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT | rays,
+                                              VMA_MEMORY_USAGE_CPU_TO_GPU);
     }
     fb.vertices->upload(m_vertices.data(), m_vertices.size() * sizeof(Vertex));
     fb.indices->upload(m_indices.data(), m_indices.size() * sizeof(uint32_t));
@@ -107,6 +143,7 @@ void DynamicMeshRenderer::ensureUploaded(uint32_t f) {
 void DynamicMeshRenderer::draw(const RenderContext& ctx, const glm::mat4& model, float metallic, float roughness) {
     if (m_indices.empty()) return;
     bindAndDraw(ctx, *m_pipeline, model, metallic, roughness);
+    if (m_app.recordingRays() && ctx.viewIndex == 0) m_app.recordRayDraw(this, model);
 }
 
 void DynamicMeshRenderer::drawTranslucent(const RenderContext& ctx, const glm::mat4& model, float roughness) {
@@ -169,6 +206,7 @@ void DynamicMeshRenderer::drawCloth(const RenderContext& ctx, const Fabric& fabr
     vkCmdBindVertexBuffers(ctx.cmd, 0, 1, &vb, &off);
     vkCmdBindIndexBuffer(ctx.cmd, fb.indices->handle(), 0, VK_INDEX_TYPE_UINT32);
     vkCmdDrawIndexed(ctx.cmd, static_cast<uint32_t>(m_indices.size()), 1, 0, 0, 0);
+    if (m_app.recordingRays() && ctx.viewIndex == 0) m_app.recordRayDraw(this, model);
 }
 
 void DynamicMeshRenderer::bindAndDraw(const RenderContext& ctx, Pipeline& pipeline, const glm::mat4& model, float metallic, float roughness) {

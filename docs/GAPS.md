@@ -80,7 +80,7 @@ by area. The goal is parity with the big engines and more.
 | ID | Area | Feature | Status |
 |---|---|---|---|
 | ENG-F01 | Rendering | Real-time global illumination. Screen-space done: a visibility bitmask, one frame late, off by default (`globalIllumination`, docs/RENDERING_PRINCIPLES.md). Not yet: light from what is off screen (probes, ENG-F15). | 🟡 |
-| ENG-F02 | Rendering | Ray-traced reflections and refractions. Part 1 done: inline ray tracing (VK_KHR_ray_query) on devices that have it, `kke::RayScene` (acceleration structures), a GPU self-test in CI (`KKE_RAY_SELFTEST=1`). Part 2 started: reflections in screen space (`reflections = screen`, ENG-F18). | 🔨 |
+| ENG-F02 | Rendering | Ray-traced reflections and refractions. Reflections done: `reflections = screen`, `kke` (screen first, then rays through simplified stand-ins within a budget) and `classic` (every triangle, sun shadows), inline ray queries on any vendor (`kke::RayScene`, a GPU self-test in CI). Not yet: refractions. | 🟡 |
 | ENG-F03 | Rendering | Volumetric lighting and fog (height fog only today) | 🟡 |
 | ENG-F04 | Rendering | Screen-space ambient occlusion (GTAO/SSAO). Done with ENG-F01's screen-space GI: its visibility shades the sky light and reflections. | ✅ |
 | ENG-F05 | Rendering | Temporal anti-aliasing (MSAA only today) | ⬜ |

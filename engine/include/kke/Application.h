@@ -12,6 +12,7 @@
 #include "kke/ResourceGovernor.h"
 #include "kke/HardwareTarget.h"
 #include "kke/UiProfile.h"
+#include "kke/RayScene.h"
 #include "kke/Reflections.h"
 #include "kke/ScreenGi.h"
 #include "kke/ShadowMap.h"
@@ -38,6 +39,7 @@ struct BenchOptions;
 class SkyRenderer;
 class ScreenGiPass;
 class ReflectionPass;
+class DynamicMeshRenderer;
 struct Mood;
 
 // A basic orbit-style camera. Not a module itself — nearly every module
@@ -276,6 +278,13 @@ public:
     // (VulkanDevice::rayQuery). The graphics setting "reflections" or
     // KKE_REFLECTIONS=off|screen|kke|classic choose it. One view only.
     void setReflections(Reflections mode);
+    // Meshes drawn this frame that rays should see (ENG-F02): while
+    // ray-traced reflections are on, kke::DynamicMeshRenderer::draw records
+    // itself here and the frame's ray scene takes it in (classic: its
+    // triangles; KKE: a box round them). A renderer going away forgets itself.
+    bool recordingRays() const { return m_recordRays; }
+    void recordRayDraw(DynamicMeshRenderer* mesh, const glm::mat4& model) { m_rayDraws.push_back({ mesh, model }); }
+    void forgetRayDraws(DynamicMeshRenderer* mesh);
     Reflections reflections() const { return m_reflections; }
     ReflectionSettings& reflectionSettings() { return m_reflectionSettings; }
     // The shadow map sampler's descriptor SET LAYOUT (not the set
@@ -461,6 +470,16 @@ private:
     Reflections m_reflections = Reflections::Off;
     std::optional<Reflections> m_reflectionsEnv; // KKE_REFLECTIONS
     ReflectionSettings m_reflectionSettings;
+    std::unique_ptr<RayScene> m_rayScene;    // KKE ray tracing's stand-ins, made the first time they're traced
+    std::vector<RayMaterial> m_rayMaterials; // how each instance looks to a ray, this frame
+    bool m_recordRays = false;
+    struct RayDraw { DynamicMeshRenderer* mesh; glm::mat4 model; };
+    std::vector<RayDraw> m_rayDraws; // this frame's (recordRayDraw)
+    // Their geometry: KKE a box per mesh (by its upload version), classic per mesh and frame slot.
+    struct MeshRay { uint32_t geometry = 0; uint64_t version = 0; const void* buffer = nullptr; uint32_t vertexCount = 0, indexCount = 0; };
+    std::unordered_map<const DynamicMeshRenderer*, MeshRay> m_meshBoxes;
+    std::unordered_map<const DynamicMeshRenderer*, MeshRay> m_meshTriangles[2];
+    void addMeshesToRayScene(bool classic, VkCommandBuffer cmd, uint32_t frame);
     std::vector<View> m_views;
     // Views after the first: each its own lighting block (camera position
     // and view-projection differ per view).

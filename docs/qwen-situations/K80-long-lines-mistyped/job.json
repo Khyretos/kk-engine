@@ -1,0 +1,16 @@
+[
+ {
+  "mode": "patch",
+  "focus": [
+   "^\\#\\ \\(kke::RmlVulkanRenderInterface\\),\\ the\\ tone\\-map\\ pass\\ \\(kke::Renderer\\)\\ and$"
+  ],
+  "name": "f02k-cmakelists1",
+  "role": "worker/cpp-games",
+  "out": "engine/CMakeLists.txt",
+  "prompt": "Kreative Kompas Engine (C++20, Vulkan, forward renderer): ENG-F02 part 3 adds ray-traced reflections with inline ray queries: models and meshes add themselves to a kke::RayScene each frame (skinned parts refitted from their skinned vertices), a hit is shaded from its vertices' normal and colour; classic traces every triangle for every smooth pixel, KKE marches on screen first and traces rays that leave it through stand-ins with a tenth of the triangles, within a budget.  Make these 1 edits in engine/CMakeLists.txt, each its own SEARCH/REPLACE block.\nEdit 1. Your SEARCH block is exactly these lines:\n```\n# (kke::RmlVulkanRenderInterface), the tone-map pass (kke::Renderer) and\n# particle effects (kke::ParticleEffects: Lua's fx.* works in every game).\nforeach(shader logo.vert logo.frag logo_backdrop.vert logo_backdrop.frag logo_text.vert logo_text.frag sky.vert sky.frag cloth_pairs.comp skin.comp\n               rml_fullscreen.vert rml_filter.frag rml_layer.frag tonemap_post.frag screen_gi.comp screen_gi_ms.comp reflect.comp reflect_ms.comp ray_selftest.comp\n               effect.vert effect_gpu.vert effect_smoke.frag effect_spark.frag effect_glow.frag effect_flake.frag effect_ring.frag)\n    engine_add_shader(kke_engine ${CMAKE_SOURCE_DIR}/shaders/${shader})\nendforeach()\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n# (kke::RmlVulkanRenderInterface), the tone-map pass (kke::Renderer) and\n# particle effects (kke::ParticleEffects: Lua's fx.* works in every game).\nforeach(shader logo.vert logo.frag logo_backdrop.vert logo_backdrop.frag logo_text.vert logo_text.frag sky.vert sky.frag cloth_pairs.comp skin.comp\n               rml_fullscreen.vert rml_filter.frag rml_layer.frag tonemap_post.frag screen_gi.comp screen_gi_ms.comp reflect.comp reflect_ms.comp ray_reflect.comp ray_reflect_ms.comp ray_selftest.comp\n               effect.vert effect_gpu.vert effect_smoke.frag effect_spark.frag effect_glow.frag effect_flake.frag effect_ring.frag)\n    engine_add_shader(kke_engine ${CMAKE_SOURCE_DIR}/shaders/${shader})\nendforeach()\n```\nChange nothing else; do not copy or move any other line.\n",
+  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g09.py f02kcmakelists1",
+  "precheck": false,
+  "context": [],
+  "max_tokens": 1294
+ }
+]

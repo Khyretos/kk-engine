@@ -3,8 +3,11 @@
 
 #include "kke/Application.h"
 #include "kke/GpuSkin.h"
+#include "kke/InteriorColor.h"
+#include "kke/MeshLod.h"
 #include "kke/Log.h"
 #include "kke/Picking.h"
+#include "kke/RayScene.h"
 #include "kke/ShaderUtils.h"
 #include "kke/VulkanCheck.h"
 
@@ -424,14 +427,18 @@ ModelModule::InstanceId ModelModule::spawn(ModelId modelId, const glm::mat4& tra
         // GPU skinning: skin.comp writes these (device memory); the CPU path
         // writes them from sb.cpu.
         if (!m_gpuSkinning) sb.cpu.resize(src.vertices.size());
+        // With ray query they're also what classic ray tracing traces (RayScene::addDynamic).
+        const VkBufferUsageFlags rays = m_app->device().rayQuery() ? VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+                                                                         VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR
+                                                                   : 0;
         const VkBufferUsageFlags usage =
-            m_gpuSkinning ? VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT : VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+            (m_gpuSkinning ? VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT : VK_BUFFER_USAGE_VERTEX_BUFFER_BIT) | rays;
         for (auto& vb : sb.vertices) {
             vb = std::make_unique<Buffer>(m_app->device(), sizeof(Vertex) * std::max<size_t>(1, src.vertices.size()), usage,
                                           m_gpuSkinning ? VMA_MEMORY_USAGE_GPU_ONLY : VMA_MEMORY_USAGE_CPU_TO_GPU);
         }
         sb.indices = std::make_unique<Buffer>(Buffer::createDeviceLocal(m_app->device(), src.indices.data(),
-                                                                        src.indices.size() * sizeof(uint32_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT));
+                                                                        src.indices.size() * sizeof(uint32_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT | rays));
         sb.indexCount = static_cast<uint32_t>(src.indices.size());
         inst.skinned.push_back(std::move(sb));
     }
@@ -1178,6 +1185,140 @@ void ModelModule::shutdown() {
     m_surfacePool = VK_NULL_HANDLE;
     m_surfaceLayout = VK_NULL_HANDLE;
     m_flatNormal.reset();
+}
+
+namespace {
+
+constexpr float kKkeTriangleShare = 0.1f; // KKE ray tracing traces about this share of a part's triangles
+
+float linearChannel(float c) { return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f); }
+
+// A mesh part's colour as it mostly looks: the material's colour times its
+// texture's dominant colour where the part's UVs fall (a Synty atlas holds
+// many colours; this is the one this part uses most).
+glm::vec4 partColor(const ModelData& data, const ModelMesh& mesh) {
+    glm::vec3 c(1.0f);
+    if (mesh.material < data.materials.size()) {
+        const ModelMaterial& m = data.materials[mesh.material];
+        c = m.baseColor;
+        if (!m.albedoTexture.empty()) {
+            std::vector<glm::vec2> uvs;
+            uvs.reserve(mesh.vertices.size());
+            for (const ModelVertex& v : mesh.vertices) uvs.push_back(v.uv);
+            const InteriorFill fill = interiorFillFromTexture(m.albedoTexture, uvs);
+            if (fill.valid) c *= glm::vec3(linearChannel(fill.dominant.r), linearChannel(fill.dominant.g), linearChannel(fill.dominant.b));
+        }
+    }
+    return glm::vec4(c, 1.0f);
+}
+
+} // namespace
+
+const ModelModule::StandIn& ModelModule::rigidFor(ModelId id, RayScene& scene, bool classic) {
+    auto& cache = classic ? m_full : m_standIns;
+    if (auto it = cache.find(id); it != cache.end()) return it->second;
+    StandIn& out = cache[id];
+    const auto model = m_models.find(id);
+    if (model == m_models.end()) return out;
+    const ModelData& data = model->second->data;
+    for (const ModelMesh& m : data.meshes) {
+        if (m.skinned || m.indices.size() < 3) continue;
+        // Classic: every triangle. KKE: about a tenth of them, over the same vertices.
+        const std::vector<uint32_t> indices = classic ? m.indices : simplifyIndices(m, kKkeTriangleShare);
+        if (indices.size() < 3) continue;
+        std::vector<glm::vec3> positions, normals;
+        positions.reserve(m.vertices.size());
+        normals.reserve(m.vertices.size());
+        for (const ModelVertex& v : m.vertices) {
+            positions.push_back(v.position);
+            normals.push_back(v.normal);
+        }
+        out.parts.push_back({ scene.addTriangles(positions, indices, &normals), partColor(data, m) });
+    }
+    return out;
+}
+
+const Buffer* ModelModule::simplifiedIndices(ModelId id, uint32_t meshIndex, uint32_t& count) {
+    auto& parts = m_simplified[id];
+    const LoadedModel& lm = *m_models.at(id);
+    if (parts.empty()) {
+        parts.resize(lm.data.meshes.size());
+        for (size_t i = 0; i < lm.data.meshes.size(); ++i) {
+            const ModelMesh& m = lm.data.meshes[i];
+            if (!m.skinned || m.indices.size() < 3) continue;
+            const std::vector<uint32_t> idx = simplifyIndices(m, kKkeTriangleShare);
+            parts[i].count = static_cast<uint32_t>(idx.size());
+            parts[i].buffer = std::make_unique<Buffer>(Buffer::createDeviceLocal(
+                m_app->device(), idx.data(), idx.size() * sizeof(uint32_t),
+                VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
+                    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
+        }
+    }
+    count = meshIndex < parts.size() ? parts[meshIndex].count : 0;
+    return meshIndex < parts.size() ? parts[meshIndex].buffer.get() : nullptr;
+}
+
+void ModelModule::addToRayScene(RayScene& scene, std::vector<RayMaterial>& materials, const RaySceneContext& context) {
+    if (&scene != m_standInScene || context.classic != m_rayClassic) {
+        // A new scene (its geometry was the old one's), or the other kind of ray tracing.
+        if (&scene == m_standInScene)
+            for (const auto& [iid, parts] : m_skinnedRays)
+                for (const StandIn::Part& p : parts) scene.remove(p.geometry);
+        m_standIns.clear();
+        m_full.clear();
+        m_skinnedRays.clear();
+        m_standInScene = &scene;
+        m_rayClassic = context.classic;
+    }
+    // Instances gone since last frame: their skinned geometry goes too.
+    for (auto it = m_skinnedRays.begin(); it != m_skinnedRays.end();) {
+        if (m_instances.count(it->first)) {
+            ++it;
+            continue;
+        }
+        for (const StandIn::Part& p : it->second) scene.remove(p.geometry);
+        it = m_skinnedRays.erase(it);
+    }
+    for (auto& [iid, inst] : m_instances) {
+        if (!inst.visible) continue;
+        for (const StandIn::Part& part : rigidFor(inst.model, scene, context.classic).parts) {
+            materials.push_back(scene.material(part.geometry, part.color * glm::vec4(inst.tint, 1.0f)));
+            scene.add(part.geometry, inst.transform, static_cast<uint32_t>(materials.size() - 1));
+        }
+        // Skinned parts: their skinned vertices this frame (model space), refitted; KKE over a simplified index list.
+        if (inst.skinned.empty()) continue;
+        std::vector<StandIn::Part>& parts = m_skinnedRays[iid];
+        const LoadedModel& lm = *m_models.at(inst.model);
+        size_t si = 0;
+        for (const GpuMesh& gm : lm.meshes) {
+            if (!gm.skinned) continue;
+            if (si >= inst.skinned.size()) break;
+            SkinnedBuffers& sb = inst.skinned[si];
+            const Buffer& vb = *sb.vertices[context.frame % Renderer::kMaxFramesInFlight];
+            const uint32_t vertexCount = static_cast<uint32_t>(lm.data.meshes[gm.meshIndex].vertices.size());
+            uint32_t indexCount = sb.indexCount;
+            const Buffer* ib = sb.indices.get();
+            if (!context.classic) ib = simplifiedIndices(inst.model, gm.meshIndex, indexCount);
+            if (!ib || indexCount < 3) {
+                ++si;
+                continue;
+            }
+            if (parts.size() <= si)
+                parts.push_back({ scene.addDynamic(vb.deviceAddress(), sizeof(Vertex), vertexCount, ib->deviceAddress(), indexCount),
+                                  partColor(lm.data, lm.data.meshes[gm.meshIndex]) });
+            scene.refit(context.cmd, parts[si].geometry, vb.deviceAddress());
+            // The hit reads the skinned vertex (kke::Vertex: normal at byte 24; its colour slot isn't a colour here).
+            RayMaterial m;
+            m.color = parts[si].color * glm::vec4(inst.tint, 1.0f);
+            m.vertices = vb.deviceAddress();
+            m.indices = ib->deviceAddress();
+            m.stride = sizeof(Vertex);
+            m.normalOffset = offsetof(Vertex, normal);
+            materials.push_back(m);
+            scene.add(parts[si].geometry, inst.transform, static_cast<uint32_t>(materials.size() - 1));
+            ++si;
+        }
+    }
 }
 
 } // namespace kke

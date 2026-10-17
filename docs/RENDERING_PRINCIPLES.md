@@ -251,6 +251,25 @@ blended over frames. Cost on the RX 9070 XT at 844 x 1384 with 4x MSAA:
 screen, within a budget, and `classic` rays through the full geometry
 (both on GPUs with VK_KHR_ray_query; screen elsewhere).
 
+**KKE and classic ray tracing (ENG-F02).** Both trace inline ray queries
+(any vendor, lavapipe too) through a `kke::RayScene` that what is drawn
+adds itself to each frame: models (ModelModule) and meshes
+(DynamicMeshRenderer), skinned parts refitted from their skinned
+vertices every frame, so a reflection moves as the character does. A hit
+is shaded with its interpolated normal and vertex colour under the sky
+and the sun. `classic`: every triangle, every smooth pixel traced
+directly, the sun's shadow traced too. `kke` (Kees's ask: keep the look,
+cut the cost): screen first, rays only for reflections that leave the
+screen, through stand-ins with about a tenth of the triangles over the
+same vertices (meshoptimizer), within a ray budget per frame, no shadow
+ray. Measured on the RX 9070 XT at 844 x 1384 with 4x MSAA: anim_demo's
+polished floor 0.26 ms off, 0.34 screen, 0.58 kke, 0.64 classic; the Synty
+demo with every surface reflecting (`KKE_REFLECT_ROUGHNESS=1`) 0.33 off,
+0.44 screen, 0.68 kke, 0.72 classic; lavapipe there 33.5 fps off, 22.6
+kke, 21.8 classic. On this GPU classic is only a little dearer: KKE's
+gains are the budget (a frame never pays more than it allows) and that it
+falls back to screen space where there is no ray tracing.
+
 ### 7. Tone mapping, exposure and colour management
 
 **Argument.** (Fox Engine videos, 33 "tone mapping & exposure

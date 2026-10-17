@@ -40,4 +40,11 @@ struct SimplifyOptions {
 // first. Parts too small to simplify (under 64 triangles) are kept.
 ModelData simplifyModel(const ModelData& model, float ratio, const SimplifyOptions& options = {});
 
+// About `ratio` of a mesh part's triangles as a new index list into the
+// part's own, unchanged vertices (corners at the same position count as
+// one, so an unwelded FBX part simplifies too): what KKE ray tracing traces
+// over a skinned part's skinned vertices (ENG-F02). Shape only; seams and
+// small pieces may go. Parts under 64 triangles come back whole.
+std::vector<uint32_t> simplifyIndices(const ModelMesh& mesh, float ratio, float maxError = 0.05f);
+
 } // namespace kke
