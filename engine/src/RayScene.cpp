@@ -82,10 +82,24 @@ void RayScene::destroy(Structure& s) {
     s.buffer.reset();
 }
 
-RayScene::Geometry RayScene::addTriangles(const std::vector<glm::vec3>& positions, const std::vector<uint32_t>& indices) {
+RayScene::Geometry RayScene::addTriangles(const std::vector<glm::vec3>& positions, const std::vector<uint32_t>& indices,
+                                          const std::vector<glm::vec3>* normals) {
     if (positions.empty() || indices.size() < 3) throw std::runtime_error("RayScene::addTriangles: no triangles");
-    Buffer vertices = Buffer::createDeviceLocal(m_device, positions.data(), positions.size() * sizeof(glm::vec3), kInput);
-    Buffer index = Buffer::createDeviceLocal(m_device, indices.data(), indices.size() * sizeof(uint32_t), kInput);
+    const bool shaded = normals && normals->size() == positions.size();
+    std::vector<glm::vec3> data; // positions, or position + normal per vertex
+    if (shaded) {
+        data.reserve(positions.size() * 2);
+        for (size_t i = 0; i < positions.size(); ++i) {
+            data.push_back(positions[i]);
+            data.push_back((*normals)[i]);
+        }
+    }
+    const uint32_t stride = shaded ? 2 * sizeof(glm::vec3) : sizeof(glm::vec3);
+    VkBufferUsageFlags usage = kInput;
+    if (shaded) usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    Buffer vertices = shaded ? Buffer::createDeviceLocal(m_device, data.data(), data.size() * sizeof(glm::vec3), usage)
+                             : Buffer::createDeviceLocal(m_device, positions.data(), positions.size() * sizeof(glm::vec3), usage);
+    Buffer index = Buffer::createDeviceLocal(m_device, indices.data(), indices.size() * sizeof(uint32_t), usage);
 
     VkAccelerationStructureGeometryKHR g{};
     g.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
@@ -94,7 +108,7 @@ RayScene::Geometry RayScene::addTriangles(const std::vector<glm::vec3>& position
     g.geometry.triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
     g.geometry.triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
     g.geometry.triangles.vertexData.deviceAddress = vertices.deviceAddress();
-    g.geometry.triangles.vertexStride = sizeof(glm::vec3);
+    g.geometry.triangles.vertexStride = stride;
     g.geometry.triangles.maxVertex = static_cast<uint32_t>(positions.size() - 1);
     g.geometry.triangles.indexType = VK_INDEX_TYPE_UINT32;
     g.geometry.triangles.indexData.deviceAddress = index.deviceAddress();
@@ -119,12 +133,30 @@ RayScene::Geometry RayScene::addTriangles(const std::vector<glm::vec3>& position
     const VkAccelerationStructureBuildRangeInfoKHR* ranges = &range;
     submitNow(m_device, [&](VkCommandBuffer cmd) { vkCmdBuildAccelerationStructuresKHR(cmd, 1, &build, &ranges); });
 
+    if (shaded) {
+        s.stride = stride;
+        s.vertexData = std::make_unique<Buffer>(std::move(vertices));
+        s.indexData = std::make_unique<Buffer>(std::move(index));
+    }
     VkAccelerationStructureDeviceAddressInfoKHR ai{};
     ai.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR;
     ai.accelerationStructure = s.handle;
     m_geometryAddress.push_back(vkGetAccelerationStructureDeviceAddressKHR(m_device.device(), &ai));
     m_geometries.push_back(std::move(s));
     return static_cast<Geometry>(m_geometries.size() - 1);
+}
+
+RayMaterial RayScene::material(Geometry geometry, const glm::vec4& color) const {
+    RayMaterial m;
+    m.color = color;
+    if (geometry < m_geometries.size() && m_geometries[geometry].vertexData) {
+        const Structure& s = m_geometries[geometry];
+        m.vertices = s.vertexData->deviceAddress();
+        m.indices = s.indexData->deviceAddress();
+        m.stride = s.stride;
+        m.normalOffset = sizeof(glm::vec3);
+    }
+    return m;
 }
 
 RayScene::Geometry RayScene::addBox(const glm::vec3& h) {
@@ -226,6 +258,8 @@ void RayScene::remove(Geometry geometry) {
     vkDeviceWaitIdle(m_device.device());
     destroy(m_geometries[geometry]);
     m_geometries[geometry].scratch.reset();
+    m_geometries[geometry].vertexData.reset();
+    m_geometries[geometry].indexData.reset();
 }
 
 void RayScene::add(Geometry geometry, const glm::mat4& t, uint32_t custom, uint8_t mask) {

@@ -27,8 +27,19 @@ layout(set = 0, binding = 3, r32f) uniform writeonly image2D reflectDepthOut; //
 
 #ifdef RAY_QUERY
 #extension GL_EXT_ray_query : require
+#extension GL_EXT_buffer_reference : require
+#extension GL_EXT_buffer_reference_uvec2 : require
 layout(set = 0, binding = 4) uniform accelerationStructureEXT standIns;
-layout(std430, set = 0, binding = 5) readonly buffer Colors { vec4 colors[]; }; // per stand-in: linear albedo
+// kke::RayMaterial, per instance (its custom index).
+struct RayMaterial {
+    vec4 color;        // linear albedo
+    uvec2 vertices;    // address, (0, 0): a stand-in with no vertex data
+    uvec2 indices;
+    uint stride, normalOffset, colorOffset, unused; // bytes; colorOffset 0xffffffff: no vertex colour
+};
+layout(std430, set = 0, binding = 5) readonly buffer Materials { RayMaterial materials[]; };
+layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer Floats { float f[]; };
+layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer Uints { uint u[]; };
 layout(std430, set = 0, binding = 6) buffer Budget { uint raysCast; };          // reset to 0 each frame
 layout(set = 0, binding = 7) uniform Rays {
     mat4 viewToWorld;  // inverse view
@@ -37,8 +48,31 @@ layout(set = 0, binding = 7) uniform Rays {
     vec4 ambient;      // rgb = the sky's average light, w = 1: classic ray tracing (no march, every smooth pixel)
 } rays;
 
-// The light a stand-in sends back along a ray: its colour under the sky and
-// half the sun (no normal on a stand-in: an average side).
+// base + offset bytes, as a 64-bit address in two halves.
+uvec2 addressAt(uvec2 base, uint offset) {
+    uint carry;
+    uint lo = uaddCarry(base.x, offset, carry);
+    return uvec2(lo, base.y + carry);
+}
+vec3 vec3At(uvec2 base, uint offset) {
+    Floats f = Floats(addressAt(base, offset));
+    return vec3(f.f[0], f.f[1], f.f[2]);
+}
+
+// Whether anything is between p and the sun (classic ray tracing's shadows).
+bool sunBlocked(vec3 p) {
+    rayQueryEXT s;
+    rayQueryInitializeEXT(s, standIns, gl_RayFlagsOpaqueEXT | gl_RayFlagsTerminateOnFirstHitEXT, 0xFF, p, 0.02,
+                          normalize(rays.sunDirection.xyz), 200.0);
+    while (rayQueryProceedEXT(s)) {
+    }
+    return rayQueryGetIntersectionTypeEXT(s, true) == gl_RayQueryCommittedIntersectionTriangleEXT;
+}
+
+// The light the first thing along a ray sends back. A stand-in: its colour
+// under the sky and a third of the sun (no normal: an average side). Real
+// geometry: its interpolated normal and vertex colour, the sky and the sun,
+// with the sun's shadow traced too in classic ray tracing.
 vec4 traceStandIns(vec3 viewOrigin, vec3 viewDir, float maxDist) {
     if (rays.ambient.w < 0.5 && atomicAdd(raysCast, 1u) >= uint(rays.sunDirection.w)) return vec4(0.0); // over budget: the sky
     vec3 o = (rays.viewToWorld * vec4(viewOrigin, 1.0)).xyz;
@@ -48,8 +82,29 @@ vec4 traceStandIns(vec3 viewOrigin, vec3 viewDir, float maxDist) {
     while (rayQueryProceedEXT(q)) {
     }
     if (rayQueryGetIntersectionTypeEXT(q, true) != gl_RayQueryCommittedIntersectionTriangleEXT) return vec4(0.0);
-    vec3 albedo = colors[rayQueryGetIntersectionInstanceCustomIndexEXT(q, true)].rgb;
-    return vec4(albedo * (rays.ambient.rgb + 0.5 * rays.sunColor.rgb), 1.0);
+    RayMaterial m = materials[rayQueryGetIntersectionInstanceCustomIndexEXT(q, true)];
+    vec3 albedo = m.color.rgb;
+    if (m.vertices == uvec2(0u)) return vec4(albedo * (rays.ambient.rgb + 0.3 * rays.sunColor.rgb), 1.0);
+    // The hit triangle's vertices, by index, and its point's barycentric weights.
+    Uints idx = Uints(m.indices);
+    uint tri = uint(rayQueryGetIntersectionPrimitiveIndexEXT(q, true)) * 3u;
+    uint i0 = idx.u[tri], i1 = idx.u[tri + 1u], i2 = idx.u[tri + 2u];
+    vec2 b = rayQueryGetIntersectionBarycentricsEXT(q, true);
+    vec3 w = vec3(1.0 - b.x - b.y, b.x, b.y);
+    vec3 n = vec3At(m.vertices, i0 * m.stride + m.normalOffset) * w.x + vec3At(m.vertices, i1 * m.stride + m.normalOffset) * w.y
+           + vec3At(m.vertices, i2 * m.stride + m.normalOffset) * w.z;
+    if (m.colorOffset != 0xffffffffu) {
+        vec3 c = vec3At(m.vertices, i0 * m.stride + m.colorOffset) * w.x + vec3At(m.vertices, i1 * m.stride + m.colorOffset) * w.y
+               + vec3At(m.vertices, i2 * m.stride + m.colorOffset) * w.z;
+        albedo *= pow(max(c, vec3(0.0)), vec3(2.2)); // sRGB vertex colour
+    }
+    mat4x3 toWorld = rayQueryGetIntersectionObjectToWorldEXT(q, true);
+    n = normalize(mat3(toWorld) * n);
+    if (dot(n, d) > 0.0) n = -n; // facing the ray
+    vec3 p = o + d * rayQueryGetIntersectionTEXT(q, true) + n * 0.01;
+    float sun = max(dot(n, normalize(rays.sunDirection.xyz)), 0.0);
+    if (sun > 0.0 && rays.ambient.w > 0.5 && sunBlocked(p)) sun = 0.0; // the sun's shadow: classic only
+    return vec4(albedo * (rays.ambient.rgb + sun * rays.sunColor.rgb), 1.0);
 }
 #endif
 

@@ -1189,6 +1189,8 @@ void ModelModule::shutdown() {
 
 namespace {
 
+constexpr float kKkeTriangleShare = 0.1f; // KKE ray tracing traces about this share of a part's triangles
+
 float linearChannel(float c) { return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f); }
 
 // A mesh part's colour as it mostly looks: the material's colour times its
@@ -1212,132 +1214,109 @@ glm::vec4 partColor(const ModelData& data, const ModelMesh& mesh) {
 
 } // namespace
 
-const ModelModule::StandIn& ModelModule::standInFor(ModelId id, RayScene& scene) {
-    if (auto it = m_standIns.find(id); it != m_standIns.end()) return it->second;
-    StandIn& out = m_standIns[id];
-    const auto model = m_models.find(id);
-    if (model == m_models.end()) return out;
-    const ModelData& data = model->second->data;
-    // Rigid parts: about a tenth of the triangles, seams and specks allowed to go.
-    SimplifyOptions opt;
-    opt.maxError = 0.05f;
-    opt.acrossSeams = true;
-    opt.prune = true;
-    bool anyRigid = false;
-    for (const ModelMesh& m : data.meshes) anyRigid = anyRigid || (!m.skinned && m.indices.size() >= 3);
-    if (anyRigid) {
-        const ModelData simple = simplifyModel(data, 0.1f, opt);
-        for (size_t i = 0; i < simple.meshes.size() && i < data.meshes.size(); ++i) {
-            const ModelMesh& m = simple.meshes[i];
-            if (m.skinned || m.indices.size() < 3) continue;
-            std::vector<glm::vec3> positions;
-            positions.reserve(m.vertices.size());
-            for (const ModelVertex& v : m.vertices) positions.push_back(v.position);
-            out.parts.push_back({ scene.addTriangles(positions, m.indices), partColor(data, data.meshes[i]), -1, glm::mat4(1.0f) });
-        }
-    }
-    // Skinned parts: a box per bone round the vertices it moves most, in the bone's own space.
-    const size_t bones = data.bones.size();
-    std::vector<glm::vec3> lo(bones, glm::vec3(1e30f)), hi(bones, glm::vec3(-1e30f));
-    std::vector<int> count(bones, 0), colorOf(bones, -1);
-    for (size_t mi = 0; mi < data.meshes.size(); ++mi) {
-        const ModelMesh& m = data.meshes[mi];
-        if (!m.skinned) continue;
-        for (const ModelVertex& v : m.vertices) {
-            int k = 0;
-            for (int j = 1; j < 4; ++j)
-                if (v.weights[j] > v.weights[k]) k = j;
-            const uint32_t b = v.joints[k];
-            if (b >= bones || v.weights[k] <= 0.0f) continue;
-            const glm::vec3 p = glm::vec3(data.bones[b].inverseBind * glm::vec4(v.position, 1.0f));
-            lo[b] = glm::min(lo[b], p);
-            hi[b] = glm::max(hi[b], p);
-            if (count[b]++ == 0) colorOf[b] = static_cast<int>(mi);
-        }
-    }
-    for (size_t b = 0; b < bones; ++b) {
-        if (count[b] < 6) continue;
-        const glm::vec3 half = glm::max((hi[b] - lo[b]) * 0.5f, glm::vec3(0.01f));
-        const glm::mat4 offset = glm::translate(glm::mat4(1.0f), (hi[b] + lo[b]) * 0.5f);
-        out.parts.push_back({ scene.addBox(half), partColor(data, data.meshes[static_cast<size_t>(colorOf[b])]), static_cast<int>(b), offset });
-    }
-    return out;
-}
-
-const ModelModule::StandIn& ModelModule::fullFor(ModelId id, RayScene& scene) {
-    if (auto it = m_full.find(id); it != m_full.end()) return it->second;
-    StandIn& out = m_full[id];
+const ModelModule::StandIn& ModelModule::rigidFor(ModelId id, RayScene& scene, bool classic) {
+    auto& cache = classic ? m_full : m_standIns;
+    if (auto it = cache.find(id); it != cache.end()) return it->second;
+    StandIn& out = cache[id];
     const auto model = m_models.find(id);
     if (model == m_models.end()) return out;
     const ModelData& data = model->second->data;
     for (const ModelMesh& m : data.meshes) {
         if (m.skinned || m.indices.size() < 3) continue;
-        std::vector<glm::vec3> positions;
+        // Classic: every triangle. KKE: about a tenth of them, over the same vertices.
+        const std::vector<uint32_t> indices = classic ? m.indices : simplifyIndices(m, kKkeTriangleShare);
+        if (indices.size() < 3) continue;
+        std::vector<glm::vec3> positions, normals;
         positions.reserve(m.vertices.size());
-        for (const ModelVertex& v : m.vertices) positions.push_back(v.position);
-        out.parts.push_back({ scene.addTriangles(positions, m.indices), partColor(data, m), -1, glm::mat4(1.0f) });
+        normals.reserve(m.vertices.size());
+        for (const ModelVertex& v : m.vertices) {
+            positions.push_back(v.position);
+            normals.push_back(v.normal);
+        }
+        out.parts.push_back({ scene.addTriangles(positions, indices, &normals), partColor(data, m) });
     }
     return out;
 }
 
-void ModelModule::addToRayScene(RayScene& scene, std::vector<glm::vec4>& colors, const RaySceneContext& context) {
-    if (&scene != m_standInScene) {
-        // A new scene: the geometry was the old one's.
+const Buffer* ModelModule::simplifiedIndices(ModelId id, uint32_t meshIndex, uint32_t& count) {
+    auto& parts = m_simplified[id];
+    const LoadedModel& lm = *m_models.at(id);
+    if (parts.empty()) {
+        parts.resize(lm.data.meshes.size());
+        for (size_t i = 0; i < lm.data.meshes.size(); ++i) {
+            const ModelMesh& m = lm.data.meshes[i];
+            if (!m.skinned || m.indices.size() < 3) continue;
+            const std::vector<uint32_t> idx = simplifyIndices(m, kKkeTriangleShare);
+            parts[i].count = static_cast<uint32_t>(idx.size());
+            parts[i].buffer = std::make_unique<Buffer>(Buffer::createDeviceLocal(
+                m_app->device(), idx.data(), idx.size() * sizeof(uint32_t),
+                VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
+                    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT));
+        }
+    }
+    count = meshIndex < parts.size() ? parts[meshIndex].count : 0;
+    return meshIndex < parts.size() ? parts[meshIndex].buffer.get() : nullptr;
+}
+
+void ModelModule::addToRayScene(RayScene& scene, std::vector<RayMaterial>& materials, const RaySceneContext& context) {
+    if (&scene != m_standInScene || context.classic != m_rayClassic) {
+        // A new scene (its geometry was the old one's), or the other kind of ray tracing.
+        if (&scene == m_standInScene)
+            for (const auto& [iid, parts] : m_skinnedRays)
+                for (const StandIn::Part& p : parts) scene.remove(p.geometry);
         m_standIns.clear();
         m_full.clear();
         m_skinnedRays.clear();
         m_standInScene = &scene;
+        m_rayClassic = context.classic;
     }
-    if (context.classic) {
-        // Instances gone since last frame: their skinned geometry goes too.
-        for (auto it = m_skinnedRays.begin(); it != m_skinnedRays.end();) {
-            if (m_instances.count(it->first)) {
-                ++it;
-                continue;
-            }
-            for (const StandIn::Part& p : it->second) scene.remove(p.geometry);
-            it = m_skinnedRays.erase(it);
+    // Instances gone since last frame: their skinned geometry goes too.
+    for (auto it = m_skinnedRays.begin(); it != m_skinnedRays.end();) {
+        if (m_instances.count(it->first)) {
+            ++it;
+            continue;
         }
+        for (const StandIn::Part& p : it->second) scene.remove(p.geometry);
+        it = m_skinnedRays.erase(it);
     }
     for (auto& [iid, inst] : m_instances) {
         if (!inst.visible) continue;
-        if (context.classic) {
-            for (const StandIn::Part& part : fullFor(inst.model, scene).parts) {
-                colors.push_back(part.color * glm::vec4(inst.tint, 1.0f));
-                scene.add(part.geometry, inst.transform, static_cast<uint32_t>(colors.size() - 1));
-            }
-            // Skinned parts: their skinned vertices (model space), refitted.
-            if (inst.skinned.empty()) continue;
-            std::vector<StandIn::Part>& parts = m_skinnedRays[iid];
-            const LoadedModel& lm = *m_models.at(inst.model);
-            size_t si = 0;
-            for (const GpuMesh& gm : lm.meshes) {
-                if (!gm.skinned) continue;
-                if (si >= inst.skinned.size()) break;
-                SkinnedBuffers& sb = inst.skinned[si];
-                const Buffer& vb = *sb.vertices[context.frame % Renderer::kMaxFramesInFlight];
-                const uint32_t count = static_cast<uint32_t>(lm.data.meshes[gm.meshIndex].vertices.size());
-                if (parts.size() <= si)
-                    parts.push_back({ scene.addDynamic(vb.deviceAddress(), sizeof(Vertex), count, sb.indices->deviceAddress(), sb.indexCount),
-                                      partColor(lm.data, lm.data.meshes[gm.meshIndex]), -1, glm::mat4(1.0f) });
-                scene.refit(context.cmd, parts[si].geometry, vb.deviceAddress());
-                colors.push_back(parts[si].color * glm::vec4(inst.tint, 1.0f));
-                scene.add(parts[si].geometry, inst.transform, static_cast<uint32_t>(colors.size() - 1));
-                ++si;
-            }
-            continue;
+        for (const StandIn::Part& part : rigidFor(inst.model, scene, context.classic).parts) {
+            materials.push_back(scene.material(part.geometry, part.color * glm::vec4(inst.tint, 1.0f)));
+            scene.add(part.geometry, inst.transform, static_cast<uint32_t>(materials.size() - 1));
         }
-        const StandIn& standIn = standInFor(inst.model, scene);
-        std::vector<glm::mat4> bones;
-        for (const StandIn::Part& part : standIn.parts) {
-            glm::mat4 at = inst.transform;
-            if (part.bone >= 0) {
-                if (bones.empty()) bones = currentBoneWorld(inst);
-                if (static_cast<size_t>(part.bone) >= bones.size()) continue;
-                at = at * bones[static_cast<size_t>(part.bone)];
+        // Skinned parts: their skinned vertices this frame (model space), refitted; KKE over a simplified index list.
+        if (inst.skinned.empty()) continue;
+        std::vector<StandIn::Part>& parts = m_skinnedRays[iid];
+        const LoadedModel& lm = *m_models.at(inst.model);
+        size_t si = 0;
+        for (const GpuMesh& gm : lm.meshes) {
+            if (!gm.skinned) continue;
+            if (si >= inst.skinned.size()) break;
+            SkinnedBuffers& sb = inst.skinned[si];
+            const Buffer& vb = *sb.vertices[context.frame % Renderer::kMaxFramesInFlight];
+            const uint32_t vertexCount = static_cast<uint32_t>(lm.data.meshes[gm.meshIndex].vertices.size());
+            uint32_t indexCount = sb.indexCount;
+            const Buffer* ib = sb.indices.get();
+            if (!context.classic) ib = simplifiedIndices(inst.model, gm.meshIndex, indexCount);
+            if (!ib || indexCount < 3) {
+                ++si;
+                continue;
             }
-            colors.push_back(part.color * glm::vec4(inst.tint, 1.0f));
-            scene.add(part.geometry, at * part.offset, static_cast<uint32_t>(colors.size() - 1));
+            if (parts.size() <= si)
+                parts.push_back({ scene.addDynamic(vb.deviceAddress(), sizeof(Vertex), vertexCount, ib->deviceAddress(), indexCount),
+                                  partColor(lm.data, lm.data.meshes[gm.meshIndex]) });
+            scene.refit(context.cmd, parts[si].geometry, vb.deviceAddress());
+            // The hit reads the skinned vertex (kke::Vertex: normal at byte 24; its colour slot isn't a colour here).
+            RayMaterial m;
+            m.color = parts[si].color * glm::vec4(inst.tint, 1.0f);
+            m.vertices = vb.deviceAddress();
+            m.indices = ib->deviceAddress();
+            m.stride = sizeof(Vertex);
+            m.normalOffset = offsetof(Vertex, normal);
+            materials.push_back(m);
+            scene.add(parts[si].geometry, inst.transform, static_cast<uint32_t>(materials.size() - 1));
+            ++si;
         }
     }
 }

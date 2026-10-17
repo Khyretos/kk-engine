@@ -14,15 +14,16 @@
 namespace kke {
 
 class RayScene;
+struct RayMaterial;
 class VulkanDevice;
 
-// What KKE ray tracing needs beyond the screen (ENG-F02): the stand-ins built
-// this frame and their colours (an instance's custom index is its colour's
-// index), the camera's inverse view, the sun and sky that light a hit, and
-// how many rays may be cast this frame.
+// What ray tracing needs beyond the screen (ENG-F02): the scene built this
+// frame and how each instance looks (an instance's custom index is its
+// material's index), the camera's inverse view, the sun and sky that light
+// a hit, and how many rays may be cast this frame.
 struct ReflectionRays {
     RayScene* scene = nullptr;
-    const std::vector<glm::vec4>* colors = nullptr; // linear albedo
+    const std::vector<RayMaterial>* materials = nullptr; // per instance (kke::RayMaterial)
     glm::mat4 viewToWorld{1.0f};
     glm::vec3 sunDirection{0.0f, 1.0f, 0.0f}; // towards the sun
     glm::vec3 sunColor{0.0f};                  // colour x intensity
@@ -78,8 +79,8 @@ private:
     void createRayPath();
     VkPipeline rayPipeline(bool multisampled);
     struct RaySlot {
-        std::unique_ptr<Buffer> colors, budget, params;
-        size_t colorCapacity = 0; // vec4s
+        std::unique_ptr<Buffer> materials, budget, params;
+        size_t materialCapacity = 0; // RayMaterials
     };
 
     VulkanDevice& m_device;

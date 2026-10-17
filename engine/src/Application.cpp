@@ -4,6 +4,7 @@
 #include "ScreenGiPass.h"
 #include "kke/Capabilities.h"
 #include "kke/RayScene.h"
+#include "kke/SphereImpostors.h"
 #include "kke/Mood.h"
 #include "kke/EngineSettings.h"
 #include "kke/LogoIntro.h"
@@ -20,6 +21,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <stb_image_write.h>
 #include <algorithm>
+#include <cstddef>
 #include <atomic>
 #include <cstdio>
 #include <cctype>
@@ -149,6 +151,9 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
         m_reflectionsEnv = reflectionsFromName(env, Reflections::Off);
         setReflections(*m_reflectionsEnv);
     }
+    // KKE_REFLECT_ROUGHNESS=1: every surface up to that roughness reflects (benchmarks: the most work).
+    if (const char* env = dev::env("KKE_REFLECT_ROUGHNESS"); env && *env)
+        m_reflectionSettings.maxRoughness = std::clamp(static_cast<float>(std::atof(env)), 0.01f, 1.0f);
     if (const char* env = dev::env("KKE_GI"); env && env[0] == '1') {
         m_screenGiEnv = true;
         setScreenGi(true);
@@ -1031,6 +1036,10 @@ void Application::run() {
                 m_reflectionPass->prepare(sceneExtent);
             }
             const bool reflReady = reflOn && m_reflectionPass->ready();
+            // Meshes record themselves for rays while they draw (recordRayDraw).
+            m_rayDraws.clear();
+            m_recordRays = reflOn && (m_reflections == Reflections::Kke || m_reflections == Reflections::Classic) &&
+                           m_renderer->device().rayQuery();
             for (uint32_t i = 0; i < viewCount; ++i) {
                 if (i == 0 && giReady)
                     drawViews[i].lighting->setScreenGi(m_screenGi->light(), m_screenGi->depth(), m_screenGi->sampler(), m_screenGi->viewProj(),
@@ -1184,11 +1193,12 @@ void Application::run() {
                 if (traced) {
                     if (!m_rayScene) m_rayScene = std::make_unique<RayScene>(m_renderer->device());
                     m_rayScene->clear();
-                    m_rayColors.clear();
+                    m_rayMaterials.clear();
                     RaySceneContext context{ m_reflections == Reflections::Classic, cmd, m_renderer->currentFrameIndex() };
-                    for (IRayContributor* c : findCapability<IRayContributor>()) c->addToRayScene(*m_rayScene, m_rayColors, context);
+                    for (IRayContributor* c : findCapability<IRayContributor>()) c->addToRayScene(*m_rayScene, m_rayMaterials, context);
+                    addMeshesToRayScene(context.classic, cmd, context.frame);
                     rays.scene = m_rayScene.get();
-                    rays.colors = &m_rayColors;
+                    rays.materials = &m_rayMaterials;
                     rays.viewToWorld = glm::inverse(view);
                     const Light& sun = m_lighting.lights[0];
                     if (sun.enabled && sun.isDirectional) {
@@ -1254,6 +1264,71 @@ void Application::setScreenGi(bool on) {
     // The scene's depth is kept only while something reads it.
     m_renderer->setSceneDepthReadable(m_screenGiOn || m_reflections != Reflections::Off);
     if (!m_screenGiOn && m_screenGi) m_screenGi->invalidate();
+}
+
+void Application::forgetRayDraws(DynamicMeshRenderer* mesh) {
+    m_rayDraws.erase(std::remove_if(m_rayDraws.begin(), m_rayDraws.end(), [mesh](const RayDraw& d) { return d.mesh == mesh; }), m_rayDraws.end());
+    auto drop = [&](std::unordered_map<const DynamicMeshRenderer*, MeshRay>& map) {
+        if (auto it = map.find(mesh); it != map.end()) {
+            if (m_rayScene) m_rayScene->remove(it->second.geometry);
+            map.erase(it);
+        }
+    };
+    drop(m_meshBoxes);
+    for (auto& slot : m_meshTriangles) drop(slot);
+}
+
+namespace {
+constexpr uint32_t kKkeMeshTriangles = 20000; // KKE ray tracing: meshes up to this many triangles are traced as they are
+} // namespace
+
+void Application::addMeshesToRayScene(bool classic, VkCommandBuffer cmd, uint32_t frame) {
+    RayScene& scene = *m_rayScene;
+    for (const RayDraw& d : m_rayDraws) {
+        const DynamicMeshRenderer::RayView v = d.mesh->rayView(frame);
+        if (v.indexCount < 3) continue;
+        // KKE takes small meshes as they are (a floor, a prop, a tentacle: a box round
+        // those would cover the floor it stands on) and stands a box in for big ones.
+        if (!classic && v.indexCount / 3 > kKkeMeshTriangles) {
+            // A box round the vertices in their average colour, remade when they change.
+            MeshRay& r = m_meshBoxes[d.mesh];
+            if (r.version != v.version || r.vertexCount == 0) {
+                if (r.vertexCount != 0) scene.remove(r.geometry);
+                r.geometry = scene.addBox(glm::max((v.hi - v.lo) * 0.5f, glm::vec3(0.01f)));
+                r.version = v.version;
+                r.vertexCount = v.vertexCount;
+            }
+            RayMaterial m;
+            m.color = glm::vec4(v.color, 1.0f);
+            m_rayMaterials.push_back(m);
+            scene.add(r.geometry, d.model * glm::translate(glm::mat4(1.0f), (v.hi + v.lo) * 0.5f), static_cast<uint32_t>(m_rayMaterials.size() - 1));
+            continue;
+        }
+        // Their triangles: this frame slot's buffers, refitted when the vertices change, rebuilt when their number or buffer does.
+        if (!v.vertices) continue;
+        MeshRay& r = m_meshTriangles[frame % 2][d.mesh];
+        if (r.buffer != v.vertexBuffer || r.vertexCount != v.vertexCount || r.indexCount != v.indexCount) {
+            if (r.buffer) scene.remove(r.geometry);
+            r.geometry = scene.addDynamic(v.vertices, sizeof(Vertex), v.vertexCount, v.indices, v.indexCount);
+            r.buffer = v.vertexBuffer;
+            r.vertexCount = v.vertexCount;
+            r.indexCount = v.indexCount;
+            r.version = v.version;
+        } else if (r.version != v.version) {
+            scene.refit(cmd, r.geometry, v.vertices);
+            r.version = v.version;
+        }
+        RayMaterial m;
+        m.color = glm::vec4(1.0f); // the vertex colours carry it
+        m.vertices = v.vertices;
+        m.indices = v.indices;
+        m.stride = sizeof(Vertex);
+        m.normalOffset = offsetof(Vertex, normal);
+        m.colorOffset = offsetof(Vertex, color);
+        m_rayMaterials.push_back(m);
+        scene.add(r.geometry, d.model, static_cast<uint32_t>(m_rayMaterials.size() - 1));
+    }
+    m_rayDraws.clear();
 }
 
 void Application::setReflections(Reflections mode) {

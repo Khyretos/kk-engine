@@ -240,7 +240,7 @@ void ReflectionPass::record(VkCommandBuffer cmd, uint32_t frame, const Renderer:
         return;
     }
     const bool ms = scene.depthSamples > 1;
-    const bool traced = rays && rays->scene && rays->colors && m_device.rayQuery();
+    const bool traced = rays && rays->scene && rays->materials && m_device.rayQuery();
     const uint32_t slotIndex = frame % Renderer::kMaxFramesInFlight;
     if (traced) createRayPath();
     const VkPipeline p = traced ? rayPipeline(ms) : pipeline(ms);
@@ -268,14 +268,14 @@ void ReflectionPass::record(VkCommandBuffer cmd, uint32_t frame, const Renderer:
         // the light for a hit and a fresh ray count.
         RaySlot& slot = m_raySlots[slotIndex];
         rays->scene->build(cmd, slotIndex);
-        const std::vector<glm::vec4>& colors = *rays->colors;
-        const size_t count = std::max<size_t>(1, colors.size());
-        if (!slot.colors || slot.colorCapacity < count) {
-            slot.colorCapacity = std::max<size_t>(64, count * 2);
-            slot.colors = std::make_unique<Buffer>(m_device, slot.colorCapacity * sizeof(glm::vec4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        const std::vector<RayMaterial>& materials = *rays->materials;
+        const size_t count = std::max<size_t>(1, materials.size());
+        if (!slot.materials || slot.materialCapacity < count) {
+            slot.materialCapacity = std::max<size_t>(64, count * 2);
+            slot.materials = std::make_unique<Buffer>(m_device, slot.materialCapacity * sizeof(RayMaterial), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                                                    VMA_MEMORY_USAGE_CPU_TO_GPU);
         }
-        if (!colors.empty()) slot.colors->upload(colors.data(), colors.size() * sizeof(glm::vec4));
+        if (!materials.empty()) slot.materials->upload(materials.data(), materials.size() * sizeof(RayMaterial));
         RayParams params{ rays->viewToWorld, glm::vec4(glm::normalize(rays->sunDirection), static_cast<float>(rays->budget)),
                           glm::vec4(rays->sunColor, 0.0f), glm::vec4(rays->ambient, rays->classic ? 1.0f : 0.0f) };
         slot.params->upload(&params, sizeof(params));
@@ -297,7 +297,7 @@ void ReflectionPass::record(VkCommandBuffer cmd, uint32_t frame, const Renderer:
         asw.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
         asw.accelerationStructureCount = 1;
         asw.pAccelerationStructures = &tlas;
-        const VkDescriptorBufferInfo cb{ slot.colors->handle(), 0, VK_WHOLE_SIZE }, bb{ slot.budget->handle(), 0, VK_WHOLE_SIZE },
+        const VkDescriptorBufferInfo cb{ slot.materials->handle(), 0, VK_WHOLE_SIZE }, bb{ slot.budget->handle(), 0, VK_WHOLE_SIZE },
             pb{ slot.params->handle(), 0, VK_WHOLE_SIZE };
         std::array<VkWriteDescriptorSet, 4> rw{};
         for (uint32_t i = 0; i < 4; ++i) {

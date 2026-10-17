@@ -69,12 +69,13 @@ public:
 
 // Implemented by a module that has things rays should see (ENG-F02): each
 // frame, before the reflections pass, Application asks every implementer to
-// add what it draws to the frame's kke::RayScene, and each instance's colour
-// (linear albedo) to `colors`; an instance's custom index is its colour's
-// index there. `classic`: the real geometry, posed (classic ray tracing,
+// add what it draws to the frame's kke::RayScene, and how each instance looks
+// to `materials` (kke::RayMaterial); an instance's custom index is its
+// material's index there. `classic`: the real geometry, posed (classic ray tracing,
 // refits recorded into `cmd`, frame slot `frame`); else simple stand-ins
 // (KKE ray tracing).
 class RayScene;
+struct RayMaterial;
 struct RaySceneContext {
     bool classic = false;
     VkCommandBuffer cmd = VK_NULL_HANDLE;
@@ -83,7 +84,7 @@ struct RaySceneContext {
 class IRayContributor {
 public:
     virtual ~IRayContributor() = default;
-    virtual void addToRayScene(RayScene& scene, std::vector<glm::vec4>& colors, const RaySceneContext& context) = 0;
+    virtual void addToRayScene(RayScene& scene, std::vector<RayMaterial>& materials, const RaySceneContext& context) = 0;
 };
 
 // Implemented by a physics module that can simulate ragdolls (FEMFX's

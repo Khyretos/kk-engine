@@ -14,6 +14,21 @@ namespace kke {
 
 class VulkanDevice;
 
+// How a ray hit looks (one per instance; the instance's custom index is its
+// place in the table the shader reads, std430, 48 bytes): its colour, and in
+// classic ray tracing where its vertices are, so the hit gets its real
+// normal (and vertex colour) instead of a stand-in's flat look.
+struct RayMaterial {
+    glm::vec4 color{1.0f};         // linear albedo (times the vertex colour when there is one)
+    VkDeviceAddress vertices = 0;  // 0: a stand-in, no vertex data
+    VkDeviceAddress indices = 0;   // uint32 triangle list
+    uint32_t stride = 0;           // bytes per vertex
+    uint32_t normalOffset = 0;     // bytes to the normal (3 floats)
+    uint32_t colorOffset = ~0u;    // bytes to an sRGB vertex colour (3 floats), ~0u: none
+    uint32_t unused = 0;
+};
+static_assert(sizeof(RayMaterial) == 48, "matches shaders/reflect.glsl's RayMaterial");
+
 // What inline ray queries trace against (ENG-F02, VK_KHR_ray_query): triangle
 // geometry as bottom-level acceleration structures, built once, and each
 // frame's instances of them in a top-level structure. The engine has no
@@ -32,7 +47,13 @@ public:
 
     // Triangles (positions, three indices each) as a bottom-level structure,
     // built now: the call waits for the GPU (load time, not per frame).
-    Geometry addTriangles(const std::vector<glm::vec3>& positions, const std::vector<uint32_t>& indices);
+    // With `normals` (one per position) the vertices keep them for shading
+    // hits: material(geometry) says where.
+    Geometry addTriangles(const std::vector<glm::vec3>& positions, const std::vector<uint32_t>& indices,
+                          const std::vector<glm::vec3>* normals = nullptr);
+    // A RayMaterial of `color` pointing at a geometry's own vertices (from
+    // addTriangles with normals), or a flat one.
+    RayMaterial material(Geometry geometry, const glm::vec4& color) const;
     // An axis-aligned box of half extents `half` round the origin: a stand-in.
     Geometry addBox(const glm::vec3& half);
     // Triangles whose vertices change every frame (a skinned character, for
@@ -66,6 +87,8 @@ private:
     struct Structure {
         std::unique_ptr<Buffer> buffer;
         VkAccelerationStructureKHR handle = VK_NULL_HANDLE;
+        // addTriangles with normals: positions and normals interleaved (24 bytes), kept for shading hits.
+        std::unique_ptr<Buffer> vertexData, indexData;
         // Dynamic geometry only: how it was built, to update it the same way.
         std::unique_ptr<Buffer> scratch;
         uint32_t stride = 0, vertexCount = 0, indexCount = 0;
@@ -91,9 +114,10 @@ private:
     Top m_top[kSlots];
 };
 
-// Builds a small scene, traces rays through it on the GPU (a compute shader
-// with ray queries) and compares the hits with the expected ones: the
-// check that ray tracing works on this device and driver. Runs when the
+// Builds a small scene (two boxes, a floor, and a triangle refitted after it
+// moved), traces rays through it on the GPU (a compute shader with ray
+// queries) and compares the hits with the expected ones: the check that ray
+// tracing works on this device and driver. Runs when the
 // game starts with KKE_RAY_SELFTEST=1. False (and why, in `report`) on a
 // mismatch or without ray query.
 bool rayQuerySelfTest(VulkanDevice& device, std::string* report);
