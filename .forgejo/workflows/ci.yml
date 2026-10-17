@@ -132,7 +132,7 @@ jobs:
           export VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation
           export VK_LAYER_ENABLES=VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT
           failed=0
-          for demo in kke_demo physics_demo melt_demo sea_demo sandbox rmlui_demo imgui_demo synty_demo starter_game cookbook audio_demo procedural_demo duel goblin_horde pet_companion platoon climb_race racing farm_demo jiggle_demo; do
+          for demo in kke_demo physics_demo melt_demo sea_demo sandbox rmlui_demo imgui_demo synty_demo starter_game cookbook audio_demo procedural_demo duel goblin_horde pet_companion platoon climb_race racing farm_demo jiggle_demo particles_demo anim_demo; do
             [ -x "./$demo" ] || { echo "== $demo: not built, skipped"; continue; }
             set +e
             # Virtual HOSAS pair + gamepad (SDL virtual joysticks), moving:
@@ -177,6 +177,17 @@ jobs:
               echo "== $demo (10-bit display): ok"
             fi
           done
+          # Inline ray tracing (ENG-F02): lavapipe has VK_KHR_ray_query, so
+          # rays traced through a small scene on the GPU (and a mesh refitted
+          # after it moved) must hit as expected.
+          set +e
+          DISPLAY=:99 SDL_VIDEODRIVER=x11 KKE_TARGET=desktop KKE_RAY_SELFTEST=1 timeout 8 ./particles_demo > run_ray_selftest.log 2>&1
+          set -e
+          if grep -q "ray query self-test passed" run_ray_selftest.log && ! grep -qiE "Fatal error|Validation Error|SYNC-HAZARD" run_ray_selftest.log; then
+            echo "== ray query self-test: ok"
+          else
+            echo "== ray query self-test: FAILED"; grep -iE "ray|error" run_ray_selftest.log | tail -20; failed=1
+          fi
           exit $failed
 
       # The cookbook (docs/cookbook/): every Lua recipe runs in the starter
