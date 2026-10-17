@@ -120,6 +120,7 @@ nav:
           - Platoon: demos/platoon.md
           - Command kit: demos/command_kit.md
           - Procedural animation: demos/procedural_demo.md
+          - Animation (blend spaces, retargeting, IK): demos/anim_demo.md
       - Physics, water and sound:
           - Physics (FEMFX): demos/physics_demo.md
           - Melting: demos/melt_demo.md

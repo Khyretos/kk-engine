@@ -570,8 +570,8 @@ void HordeModule::animateHero(Hero& h, float dt) {
         if (slot >= 0 && slot < static_cast<int>(p.moves.size()) && p.moves[static_cast<size_t>(slot)] >= 0)
             a.play(p.moves[static_cast<size_t>(slot)], 0.06f, true);
     };
-    const bool busy = !a.finished() && a.current() != p.move && a.current() != p.idle && a.current() != p.strafeL && a.current() != p.strafeR &&
-                      a.current() != p.back_ && a.current() != p.block;
+    const bool busy = !a.finished() && a.current() != p.move && a.current() != p.idle && a.current() != p.strafe &&
+                      a.current() != p.block;
     switch (static_cast<S>(state)) {
     case S::Windup:
         if (entered) playMove(h.moveState);
@@ -593,12 +593,10 @@ void HordeModule::animateHero(Hero& h, float dt) {
         const glm::vec3 v = h.remote ? h.velocity : m_rigid->world().characterVelocity(h.body);
         const float speed = glm::length(glm::vec2(v.x, v.z));
         int want = p.move;
-        if (h.aiming && speed > 0.5f) {
-            // Strafing: which way the legs go, relative to the facing.
-            const glm::vec3 dir = glm::normalize(glm::vec3(v.x, 0.0f, v.z));
-            const float fwd = glm::dot(dir, h.facing), side = glm::dot(dir, glm::vec3(h.facing.z, 0.0f, -h.facing.x));
-            if (fwd < -0.5f && p.back_ >= 0) want = p.back_;
-            else if (std::abs(side) > 0.6f) want = side > 0.0f ? (p.strafeL >= 0 ? p.strafeL : p.move) : (p.strafeR >= 0 ? p.strafeR : p.move);
+        if (h.aiming && p.strafe >= 0) {
+            // Strafing: the velocity in the hero's own frame (x = right, y = forward).
+            want = p.strafe;
+            a.setParameter2(glm::vec2(glm::dot(v, glm::vec3(-h.facing.z, 0.0f, h.facing.x)), glm::dot(v, h.facing)));
         }
         if (c.blocking() && p.block >= 0) {
             if (a.current() != p.block) a.play(p.block, 0.08f, true);

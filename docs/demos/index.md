@@ -35,6 +35,7 @@ Run any demo from `build/bin/` (building: [BUILDING.md](../BUILDING.md)).
 | A strategy or squad game | [Platoon](../../games/platoon/README.md) | [command kit](../../games/command_kit/README.md), [commands and orders](../COMMANDS.md) |
 | A pet, a companion, or animals that react to you | [Pet companion](../../games/pet_companion/README.md), [Farm](../../games/farm_demo/README.md) | [AI](../AI.md) |
 | Creatures that walk without animation clips | [Procedural animation](../../games/procedural_demo/README.md) | [procedural animation](../PROCEDURAL_ANIMATION.md) |
+| Characters that run in any direction, play clips made for another skeleton, or reach with long chains | [Animation](../../games/anim_demo/README.md) | [movement](../MOVEMENT.md), [procedural animation](../PROCEDURAL_ANIMATION.md) |
 | A third-person adventure, or anything using every system at once | [kke_demo showcase](../../games/showcase/README.md) | [the showcase guide](../SHOWCASE.md) |
 | A building or level-editing game, or a game made while playing | [Sandbox](../../games/sandbox/README.md) | [play to make](../PLAY_TO_MAKE.md) |
 | Menus, a HUD, settings, an inventory | [RmlUi demo](../../games/rmlui_demo/README.md) | [input](../INPUT.md) |
