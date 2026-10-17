@@ -1,0 +1,34 @@
+[2026-10-17 23:25:45.621][engine][Application][KKE Cookbook][info]: Hardware target: desktop (no specific device recognised); platform backend: desktop
+[2026-10-17 23:25:45.621][engine][Application][KKE Cookbook][info]: UI profile: desktop
+[2026-10-17 23:25:45.621][engine][Governor][KKE Cookbook][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 1.00
+[2026-10-17 23:25:45.625][engine][VulkanDevice][KKE Cookbook][info]: using device: llvmpipe (LLVM 22.1.8, 256 bits)
+[2026-10-17 23:25:45.682][engine][SwapChain][KKE Cookbook][info]: colour output: format 50 (8-bit sRGB)
+[2026-10-17 23:25:45.682][engine][Application][KKE Cookbook][info]: Hardware target: software-gpu (the only Vulkan device is a CPU: llvmpipe (LLVM 22.1.8, 256 bits))
+[2026-10-17 23:25:45.683][engine][Governor][KKE Cookbook][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+[2026-10-17 23:25:45.683][engine][Application][KKE Cookbook][info]: MSAA 1x (software rasteriser)
+[2026-10-17 23:25:45.685][engine][Application][KKE Cookbook][info]: mood 'playful' (assets/moods/playful.yaml)
+[2026-10-17 23:25:45.686][engine][Benchmark][KKE Cookbook][info]: benchmark: 3 s warm-up, then 20 s measured, uncapped (no vsync, no frame cap)
+[2026-10-17 23:25:45.686][engine][Settings][KKE Cookbook][info]: no settings file at 'settings.json' (using defaults)
+[2026-10-17 23:25:45.686][engine][Governor][KKE Cookbook][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+[2026-10-17 23:25:45.731][engine][Input][KKE Cookbook][info]: attached KKE virtual gamepad (virtual)
+[2026-10-17 23:25:45.733][engine][ClothGpu][KKE Cookbook][info]: no compute queue of its own on this GPU: cloth pairs are searched on the CPU (KKE_CLOTH_GPU=shared to try the graphics queue)
+[2026-10-17 23:25:45.733][engine][RigidBodies][KKE Cookbook][info]: Jolt rigid-body world ready (65536 max bodies)
+[rmlui] Loaded font face 'Noto Sans' [regular] from 'assets/fonts/NotoSans-Regular.ttf'.
+[rmlui] Loaded font face 'Noto Sans' [bold] from 'assets/fonts/NotoSans-Bold.ttf'.
+[rmlui] Loaded font face 'Noto Sans' [italic] from 'assets/fonts/NotoSans-Italic.ttf'.
+[rmlui] Loaded font face 'Noto Color Emoji' [regular] from 'assets/fonts/NotoColorEmoji.ttf'.
+[ui] RmlUi initialised with real Vulkan rendering (text via glyph textures, <img>/background-image via stb_image, both real now -- see RmlVulkanRenderInterface.h)
+[2026-10-17 23:25:45.868][engine][Audio][KKE Cookbook][info]: Audio ready: 48000 Hz, 32 voices, output: Speakers (Realtek High Definition Audio) (WASAPI)
+[2026-10-17 23:25:45.893][engine][Scripts][KKE Cookbook][info]: 3 script(s) from '/workspace/khyretos/kk-engine/games/cookbook/scripts'
+[2026-10-17 23:25:46.193][engine][Models][KKE Cookbook][info]: loaded 'C:\forgejo-runner\work\8801d9099be17ad7\tmp\kke-run\pkg\assets\animations\UAL1_Standard.fbx': 2 mesh part(s), 13744 triangles, 2 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-10-17 23:25:46.246][engine][Governor][KKE Cookbook][info]: budget: 2 worker thread(s), frame cap 0, background cap 0, render scale 0.75
+[2026-10-17 23:25:46.246][engine][Input][KKE Cookbook][info]: connected KKE virtual gamepad (28de:1302/n:KKE virtual gamepad)
+[2026-10-17 23:25:46.247][engine][Input][KKE Cookbook][info]: touch controls: stick left, look look.rate, button jump, button crouch, button interact, button fire, button zoom, button aim, pause
+[2026-10-17 23:25:46.251][engine][Scripts][KKE Cookbook][info]: cameras.lua: Cameras: 1-8 pick one, Tab or d-pad right cycles, P or d-pad up plays a camera path, K or d-pad left shakes.
+[2026-10-17 23:25:49.737][engine][Input][KKE Cookbook][info]: input sanity: steady axis on control 0x40000300: held at 0.3000 with no noise for 2.0 s
+[2026-10-17 23:25:49.737][engine][Input][KKE Cookbook][info]: input sanity: steady axis on control 0x40000301: held at -0.8000 with no noise for 2.0 s
+[2026-10-17 23:25:56.333][engine][Input][KKE Cookbook][info]: input sanity: steady axis on control 0x40000302: held at 0.5000 with no noise for 2.0 s
+[2026-10-17 23:26:01.327][engine][Input][KKE Cookbook][info]: input sanity: steady axis on control 0x40000300: held at 0.6000 with no noise for 2.0 s
+[2026-10-17 23:26:06.382][engine][Input][KKE Cookbook][info]: input sanity: steady axis on control 0x40000301: held at 0.8000 with no noise for 2.0 s
+[2026-10-17 23:26:09.486][engine][Benchmark][KKE Cookbook][info]: benchmark: 6 screenshot(s) in C:/forgejo-runner/work/8801d9099be17ad7/hostexecutor/results/bench/run_20261017_231304/reports/shots
+[2026-10-17 23:26:09.487][engine][Benchmark][KKE Cookbook][info]: benchmark: 270 frames, 14.6 fps avg, 12.0 fps 1% low, 0 hitch(es), verdict too slow; report C:\forgejo-runner\work\8801d9099be17ad7\hostexecutor\results\bench\run_20261017_231304\reports\cookbook.json
