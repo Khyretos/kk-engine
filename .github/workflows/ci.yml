@@ -155,6 +155,16 @@ jobs:
               echo "== $demo (phone shape): ok"
             fi
           done
+          # Inline ray tracing (ENG-F02): lavapipe has VK_KHR_ray_query, so
+          # rays traced through a small scene on the GPU must hit as expected.
+          set +e
+          DISPLAY=:99 SDL_VIDEODRIVER=x11 KKE_RAY_SELFTEST=1 timeout 8 ./particles_demo > run_ray_selftest.log 2>&1
+          set -e
+          if grep -q "ray query self-test passed" run_ray_selftest.log && ! grep -qiE "Fatal error|Validation Error|SYNC-HAZARD" run_ray_selftest.log; then
+            echo "== ray query self-test: ok"
+          else
+            echo "== ray query self-test: FAILED"; grep -iE "ray|error" run_ray_selftest.log | tail -20; failed=1
+          fi
           exit $failed
 
       # The cookbook (docs/cookbook/): every Lua recipe runs in the starter

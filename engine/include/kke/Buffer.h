@@ -29,6 +29,9 @@ public:
     void download(void* out, VkDeviceSize size) const;
 
     VkBuffer handle() const { return m_buffer; }
+    // Its GPU address (needs VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT and a
+    // device with buffer device addresses, VulkanDevice::rayQuery()).
+    VkDeviceAddress deviceAddress() const;
 
     // Creates a device-local buffer and fills it via a staging buffer + copy command.
     static Buffer createDeviceLocal(VulkanDevice& device, const void* data, VkDeviceSize size, VkBufferUsageFlags usage);

@@ -66,6 +66,13 @@ void Buffer::uploadAt(VkDeviceSize offset, const void* data, VkDeviceSize size) 
     vmaUnmapMemory(m_device.allocator(), m_allocation);
 }
 
+VkDeviceAddress Buffer::deviceAddress() const {
+    VkBufferDeviceAddressInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+    info.buffer = m_buffer;
+    return vkGetBufferDeviceAddress(m_device.device(), &info);
+}
+
 void Buffer::download(void* out, VkDeviceSize size) const {
     void* mapped = nullptr;
     VK_CHECK(vmaMapMemory(m_device.allocator(), m_allocation, &mapped));
