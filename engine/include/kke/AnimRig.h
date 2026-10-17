@@ -191,6 +191,14 @@ private:
 // differently still move the same way; the pelvis also copies its
 // motion, scaled by leg length. Unmatched target bones stay at rest.
 //
+// Rest matching (on by default): skeletons modelled in different rest
+// poses (an A-pose character, arms 45 degrees down, playing T-pose
+// clips) would otherwise keep that difference in every frame, arms
+// through the hips. Each arm and leg bone (clavicle to forearm, thigh and
+// calf) is first turned to point the way the source's points at rest, so
+// the source's rest pose becomes the target's and every clip lines up;
+// hands turn with the forearm, feet stay flat, the spine keeps its curve.
+//
 // The one contract (PointDown, "Importing animated 3D characters"): a
 // clip only means something for the skeleton it was made for. The match
 // lists what didn't pair up, so a silent half-working retarget shows.
@@ -208,7 +216,7 @@ std::string canonicalBoneName(const std::string& name);
 glm::vec3 modelForward(const ModelData& model);
 BoneMatch matchBones(const ModelData& source, const ModelData& target);
 // Every source clip as a clip for the target skeleton.
-std::vector<ModelAnimation> retargetAnimations(const ModelData& source, const ModelData& target, const BoneMatch& match);
+std::vector<ModelAnimation> retargetAnimations(const ModelData& source, const ModelData& target, const BoneMatch& match, bool matchRest = true);
 
 // The same retarget, one pose at a time: drives a second skeleton from
 // the poses a first one is given every frame (IK and all), so a game can
@@ -218,7 +226,7 @@ class PoseRetarget {
 public:
     PoseRetarget() = default;
     PoseRetarget(const ModelData& source, const ModelData& target);
-    PoseRetarget(const ModelData& source, const ModelData& target, const BoneMatch& match);
+    PoseRetarget(const ModelData& source, const ModelData& target, const BoneMatch& match, bool matchRest = true);
     bool valid() const { return m_match.matched > 0; }
     const BoneMatch& match() const { return m_match; }
     // sourceLocals: each source bone's local transform (a Pose made
@@ -228,12 +236,17 @@ public:
     // the same way and scaled to the source's height. Draw it at
     // sourceTransform * placement().
     const glm::mat4& placement() const { return m_placement; }
+    // The largest rest-pose difference rest matching turned a bone by,
+    // in degrees (0 with it off, or for skeletons resting alike).
+    float restDifferenceDegrees() const { return m_restDifference; }
 
 private:
     BoneMatch m_match;
     std::vector<int> m_sourceParent, m_targetParent;
     std::vector<glm::vec3> m_sourceRestPos;
     std::vector<glm::quat> m_sourceRestRot, m_targetRestRot;
+    std::vector<glm::quat> m_restFix; // per target bone, model space: its rest direction onto the source's
+    float m_restDifference = 0.0f;
     std::vector<glm::mat4> m_targetRest;
     std::vector<BoneTRS> m_targetLocalRest;
     std::vector<bool> m_moves;
