@@ -15,3 +15,4 @@
 - runs/2026-10-17T1611Z-1607f6c1f7: claude/cloth-passes, test job success
 - runs/2026-10-17T1633Z-efe5c2fbcb: claude/rest-match, test job success
 - runs/2026-10-17T1653Z-ccfd8c5402: claude/anim-demo, test job success
+- runs/2026-10-17T1712Z-b3fdd87635: claude/screen-gi, test job success

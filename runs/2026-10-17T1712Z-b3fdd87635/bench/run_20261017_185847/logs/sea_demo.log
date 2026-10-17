@@ -1,0 +1,60 @@
+[2026-10-17 19:01:01.240][engine][Application][Kreative Kompas Engine - Sea Demo][info]: Hardware target: desktop (no specific device recognised); platform backend: desktop
+[2026-10-17 19:01:01.240][engine][Application][Kreative Kompas Engine - Sea Demo][info]: UI profile: desktop
+[2026-10-17 19:01:01.240][engine][Governor][Kreative Kompas Engine - Sea Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 1.00
+[2026-10-17 19:01:01.243][engine][VulkanDevice][Kreative Kompas Engine - Sea Demo][info]: using device: llvmpipe (LLVM 22.1.8, 256 bits)
+[2026-10-17 19:01:01.301][engine][SwapChain][Kreative Kompas Engine - Sea Demo][info]: colour output: format 50 (8-bit sRGB)
+[2026-10-17 19:01:01.301][engine][Application][Kreative Kompas Engine - Sea Demo][info]: Hardware target: software-gpu (the only Vulkan device is a CPU: llvmpipe (LLVM 22.1.8, 256 bits))
+[2026-10-17 19:01:01.301][engine][Governor][Kreative Kompas Engine - Sea Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+[2026-10-17 19:01:01.302][engine][Application][Kreative Kompas Engine - Sea Demo][info]: MSAA 1x (software rasteriser)
+[2026-10-17 19:01:01.387][engine][Application][Kreative Kompas Engine - Sea Demo][info]: mood 'clear_day' (assets/moods/clear_day.yaml)
+[2026-10-17 19:01:01.387][engine][Benchmark][Kreative Kompas Engine - Sea Demo][info]: benchmark: 3 s warm-up, then 20 s measured, uncapped (no vsync, no frame cap)
+[2026-10-17 19:01:01.388][engine][Settings][Kreative Kompas Engine - Sea Demo][info]: no settings file at 'settings.json' (using defaults)
+[2026-10-17 19:01:01.388][engine][Governor][Kreative Kompas Engine - Sea Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+[2026-10-17 19:01:01.432][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: Task system: 2 worker(s) (4 usable cores)
+[2026-10-17 19:01:01.432][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: FEMFX constraint solver memory: 67.2 MB
+[2026-10-17 19:01:01.463][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: FEMFX scene created (ground + 0 object(s), cap=512)
+[rmlui] Loaded font face 'Noto Sans' [regular] from 'assets/fonts/NotoSans-Regular.ttf'.
+[rmlui] Loaded font face 'Noto Sans' [bold] from 'assets/fonts/NotoSans-Bold.ttf'.
+[rmlui] Loaded font face 'Noto Sans' [italic] from 'assets/fonts/NotoSans-Italic.ttf'.
+[rmlui] Loaded font face 'Noto Color Emoji' [regular] from 'assets/fonts/NotoColorEmoji.ttf'.
+[ui] RmlUi initialised with real Vulkan rendering (text via glyph textures, <img>/background-image via stb_image, both real now -- see RmlVulkanRenderInterface.h)
+[2026-10-17 19:01:01.597][engine][Audio][Kreative Kompas Engine - Sea Demo][info]: Audio ready: 48000 Hz, 32 voices, output: Speakers (Realtek High Definition Audio) (WASAPI)
+[2026-10-17 19:01:01.617][engine][SeaDemo][Kreative Kompas Engine - Sea Demo][info]: POLYGON Pirate Pack isn't installed: the ships are built from boxes. Put the extracted pack in assets/synty/ or set KKE_ASSETS_DIR (README.md "Ships").
+[2026-10-17 19:01:01.650][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: patterned box 1: 480 tets, 24 pieces (Splinters), seed 3709469897
+[2026-10-17 19:01:01.654][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: patterned box 3: 480 tets, 26 pieces (Splinters), seed 3468198433
+[2026-10-17 19:01:01.659][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: patterned box 5: 480 tets, 24 pieces (Splinters), seed 4235268066
+[2026-10-17 19:01:01.663][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: patterned box 7: 480 tets, 24 pieces (Splinters), seed 3777939224
+[2026-10-17 19:01:01.667][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: patterned box 9: 480 tets, 26 pieces (Splinters), seed 3958183298
+[2026-10-17 19:01:01.667][engine][SeaDemo][Kreative Kompas Engine - Sea Demo][info]: fort: 5 FEMFX wall panels
+[2026-10-17 19:01:01.686][engine][Governor][Kreative Kompas Engine - Sea Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 0, render scale 0.75
+[2026-10-17 19:01:01.686][engine][Input][Kreative Kompas Engine - Sea Demo][info]: touch controls: stick left, look sea.look, button sea.ship, button sea.fire, button sea.aim, button sea.zoom, button sea.next, button sea.throw, pause
+[2026-10-17 19:01:03.164][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: perf: 1.2 fps, 1.2 ticks/s, step avg 6.07 ms max 7.72 ms, render prep 0.20 ms, 5 object(s) / 5 piece(s), 5 awake piece(s), 1960 faces drawn
+[2026-10-17 19:01:04.170][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: perf: 10.9 fps, 21.9 ticks/s, step avg 7.59 ms max 7.95 ms, render prep 0.11 ms, 5 object(s) / 5 piece(s), 4 awake piece(s), 1960 faces drawn
+[2026-10-17 19:01:04.858][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: breakable 9 armed after 45 ticks: border resting stress median 22919, p90 82310, max 147129; base threshold 150000
+[2026-10-17 19:01:04.858][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: breakable 7 armed after 45 ticks: border resting stress median 28315, p90 91628, max 157826; base threshold 150000
+[2026-10-17 19:01:04.858][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: breakable 5 armed after 45 ticks: border resting stress median 20596, p90 52221, max 144973; base threshold 150000
+[2026-10-17 19:01:04.858][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: breakable 3 armed after 45 ticks: border resting stress median 18617, p90 82829, max 158873; base threshold 150000
+[2026-10-17 19:01:04.858][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: breakable 1 armed after 45 ticks: border resting stress median 19425, p90 76119, max 124721; base threshold 150000
+[2026-10-17 19:01:05.232][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: perf: 16.0 fps, 32.0 ticks/s, step avg 0.27 ms max 7.79 ms, render prep 0.00 ms, 5 object(s) / 5 piece(s), 0 awake piece(s), 1960 faces drawn
+[2026-10-17 19:01:06.283][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: perf: 16.2 fps, 32.4 ticks/s, step avg 0.03 ms max 0.05 ms, render prep 0.00 ms, 5 object(s) / 5 piece(s), 0 awake piece(s), 1960 faces drawn
+[2026-10-17 19:01:07.341][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: perf: 16.1 fps, 32.2 ticks/s, step avg 0.03 ms max 0.05 ms, render prep 0.00 ms, 5 object(s) / 5 piece(s), 0 awake piece(s), 1960 faces drawn
+[2026-10-17 19:01:08.392][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: perf: 16.2 fps, 32.3 ticks/s, step avg 0.03 ms max 0.05 ms, render prep 0.00 ms, 5 object(s) / 5 piece(s), 0 awake piece(s), 1960 faces drawn
+[2026-10-17 19:01:09.421][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: perf: 16.5 fps, 33.0 ticks/s, step avg 0.03 ms max 0.05 ms, render prep 0.00 ms, 5 object(s) / 5 piece(s), 0 awake piece(s), 1960 faces drawn
+[2026-10-17 19:01:10.446][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: perf: 16.6 fps, 33.2 ticks/s, step avg 0.03 ms max 0.05 ms, render prep 0.00 ms, 5 object(s) / 5 piece(s), 0 awake piece(s), 1960 faces drawn
+[2026-10-17 19:01:11.473][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: perf: 16.6 fps, 33.1 ticks/s, step avg 0.03 ms max 0.05 ms, render prep 0.00 ms, 5 object(s) / 5 piece(s), 0 awake piece(s), 1960 faces drawn
+[2026-10-17 19:01:12.485][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: perf: 16.8 fps, 33.6 ticks/s, step avg 0.03 ms max 0.05 ms, render prep 0.00 ms, 5 object(s) / 5 piece(s), 0 awake piece(s), 1960 faces drawn
+[2026-10-17 19:01:13.496][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: perf: 16.8 fps, 33.6 ticks/s, step avg 0.03 ms max 0.05 ms, render prep 0.00 ms, 5 object(s) / 5 piece(s), 0 awake piece(s), 1960 faces drawn
+[2026-10-17 19:01:14.512][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: perf: 16.7 fps, 33.5 ticks/s, step avg 0.03 ms max 0.05 ms, render prep 0.00 ms, 5 object(s) / 5 piece(s), 0 awake piece(s), 1960 faces drawn
+[2026-10-17 19:01:15.532][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: perf: 16.7 fps, 33.3 ticks/s, step avg 0.03 ms max 0.05 ms, render prep 0.00 ms, 5 object(s) / 5 piece(s), 0 awake piece(s), 1960 faces drawn
+[2026-10-17 19:01:16.550][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: perf: 16.7 fps, 33.4 ticks/s, step avg 0.03 ms max 0.05 ms, render prep 0.00 ms, 5 object(s) / 5 piece(s), 0 awake piece(s), 1960 faces drawn
+[2026-10-17 19:01:17.569][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: perf: 16.7 fps, 33.4 ticks/s, step avg 0.03 ms max 0.05 ms, render prep 0.00 ms, 5 object(s) / 5 piece(s), 0 awake piece(s), 1960 faces drawn
+[2026-10-17 19:01:18.588][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: perf: 16.7 fps, 33.4 ticks/s, step avg 0.03 ms max 0.05 ms, render prep 0.00 ms, 5 object(s) / 5 piece(s), 0 awake piece(s), 1960 faces drawn
+[2026-10-17 19:01:19.606][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: perf: 16.7 fps, 33.4 ticks/s, step avg 0.03 ms max 0.05 ms, render prep 0.00 ms, 5 object(s) / 5 piece(s), 0 awake piece(s), 1960 faces drawn
+[2026-10-17 19:01:20.623][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: perf: 16.7 fps, 33.4 ticks/s, step avg 0.03 ms max 0.05 ms, render prep 0.00 ms, 5 object(s) / 5 piece(s), 0 awake piece(s), 1960 faces drawn
+[2026-10-17 19:01:21.640][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: perf: 16.7 fps, 33.4 ticks/s, step avg 0.03 ms max 0.05 ms, render prep 0.00 ms, 5 object(s) / 5 piece(s), 0 awake piece(s), 1960 faces drawn
+[2026-10-17 19:01:22.656][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: perf: 16.7 fps, 33.5 ticks/s, step avg 0.03 ms max 0.05 ms, render prep 0.00 ms, 5 object(s) / 5 piece(s), 0 awake piece(s), 1960 faces drawn
+[2026-10-17 19:01:23.677][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: perf: 16.6 fps, 33.3 ticks/s, step avg 0.03 ms max 0.05 ms, render prep 0.00 ms, 5 object(s) / 5 piece(s), 0 awake piece(s), 1960 faces drawn
+[2026-10-17 19:01:24.697][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: perf: 16.7 fps, 33.3 ticks/s, step avg 0.03 ms max 0.05 ms, render prep 0.00 ms, 5 object(s) / 5 piece(s), 0 awake piece(s), 1960 faces drawn
+[2026-10-17 19:01:24.927][engine][Benchmark][Kreative Kompas Engine - Sea Demo][info]: benchmark: 6 screenshot(s) in C:/forgejo-runner/work/179b6833b819db2a/hostexecutor/results/bench/run_20261017_185847/reports/shots
+[2026-10-17 19:01:24.928][engine][Benchmark][Kreative Kompas Engine - Sea Demo][info]: benchmark: 320 frames, 16.6 fps avg, 15.9 fps 1% low, 0 hitch(es), verdict struggles; report C:\forgejo-runner\work\179b6833b819db2a\hostexecutor\results\bench\run_20261017_185847\reports\sea_demo.json
+[2026-10-17 19:01:24.960][engine][Physics][Kreative Kompas Engine - Sea Demo][info]: FEMFX scene destroyed
