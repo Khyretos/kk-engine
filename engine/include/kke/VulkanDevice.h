@@ -67,6 +67,11 @@ public:
     VkSampleCountFlagBits maxUsableSampleCount() const { return m_maxSampleCount; }
     // A CPU rasteriser (lavapipe/llvmpipe, the min-spec reference).
     bool isSoftwareRasterizer() const { return m_softwareRasterizer; }
+    // Inline ray tracing (ENG-F02): VK_KHR_ray_query with acceleration
+    // structures, buffer device addresses and descriptor indexing, enabled
+    // when the device has them all (RADV, lavapipe, NVIDIA, Intel Arc).
+    // KKE_RAY_QUERY=0 leaves them off, to test the fallback.
+    bool rayQuery() const { return m_rayQuery; }
     // Sample count of the attachments in a render pass, so kke::Pipeline
     // can match it without every caller passing it along. Passes never
     // registered are single-sampled (shadow, UI, offscreen passes).
@@ -132,6 +137,7 @@ private:
     float m_maxSamplerAnisotropy = 1.0f;
     VkSampleCountFlagBits m_maxSampleCount = VK_SAMPLE_COUNT_1_BIT;
     bool m_softwareRasterizer = false;
+    bool m_rayQuery = false;
     std::unordered_map<VkRenderPass, VkSampleCountFlagBits> m_passSamples;
 
     bool m_validationEnabled = false;

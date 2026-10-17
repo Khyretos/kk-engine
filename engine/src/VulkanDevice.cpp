@@ -380,13 +380,76 @@ void VulkanDevice::createLogicalDevice(bool enableValidation) {
         m_maxSamplerAnisotropy = props.limits.maxSamplerAnisotropy;
     }
 
+    // Inline ray tracing (ENG-F02), when the device has every piece of it:
+    // the extensions, and the features asked for through a features chain.
+    std::vector<const char*> extensions = kDeviceExtensions;
+    VkPhysicalDeviceVulkan12Features v12{};
+    v12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+    VkPhysicalDeviceAccelerationStructureFeaturesKHR as{};
+    as.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+    VkPhysicalDeviceRayQueryFeaturesKHR rq{};
+    rq.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
+    VkPhysicalDeviceFeatures2 features2{};
+    features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+    {
+        VkPhysicalDeviceProperties props{};
+        vkGetPhysicalDeviceProperties(m_physicalDevice, &props);
+        uint32_t count = 0;
+        vkEnumerateDeviceExtensionProperties(m_physicalDevice, nullptr, &count, nullptr);
+        std::vector<VkExtensionProperties> available(count);
+        vkEnumerateDeviceExtensionProperties(m_physicalDevice, nullptr, &count, available.data());
+        auto has = [&](const char* name) {
+            return std::any_of(available.begin(), available.end(), [&](const VkExtensionProperties& e) { return std::strcmp(e.extensionName, name) == 0; });
+        };
+        const char* off = std::getenv("KKE_RAY_QUERY");
+        const bool wanted = !(off && off[0] == '0');
+        if (wanted && props.apiVersion >= VK_API_VERSION_1_2 && has(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) &&
+            has(VK_KHR_RAY_QUERY_EXTENSION_NAME) && has(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME)) {
+            // What the device has: one query down the same chain.
+            VkPhysicalDeviceVulkan12Features s12{};
+            s12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+            VkPhysicalDeviceAccelerationStructureFeaturesKHR sas{};
+            sas.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+            VkPhysicalDeviceRayQueryFeaturesKHR srq{};
+            srq.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
+            s12.pNext = &sas;
+            sas.pNext = &srq;
+            VkPhysicalDeviceFeatures2 query{};
+            query.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+            query.pNext = &s12;
+            vkGetPhysicalDeviceFeatures2(m_physicalDevice, &query);
+            m_rayQuery = s12.bufferDeviceAddress && s12.descriptorIndexing && s12.runtimeDescriptorArray &&
+                         s12.shaderSampledImageArrayNonUniformIndexing && s12.descriptorBindingPartiallyBound &&
+                         sas.accelerationStructure && srq.rayQuery;
+        }
+        if (m_rayQuery) {
+            extensions.push_back(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
+            extensions.push_back(VK_KHR_RAY_QUERY_EXTENSION_NAME);
+            extensions.push_back(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
+            v12.bufferDeviceAddress = VK_TRUE;
+            v12.descriptorIndexing = VK_TRUE;
+            v12.runtimeDescriptorArray = VK_TRUE;
+            v12.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
+            v12.descriptorBindingPartiallyBound = VK_TRUE;
+            as.accelerationStructure = VK_TRUE;
+            rq.rayQuery = VK_TRUE;
+            v12.pNext = &as;
+            as.pNext = &rq;
+            features2.features = deviceFeatures;
+            features2.pNext = &v12;
+        }
+        log::get("VulkanDevice")->info("inline ray tracing (VK_KHR_ray_query): {}", m_rayQuery ? "on" : wanted ? "not available" : "off (KKE_RAY_QUERY=0)");
+    }
+
     VkDeviceCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
     createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
     createInfo.pQueueCreateInfos = queueCreateInfos.data();
-    createInfo.pEnabledFeatures = &deviceFeatures;
-    createInfo.enabledExtensionCount = static_cast<uint32_t>(kDeviceExtensions.size());
-    createInfo.ppEnabledExtensionNames = kDeviceExtensions.data();
+    // With ray query the features go down the chain instead.
+    createInfo.pEnabledFeatures = m_rayQuery ? nullptr : &deviceFeatures;
+    createInfo.pNext = m_rayQuery ? &features2 : nullptr;
+    createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
+    createInfo.ppEnabledExtensionNames = extensions.data();
 
     if (enableValidation) {
         createInfo.enabledLayerCount = static_cast<uint32_t>(kValidationLayers.size());
@@ -438,6 +501,8 @@ void VulkanDevice::createAllocator() {
         }
     }
 
+    // Acceleration structures are built from buffer device addresses.
+    if (m_rayQuery) allocatorInfo.flags |= VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
     VK_CHECK(vmaCreateAllocator(&allocatorInfo, &m_allocator));
 }
 

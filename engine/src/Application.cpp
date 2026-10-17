@@ -1,5 +1,6 @@
 #include "kke/Application.h"
 #include "kke/SkyRenderer.h"
+#include "kke/RayScene.h"
 #include "kke/Mood.h"
 #include "kke/EngineSettings.h"
 #include "kke/LogoIntro.h"
@@ -140,6 +141,13 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
         if (!m_toneMapperOverride) log::get("Application")->warn("KKE_TONEMAP={} is not agx, aces, reinhard or none; ignored", env);
     }
     m_lightingBuffer = std::make_unique<LightingBuffer>(m_renderer->device());
+    // KKE_RAY_SELFTEST=1: trace a few rays through a small scene on the GPU and
+    // check them (ENG-F02), so a driver's ray tracing is known good or not.
+    if (const char* env = dev::env("KKE_RAY_SELFTEST"); env && env[0] == '1') {
+        std::string report;
+        if (rayQuerySelfTest(m_renderer->device(), &report)) log::get("Application")->info("ray query self-test passed: {}", report);
+        else log::get("Application")->error("ray query self-test failed: {}", report);
+    }
     m_mood = std::make_unique<Mood>();
     if (const char* env = dev::env("KKE_MOOD"); env && *env) m_moodOverride = env;
 

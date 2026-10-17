@@ -123,6 +123,8 @@ set(ENGINE_SOURCES
     src/SphereImpostors.cpp
     src/ParticleSim.cpp
     src/ParticleMotion.cpp
+    src/RayScene.cpp
+    src/RaySelfTest.cpp
     src/GpuParticleRing.cpp
     src/ParticleEffects.cpp
     src/ParticleLibrary.cpp
@@ -297,7 +299,7 @@ endif()
 # (kke::RmlVulkanRenderInterface), the tone-map pass (kke::Renderer) and
 # particle effects (kke::ParticleEffects: Lua's fx.* works in every game).
 foreach(shader logo.vert logo.frag logo_backdrop.vert logo_backdrop.frag logo_text.vert logo_text.frag sky.vert sky.frag cloth_pairs.comp skin.comp
-               rml_fullscreen.vert rml_filter.frag rml_layer.frag tonemap_post.frag
+               rml_fullscreen.vert rml_filter.frag rml_layer.frag tonemap_post.frag ray_selftest.comp
                effect.vert effect_gpu.vert effect_smoke.frag effect_spark.frag effect_glow.frag effect_flake.frag effect_ring.frag)
     engine_add_shader(kke_engine ${CMAKE_SOURCE_DIR}/shaders/${shader})
 endforeach()
