@@ -7,3 +7,4 @@
 - runs/2026-10-15T0420Z-03036e2d5e: main, test job success
 - runs/2026-10-16T0419Z-ef9f975bc1: main, test job success
 - runs/2026-10-17T0419Z-7c98b22506: main, test job success
+- runs/2026-10-17T1239Z-ce69567150: claude/gpu-particles, test job success
