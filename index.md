@@ -21,3 +21,4 @@
 - runs/2026-10-17T1809Z-db9bde0cfc: claude/anim-demo, test job success
 - runs/2026-10-17T1827Z-be77c20013: claude/ray-query, test job success
 - runs/2026-10-17T2131Z-6345d3fa0a: claude/cloth-passes, test job success
+- runs/2026-10-17T2235Z-b9c1519fd7: claude/ci-mirrors, test job success

@@ -1,0 +1,51 @@
+[2026-10-18 00:26:06.853][engine][Application][Kreative Kompas Engine - Synty Demo][info]: Hardware target: desktop (no specific device recognised); platform backend: desktop
+[2026-10-18 00:26:06.853][engine][Application][Kreative Kompas Engine - Synty Demo][info]: UI profile: desktop
+[2026-10-18 00:26:06.853][engine][Governor][Kreative Kompas Engine - Synty Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 1.00
+[2026-10-18 00:26:06.856][engine][VulkanDevice][Kreative Kompas Engine - Synty Demo][info]: using device: llvmpipe (LLVM 22.1.8, 256 bits)
+[2026-10-18 00:26:06.916][engine][SwapChain][Kreative Kompas Engine - Synty Demo][info]: colour output: format 50 (8-bit sRGB)
+[2026-10-18 00:26:06.916][engine][Application][Kreative Kompas Engine - Synty Demo][info]: Hardware target: software-gpu (the only Vulkan device is a CPU: llvmpipe (LLVM 22.1.8, 256 bits))
+[2026-10-18 00:26:06.916][engine][Governor][Kreative Kompas Engine - Synty Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+[2026-10-18 00:26:06.917][engine][Application][Kreative Kompas Engine - Synty Demo][info]: MSAA 1x (software rasteriser)
+[2026-10-18 00:26:07.002][engine][Application][Kreative Kompas Engine - Synty Demo][info]: mood 'morning' (assets/moods/morning.yaml)
+[2026-10-18 00:26:07.002][engine][Benchmark][Kreative Kompas Engine - Synty Demo][info]: benchmark: 3 s warm-up, then 20 s measured, uncapped (no vsync, no frame cap)
+[rmlui] Loaded font face 'Noto Sans' [regular] from 'assets/fonts/NotoSans-Regular.ttf'.
+[rmlui] Loaded font face 'Noto Sans' [bold] from 'assets/fonts/NotoSans-Bold.ttf'.
+[rmlui] Loaded font face 'Noto Sans' [italic] from 'assets/fonts/NotoSans-Italic.ttf'.
+[rmlui] Loaded font face 'Noto Color Emoji' [regular] from 'assets/fonts/NotoColorEmoji.ttf'.
+[ui] RmlUi initialised with real Vulkan rendering (text via glyph textures, <img>/background-image via stb_image, both real now -- see RmlVulkanRenderInterface.h)
+[2026-10-18 00:26:07.118][engine][Audio][Kreative Kompas Engine - Synty Demo][info]: Audio ready: 48000 Hz, 32 voices, output: Speakers (Realtek High Definition Audio) (WASAPI)
+[2026-10-18 00:26:07.182][engine][Physics][Kreative Kompas Engine - Synty Demo][info]: Task system: 2 worker(s) (4 usable cores)
+[2026-10-18 00:26:07.182][engine][Physics][Kreative Kompas Engine - Synty Demo][info]: FEMFX constraint solver memory: 67.2 MB
+[2026-10-18 00:26:07.201][engine][Physics][Kreative Kompas Engine - Synty Demo][info]: FEMFX scene created (ground + 0 object(s), cap=512)
+[2026-10-18 00:26:07.203][engine][ClothGpu][Kreative Kompas Engine - Synty Demo][info]: no compute queue of its own on this GPU: cloth pairs are searched on the CPU (KKE_CLOTH_GPU=shared to try the graphics queue)
+[2026-10-18 00:26:07.203][engine][RigidBodies][Kreative Kompas Engine - Synty Demo][info]: Jolt rigid-body world ready (65536 max bodies)
+[2026-10-18 00:26:07.207][engine][SyntyScene][Kreative Kompas Engine - Synty Demo][info]: Synty POLYGON Prototype pack not found. Put the extracted pack folder(s) in assets/synty/ (e.g. assets/synty/POLYGON_Prototype/Characters/...) or set KKE_ASSETS_DIR.
+[2026-10-18 00:26:07.207][engine][GameShell][Kreative Kompas Engine - Synty Demo][info]: no settings file at 'settings.json' (using defaults)
+[2026-10-18 00:26:07.207][engine][Governor][Kreative Kompas Engine - Synty Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+[2026-10-18 00:26:07.215][engine][Governor][Kreative Kompas Engine - Synty Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 0, render scale 0.75
+[2026-10-18 00:26:07.216][engine][Input][Kreative Kompas Engine - Synty Demo][info]: touch controls: stick left, button synty.glass, button synty.ragdoll, button synty.crates, button synty.stand, button synty.next, button synty.prev, pause
+[2026-10-18 00:26:08.215][engine][Physics][Kreative Kompas Engine - Synty Demo][info]: perf: 6.9 fps, 11.8 ticks/s, step avg 0.04 ms max 0.15 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 00:26:09.227][engine][Physics][Kreative Kompas Engine - Synty Demo][info]: perf: 28.7 fps, 57.3 ticks/s, step avg 0.03 ms max 0.06 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 00:26:10.237][engine][Physics][Kreative Kompas Engine - Synty Demo][info]: perf: 28.7 fps, 57.4 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 00:26:11.249][engine][Physics][Kreative Kompas Engine - Synty Demo][info]: perf: 28.6 fps, 57.3 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 00:26:12.263][engine][Physics][Kreative Kompas Engine - Synty Demo][info]: perf: 28.6 fps, 57.2 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 00:26:13.277][engine][Physics][Kreative Kompas Engine - Synty Demo][info]: perf: 28.6 fps, 57.2 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 00:26:14.292][engine][Physics][Kreative Kompas Engine - Synty Demo][info]: perf: 28.6 fps, 57.2 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 00:26:15.299][engine][Physics][Kreative Kompas Engine - Synty Demo][info]: perf: 28.8 fps, 57.6 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 00:26:16.311][engine][Physics][Kreative Kompas Engine - Synty Demo][info]: perf: 28.7 fps, 57.3 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 00:26:17.318][engine][Physics][Kreative Kompas Engine - Synty Demo][info]: perf: 28.8 fps, 57.6 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 00:26:18.328][engine][Physics][Kreative Kompas Engine - Synty Demo][info]: perf: 28.7 fps, 57.4 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 00:26:19.336][engine][Physics][Kreative Kompas Engine - Synty Demo][info]: perf: 28.8 fps, 57.5 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 00:26:20.351][engine][Physics][Kreative Kompas Engine - Synty Demo][info]: perf: 28.6 fps, 57.2 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 00:26:21.361][engine][Physics][Kreative Kompas Engine - Synty Demo][info]: perf: 28.7 fps, 57.4 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 00:26:22.370][engine][Physics][Kreative Kompas Engine - Synty Demo][info]: perf: 28.7 fps, 57.5 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 00:26:23.380][engine][Physics][Kreative Kompas Engine - Synty Demo][info]: perf: 28.7 fps, 57.5 ticks/s, step avg 0.03 ms max 0.06 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 00:26:24.388][engine][Physics][Kreative Kompas Engine - Synty Demo][info]: perf: 28.7 fps, 57.5 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 00:26:25.398][engine][Physics][Kreative Kompas Engine - Synty Demo][info]: perf: 28.7 fps, 57.5 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 00:26:26.405][engine][Physics][Kreative Kompas Engine - Synty Demo][info]: perf: 28.8 fps, 57.6 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 00:26:27.415][engine][Physics][Kreative Kompas Engine - Synty Demo][info]: perf: 28.7 fps, 57.5 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 00:26:28.437][engine][Physics][Kreative Kompas Engine - Synty Demo][info]: perf: 28.4 fps, 56.7 ticks/s, step avg 0.03 ms max 0.05 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 00:26:29.466][engine][Physics][Kreative Kompas Engine - Synty Demo][info]: perf: 28.2 fps, 56.4 ticks/s, step avg 0.03 ms max 0.05 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 00:26:30.377][engine][Benchmark][Kreative Kompas Engine - Synty Demo][info]: benchmark: 6 screenshot(s) in C:/forgejo-runner/work/b01295b60664b88c/hostexecutor/results/bench/run_20261018_002154/reports/shots
+[2026-10-18 00:26:30.378][engine][Benchmark][Kreative Kompas Engine - Synty Demo][info]: benchmark: 559 frames, 28.7 fps avg, 27.3 fps 1% low, 0 hitch(es), verdict struggles; report C:\forgejo-runner\work\b01295b60664b88c\hostexecutor\results\bench\run_20261018_002154\reports\synty_demo.json
+[2026-10-18 00:26:30.378][engine][Physics][Kreative Kompas Engine - Synty Demo][info]: FEMFX scene destroyed

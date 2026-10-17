@@ -1,0 +1,13 @@
+[2026-10-18 00:25:19.568][engine][Application][Kreative Kompas Engine - ImGui Demo][info]: Hardware target: desktop (no specific device recognised); platform backend: desktop
+[2026-10-18 00:25:19.568][engine][Application][Kreative Kompas Engine - ImGui Demo][info]: UI profile: desktop
+[2026-10-18 00:25:19.568][engine][Governor][Kreative Kompas Engine - ImGui Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 1.00
+[2026-10-18 00:25:19.572][engine][VulkanDevice][Kreative Kompas Engine - ImGui Demo][info]: using device: llvmpipe (LLVM 22.1.8, 256 bits)
+[2026-10-18 00:25:19.631][engine][SwapChain][Kreative Kompas Engine - ImGui Demo][info]: colour output: format 50 (8-bit sRGB)
+[2026-10-18 00:25:19.632][engine][Application][Kreative Kompas Engine - ImGui Demo][info]: Hardware target: software-gpu (the only Vulkan device is a CPU: llvmpipe (LLVM 22.1.8, 256 bits))
+[2026-10-18 00:25:19.632][engine][Governor][Kreative Kompas Engine - ImGui Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+[2026-10-18 00:25:19.632][engine][Application][Kreative Kompas Engine - ImGui Demo][info]: MSAA 1x (software rasteriser)
+[2026-10-18 00:25:19.634][engine][Application][Kreative Kompas Engine - ImGui Demo][info]: mood 'studio' (assets/moods/studio.yaml)
+[2026-10-18 00:25:19.635][engine][Benchmark][Kreative Kompas Engine - ImGui Demo][info]: benchmark: 3 s warm-up, then 20 s measured, uncapped (no vsync, no frame cap)
+[2026-10-18 00:25:19.636][engine][Governor][Kreative Kompas Engine - ImGui Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 0, render scale 0.75
+[2026-10-18 00:25:42.807][engine][Benchmark][Kreative Kompas Engine - ImGui Demo][info]: benchmark: 6 screenshot(s) in C:/forgejo-runner/work/b01295b60664b88c/hostexecutor/results/bench/run_20261018_002154/reports/shots
+[2026-10-18 00:25:42.808][engine][Benchmark][Kreative Kompas Engine - ImGui Demo][info]: benchmark: 692 frames, 35.2 fps avg, 33.2 fps 1% low, 0 hitch(es), verdict playable; report C:\forgejo-runner\work\b01295b60664b88c\hostexecutor\results\bench\run_20261018_002154\reports\imgui_demo.json
