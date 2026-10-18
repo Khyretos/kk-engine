@@ -76,6 +76,14 @@ public:
         m_reflSize = size;
         m_reflMaxRoughness = maxRoughness;
     }
+    // Refraction (ENG-F02 part 4, set 0 binding 6): this frame's scene drawn
+    // before the see-through surfaces (kke::BehindPass, GENERAL layout),
+    // `size` pixels. Null: none (translucents absorb what is behind them).
+    void setBehind(VkImageView image, VkSampler sampler, const glm::vec2& size) {
+        m_behind = image;
+        m_behindSampler = sampler;
+        m_behindSize = size;
+    }
     void setScreenGi(VkImageView light, VkImageView depth, VkSampler sampler, const glm::mat4& viewProj, const glm::vec2& size) {
         m_giLight = light;
         m_giDepth = depth;
@@ -105,7 +113,7 @@ private:
     std::unique_ptr<Buffer> m_buffers[kSlotCount];
     uint32_t m_slot = 0;
 
-    void writeEnvironment(uint32_t slot); // bindings 1-5 of that slot: m_envMap, the GI and reflection images, or m_placeholder
+    void writeEnvironment(uint32_t slot); // bindings 1-6 of that slot: m_envMap, the GI, reflection and behind images, or m_placeholder
     std::unique_ptr<Texture> m_placeholder; // 1x1 black, bound while there is no map
     const Texture* m_envMap = nullptr;
     uint32_t m_envLevels = 0;
@@ -118,6 +126,9 @@ private:
     glm::mat4 m_reflViewProj{1.0f};
     glm::vec2 m_reflSize{0.0f};
     float m_reflMaxRoughness = 0.3f;
+    VkImageView m_behind = VK_NULL_HANDLE;
+    VkSampler m_behindSampler = VK_NULL_HANDLE;
+    glm::vec2 m_behindSize{0.0f};
 };
 
 } // namespace kke

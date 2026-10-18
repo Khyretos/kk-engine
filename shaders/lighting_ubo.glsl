@@ -42,6 +42,7 @@ layout(set = 0, binding = 0) uniform LightingUBO {
     vec4 gi;         // x = 1 when they hold a frame's result, yz = their size in pixels, w = KKE_GI_VIEW (1: show the visibility alone)
     mat4 reflViewProj; // the camera the reflection images were made with (last frame's)
     vec4 refl;         // x = 1 when they hold a frame's result, yz = their size, w = the roughest surface they're for
+    vec4 behind;       // x = 1 when this frame's behind image is there (refraction), yz = its size in pixels
 } lighting;
 
 // The sky prefiltered for reflections (kke::EnvMap, kke::LightingBuffer::setEnvironmentMap):
@@ -58,6 +59,11 @@ layout(set = 0, binding = 3) uniform sampler2D giDepth;
 // (a = 1 where the ray met something) at half resolution, and its view depth.
 layout(set = 0, binding = 4) uniform sampler2D reflLight;
 layout(set = 0, binding = 5) uniform sampler2D reflDepth;
+
+// Refraction (ENG-F02 part 4, kke::BehindPass): this frame's scene drawn
+// before the see-through surfaces, with the distance from the camera in
+// alpha (0 = sky). Only translucent_refract.frag reads it.
+layout(set = 0, binding = 6) uniform sampler2D behindImage;
 
 // The four nearest texels of a half-resolution screen image made with camera
 // `viewProj`, weighted by bilinear distance and by how close their depth is

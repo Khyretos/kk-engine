@@ -112,12 +112,14 @@ void AnimDemoModule::init(kke::Application& app) {
     m_models = app.getModule<kke::ModelModule>();
     m_ground = std::make_unique<kke::DynamicMeshRenderer>(app);
     m_arms = std::make_unique<kke::DynamicMeshRenderer>(app);
+    m_glass = std::make_unique<kke::DynamicMeshRenderer>(app);
     if (const char* move = std::getenv("KKE_ANIM_MOVE")) {
         m_forced = std::sscanf(move, "%f,%f", &m_forcedMove.x, &m_forcedMove.y) == 2;
     }
     if (const char* circle = std::getenv("KKE_ANIM_CIRCLE")) m_circle = std::max(0.0f, static_cast<float>(std::atof(circle)));
     if (const char* rest = std::getenv("KKE_ANIM_REST")) m_showRest = rest[0] == '1';
     if (const char* mirror = std::getenv("KKE_ANIM_MIRROR")) m_mirrorFloor = mirror[0] == '1';
+    if (const char* glass = std::getenv("KKE_ANIM_GLASS")) m_glassBlock = glass[0] == '1';
     // KKE_ANIM_VIEW=distance,pitch,yaw (metres, radians): where the camera starts, for pictures.
     if (const char* view = std::getenv("KKE_ANIM_VIEW")) {
         float d = 0.0f, pitch = 0.0f, yaw = 0.0f;
@@ -335,6 +337,12 @@ void AnimDemoModule::buildScenery() {
         for (int i = 0; i < kJoints; ++i) t.points.push_back(t.base + glm::vec3(0.0f, kSegment * static_cast<float>(i), 0.0f));
     }
     m_ground->upload(v, idx);
+    // A clear glass block in front of the tentacles (drawTranslucent: uv.x = density, uv.y = milkiness).
+    std::vector<kke::Vertex> g;
+    std::vector<uint32_t> gi;
+    box(g, gi, glm::vec3(1.2f, 0.0f, -1.2f), glm::vec3(1.8f, 1.6f, 1.2f), glm::vec3(0.85f, 0.95f, 1.0f));
+    for (kke::Vertex& x : g) x.uv = glm::vec2(0.15f, 0.0f);
+    m_glass->upload(g, gi);
 }
 
 void AnimDemoModule::buildTentacles() {
@@ -361,6 +369,10 @@ void AnimDemoModule::buildTentacles() {
 void AnimDemoModule::render(const kke::RenderContext& ctx) {
     m_ground->draw(ctx, glm::mat4(1.0f), m_mirrorFloor ? 0.6f : 0.0f, m_mirrorFloor ? 0.04f : 0.9f); // polished: brushed metal
     m_arms->draw(ctx, glm::mat4(1.0f), 0.0f, 0.5f);
+}
+
+void AnimDemoModule::renderTranslucent(const kke::RenderContext& ctx) {
+    if (m_glassBlock) m_glass->drawTranslucent(ctx, glm::mat4(1.0f), 0.05f, 1.5f); // glass: n = 1.5
 }
 
 void AnimDemoModule::renderShadow(const kke::ShadowRenderContext& ctx) {
@@ -429,6 +441,7 @@ void AnimDemoModule::buildPanel() {
 
     auto& look = panel->section("Floor");
     look.toggle("Polished floor (shows reflections: settings, Graphics, Reflections)", &m_mirrorFloor);
+    look.toggle("Glass block (bends what's behind it when reflections are on)", &m_glassBlock);
 }
 
 } // namespace kke_anim
