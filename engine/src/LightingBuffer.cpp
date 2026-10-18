@@ -61,8 +61,10 @@ struct LightingUBOData {
     glm::vec4 refl;         // x = 1 when they hold a frame's result, yz = their size, w = the roughest surface they're for
     glm::vec4 behind;       // x = 1 when this frame's behind image is there (refraction, ENG-F02 part 4), yz = its size
     glm::vec4 fogVolume;    // x = 1 when volumetric fog is on (ENG-F03), y = its near distance, z = its far distance, w = its slices
+    glm::mat4 shadowRayViewProj; // the camera the shadow rays were cast with (ENG-F07)
+    glm::vec4 shadowRays;        // x = 1 when they hold a frame's result, yz = their size, w = reprojection slack
 };
-static_assert(sizeof(LightingUBOData) == Lighting::kMaxLights * 3 * 16 + 2 * 16 + 2 * 64 + 7 * 16 + 9 * 16 + 2 * ShadowMap::kCascades * 16 + ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces * (64 + 16) + 16 + 64 + 16 + 64 + 16 + 16 + 16, "must match shaders/lighting_ubo.glsl");
+static_assert(sizeof(LightingUBOData) == Lighting::kMaxLights * 3 * 16 + 2 * 16 + 2 * 64 + 7 * 16 + 9 * 16 + 2 * ShadowMap::kCascades * 16 + ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces * (64 + 16) + 16 + 64 + 16 + 64 + 16 + 16 + 16 + 64 + 16, "must match shaders/lighting_ubo.glsl");
 static_assert(ShadowMap::kMaxPointShadows <= Lighting::kMaxLights, "every point-shadow slot needs a light");
 
 } // namespace
@@ -72,7 +74,7 @@ LightingBuffer::LightingBuffer(VulkanDevice& device) : m_device(device) {
     // vertex and fragment stages (vertex doesn't currently need it, but
     // costs nothing to allow now rather than needing a second layout
     // later for e.g. per-vertex light-space transforms for shadows).
-    std::array<VkDescriptorSetLayoutBinding, 8> bindings{};
+    std::array<VkDescriptorSetLayoutBinding, 9> bindings{};
     bindings[0].binding = 0;
     bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     bindings[0].descriptorCount = 1;
@@ -99,6 +101,9 @@ LightingBuffer::LightingBuffer(VulkanDevice& device) : m_device(device) {
     // Binding 7: volumetric fog's integrated grid, a 3D image (setFogVolume).
     bindings[7] = bindings[1];
     bindings[7].binding = 7;
+    // Binding 8: last frame's ray-traced sun shadows (setShadowRays).
+    bindings[8] = bindings[1];
+    bindings[8].binding = 8;
 
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -110,7 +115,7 @@ LightingBuffer::LightingBuffer(VulkanDevice& device) : m_device(device) {
     // module shares these, there's no per-object growth the way
     // RmlVulkanRenderInterface's texture pool needs.
     const std::array<VkDescriptorPoolSize, 2> poolSizes{ { { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kSlotCount },
-                                                          { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 7 * kSlotCount } } };
+                                                          { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 8 * kSlotCount } } };
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     poolInfo.maxSets = kSlotCount;
@@ -230,7 +235,7 @@ void LightingBuffer::writeEnvironment(uint32_t slot) {
     const Texture& map = m_envMap ? *m_envMap : *m_placeholder;
     // Without GI the placeholder (0, 0, 0, 1) reads as no bounce, all visible.
     const bool gi = m_giLight && m_giDepth && m_giSampler;
-    std::array<VkDescriptorImageInfo, 7> info{};
+    std::array<VkDescriptorImageInfo, 8> info{};
     info[0] = { map.sampler(), map.imageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
     info[1] = gi ? VkDescriptorImageInfo{ m_giSampler, m_giLight, VK_IMAGE_LAYOUT_GENERAL }
                  : VkDescriptorImageInfo{ m_placeholder->sampler(), m_placeholder->imageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
@@ -243,8 +248,9 @@ void LightingBuffer::writeEnvironment(uint32_t slot) {
     info[5] = m_behind && m_behindSampler ? VkDescriptorImageInfo{ m_behindSampler, m_behind, VK_IMAGE_LAYOUT_GENERAL } : none;
     info[6] = m_fogVolume && m_fogVolumeSampler ? VkDescriptorImageInfo{ m_fogVolumeSampler, m_fogVolume, VK_IMAGE_LAYOUT_GENERAL }
                                                 : VkDescriptorImageInfo{ m_volumeSampler, m_volumeView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
-    std::array<VkWriteDescriptorSet, 7> write{};
-    for (uint32_t i = 0; i < 7; ++i) {
+    info[7] = m_shadowRays && m_shadowRaySampler ? VkDescriptorImageInfo{ m_shadowRaySampler, m_shadowRays, VK_IMAGE_LAYOUT_GENERAL } : none;
+    std::array<VkWriteDescriptorSet, 8> write{};
+    for (uint32_t i = 0; i < 8; ++i) {
         write[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         write[i].dstSet = m_descriptorSets[slot];
         write[i].dstBinding = 1 + i;
@@ -321,6 +327,8 @@ void LightingBuffer::update(const Lighting& lighting, const glm::vec3& cameraPos
     data.reflViewProj = m_reflViewProj;
     data.refl = glm::vec4(m_reflLight ? 1.0f : 0.0f, m_reflSize.x, m_reflSize.y, m_reflMaxRoughness);
     data.behind = glm::vec4(m_behind ? 1.0f : 0.0f, m_behindSize.x, m_behindSize.y, 0.0f);
+    data.shadowRayViewProj = m_shadowRayViewProj;
+    data.shadowRays = glm::vec4(m_shadowRays ? 1.0f : 0.0f, m_shadowRaySize.x, m_shadowRaySize.y, m_shadowRaySlack);
     data.fogVolume = m_fogVolume ? glm::vec4(1.0f, m_fogVolumeSettings.nearDistance, m_fogVolumeSettings.farDistance,
                                              static_cast<float>(m_fogVolumeSettings.slices))
                                  : glm::vec4(0.0f);

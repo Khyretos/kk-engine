@@ -197,6 +197,22 @@ slope-scaled bias, texel-snapped light projection (no shimmer when the
 camera moves), then cascades as already planned in #20:
 [#38](https://github.com/Khyretos/kk-engine/issues/38).
 
+**Ray-traced shadows (ENG-F07, 2026-10-18).** The setting `shadowRays`
+(off by default; `KKE_SHADOW_RAYS`) is `kke` or `classic`, on GPUs with
+ray query. KKE keeps the argument above: the shadow maps stay, and a ray
+towards the sun is cast only where they don't reach (past 75 m, up to
+600 m), through the stand-ins, so a far grandstand or hill shades the land
+behind it again instead of everything past 80 m being lit. `classic`
+casts a ray from every pixel through the full geometry and uses it instead
+of the map: hard shadows everywhere, the textbook ray-traced look, for
+comparison. Both are cast after the frame from its depth (one compute
+dispatch, sharing the frame's `RayScene` with reflections and refraction)
+and read by the next frame's lit shaders, reprojected; where a pixel showed
+something else last frame, the shadow map answers. Measured on the RX
+9070 XT, the racing demo at 1019 x 1384 with 4x MSAA: 0.716 ms off, 0.98
+kke (+0.26, mostly building the ray scene of moving cars every frame),
+1.16 classic (+0.44).
+
 ### 6. Lighting and GI: stable beats noisy
 
 **Argument.** (Video "Dynamic lighting was better nine years ago",
