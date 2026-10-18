@@ -494,6 +494,21 @@ the RX 9070 XT, the Synty demo at 836 x 1384 with 4x MSAA: 0.356 ms off,
 0.422 on (+0.07; the machine was busy with CI, best runs compared). The
 software-GPU target keeps it off until it is measured there.
 
+**TAA, an option (ENG-F05 part 2, 2026-10-18).** Kees wanted both: SMAA by
+default and TAA beside it. The graphics setting `taa` (off by default;
+`KKE_TAA=1` or `0` wins) follows rule 1 above: nothing needs it, it only
+adds on top of the clean image. The projection moves by under a pixel each
+frame (Halton 2, 3 over 8 frames); after SMAA, one compute dispatch mixes
+the frame into the history of earlier ones (10% new), found through the
+depth with last frame's camera and read between pixels by a Catmull-Rom
+curve (a bilinear read blurred the floor lines a little more each frame);
+the history is clipped to the mean and spread of the colours around the
+pixel now (YCoCg), so a moving arm leaves no trail. Honest limits: there
+are no motion vectors, so on moving things the history is clipped rather
+than followed (a little softer in motion, no ghost), and split screen
+draws without it. Measured on the RX 9070 XT, the Synty demo at 1019 x 1384
+with 4x MSAA and SMAA: 0.393 ms off, 0.448 on (+0.055).
+
 **Later the same day:** shadow map quality (#38). The shadow map is
 sampled with a depth-compare sampler (each of the 9 PCF taps is a
 hardware bilinear comparison), casters get slope-scaled depth bias from

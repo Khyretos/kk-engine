@@ -37,6 +37,9 @@ struct EngineSettings {
         // shading and alpha tests that MSAA can't smooth. One frame, no ghosting.
         // On by default (Kees, 2026-10-18); TAA comes as an option beside it.
         bool smaa = true;
+        // Temporal anti-aliasing (Application::setTaa), an option over the clean
+        // image: smoother still when standing still, a little softer in motion.
+        bool taa = false;
         float brightness = 1.0f;       // multiplies ambient light
         float uiScale = 1.0f;          // see UiModule::setUiScale()
         bool showDebugOverlay = false; // the ImGui developer panels (F1 in the showcase)

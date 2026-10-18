@@ -47,6 +47,7 @@ struct OverlayTarget {
 //       renderer.endFrame();                   // ends render pass, submits, presents
 //   }
 class SmaaPass;
+class TaaPass;
 
 class Renderer {
 public:
@@ -111,6 +112,13 @@ public:
     // scale below 1). One frame, no history. Off by default.
     void setSmaa(bool on) { m_smaaOn = on; }
     bool smaa() const { return m_smaaOn; }
+    // Temporal anti-aliasing, an option over the clean image (ENG-F05 part 2,
+    // kke/Taa.h): needs the scene's depth readable (setSceneDepthReadable)
+    // and each frame the (jittered) viewProj it was drawn with
+    // (setTaaCamera). Off by default.
+    void setTaa(bool on) { m_taaOn = on; }
+    bool taa() const { return m_taaOn; }
+    void setTaaCamera(const glm::mat4& viewProj) { m_taaViewProj = viewProj; }
     float renderScale() const { return m_renderScale; }
     // Size of the 3D image: extent() times the render scale.
     VkExtent2D renderExtent() const;
@@ -242,6 +250,11 @@ private:
     std::unique_ptr<VulkanDevice> m_device;
     std::unique_ptr<SmaaPass> m_smaa; // made the first time SMAA is on
     bool m_smaaOn = false;
+    std::unique_ptr<TaaPass> m_taa; // made the first time TAA is on
+    bool m_taaOn = false, m_taaHavePrev = false;
+    glm::mat4 m_taaViewProj{1.0f}, m_taaPrevViewProj{1.0f};
+    VkImageView m_postSource = VK_NULL_HANDLE; // what the tone map reads this frame (the scene, or SMAA's or TAA's result)
+    VkImageLayout m_postSourceLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     std::unique_ptr<SwapChain> m_swapChain;
 
     std::vector<VkCommandBuffer> m_commandBuffers;
