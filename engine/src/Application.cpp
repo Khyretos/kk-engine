@@ -2,6 +2,7 @@
 #include "kke/SkyRenderer.h"
 #include "BehindPass.h"
 #include "ClusterLightPass.h"
+#include "DecalTextures.h"
 #include "ShadowRayPass.h"
 #include "VolumetricFogPass.h"
 #include "RefractionRays.h"
@@ -817,6 +818,7 @@ void Application::run() {
         auto now = std::chrono::high_resolution_clock::now();
         float dt = std::chrono::duration<float>(now - lastFrameTime).count();
         float totalTime = std::chrono::duration<float>(now - startTime).count();
+        m_now = totalTime;
         lastFrameTime = now;
 
         // Benchmark: close the previous frame (its events were just
@@ -1115,6 +1117,26 @@ void Application::run() {
                 m_clusterLights->upload(m_renderer->currentFrameIndex(), manyLights);
             }
             const bool manyOn = !manyLights.empty();
+            // Decals (ENG-F12): this frame's records, and their bounding spheres listed per cell like the many lights.
+            m_decals.update(m_now);
+            const uint32_t frameSlot = m_renderer->currentFrameIndex();
+            bool decalsOn = false;
+            if (m_decalTextures && m_decals.count() > 0) {
+                m_decals.build(m_now, m_decalRecords, m_decalSpheres);
+                decalsOn = !m_decalRecords.empty();
+            }
+            if (decalsOn) {
+                if (!m_decalCells) m_decalCells = std::make_unique<ClusterLightPass>(m_renderer->device());
+                std::unique_ptr<Buffer>& records = m_decalBuffers[frameSlot];
+                if (!records)
+                    records = std::make_unique<Buffer>(m_renderer->device(), DecalSet::kMax * sizeof(GpuDecal), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                                                       VMA_MEMORY_USAGE_CPU_TO_GPU);
+                records->upload(m_decalRecords.data(), m_decalRecords.size() * sizeof(GpuDecal));
+                std::vector<ClusterLightPass::GpuLight> spheres;
+                spheres.reserve(m_decalSpheres.size());
+                for (const glm::vec4& s : m_decalSpheres) spheres.push_back({ s, glm::vec4(0.0f) });
+                m_decalCells->upload(frameSlot, spheres);
+            }
             m_recordRays = shadowRaysOn || (reflOn && (m_reflections == Reflections::Kke || m_reflections == Reflections::Classic) &&
                                             m_renderer->device().rayQuery());
             for (uint32_t i = 0; i < viewCount; ++i) {
@@ -1134,6 +1156,15 @@ void Application::run() {
                 } else {
                     drawViews[i].lighting->setManyLights(VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE, 0, ClusterGrid{}, glm::vec2(1.0f), false);
                 }
+                // Decals in the first view only for now: their cells are made for its camera.
+                if (i == 0 && decalsOn && viewCount == 1)
+                    drawViews[i].lighting->setDecals(m_decalBuffers[frameSlot]->handle(), m_decalCells->counts(frameSlot), m_decalCells->indices(frameSlot),
+                                                     static_cast<uint32_t>(m_decalRecords.size()), m_decalCells->grid(),
+                                                     glm::vec2(static_cast<float>(sceneExtent.width), static_cast<float>(sceneExtent.height)),
+                                                     m_decalTextures->view(), m_decalTextures->sampler());
+                else
+                    drawViews[i].lighting->setDecals(VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE, 0, ClusterGrid{}, glm::vec2(1.0f), VK_NULL_HANDLE,
+                                                     VK_NULL_HANDLE);
                 if (i == 0 && shadowRaysReady)
                     drawViews[i].lighting->setShadowRays(m_shadowRayPass->image(), m_shadowRayPass->sampler(), m_shadowRayPass->viewProj(),
                                                          m_shadowRayPass->size(), m_shadowRaySettings.reprojectSlack);
@@ -1248,6 +1279,7 @@ void Application::run() {
             }
 
             if (manyOn && viewCount == 1 && !m_clustersOff) m_clusterLights->record(cmd, m_renderer->currentFrameIndex(), view, proj);
+            if (decalsOn && viewCount == 1) m_decalCells->record(cmd, m_renderer->currentFrameIndex(), view, proj);
             if (fogVolumeOn) m_volumetricFog->record(cmd, drawViews[0].lighting->descriptorSet(), m_shadowMapDescriptorSet, glm::inverse(proj * view));
             PrepassContext prepassCtx{ cmd, view, proj, drawViews[0].camera.position, sceneExtent, m_lightingBuffer->descriptorSet(),
                                        m_renderer->currentFrameIndex(), m_sceneCovered };
@@ -1497,6 +1529,17 @@ void Application::setMotionBlur(bool on) {
 }
 
 MotionBlurSettings& Application::motionBlurSettings() { return m_renderer->motionBlurSettings(); }
+
+DecalId Application::placeDecal(const Decal& decal) {
+    if (!m_decalTextures) m_decalTextures = std::make_unique<DecalTextures>(m_renderer->device());
+    const int layer = m_decalTextures->layerOf(decal.texture);
+    if (layer < 0) return 0;
+    return m_decals.place(decal, m_now, static_cast<uint16_t>(layer));
+}
+
+bool Application::removeDecal(DecalId id) { return m_decals.remove(id); }
+
+void Application::clearDecals() { m_decals.clear(); }
 
 void Application::addFrameCompute(const void* owner, std::function<void(VkCommandBuffer)> step) {
     m_frameCompute.emplace_back(owner, std::move(step));

@@ -241,6 +241,51 @@ void ScriptModule::bindAll() {
         return 1;
     });
 
+    // decal.*: marks laid onto surfaces (ENG-F12, kke/Decals.h, docs/DECALS.md)
+    vm.registerFunction("decal", "place", [this](lua_State* L) {
+        Decal d;
+        d.texture = luaL_checkstring(L, 1);
+        d.position = ScriptVM::toVec3(L, 2);
+        d.normal = ScriptVM::fieldVec3(L, 3, "normal", d.normal);
+        d.size = ScriptVM::fieldNumber(L, 3, "size", d.size);
+        d.depth = ScriptVM::fieldNumber(L, 3, "depth", d.depth);
+        d.angle = ScriptVM::fieldNumber(L, 3, "angle", d.angle);
+        d.color = ScriptVM::fieldVec3(L, 3, "color", d.color);
+        d.opacity = ScriptVM::fieldNumber(L, 3, "opacity", d.opacity);
+        d.roughness = ScriptVM::fieldNumber(L, 3, "roughness", d.roughness);
+        d.life = ScriptVM::fieldNumber(L, 3, "life", d.life);
+        d.fade = ScriptVM::fieldNumber(L, 3, "fade", d.fade);
+        const DecalId id = m_app->placeDecal(d);
+        if (!id) {
+            lua_pushnil(L);
+            lua_pushfstring(L, "no decal texture '%s' (a built-in or assets/decals/%s.png)", d.texture.c_str(), d.texture.c_str());
+            return 2;
+        }
+        lua_pushinteger(L, static_cast<lua_Integer>(id));
+        return 1;
+    });
+    vm.registerFunction("decal", "remove", [this](lua_State* L) {
+        lua_pushboolean(L, m_app->removeDecal(static_cast<DecalId>(luaL_checkinteger(L, 1))));
+        return 1;
+    });
+    vm.registerFunction("decal", "clear", [this](lua_State*) {
+        m_app->clearDecals();
+        return 0;
+    });
+    vm.registerFunction("decal", "count", [this](lua_State* L) {
+        lua_pushinteger(L, static_cast<lua_Integer>(m_app->decalCount()));
+        return 1;
+    });
+    vm.registerFunction("decal", "textures", [](lua_State* L) {
+        const std::vector<std::string>& names = decalBuiltIns();
+        lua_createtable(L, static_cast<int>(names.size()), 0);
+        for (size_t i = 0; i < names.size(); ++i) {
+            lua_pushstring(L, names[i].c_str());
+            lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));
+        }
+        return 1;
+    });
+
     // fx.*: particle effects by name (kke/ParticleLibrary.h, docs/PARTICLE_EFFECTS.md), made on first use;
     // emitters a script starts stop when it goes (kke/ScriptFx.h)
     auto spotAt = [](lua_State* L, int pos, int opts) {
