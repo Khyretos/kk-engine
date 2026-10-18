@@ -277,8 +277,9 @@ Rules of thumb:
 - Vertex count matters most. A cape is fine at 16 x 20; a blanket at 32 x
   32; go higher only for a hero close-up.
 - `lastClothMs()` is the engine's pass (air, protection); `lastStepMs()`
-  the whole physics step. `clothStats(id)` gives contacts and undone
-  crossings per step.
+  the whole physics step. `lastClothPasses()` counts the cloths that pass
+  worked on (0 while every cloth sleeps). `clothStats(id)` gives contacts
+  and undone crossings per step.
 
 ## The demo
 

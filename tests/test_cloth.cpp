@@ -429,7 +429,8 @@ TEST(Cloth, LayersOnABedFallAsleepAndWakeForABall) {
     }
     ASSERT_TRUE(slept) << "settled layers should fall asleep";
     w.step(1.0f / 60.0f);
-    EXPECT_LT(w.lastClothMs(), 0.5) << "sleeping cloth should cost (almost) nothing";
+    // Counted, not timed: milliseconds on a busy CI machine say little.
+    EXPECT_EQ(w.lastClothPasses(), 0u) << "sleeping cloth should cost nothing";
 
     kke::RigidWorld::BodyDesc ball;
     ball.shape = kke::RigidWorld::Shape::Sphere;
@@ -437,11 +438,14 @@ TEST(Cloth, LayersOnABedFallAsleepAndWakeForABall) {
     ball.position = glm::vec3(0.0f, 1.0f, 0.0f);
     const auto id = w.add(ball);
     bool woke = false;
+    uint32_t passes = 0;
     for (int i = 0; i < 90; ++i) {
         w.step(1.0f / 60.0f);
         woke = woke || !w.clothStats(b).sleeping;
+        passes = std::max(passes, w.lastClothPasses());
     }
     EXPECT_TRUE(woke) << "a ball landing on the sheet should wake it";
+    EXPECT_GT(passes, 0u) << "awake, the pass works on it again";
     // On the covers: the sheet under the ball stays under it, and the ball
     // doesn't sink into the mattress more than Jolt's penetration slop.
     const glm::vec3 at = w.position(id);

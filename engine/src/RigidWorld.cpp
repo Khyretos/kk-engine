@@ -1396,6 +1396,7 @@ ClothStats RigidWorld::clothStats(ClothId id) const { return m->cloth ? m->cloth
 void RigidWorld::setWind(const glm::vec3& velocity) { m->clothSystem().setWind(velocity); }
 glm::vec3 RigidWorld::wind() const { return m->cloth ? m->cloth->wind() : glm::vec3(0.0f); }
 double RigidWorld::lastClothMs() const { return m->cloth ? m->cloth->lastMs() : 0.0; }
+uint32_t RigidWorld::lastClothPasses() const { return m->cloth ? m->cloth->lastPasses() : 0u; }
 void RigidWorld::setClothGpu(std::shared_ptr<ClothGpu> gpu) {
     m->clothGpu = std::move(gpu);
     if (m->cloth) m->cloth->setGpu(m->clothGpu);
