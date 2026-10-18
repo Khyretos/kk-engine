@@ -178,6 +178,9 @@ public:
     // Frame cap choices and the index of a cap (0 = off).
     static const std::vector<int>& frameCaps();
     static int frameCapIndex(float fps);
+    // Shows the menu document closed. Show() makes a document visible, so the menu is hidden after it: hidden first, its
+    // dimmed backdrop stayed over the game and every other UI while no menu was open.
+    static void showClosed(Rml::ElementDocument* doc);
 
 private:
     struct Row {
