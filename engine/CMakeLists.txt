@@ -130,12 +130,14 @@ set(ENGINE_SOURCES
     src/Smaa.cpp
     src/ClusterLightPass.cpp
     src/Bloom.cpp
+    src/ColorLut.cpp
     src/ClusteredLights.cpp
     src/ShadowRays.cpp
     src/Taa.cpp
     src/VolumetricFog.cpp
     src/BehindPass.cpp
     src/BloomPass.cpp
+    src/ColorLutTexture.cpp
     src/RefractionRays.cpp
     src/VolumetricFogPass.cpp
     src/ReflectionPass.cpp

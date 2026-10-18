@@ -108,6 +108,7 @@ add_executable(kke_tests
     test_smaa.cpp
     test_bloom.cpp
     test_clustered_lights.cpp
+    test_color_lut.cpp
     test_shadow_rays.cpp
     test_taa.cpp
     test_volumetric_fog.cpp
