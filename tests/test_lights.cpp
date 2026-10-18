@@ -105,13 +105,36 @@ TEST(ScriptLights, FullThenFreedByRemove) {
     Lighting lighting;
     ScriptLights sl;
     for (int i = 1; i < Lighting::kMaxLights; ++i) EXPECT_EQ(sl.add(lighting, "a.lua", {}), i);
-    EXPECT_EQ(sl.add(lighting, "a.lua", {}), -1);
+    ScriptLights::Desc shadowed;
+    shadowed.shadows = true;
+    EXPECT_EQ(sl.add(lighting, "a.lua", shadowed), -1); // the key slots are full: no room for a light with shadows
     EXPECT_TRUE(lighting.lights[0].enabled); // the sun stays
     sl.remove(lighting, 7);
     EXPECT_FALSE(lighting.lights[7].enabled);
     EXPECT_FALSE(sl.owns(7, "a.lua"));
     EXPECT_EQ(sl.count("a.lua"), size_t(Lighting::kMaxLights - 2));
     EXPECT_EQ(sl.add(lighting, "b.lua", {}), 7);
+}
+
+TEST(ScriptLights, PastTheKeySlotsLightsGoToTheManyLights) {
+    // ENG-F08: with the 16 key slots full, a light without shadows becomes one of the many lights (slot 16 and up).
+    Lighting lighting;
+    ScriptLights sl;
+    for (int i = 1; i < Lighting::kMaxLights; ++i) sl.add(lighting, "a.lua", {});
+    ScriptLights::Desc lamp;
+    lamp.position = glm::vec3(1.0f, 2.0f, 3.0f);
+    lamp.range = 0.0f; // everywhere: many lights need a reach, so they get the default
+    const int slot = sl.add(lighting, "a.lua", lamp);
+    EXPECT_EQ(slot, Lighting::kMaxLights);
+    ASSERT_EQ(lighting.manyLights.size(), 1u);
+    EXPECT_TRUE(lighting.manyLights[0].enabled);
+    EXPECT_FLOAT_EQ(lighting.manyLights[0].range, Lighting::kDefaultManyRange);
+    EXPECT_EQ(lighting.at(slot).position, glm::vec3(1.0f, 2.0f, 3.0f));
+    EXPECT_TRUE(sl.owns(slot, "a.lua"));
+    sl.remove(lighting, slot);
+    EXPECT_FALSE(lighting.manyLights[0].enabled);
+    EXPECT_EQ(sl.add(lighting, "b.lua", {}), Lighting::kMaxLights); // a freed many light is reused
+    EXPECT_EQ(lighting.manyLights.size(), 1u);
 }
 
 TEST(ScriptLights, ReleaseAllTakesOnlyThatScriptsLights) {
