@@ -1185,6 +1185,8 @@ void Application::run() {
                     safeInvoke(m, "computeEveryFrame", [&] { m->computeEveryFrame(cmd); });
                 }
             }
+            // Engine parts that step on the GPU before the 3D pass (addFrameCompute).
+            for (const auto& step : m_frameCompute) step.second(cmd);
 
             // The shadow pass — a real, separate render pass, entirely
             // before the main color pass begins (see ShadowMap.h's own
@@ -1496,9 +1498,25 @@ void Application::setMotionBlur(bool on) {
 
 MotionBlurSettings& Application::motionBlurSettings() { return m_renderer->motionBlurSettings(); }
 
+void Application::addFrameCompute(const void* owner, std::function<void(VkCommandBuffer)> step) {
+    m_frameCompute.emplace_back(owner, std::move(step));
+}
+
+void Application::removeFrameCompute(const void* owner) {
+    m_frameCompute.erase(std::remove_if(m_frameCompute.begin(), m_frameCompute.end(), [owner](const auto& s) { return s.first == owner; }),
+                         m_frameCompute.end());
+}
+
+void Application::wantSceneDepth(const void* owner, bool want) {
+    const auto it = std::find(m_depthWanted.begin(), m_depthWanted.end(), owner);
+    if (want && it == m_depthWanted.end()) m_depthWanted.push_back(owner);
+    if (!want && it != m_depthWanted.end()) m_depthWanted.erase(it);
+    updateSceneDepthReadable();
+}
+
 void Application::updateSceneDepthReadable() {
     m_renderer->setSceneDepthReadable(m_screenGiOn || m_reflections != Reflections::Off || m_taaOn || m_shadowRays != ShadowRays::Off || m_dofOn ||
-                                      m_motionBlurOn);
+                                      m_motionBlurOn || !m_depthWanted.empty());
 }
 
 void Application::setReflections(Reflections mode) {

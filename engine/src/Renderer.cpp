@@ -407,6 +407,9 @@ void Renderer::createScenePass() {
     if (m_scenePass && m_scenePassFormats[0] == color && m_scenePassFormats[1] == depth && m_scenePassSamples == m_msaa &&
         m_scenePassDepthStored == m_depthReadable)
         return;
+    // A pass made before may still be in use by a frame in flight (the depth turned readable mid-game: a GPU
+    // particle that collides, ENG-F11): wait for them first. Rare: a setting changed.
+    if (m_scenePass) vkDeviceWaitIdle(m_device->device());
     if (m_scenePass) vkDestroyRenderPass(m_device->device(), m_scenePass, nullptr);
     if (m_scenePassSplit) vkDestroyRenderPass(m_device->device(), m_scenePassSplit, nullptr);
     if (m_scenePassResume) vkDestroyRenderPass(m_device->device(), m_scenePassResume, nullptr);
@@ -426,6 +429,7 @@ void Renderer::createScenePass() {
 }
 
 void Renderer::destroySceneTarget(uint32_t frame) {
+    if (m_lastDepthFrame == static_cast<int>(frame)) m_lastDepthFrame = -1; // its depth goes with it
     SceneTarget& t = m_sceneTargets[frame];
     VkDevice dev = m_device->device();
     if (t.framebuffer) vkDestroyFramebuffer(dev, t.framebuffer, nullptr);
@@ -565,6 +569,13 @@ Renderer::SceneImages Renderer::sceneImages() const {
     return SceneImages{ t.colorView, t.depthSampleView, t.extent, m_scenePassSamples };
 }
 
+Renderer::LastFrameDepth Renderer::lastFrameDepth() const {
+    if (m_lastDepthFrame < 0 || static_cast<uint32_t>(m_lastDepthFrame) == m_currentFrame) return {};
+    const SceneTarget& t = m_sceneTargets[m_lastDepthFrame];
+    if (!t.depthSampleView) return {};
+    return LastFrameDepth{ t.depthSampleView, t.extent, m_lastDepthSamples, m_motionBlurPrevViewProj };
+}
+
 void Renderer::endScenePass() {
     if (!m_inScenePass) return;
     m_inScenePass = false;
@@ -700,6 +711,8 @@ void Renderer::beginOverlayPass() {
     }
     m_motionBlurPrevViewProj = m_taaViewProj;
     m_motionBlurHavePrev = blur;
+    m_lastDepthFrame = t.depthSampleView ? static_cast<int>(m_currentFrame) : -1;
+    m_lastDepthSamples = m_scenePassSamples;
     m_bloomSource = VK_NULL_HANDLE;
     if (m_bloomOn) {
         // Bloom over the anti-aliased light, mixed in by the tone map.

@@ -1,5 +1,7 @@
 #include "kke/ParticleSim.h"
 
+#include "kke/ParticleStep.h"
+
 #include <algorithm>
 #include <cmath>
 
@@ -151,6 +153,8 @@ void ParticleSim::update(float dt, const glm::vec3& wind) {
             p.velocity.y += p.rise * dt;
             break;
         }
+        if (p.turbulence != 0.0f && !(p.kind == Kind::Flake && p.velocity == glm::vec3(0.0f) && p.position.y <= p.floor + 1e-3f))
+            p.velocity += p.turbulence * particleTurbulence(p.position, p.turbulenceSize, m_time) * std::min(1.0f, std::max(p.drag, 0.5f) * dt);
         if (p.attract != 0.0f) {
             const glm::vec3 to = p.origin - p.position;
             const float d = glm::length(to);

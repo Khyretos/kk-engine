@@ -197,6 +197,16 @@ dust_devil:
         sizeOverLife: [0.6, 1.4, 1.8], opacityOverLife: [0, 1, 1, 0] }
     - { kind: flake, rate: 6, up: true, spread: 30, speed: [1, 2], jitter: 0.8, colors: [[0.55, 0.42, 0.2], [0.4, 0.35, 0.15]],
         radius: [0.03, 0.05], life: [2.5, 3.5], drag: 0.8, rise: 1.2, flip: [-8, 8], flutter: 0.4, vortex: 4, attract: 0.8 }
+fireflies:
+  description: "Fireflies drifting on the evening air round their spot (start() it): the GPU carries them on turbulence"
+  layers:
+    - { kind: glow, gpu: true, rate: 30, speed: [0.1, 0.3], spread: 180, box: [1.4, 0.6, 1.4], colors: [[3.5, 4.5, 0.8], [2.5, 4, 1]],
+        radius: [0.04, 0.06], life: [5, 8], drag: 0.6, turbulence: 1.2, turbulenceSize: 3 }
+spark_shower:
+  description: "A shower of welding sparks that bounce off whatever they land on (the GPU collides them with what is on screen)"
+  layers:
+    - { kind: spark, gpu: true, rate: 600, speed: [3, 6], spread: 50, colors: [[9, 4.5, 1.2], [8, 6, 2]], radius: [0.008, 0.014],
+        life: [1.2, 2], drag: 0.3, rise: -9.81, stretch: 0.03, collide: true }
 )YAML";
 
 ParticleEffects::Kind kindOf(const std::string& s, bool& ok) {
@@ -337,6 +347,13 @@ bool parseLayer(const nlohmann::json& j, ParticleLibrary::Layer& l, std::string&
     l.vortex = number(j, "vortex", 0.0f);
     l.attract = number(j, "attract", 0.0f);
     l.collide = j.value("collide", false);
+    // ENG-F11: swirling air.
+    l.turbulence = number(j, "turbulence", 0.0f);
+    l.turbulenceSize = number(j, "turbulenceSize", 2.0f);
+    if (l.turbulenceSize <= 0.0f) {
+        error = "turbulenceSize must be above 0 (m)";
+        return false;
+    }
     if (j.contains("onDeath")) {
         if (!j["onDeath"].is_string() || j["onDeath"].get<std::string>().empty()) {
             error = "onDeath must be the name of an effect";
@@ -346,7 +363,8 @@ bool parseLayer(const nlohmann::json& j, ParticleLibrary::Layer& l, std::string&
     }
     l.gpu = j.value("gpu", false);
     if (l.gpu) {
-        const char* cpuOnly = l.collide ? "collide" : !l.onDeath.empty() ? "onDeath" : l.attract != 0.0f ? "attract"
+        // ENG-F11: attract, turbulence and collide are stepped on the GPU (collide: off the last frame's depth).
+        const char* cpuOnly = !l.onDeath.empty() ? "onDeath"
                             : !l.sizeOverLife.empty() ? "sizeOverLife" : !l.colorOverLife.empty() ? "colorOverLife"
                             : !l.opacityOverLife.empty() ? "opacityOverLife" : nullptr;
         if (cpuOnly) {
@@ -551,6 +569,8 @@ void ParticleLibrary::emitLayer(const Layer& l, const Spot& spot, int count) {
         p.vortex = l.vortex * s;
         p.attract = l.attract * s;
         p.collide = l.collide;
+        p.turbulence = l.turbulence * s;
+        p.turbulenceSize = l.turbulenceSize * s;
         p.curve = l.curve;
         p.onDeath = l.death;
         p.angle = random01() * 6.2831853f;

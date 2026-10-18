@@ -330,6 +330,14 @@ public:
     // KKE_MOTION_BLUR=1 or 0 wins over it.
     void setMotionBlur(bool on);
     MotionBlurSettings& motionBlurSettings();
+    // Work an engine part (not a module) records each frame before the 3D
+    // pass, paused or not (ENG-F11: kke::ParticleEffects steps its GPU
+    // particles); `owner` removes it again.
+    void addFrameCompute(const void* owner, std::function<void(VkCommandBuffer)> step);
+    void removeFrameCompute(const void* owner);
+    // Asks for the scene's depth to be kept for the next frame (ENG-F11: GPU
+    // particles bounce off it); `owner` gives the wish back with false.
+    void wantSceneDepth(const void* owner, bool want);
     // Ray-traced sun shadows (ENG-F07, kke/ShadowRays.h): Kke traces only
     // past the shadow map's reach, Classic every pixel; ray-query devices,
     // one view. The graphics setting "shadowRays" or KKE_SHADOW_RAYS.
@@ -537,6 +545,8 @@ private:
     bool m_dofOn = false;
     std::optional<bool> m_motionBlurEnv;                        // KKE_MOTION_BLUR
     bool m_motionBlurOn = false;
+    std::vector<std::pair<const void*, std::function<void(VkCommandBuffer)>>> m_frameCompute;
+    std::vector<const void*> m_depthWanted;
     std::optional<bool> m_bloomEnv;                             // KKE_BLOOM
     std::unique_ptr<ShadowRayPass> m_shadowRayPass; // made the first time shadow rays are on
     std::unique_ptr<ClusterLightPass> m_clusterLights; // made the first time there are many lights (ENG-F08)
