@@ -302,6 +302,26 @@ the RX 9070 XT, 1288 x 682 with 4x MSAA, anim_demo's glass block: `kke`
 0.795 (+0.29): KKE refraction costs a sixth of classic's. (Lavapipe was
 not measured: the build machine was busy with CI, load 24.)
 
+**Volumetric fog (ENG-F03, 2026-10-18).** The graphics setting
+`volumetricFog` (off by default; `KKE_VOLUMETRIC_FOG=1`) lights the height
+fog for real: a grid of 128 x 72 cells over the view, in 48 slices spaced
+exponentially from 0.5 m to 96 m, is lit after the shadow pass (one
+compute dispatch: the fog's thickness there, the sky's light, the sun's
+where its shadow map says it reaches, the point lights' halos) and
+summed per column from the camera outwards (a second dispatch, Hillaire's
+energy-conserving step). Every lit shader and the sky read it through
+the same `fogAlong()`; past 96 m the analytic fog takes over, so far
+hills are fogged exactly as before. Fully lit, a cell sends exactly what
+the analytic fog does (`fogInscatter`): turning it on only darkens fog in
+the sun's shadow (light shafts) and adds lamp halos. What the usual
+froxel fog (Frostbite, Unreal) does differently: it jitters the cells and
+relies on TAA to blend the noise over frames, which ghosts behind moving
+things. Ours has no jitter and nothing carried between frames: stable on
+its own (section 1). Measured on the RX 9070 XT, the Synty demo in the
+misty-morning mood, 1328 x 682 with 4x MSAA: 0.331 ms off, 0.377 on
+(+0.05; the grid's cost does not grow with the resolution). On lavapipe it
+costs too much for a PC without a GPU, so it stays off there.
+
 ### 7. Tone mapping, exposure and colour management
 
 **Argument.** (Fox Engine videos, 33 "tone mapping & exposure

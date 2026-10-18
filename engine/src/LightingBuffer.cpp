@@ -60,8 +60,9 @@ struct LightingUBOData {
     glm::mat4 reflViewProj; // the camera the reflection images were made with (ENG-F02)
     glm::vec4 refl;         // x = 1 when they hold a frame's result, yz = their size, w = the roughest surface they're for
     glm::vec4 behind;       // x = 1 when this frame's behind image is there (refraction, ENG-F02 part 4), yz = its size
+    glm::vec4 fogVolume;    // x = 1 when volumetric fog is on (ENG-F03), y = its near distance, z = its far distance, w = its slices
 };
-static_assert(sizeof(LightingUBOData) == Lighting::kMaxLights * 3 * 16 + 2 * 16 + 2 * 64 + 7 * 16 + 9 * 16 + 2 * ShadowMap::kCascades * 16 + ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces * (64 + 16) + 16 + 64 + 16 + 64 + 16 + 16, "must match shaders/lighting_ubo.glsl");
+static_assert(sizeof(LightingUBOData) == Lighting::kMaxLights * 3 * 16 + 2 * 16 + 2 * 64 + 7 * 16 + 9 * 16 + 2 * ShadowMap::kCascades * 16 + ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces * (64 + 16) + 16 + 64 + 16 + 64 + 16 + 16 + 16, "must match shaders/lighting_ubo.glsl");
 static_assert(ShadowMap::kMaxPointShadows <= Lighting::kMaxLights, "every point-shadow slot needs a light");
 
 } // namespace
@@ -71,11 +72,12 @@ LightingBuffer::LightingBuffer(VulkanDevice& device) : m_device(device) {
     // vertex and fragment stages (vertex doesn't currently need it, but
     // costs nothing to allow now rather than needing a second layout
     // later for e.g. per-vertex light-space transforms for shadows).
-    std::array<VkDescriptorSetLayoutBinding, 7> bindings{};
+    std::array<VkDescriptorSetLayoutBinding, 8> bindings{};
     bindings[0].binding = 0;
     bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     bindings[0].descriptorCount = 1;
-    bindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    // Compute too: volumetric fog lights its cells from it (kke::VolumetricFogPass).
+    bindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
     // Binding 1: the sky prefiltered for reflections (setEnvironmentMap).
     bindings[1].binding = 1;
     bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -94,6 +96,9 @@ LightingBuffer::LightingBuffer(VulkanDevice& device) : m_device(device) {
     // Binding 6: what see-through surfaces show behind them (setBehind).
     bindings[6] = bindings[1];
     bindings[6].binding = 6;
+    // Binding 7: volumetric fog's integrated grid, a 3D image (setFogVolume).
+    bindings[7] = bindings[1];
+    bindings[7].binding = 7;
 
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -105,7 +110,7 @@ LightingBuffer::LightingBuffer(VulkanDevice& device) : m_device(device) {
     // module shares these, there's no per-object growth the way
     // RmlVulkanRenderInterface's texture pool needs.
     const std::array<VkDescriptorPoolSize, 2> poolSizes{ { { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kSlotCount },
-                                                          { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 6 * kSlotCount } } };
+                                                          { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 7 * kSlotCount } } };
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     poolInfo.maxSets = kSlotCount;
@@ -115,6 +120,7 @@ LightingBuffer::LightingBuffer(VulkanDevice& device) : m_device(device) {
 
     const std::array<uint16_t, 4> black{ glm::packHalf1x16(0.0f), glm::packHalf1x16(0.0f), glm::packHalf1x16(0.0f), glm::packHalf1x16(1.0f) };
     m_placeholder = std::make_unique<Texture>(device, black.data(), 1, 1, Texture::HalfFloatSky{});
+    createVolumePlaceholder();
 
     for (uint32_t i = 0; i < kSlotCount; ++i) {
         VkDescriptorSetAllocateInfo allocInfo{};
@@ -147,15 +153,84 @@ LightingBuffer::LightingBuffer(VulkanDevice& device) : m_device(device) {
 }
 
 LightingBuffer::~LightingBuffer() {
+    if (m_volumeSampler) vkDestroySampler(m_device.device(), m_volumeSampler, nullptr);
+    if (m_volumeView) vkDestroyImageView(m_device.device(), m_volumeView, nullptr);
+    if (m_volumeImage) vmaDestroyImage(m_device.allocator(), m_volumeImage, m_volumeAlloc);
     if (m_descriptorPool) vkDestroyDescriptorPool(m_device.device(), m_descriptorPool, nullptr);
     if (m_setLayout) vkDestroyDescriptorSetLayout(m_device.device(), m_setLayout, nullptr);
+}
+
+void LightingBuffer::createVolumePlaceholder() {
+    // A 1x1x1 3D image (0, 0, 0, 1: no fog scattered, all gets through), bound while volumetric fog is off.
+    VkImageCreateInfo ii{};
+    ii.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    ii.imageType = VK_IMAGE_TYPE_3D;
+    ii.extent = { 1, 1, 1 };
+    ii.mipLevels = 1;
+    ii.arrayLayers = 1;
+    ii.format = VK_FORMAT_R16G16B16A16_SFLOAT;
+    ii.tiling = VK_IMAGE_TILING_OPTIMAL;
+    ii.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    ii.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    ii.samples = VK_SAMPLE_COUNT_1_BIT;
+    VmaAllocationCreateInfo ai{};
+    ai.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    VK_CHECK(vmaCreateImage(m_device.allocator(), &ii, &ai, &m_volumeImage, &m_volumeAlloc, nullptr));
+    VkImageViewCreateInfo vi{};
+    vi.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    vi.image = m_volumeImage;
+    vi.viewType = VK_IMAGE_VIEW_TYPE_3D;
+    vi.format = ii.format;
+    vi.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+    VK_CHECK(vkCreateImageView(m_device.device(), &vi, nullptr, &m_volumeView));
+    VkSamplerCreateInfo si{};
+    si.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    si.magFilter = si.minFilter = VK_FILTER_NEAREST;
+    si.addressModeU = si.addressModeV = si.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    VK_CHECK(vkCreateSampler(m_device.device(), &si, nullptr, &m_volumeSampler));
+
+    VkCommandBufferAllocateInfo cai{};
+    cai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    cai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    cai.commandPool = m_device.commandPool();
+    cai.commandBufferCount = 1;
+    VkCommandBuffer cmd = VK_NULL_HANDLE;
+    VK_CHECK(vkAllocateCommandBuffers(m_device.device(), &cai, &cmd));
+    VkCommandBufferBeginInfo bi{};
+    bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    VK_CHECK(vkBeginCommandBuffer(cmd, &bi));
+    VkImageMemoryBarrier b{};
+    b.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    b.srcQueueFamilyIndex = b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    b.image = m_volumeImage;
+    b.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+    b.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    b.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    b.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &b);
+    const VkClearColorValue clear{ { 0.0f, 0.0f, 0.0f, 1.0f } };
+    vkCmdClearColorImage(cmd, m_volumeImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clear, 1, &b.subresourceRange);
+    b.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    b.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    b.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    b.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &b);
+    VK_CHECK(vkEndCommandBuffer(cmd));
+    VkSubmitInfo submit{};
+    submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit.commandBufferCount = 1;
+    submit.pCommandBuffers = &cmd;
+    VK_CHECK(vkQueueSubmit(m_device.graphicsQueue(), 1, &submit, VK_NULL_HANDLE));
+    VK_CHECK(vkQueueWaitIdle(m_device.graphicsQueue()));
+    vkFreeCommandBuffers(m_device.device(), m_device.commandPool(), 1, &cmd);
 }
 
 void LightingBuffer::writeEnvironment(uint32_t slot) {
     const Texture& map = m_envMap ? *m_envMap : *m_placeholder;
     // Without GI the placeholder (0, 0, 0, 1) reads as no bounce, all visible.
     const bool gi = m_giLight && m_giDepth && m_giSampler;
-    std::array<VkDescriptorImageInfo, 6> info{};
+    std::array<VkDescriptorImageInfo, 7> info{};
     info[0] = { map.sampler(), map.imageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
     info[1] = gi ? VkDescriptorImageInfo{ m_giSampler, m_giLight, VK_IMAGE_LAYOUT_GENERAL }
                  : VkDescriptorImageInfo{ m_placeholder->sampler(), m_placeholder->imageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
@@ -166,8 +241,10 @@ void LightingBuffer::writeEnvironment(uint32_t slot) {
     info[3] = refl ? VkDescriptorImageInfo{ m_reflSampler, m_reflLight, VK_IMAGE_LAYOUT_GENERAL } : none;
     info[4] = refl ? VkDescriptorImageInfo{ m_reflSampler, m_reflDepth, VK_IMAGE_LAYOUT_GENERAL } : none;
     info[5] = m_behind && m_behindSampler ? VkDescriptorImageInfo{ m_behindSampler, m_behind, VK_IMAGE_LAYOUT_GENERAL } : none;
-    std::array<VkWriteDescriptorSet, 6> write{};
-    for (uint32_t i = 0; i < 6; ++i) {
+    info[6] = m_fogVolume && m_fogVolumeSampler ? VkDescriptorImageInfo{ m_fogVolumeSampler, m_fogVolume, VK_IMAGE_LAYOUT_GENERAL }
+                                                : VkDescriptorImageInfo{ m_volumeSampler, m_volumeView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+    std::array<VkWriteDescriptorSet, 7> write{};
+    for (uint32_t i = 0; i < 7; ++i) {
         write[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         write[i].dstSet = m_descriptorSets[slot];
         write[i].dstBinding = 1 + i;
@@ -244,6 +321,9 @@ void LightingBuffer::update(const Lighting& lighting, const glm::vec3& cameraPos
     data.reflViewProj = m_reflViewProj;
     data.refl = glm::vec4(m_reflLight ? 1.0f : 0.0f, m_reflSize.x, m_reflSize.y, m_reflMaxRoughness);
     data.behind = glm::vec4(m_behind ? 1.0f : 0.0f, m_behindSize.x, m_behindSize.y, 0.0f);
+    data.fogVolume = m_fogVolume ? glm::vec4(1.0f, m_fogVolumeSettings.nearDistance, m_fogVolumeSettings.farDistance,
+                                             static_cast<float>(m_fogVolumeSettings.slices))
+                                 : glm::vec4(0.0f);
 
     m_buffers[m_slot]->upload(&data, sizeof(data));
     // This slot's set is free now (setFrame came after the frame's fence wait).
