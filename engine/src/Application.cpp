@@ -159,6 +159,10 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
     // KKE_REFLECT_ROUGHNESS=1: every surface up to that roughness reflects (benchmarks: the most work).
     if (const char* env = dev::env("KKE_REFLECT_ROUGHNESS"); env && *env)
         m_reflectionSettings.maxRoughness = std::clamp(static_cast<float>(std::atof(env)), 0.01f, 1.0f);
+    if (const char* env = dev::env("KKE_SMAA"); env && *env) {
+        m_smaaEnv = env[0] == '1';
+        setSmaa(*m_smaaEnv);
+    }
     if (const char* env = dev::env("KKE_VOLUMETRIC_FOG"); env && env[0] == '1') {
         m_volumetricFogEnv = true;
         setVolumetricFog(true);
@@ -1382,6 +1386,8 @@ VkDescriptorSetLayout Application::refractionRayLayout() {
     if (!m_refractionRays) m_refractionRays = std::make_unique<RefractionRays>(m_renderer->device());
     return m_refractionRays->setLayout();
 }
+
+void Application::setSmaa(bool on) { m_renderer->setSmaa(m_smaaEnv ? *m_smaaEnv : on); }
 
 void Application::setReflections(Reflections mode) {
     m_reflections = m_reflectionsEnv ? *m_reflectionsEnv : mode;

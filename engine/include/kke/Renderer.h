@@ -46,6 +46,8 @@ struct OverlayTarget {
 //       // ... bind pipelines, push constants, draw calls here
 //       renderer.endFrame();                   // ends render pass, submits, presents
 //   }
+class SmaaPass;
+
 class Renderer {
 public:
     explicit Renderer(Window& window);
@@ -104,6 +106,11 @@ public:
     // 3D resolution relative to the window (resource governor, 1.6).
     // Clamped to 0.5..1. Takes effect on the next frame.
     void setRenderScale(float scale);
+    // Morphological anti-aliasing over the scene before the tone map (ENG-F05,
+    // kke/Smaa.h): edges MSAA can't reach (shading, alpha tests, a render
+    // scale below 1). One frame, no history. Off by default.
+    void setSmaa(bool on) { m_smaaOn = on; }
+    bool smaa() const { return m_smaaOn; }
     float renderScale() const { return m_renderScale; }
     // Size of the 3D image: extent() times the render scale.
     VkExtent2D renderExtent() const;
@@ -233,6 +240,8 @@ private:
 
     Window& m_window;
     std::unique_ptr<VulkanDevice> m_device;
+    std::unique_ptr<SmaaPass> m_smaa; // made the first time SMAA is on
+    bool m_smaaOn = false;
     std::unique_ptr<SwapChain> m_swapChain;
 
     std::vector<VkCommandBuffer> m_commandBuffers;

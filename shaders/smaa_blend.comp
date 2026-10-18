@@ -1,0 +1,5 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+// Anti-aliasing, the blend step (shaders/smaa.glsl).
+#define STEP_BLEND
+#include "smaa.glsl"

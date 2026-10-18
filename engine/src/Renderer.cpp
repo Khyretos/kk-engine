@@ -1,5 +1,7 @@
 #include "kke/Renderer.h"
 
+#include "SmaaPass.h"
+
 #include <cmath>
 #include "kke/Window.h"
 #include "kke/Pipeline.h"
@@ -32,6 +34,7 @@ Renderer::Renderer(Window& window) : m_window(window) {
 Renderer::~Renderer() {
     vkDeviceWaitIdle(m_device->device());
     m_retired.releaseAll();
+    m_smaa.reset();
     for (uint32_t i = 0; i < kMaxFramesInFlight; ++i) destroySceneTarget(i);
     destroyPostPass();
     if (m_scenePass) vkDestroyRenderPass(m_device->device(), m_scenePass, nullptr);
@@ -637,6 +640,12 @@ void Renderer::beginOverlayPass() {
     endScenePass();
     m_overlayOpen = true;
     VkCommandBuffer cmd = m_commandBuffers[m_currentFrame];
+    if (m_smaaOn) {
+        // Anti-aliasing over the finished scene, before the tone map reads it (outside any pass).
+        if (!m_smaa) m_smaa = std::make_unique<SmaaPass>(*m_device);
+        const SceneTarget& t = m_sceneTargets[m_currentFrame];
+        m_smaa->record(cmd, m_currentFrame, t.colorView, t.extent);
+    }
 
     // The swapchain's own pass: it clears the image (the acquire semaphore
     // is waited on at COLOR_ATTACHMENT_OUTPUT, which its dependency chains
@@ -728,6 +737,7 @@ void Renderer::drawPostPass(VkCommandBuffer cmd) {
     // This slot's previous frame has finished (beginFrame waited on its
     // fence), so its set can point at this frame's scene image.
     VkDescriptorImageInfo image{ m_postSampler, m_sceneTargets[m_currentFrame].colorView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+    if (m_smaaOn && m_smaa) image = { m_postSampler, m_smaa->output(), VK_IMAGE_LAYOUT_GENERAL };
     VkWriteDescriptorSet w{};
     w.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     w.dstSet = m_postSets[m_currentFrame];
