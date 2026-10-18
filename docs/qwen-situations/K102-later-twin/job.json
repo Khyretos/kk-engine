@@ -1,0 +1,16 @@
+[
+ {
+  "mode": "patch",
+  "focus": [
+   "^\\ \\ \\ \\ pipe\\.bind\\(ctx\\.cmd\\);$"
+  ],
+  "name": "r1b-particleef2",
+  "role": "worker/cpp-games",
+  "out": "engine/src/ParticleEffects.cpp",
+  "prompt": "Kreative Kompas Engine (C++20, Vulkan, forward renderer): R1b moves the modules' draw paths onto the render hardware interface (docs/plans/rhi.md): each vkCmd* call that records into ctx.cmd becomes its rhi::CommandList call on ctx.list (bindPipeline through Pipeline::bind, bindGroups, pushConstants, bindVertexBuffer, bindIndexBuffer, draw, drawIndexed); compute passes keep their VkCommandBuffer.  Make these 1 edits in engine/src/ParticleEffects.cpp, each its own SEARCH/REPLACE block.\nEdit 1. Your SEARCH block is exactly these lines:\n```\n    pipe.bind(ctx.cmd);\n    VkDescriptorSet sets[] = { ctx.lightingDescriptorSet, ctx.shadowMapDescriptorSet, g.sets[f] };\n    vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe.layout(), 0, 3, sets, 0, nullptr);\n    const glm::vec4 push[2] = { glm::vec4(m_sim.time(), m_sim.wind()), glm::vec4(static_cast<float>(kind), 0.0f, 0.0f, 0.0f) };\n    vkCmdPushConstants(ctx.cmd, pipe.layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(push), push);\n    vkCmdDraw(ctx.cmd, 6, static_cast<uint32_t>(g.ring.used()), 0, 0); // one instance per slot; dead ones draw nothing\n}\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n    pipe.bind(*ctx.list);\n    VkDescriptorSet sets[] = { ctx.lightingDescriptorSet, ctx.shadowMapDescriptorSet, g.sets[f] };\n    ctx.list->bindGroups(pipe, 0, rhi::VulkanCommandList::groups(sets, 3));\n    const glm::vec4 push[2] = { glm::vec4(m_sim.time(), m_sim.wind()), glm::vec4(static_cast<float>(kind), 0.0f, 0.0f, 0.0f) };\n    ctx.list->pushConstants(pipe, rhi::kVertex, 0, sizeof(push), push);\n    ctx.list->draw(6, static_cast<uint32_t>(g.ring.used()), 0, 0); // one instance per slot; dead ones draw nothing\n}\n```\nChange nothing else; do not copy or move any other line.\n",
+  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g09.py r1bparticleef2",
+  "precheck": false,
+  "context": [],
+  "max_tokens": 1149
+ }
+]

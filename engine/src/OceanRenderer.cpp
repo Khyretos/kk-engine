@@ -1,6 +1,7 @@
 #include "kke/OceanRenderer.h"
 
 #include "kke/Application.h"
+#include "kke/rhi/VulkanCommandList.h"
 
 #include <algorithm>
 #include <cmath>
@@ -60,11 +61,11 @@ void OceanRenderer::drawOcean(const RenderContext& ctx, const OceanWaves& waves,
     // wave positions as the camera moves, so the surface never "swims".
     glm::vec2 origin(std::floor(cameraPos.x / m_cellSize) * m_cellSize, std::floor(cameraPos.z / m_cellSize) * m_cellSize);
     pc.data[7] = glm::vec4(time, origin.x, origin.y, waves.seaLevel);
-    m_ocean->bind(ctx.cmd);
-    vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_ocean->layout(), 0, 1, &ctx.lightingDescriptorSet, 0, nullptr);
-    vkCmdPushConstants(ctx.cmd, m_ocean->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
-    m_grid->bind(ctx.cmd);
-    m_grid->draw(ctx.cmd);
+    m_ocean->bind(*ctx.list);
+    ctx.list->bindGroups(*m_ocean, 0, rhi::VulkanCommandList::groups(&ctx.lightingDescriptorSet, 1));
+    ctx.list->pushConstants(*m_ocean, rhi::kVertex, 0, sizeof(pc), &pc);
+    m_grid->bind(*ctx.list);
+    m_grid->draw(*ctx.list);
 }
 
 } // namespace kke

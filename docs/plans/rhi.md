@@ -37,7 +37,15 @@ That halves the RHI: the ~20 compute passes stay as they are, behind a
   device instead of each module's descriptor-set code. Vulkan implements
   each by wrapping today's code; output must not change (benchmarks within
   2%, pictures identical).
-- **R1b, the graphics path moved.** Renderer's scene, shadow and overlay
+- **R1b, the modules moved (done).** Models (scene and shadow), physics
+  objects and rubble, particle effects (CPU batches and GPU-stepped),
+  particle systems, ocean, hair, sphere impostors and cloth record their
+  80 draw-path calls through `ctx.list`.
+  `VulkanCommandList::groups` turns descriptor sets into bind groups
+  until the device makes them. Still on a VkCommandBuffer: the fluid
+  surface (its own render pass), thumbnails, the RmlUi and ImGui
+  renderers, the sky and the Renderer's own passes.
+- **R1c, the rest of the graphics path.** Renderer's scene, shadow and overlay
   passes, Pipeline, Mesh, Texture, ShadowMap, LightingBuffer's uniform
   part, SkyRenderer, and every module's render(): ModelModule,
   PhysicsModule, ParticleEffects' instanced path, DebugDraw, Grid, Ocean,

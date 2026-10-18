@@ -31,6 +31,7 @@
 #include <chrono>
 #include <SDL3/SDL.h>
 #include "kke/ImGuiPlacement.h"
+#include "kke/rhi/VulkanCommandList.h"
 
 // FEMFX declares these extern (FEMFXCommon.h) and expects the
 // application to define them — an allocator hook, the same pattern as
@@ -1783,24 +1784,24 @@ void PhysicsModule::renderShadow(const ShadowRenderContext& ctx) {
     // frame loop), so shadows no longer lag a frame behind the objects.
     prepareRenderData(ctx.frameIndex);
 
-    m_shadowPipeline->bind(ctx.cmd);
+    m_shadowPipeline->bind(*ctx.list);
     ShadowPushConstants pc{ ctx.lightViewProj, glm::mat4(1.0f) };
-    vkCmdPushConstants(ctx.cmd, m_shadowPipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
+    ctx.list->pushConstants(*m_shadowPipeline, rhi::kVertex, 0, sizeof(pc), &pc);
     for (auto& [handle, obj] : m_objects) {
         if (obj->cpuVerts.empty() || obj->gpuVersion[ctx.frameIndex] != obj->cpuVersion) continue;
         VkBuffer buffers[] = { obj->vertexBuffers[ctx.frameIndex]->handle() };
         VkDeviceSize offsets[] = { 0 };
-        vkCmdBindVertexBuffers(ctx.cmd, 0, 1, buffers, offsets);
-        vkCmdDraw(ctx.cmd, static_cast<uint32_t>(obj->cpuVerts.size()), 1, 0, 0);
+        ctx.list->bindVertexBuffer(0, rhi::VulkanCommandList::buffer(buffers[0]), offsets[0]);
+        ctx.list->draw(static_cast<uint32_t>(obj->cpuVerts.size()), 1, 0, 0);
     }
     for (auto& [handle, r] : m_rubble) {
         if (!r.vertexBuffer) continue;
         ShadowPushConstants rpc{ ctx.lightViewProj, rubbleModel(r) };
-        vkCmdPushConstants(ctx.cmd, m_shadowPipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(rpc), &rpc);
+        ctx.list->pushConstants(*m_shadowPipeline, rhi::kVertex, 0, sizeof(rpc), &rpc);
         VkBuffer buffers[] = { r.vertexBuffer->handle() };
         VkDeviceSize offsets[] = { 0 };
-        vkCmdBindVertexBuffers(ctx.cmd, 0, 1, buffers, offsets);
-        vkCmdDraw(ctx.cmd, static_cast<uint32_t>(r.verts.size()), 1, 0, 0);
+        ctx.list->bindVertexBuffer(0, rhi::VulkanCommandList::buffer(buffers[0]), offsets[0]);
+        ctx.list->draw(static_cast<uint32_t>(r.verts.size()), 1, 0, 0);
     }
 }
 
@@ -1825,10 +1826,9 @@ void PhysicsModule::render(const RenderContext& ctx) {
         }
     } prepTimer{ this, prepStart };
 
-    m_pipeline->bind(ctx.cmd);
+    m_pipeline->bind(*ctx.list);
     VkDescriptorSet sets[] = { ctx.lightingDescriptorSet, ctx.shadowMapDescriptorSet, ctx.defaultMaterialTextureDescriptorSet };
-    vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->layout(),
-                             0, 3, sets, 0, nullptr);
+    ctx.list->bindGroups(*m_pipeline, 0, rhi::VulkanCommandList::groups(sets, 3));
 
     // Resolves a spawned object's own material to its real texture's
     // descriptor set (see the material texture library built in
@@ -1845,8 +1845,7 @@ void PhysicsModule::render(const RenderContext& ctx) {
         } else if (material.textureId >= 0 && material.textureId < static_cast<int>(m_materialTextures.size())) {
             textureSet = m_materialTextures[material.textureId].descriptorSet;
         }
-        vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->layout(),
-                                 2, 1, &textureSet, 0, nullptr);
+        ctx.list->bindGroups(*m_pipeline, 2, rhi::VulkanCommandList::groups(&textureSet, 1));
     };
 
     // Ground plane — a unit cube scaled to a visually-proportionate
@@ -1889,16 +1888,15 @@ void PhysicsModule::render(const RenderContext& ctx) {
         // a Material, since the ground isn't spawned through the same
         // Material-driven path every other object here is.
         PhysicsPushConstants pc{ model, 0.0f, 0.9f };
-        vkCmdPushConstants(ctx.cmd, m_pipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
-        m_groundMesh->bind(ctx.cmd);
-        m_groundMesh->draw(ctx.cmd);
+        ctx.list->pushConstants(*m_pipeline, rhi::kVertex, 0, sizeof(pc), &pc);
+        m_groundMesh->bind(*ctx.list);
+        m_groundMesh->draw(*ctx.list);
         }
     }
 
     if (m_showRagdollBodies) {
-        vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->layout(), 2, 1,
-                                 &ctx.defaultMaterialTextureDescriptorSet, 0, nullptr);
-        m_groundMesh->bind(ctx.cmd);
+        ctx.list->bindGroups(*m_pipeline, 2, rhi::VulkanCommandList::groups(&ctx.defaultMaterialTextureDescriptorSet, 1));
+        m_groundMesh->bind(*ctx.list);
         std::vector<glm::mat4> transforms;
         for (auto& [handle, rd] : m_ragdolls) {
             ragdollBodyTransforms(handle, transforms);
@@ -1906,8 +1904,8 @@ void PhysicsModule::render(const RenderContext& ctx) {
                 glm::mat4 m = glm::scale(transforms[i], rd.halfExtents[i] * 2.0f * m_renderScale);
                 m[3] = glm::vec4(glm::vec3(transforms[i][3]) * m_renderScale, 1.0f);
                 PhysicsPushConstants pc{ m, 0.0f, 0.6f };
-                vkCmdPushConstants(ctx.cmd, m_pipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
-                m_groundMesh->draw(ctx.cmd);
+                ctx.list->pushConstants(*m_pipeline, rhi::kVertex, 0, sizeof(pc), &pc);
+                m_groundMesh->draw(*ctx.list);
             }
         }
     }
@@ -1925,22 +1923,22 @@ void PhysicsModule::render(const RenderContext& ctx) {
         if (obj->cpuVerts.empty() || obj->gpuVersion[ctx.frameIndex] != obj->cpuVersion) continue;
         bindMaterialTexture(obj->material, obj->textureSet);
         PhysicsPushConstants pc{ glm::mat4(1.0f), obj->material.metallic, obj->material.roughness };
-        vkCmdPushConstants(ctx.cmd, m_pipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
+        ctx.list->pushConstants(*m_pipeline, rhi::kVertex, 0, sizeof(pc), &pc);
         VkBuffer buffers[] = { obj->vertexBuffers[ctx.frameIndex]->handle() };
         VkDeviceSize offsets[] = { 0 };
-        vkCmdBindVertexBuffers(ctx.cmd, 0, 1, buffers, offsets);
-        vkCmdDraw(ctx.cmd, static_cast<uint32_t>(obj->cpuVerts.size()), 1, 0, 0);
+        ctx.list->bindVertexBuffer(0, rhi::VulkanCommandList::buffer(buffers[0]), offsets[0]);
+        ctx.list->draw(static_cast<uint32_t>(obj->cpuVerts.size()), 1, 0, 0);
     }
     // Rubble (convertToRubble): a frozen shape where the other world put it.
     for (auto& [handle, r] : m_rubble) {
         if (!r.vertexBuffer) continue;
         bindMaterialTexture(r.material, r.textureSet);
         PhysicsPushConstants pc{ rubbleModel(r), r.material.metallic, r.material.roughness };
-        vkCmdPushConstants(ctx.cmd, m_pipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
+        ctx.list->pushConstants(*m_pipeline, rhi::kVertex, 0, sizeof(pc), &pc);
         VkBuffer buffers[] = { r.vertexBuffer->handle() };
         VkDeviceSize offsets[] = { 0 };
-        vkCmdBindVertexBuffers(ctx.cmd, 0, 1, buffers, offsets);
-        vkCmdDraw(ctx.cmd, static_cast<uint32_t>(r.verts.size()), 1, 0, 0);
+        ctx.list->bindVertexBuffer(0, rhi::VulkanCommandList::buffer(buffers[0]), offsets[0]);
+        ctx.list->draw(static_cast<uint32_t>(r.verts.size()), 1, 0, 0);
     }
     ++m_frameCounter;
 }

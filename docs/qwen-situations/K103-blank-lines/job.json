@@ -1,0 +1,17 @@
+[
+ {
+  "mode": "patch",
+  "focus": [
+   "^\\#include\\ <volk\\.h>$",
+   "^\\ \\ \\ \\ void\\ bindPipeline\\(const\\ Pipeline\\&\\ pipeline\\)\\ override;$"
+  ],
+  "name": "r1b-vulkancomm1",
+  "role": "worker/cpp-games",
+  "out": "engine/include/kke/rhi/VulkanCommandList.h",
+  "prompt": "Kreative Kompas Engine (C++20, Vulkan, forward renderer): R1b moves the modules' draw paths onto the render hardware interface (docs/plans/rhi.md): each vkCmd* call that records into ctx.cmd becomes its rhi::CommandList call on ctx.list (bindPipeline through Pipeline::bind, bindGroups, pushConstants, bindVertexBuffer, bindIndexBuffer, draw, drawIndexed); compute passes keep their VkCommandBuffer.  Make these 2 edits in engine/include/kke/rhi/VulkanCommandList.h, each its own SEARCH/REPLACE block.\nEdit 1. Your SEARCH block is exactly these lines:\n```\n#include <volk.h>\n\n#include <type_traits>\n\nnamespace kke::rhi {\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n#include <volk.h>\n\n#include <array>\n#include <type_traits>\n\nnamespace kke::rhi {\n```\nEdit 2. Your SEARCH block is exactly these lines:\n```\n\n    void bindPipeline(const Pipeline& pipeline) override;\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n    // `count` descriptor sets as bind groups, for bindGroups() (at most 8).\n    struct Groups {\n        std::array<BindGroup, 8> groups{};\n        uint32_t count = 0;\n        operator std::span<const BindGroup>() const { return { groups.data(), count }; }\n    };\n    static Groups groups(const VkDescriptorSet* sets, uint32_t count) {\n        Groups g;\n        g.count = count < 8 ? count : 8;\n        for (uint32_t i = 0; i < g.count; ++i) g.groups[i] = group(sets[i]);\n        return g;\n    }\n\n    void bindPipeline(const Pipeline& pipeline) override;\n```\nCareful: in Edit 2 the new lines go between `static BufferRef buffer(VkBuffer buffer) { return BufferRef{ toHandle(buffer) }; }` and ``: right after the first, right before the second.\nChange nothing else; do not copy or move any other line.\n",
+  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g09.py r1bvulkancomm1",
+  "precheck": false,
+  "context": [],
+  "max_tokens": 977
+ }
+]

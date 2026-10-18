@@ -4,6 +4,7 @@
 
 #include <volk.h>
 
+#include <array>
 #include <type_traits>
 
 namespace kke::rhi {
@@ -27,6 +28,18 @@ public:
     }
     static BindGroup group(VkDescriptorSet set) { return BindGroup{ toHandle(set) }; }
     static BufferRef buffer(VkBuffer buffer) { return BufferRef{ toHandle(buffer) }; }
+    // `count` descriptor sets as bind groups, for bindGroups() (at most 8).
+    struct Groups {
+        std::array<BindGroup, 8> groups{};
+        uint32_t count = 0;
+        operator std::span<const BindGroup>() const { return { groups.data(), count }; }
+    };
+    static Groups groups(const VkDescriptorSet* sets, uint32_t count) {
+        Groups g;
+        g.count = count < 8 ? count : 8;
+        for (uint32_t i = 0; i < g.count; ++i) g.groups[i] = group(sets[i]);
+        return g;
+    }
 
     void bindPipeline(const Pipeline& pipeline) override;
     void bindGroups(const Pipeline& pipeline, uint32_t firstSet, std::span<const BindGroup> groups) override;
