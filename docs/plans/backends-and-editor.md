@@ -14,6 +14,7 @@ the editor come after the gaps, in that order.
 | **"RHI"** (render hardware interface) | Not as a layer: 41 engine files call Vulkan directly (`VulkanDevice`, `Renderer`, the passes) | This is what an OpenGL backend needs; see section 2 |
 
 Other FOSS layers we considered for the RHI:
+
 - **bgfx** (BSD-2): has GL, GLES, Vulkan, Metal and D3D. It owns its own
   shader language and frame model, and it has no ray query, so our ray
   tracing, GI and refits would not fit in it.
@@ -32,6 +33,7 @@ and an OpenGL backend under it.
 
 Kees's idea, the backend as a module so games never change, is sound. It is
 how Unreal, Godot and bgfx work. Some things already hold:
+
 - Games don't touch Vulkan. Lua, scenes and assets know nothing about the
   backend, and only one game file calls Vulkan (`games/rmlui_demo/BackdropModule.cpp`).
 - Shaders are GLSL compiled to SPIR-V. An OpenGL 4.6 backend can load
@@ -39,6 +41,7 @@ how Unreal, Godot and bgfx work. Some things already hold:
   into the GLSL they need, as a build step.
 
 Two changes to the idea:
+
 1. **Choose at run time, not only at build time.** One build ships both
    backends and falls back to OpenGL when no Vulkan driver is found, so a
    player never has to pick a download. A build flag can still leave a
@@ -67,6 +70,7 @@ without Vulkan. That is a real but shrinking group, and the reason to do
 this after the gaps, not before.
 
 Order:
+
 - **R1:** the RHI interfaces, with Vulkan moved under them and no change in
   output. Benchmarks before and after, within 2%.
 - **R2:** an OpenGL 4.3 backend at the classic tier, run headless in CI.
@@ -107,6 +111,7 @@ The concept: **opening a project is playing it.**
   credits go in `docs/DEPENDENCIES.md`.
 
 Order:
+
 - **ED1:** the launcher.
 - **ED2:** live mode with an outliner and an inspector that are read-only.
 - **ED3:** edits written back to files.
