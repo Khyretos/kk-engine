@@ -40,6 +40,8 @@ struct EngineSettings {
         // Temporal anti-aliasing (Application::setTaa), an option over the clean
         // image: smoother still when standing still, a little softer in motion.
         bool taa = false;
+        // Bloom (Renderer::setBloom): bright light bleeding into what is around it.
+        bool bloom = true;
         // Ray-traced sun shadows (kke/ShadowRays.h): "off", "kke" (only past
         // the shadow map's reach) or "classic" (every pixel).
         std::string shadowRays = "off";

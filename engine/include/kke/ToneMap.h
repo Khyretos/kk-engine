@@ -18,7 +18,8 @@ enum class ToneMapper : int { AgX = 0, ACES = 1, Reinhard = 2, None = 3 };
 
 // The tone-map pass's push constants (shaders/tonemap_post.frag), 64 bytes.
 struct PostParams {
-    glm::vec4 tone{0.0f, 1.0f, 0.0f, 0.0f}; // x = ToneMapper, y = exposure, z = 1: write sRGB-encoded (UNORM swapchain; Renderer sets it)
+    glm::vec4 tone{0.0f, 1.0f, 0.0f, 0.0f}; // x = ToneMapper, y = exposure, z = 1: write sRGB-encoded (UNORM swapchain; Renderer sets it),
+                                            // w = bloom's share of the light (ENG-F10; Renderer sets it), 0 = none
     glm::vec4 lookSlope{1.0f};              // rgb = slope, a = saturation
     glm::vec4 lookOffset{0.0f};             // rgb = offset, a = 1 when a look is set
     glm::vec4 lookPower{1.0f};              // rgb = power

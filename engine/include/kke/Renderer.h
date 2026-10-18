@@ -48,6 +48,7 @@ struct OverlayTarget {
 //   }
 class SmaaPass;
 class TaaPass;
+class BloomPass;
 
 class Renderer {
 public:
@@ -119,6 +120,10 @@ public:
     void setTaa(bool on) { m_taaOn = on; }
     bool taa() const { return m_taaOn; }
     void setTaaCamera(const glm::mat4& viewProj) { m_taaViewProj = viewProj; }
+    // Bloom (ENG-F10, kke/Bloom.h): bright light bleeding into what is around
+    // it, mixed in before the tone map. On by default (graphics setting "bloom").
+    void setBloom(bool on) { m_bloomOn = on; }
+    bool bloom() const { return m_bloomOn; }
     float renderScale() const { return m_renderScale; }
     // Size of the 3D image: extent() times the render scale.
     VkExtent2D renderExtent() const;
@@ -250,6 +255,9 @@ private:
     std::unique_ptr<VulkanDevice> m_device;
     std::unique_ptr<SmaaPass> m_smaa; // made the first time SMAA is on
     bool m_smaaOn = false;
+    std::unique_ptr<BloomPass> m_bloom; // made the first time bloom is on
+    bool m_bloomOn = true;
+    VkImageView m_bloomSource = VK_NULL_HANDLE; // this frame's bloom (GENERAL), or none
     std::unique_ptr<TaaPass> m_taa; // made the first time TAA is on
     bool m_taaOn = false, m_taaHavePrev = false;
     glm::mat4 m_taaViewProj{1.0f}, m_taaPrevViewProj{1.0f};
