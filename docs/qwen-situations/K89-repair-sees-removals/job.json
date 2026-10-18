@@ -1,0 +1,16 @@
+[
+ {
+  "mode": "patch",
+  "focus": [
+   "^layout\\(buffer_reference,\\ std430,\\ buffer_reference_align\\ =\\ 4\\)\\ readonly\\ buffer\\ Floats\\ \\{\\ float\\ f\\[\\];\\ \\};$"
+  ],
+  "name": "f02t-reflect2",
+  "role": "worker/cpp-games",
+  "out": "shaders/reflect.glsl",
+  "prompt": "Kreative Kompas Engine (C++20, Vulkan, forward renderer): ENG-F02 part 5 adds ray-traced refraction: with reflections = kke or classic, the frame's ray scene is built once while the 3D pass is paused, see-through surfaces get it as descriptor set 3 (kke::RefractionRays), and translucent_refract_rays.frag traces a refracted ray where the screen can't show what is behind (kke) or for every pixel (classic); the ray code moves from reflect.glsl into ray_trace.glsl, shared by both.  Make these 1 edits in shaders/reflect.glsl, each its own SEARCH/REPLACE block.\nEdit 1. Your SEARCH block is exactly these lines:\n```\nlayout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer Floats { float f[]; };\nlayout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer Uints { uint u[]; };\nlayout(std430, set = 0, binding = 6) buffer Budget { uint raysCast; };          // reset to 0 each frame\nlayout(set = 0, binding = 7) uniform Rays {\n    mat4 viewToWorld;  // inverse view\n    vec4 sunDirection; // xyz = towards the sun, w = ray budget this frame\n    vec4 sunColor;     // rgb = colour x intensity\n    vec4 ambient;      // rgb = the sky's average light, w = 1: classic ray tracing (no march, every smooth pixel)\n} rays;\n\n// base + offset bytes, as a 64-bit address in two halves.\nuvec2 addressAt(uvec2 base, uint offset) {\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n\n```\nEdit 1 only deletes lines: the REPLACE block is the SEARCH block without them; put no blank line or anything else where they were.\nChange nothing else; do not copy or move any other line.\n",
+  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g09.py f02treflect2",
+  "precheck": false,
+  "context": [],
+  "max_tokens": 968
+ }
+]

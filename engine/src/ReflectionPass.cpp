@@ -267,7 +267,7 @@ void ReflectionPass::record(VkCommandBuffer cmd, uint32_t frame, const Renderer:
         // The stand-ins' top-level structure for this frame, their colours,
         // the light for a hit and a fresh ray count.
         RaySlot& slot = m_raySlots[slotIndex];
-        rays->scene->build(cmd, slotIndex);
+        if (!rays->built) rays->scene->build(cmd, slotIndex);
         const std::vector<RayMaterial>& materials = *rays->materials;
         const size_t count = std::max<size_t>(1, materials.size());
         if (!slot.materials || slot.materialCapacity < count) {

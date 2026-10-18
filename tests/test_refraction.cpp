@@ -86,3 +86,13 @@ TEST(Refraction, AFartherWallBendsMore) {
     const float farther = kke::refractedSample(v.viewProj, glm::vec3(0.0f), p, n, 1.5f, wall).uv.x;
     EXPECT_LT(farther, closer);
 }
+
+TEST(Refraction, ABendOffTheScreenIsLeftToRays) {
+    // At the left edge of the picture the ray bends further left, off screen: not settled, so KKE traces it.
+    const View v;
+    const glm::vec3 p(-5.0f * std::tan(glm::radians(30.0f)) * 16.0f / 9.0f + 0.02f, 0.0f, -5.0f);
+    const glm::vec3 n = glm::normalize(glm::vec3(std::sin(glm::radians(60.0f)), 0.0f, std::cos(glm::radians(60.0f))));
+    const kke::RefractionSample s = kke::refractedSample(v.viewProj, glm::vec3(0.0f), p, n, 1.5f, wall);
+    EXPECT_FALSE(s.bent);
+    EXPECT_NEAR(s.uv.x, v.uvOf(p).x, 1e-4f);
+}

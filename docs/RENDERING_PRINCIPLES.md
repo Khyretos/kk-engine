@@ -286,8 +286,21 @@ instead. Measured on the RX 9070 XT with 4x MSAA, anim_demo's glass block
 (`KKE_ANIM_GLASS=1`): +0.02 to +0.03 ms (905 x 682: 0.209 to 0.237 ms;
 1020 x 1384: 0.319 to 0.341 ms); lavapipe at 960 x 540, 39.8 to 38.1 fps.
 Translucents seen through other translucents show only the opaque scene
-behind both. Ray-traced refraction (rays for what the screen cannot
-show) is the next part.
+behind both.
+
+With `reflections = kke` or `classic`, refraction traces rays too,
+through the same ray scene as reflections, built once a frame while the
+3D pass is paused (outside a render pass, as acceleration structures
+need). `kke` traces a refracted ray only where the screen could not show
+what is behind the surface: the bent spot is off screen or something in
+front of the glass covers it. `classic` traces every refracting pixel.
+A hit is shaded as reflections' hits are (normal and vertex colour under
+the sky and the sun; classic adds the sun's shadow), so classic shows
+textured models in their vertex and material colours only. Measured on
+the RX 9070 XT, 1288 x 682 with 4x MSAA, anim_demo's glass block: `kke`
+0.473 ms without refraction and 0.519 with (+0.05), `classic` 0.503 and
+0.795 (+0.29): KKE refraction costs a sixth of classic's. (Lavapipe was
+not measured: the build machine was busy with CI, load 24.)
 
 ### 7. Tone mapping, exposure and colour management
 
