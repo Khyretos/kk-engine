@@ -115,6 +115,7 @@ add_executable(kke_tests
     test_decals.cpp
     test_occlusion.cpp
     test_rhi_command_list.cpp
+    test_rhi_device.cpp
     test_shadow_rays.cpp
     test_taa.cpp
     test_volumetric_fog.cpp
