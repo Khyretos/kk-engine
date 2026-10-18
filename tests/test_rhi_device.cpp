@@ -1,6 +1,7 @@
-// The RHI's device (docs/plans/rhi.md, R1c): buffer usage maps to Vulkan's
-// bits, and the interface can be implemented without Vulkan (as the
-// OpenGL ES 3 backend will), a buffer being bytes a draw names by ref().
+// The RHI's device (docs/plans/rhi.md, R1c and R1d): buffer usage maps to
+// Vulkan's bits, and the interface can be implemented without Vulkan (as the
+// OpenGL ES 3 backend will): a buffer being bytes a draw names by ref(), a
+// bind group a table of what each binding points at.
 
 #include "kke/rhi/Device.h"
 #include "kke/rhi/VulkanDevice.h"
@@ -8,6 +9,7 @@
 #include <gtest/gtest.h>
 
 #include <cstring>
+#include <map>
 #include <vector>
 
 using namespace kke;
@@ -28,6 +30,12 @@ private:
     uint64_t m_id;
 };
 
+class MemoryLayout final : public rhi::BindGroupLayout {
+public:
+    explicit MemoryLayout(std::span<const rhi::BindingLayout> b) : bindings(b.begin(), b.end()) {}
+    std::vector<rhi::BindingLayout> bindings;
+};
+
 class MemoryDevice final : public rhi::Device {
 public:
     std::unique_ptr<rhi::Buffer> createBuffer(const rhi::BufferDesc& desc, const void* initial = nullptr) override {
@@ -35,6 +43,19 @@ public:
         if (initial) b->upload(initial, desc.size);
         return b;
     }
+    std::unique_ptr<rhi::BindGroupLayout> createBindGroupLayout(std::span<const rhi::BindingLayout> bindings) override {
+        return std::make_unique<MemoryLayout>(bindings);
+    }
+    rhi::BindGroup createBindGroup(const rhi::BindGroupLayout&) override {
+        const rhi::BindGroup g{ ++m_next };
+        groups[g.handle];
+        return g;
+    }
+    void writeBindGroup(rhi::BindGroup group, const rhi::BindGroupLayout&, std::span<const rhi::BindingWrite> writes) override {
+        for (const rhi::BindingWrite& w : writes) groups[group.handle][w.binding] = w;
+    }
+    void releaseBindGroup(rhi::BindGroup group) override { groups.erase(group.handle); }
+    std::map<uint64_t, std::map<uint32_t, rhi::BindingWrite>> groups; // what each live group's bindings point at
 
 private:
     uint64_t m_next = 0;
@@ -64,4 +85,32 @@ TEST(RhiDevice, ABackendKeepsTheBytesAndNamesEachBuffer) {
     float back = 0.0f;
     std::memcpy(&back, static_cast<MemoryBuffer&>(*vb).bytes.data() + 8, sizeof(back));
     EXPECT_EQ(back, 2.5f);
+}
+
+TEST(RhiDevice, ABindGroupPointsEachBindingAtItsResource) {
+    MemoryDevice device;
+    rhi::Device& d = device;
+    const rhi::BindingLayout bindings[2] = { { 0, rhi::BindingType::StorageBuffer, rhi::kVertex },
+                                             { 1, rhi::BindingType::Texture, rhi::kFragment } };
+    auto layout = d.createBindGroupLayout(bindings);
+    EXPECT_EQ(static_cast<MemoryLayout&>(*layout).bindings.size(), 2u);
+    auto buffer = d.createBuffer({ 64, rhi::kStorageBuffer, rhi::Memory::Upload });
+    const rhi::BindGroup a = d.createBindGroup(*layout), b = d.createBindGroup(*layout);
+    EXPECT_NE(a.handle, 0u);
+    EXPECT_NE(a.handle, b.handle);
+    const rhi::BindingWrite writes[2] = { { .binding = 0, .buffer = buffer->ref(), .offset = 16 },
+                                          { .binding = 1, .texture = { 7, 9 } } };
+    d.writeBindGroup(a, *layout, writes);
+    EXPECT_EQ(device.groups[a.handle][0].buffer.handle, buffer->ref().handle);
+    EXPECT_EQ(device.groups[a.handle][0].offset, 16u);
+    EXPECT_EQ(device.groups[a.handle][1].texture.sampler, 9u);
+    EXPECT_TRUE(device.groups[b.handle].empty());
+    d.releaseBindGroup(a);
+    EXPECT_EQ(device.groups.count(a.handle), 0u);
+}
+
+TEST(RhiDevice, StagesBecomeVulkanBits) {
+    EXPECT_EQ(rhi::VulkanCommandList::stagesOf(rhi::kVertex | rhi::kCompute),
+              VkShaderStageFlags(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_COMPUTE_BIT));
+    EXPECT_EQ(rhi::VulkanCommandList::stagesOf(rhi::kFragment), VkShaderStageFlags(VK_SHADER_STAGE_FRAGMENT_BIT));
 }
