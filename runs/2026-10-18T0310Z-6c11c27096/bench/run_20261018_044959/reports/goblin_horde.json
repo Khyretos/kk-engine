@@ -1,0 +1,609 @@
+{
+ "broken_modules": [],
+ "config": {
+  "fixed_update_hz": "60",
+  "frame_cap": "none",
+  "game": "Goblin Horde",
+  "hitch_rule": "frame > 2.00 x median of the last 61 frames and > median + 8 ms",
+  "measure_s": 20.0,
+  "mood": "sunset",
+  "msaa": "1",
+  "render_resolution": "960x540",
+  "render_scale": "0.75",
+  "suite_item": "goblin_horde",
+  "uncapped": true,
+  "vsync": "off",
+  "warmup_s": 3.0,
+  "worker_threads": "2"
+ },
+ "events": [
+  {
+   "t_s": -3.0,
+   "what": "window resized to 1280x720"
+  }
+ ],
+ "events_not_listed": 0,
+ "format": "kke-benchmark-game/1",
+ "hitches": [],
+ "hitches_not_listed": 0,
+ "load_s": 0.807,
+ "modules": [
+  {
+   "avg_ms_per_frame": 0.378,
+   "init_ms": 437.753,
+   "name": "Horde",
+   "worst_call": "update",
+   "worst_call_ms": 2.327,
+   "worst_frame_ms": 2.331
+  },
+  {
+   "avg_ms_per_frame": 0.099,
+   "init_ms": 26.993,
+   "name": "UI",
+   "worst_call": "renderUi",
+   "worst_call_ms": 0.205,
+   "worst_frame_ms": 0.307
+  },
+  {
+   "avg_ms_per_frame": 0.071,
+   "init_ms": 1.999,
+   "name": "RigidBodies",
+   "worst_call": "fixedUpdate",
+   "worst_call_ms": 0.058,
+   "worst_frame_ms": 0.089
+  },
+  {
+   "avg_ms_per_frame": 0.058,
+   "init_ms": 81.829,
+   "name": "Models",
+   "worst_call": "computeEveryFrame",
+   "worst_call_ms": 0.071,
+   "worst_frame_ms": 0.098
+  },
+  {
+   "avg_ms_per_frame": 0.036,
+   "init_ms": 45.748,
+   "name": "Input",
+   "worst_call": "frameStart",
+   "worst_call_ms": 0.038,
+   "worst_frame_ms": 0.043
+  },
+  {
+   "avg_ms_per_frame": 0.028,
+   "init_ms": 45.259,
+   "name": "Audio",
+   "worst_call": "update",
+   "worst_call_ms": 0.118,
+   "worst_frame_ms": 0.119
+  },
+  {
+   "avg_ms_per_frame": 0.025,
+   "init_ms": 0.072,
+   "name": "Network",
+   "worst_call": "renderUi",
+   "worst_call_ms": 0.026,
+   "worst_frame_ms": 0.029
+  },
+  {
+   "avg_ms_per_frame": 0.006,
+   "init_ms": 12.405,
+   "name": "Lobby",
+   "worst_call": "update",
+   "worst_call_ms": 0.007,
+   "worst_frame_ms": 0.008
+  },
+  {
+   "avg_ms_per_frame": 0.003,
+   "init_ms": 3.801,
+   "name": "GameShell",
+   "worst_call": "frameStart",
+   "worst_call_ms": 0.002,
+   "worst_frame_ms": 0.004
+  },
+  {
+   "avg_ms_per_frame": 0.002,
+   "init_ms": 0.368,
+   "name": "Settings",
+   "worst_call": "frameEnd",
+   "worst_call_ms": 0.009,
+   "worst_frame_ms": 0.01
+  },
+  {
+   "avg_ms_per_frame": 0.002,
+   "init_ms": 0.001,
+   "name": "Stats",
+   "worst_call": "update",
+   "worst_call_ms": 0.001,
+   "worst_frame_ms": 0.003
+  }
+ ],
+ "per_second": {
+  "columns": [
+   "t_s",
+   "fps",
+   "frame_avg_ms",
+   "frame_max_ms",
+   "gpu_avg_ms",
+   "events_avg_ms",
+   "simulate_avg_ms",
+   "update_avg_ms",
+   "gpu_wait_avg_ms",
+   "record_avg_ms",
+   "present_avg_ms",
+   "idle_avg_ms",
+   "rss_mb",
+   "hitches"
+  ],
+  "rows": [
+   [
+    0.0,
+    13.623,
+    73.403,
+    76.965,
+    71.296,
+    0.014,
+    0.118,
+    0.334,
+    0.03,
+    0.201,
+    72.698,
+    0.008,
+    272.617,
+    0
+   ],
+   [
+    1.0,
+    12.205,
+    81.932,
+    88.937,
+    77.959,
+    0.013,
+    0.117,
+    0.361,
+    0.026,
+    0.216,
+    81.191,
+    0.008,
+    292.738,
+    0
+   ],
+   [
+    2.0,
+    9.628,
+    103.86,
+    113.872,
+    97.123,
+    0.014,
+    0.118,
+    0.498,
+    0.032,
+    0.255,
+    102.936,
+    0.008,
+    306.43,
+    0
+   ],
+   [
+    3.0,
+    8.839,
+    113.135,
+    114.694,
+    111.059,
+    0.013,
+    0.123,
+    0.409,
+    0.029,
+    0.247,
+    112.304,
+    0.009,
+    307.117,
+    0
+   ],
+   [
+    4.0,
+    8.544,
+    117.037,
+    119.397,
+    114.222,
+    0.018,
+    0.12,
+    0.407,
+    0.031,
+    0.244,
+    116.209,
+    0.008,
+    311.395,
+    0
+   ],
+   [
+    5.0,
+    8.686,
+    115.133,
+    116.018,
+    114.215,
+    0.012,
+    0.122,
+    0.406,
+    0.034,
+    0.243,
+    114.307,
+    0.008,
+    311.809,
+    0
+   ],
+   [
+    6.0,
+    8.604,
+    116.225,
+    117.843,
+    114.058,
+    0.016,
+    0.12,
+    0.41,
+    0.032,
+    0.245,
+    115.393,
+    0.008,
+    311.234,
+    0
+   ],
+   [
+    7.0,
+    8.616,
+    116.067,
+    117.246,
+    114.305,
+    0.014,
+    0.121,
+    0.405,
+    0.033,
+    0.25,
+    115.233,
+    0.011,
+    311.063,
+    0
+   ],
+   [
+    8.0,
+    8.446,
+    118.398,
+    122.369,
+    115.388,
+    0.016,
+    0.123,
+    0.407,
+    0.032,
+    0.246,
+    117.565,
+    0.008,
+    314.078,
+    0
+   ],
+   [
+    9.0,
+    8.017,
+    124.741,
+    128.854,
+    122.0,
+    0.016,
+    0.118,
+    0.413,
+    0.038,
+    0.244,
+    123.903,
+    0.008,
+    314.559,
+    0
+   ],
+   [
+    10.0,
+    7.706,
+    129.766,
+    131.419,
+    126.541,
+    0.013,
+    0.12,
+    0.403,
+    0.035,
+    0.247,
+    128.941,
+    0.008,
+    314.84,
+    0
+   ],
+   [
+    11.0,
+    7.552,
+    132.412,
+    137.222,
+    129.379,
+    0.014,
+    0.121,
+    0.408,
+    0.035,
+    0.238,
+    131.589,
+    0.008,
+    317.27,
+    0
+   ],
+   [
+    12.0,
+    7.338,
+    136.282,
+    139.038,
+    133.468,
+    0.011,
+    0.121,
+    0.429,
+    0.048,
+    0.257,
+    135.407,
+    0.008,
+    321.23,
+    0
+   ],
+   [
+    13.0,
+    7.242,
+    138.092,
+    143.689,
+    136.244,
+    0.016,
+    0.121,
+    0.428,
+    0.035,
+    0.245,
+    137.238,
+    0.008,
+    320.98,
+    0
+   ],
+   [
+    14.0,
+    6.959,
+    143.695,
+    148.623,
+    140.766,
+    0.013,
+    0.117,
+    0.41,
+    0.043,
+    0.233,
+    142.871,
+    0.008,
+    319.992,
+    0
+   ],
+   [
+    15.0,
+    6.621,
+    151.026,
+    155.41,
+    146.296,
+    0.013,
+    0.121,
+    0.419,
+    0.047,
+    0.269,
+    150.149,
+    0.008,
+    321.906,
+    0
+   ],
+   [
+    16.0,
+    6.578,
+    152.02,
+    153.908,
+    149.519,
+    0.015,
+    0.121,
+    0.423,
+    0.048,
+    0.272,
+    151.134,
+    0.008,
+    321.055,
+    0
+   ],
+   [
+    17.0,
+    6.818,
+    146.674,
+    153.433,
+    148.052,
+    0.015,
+    0.121,
+    0.41,
+    0.041,
+    0.246,
+    145.834,
+    0.008,
+    321.418,
+    0
+   ],
+   [
+    18.0,
+    7.085,
+    141.147,
+    149.08,
+    142.81,
+    0.013,
+    0.119,
+    0.457,
+    0.048,
+    0.263,
+    140.239,
+    0.01,
+    324.574,
+    0
+   ],
+   [
+    19.0,
+    6.835,
+    146.313,
+    151.416,
+    140.378,
+    0.012,
+    0.115,
+    0.423,
+    0.038,
+    0.317,
+    145.399,
+    0.008,
+    324.695,
+    0
+   ]
+  ]
+ },
+ "screenshots": [
+  {
+   "file": "shots/goblin_horde_worst-frame_155ms_at-15.7s.jpg",
+   "kind": "worst-frame",
+   "t_s": 15.7,
+   "value": 155.4
+  },
+  {
+   "file": "shots/goblin_horde_slowest-second_5fps_at-19.1s.jpg",
+   "kind": "slowest-second",
+   "t_s": 19.1,
+   "value": 5.0
+  },
+  {
+   "file": "shots/goblin_horde_view-1-of-3_at-4.2s.jpg",
+   "kind": "view-1-of-3",
+   "t_s": 4.2,
+   "value": 0.0
+  },
+  {
+   "file": "shots/goblin_horde_fastest-second_8fps_at-9.1s.jpg",
+   "kind": "fastest-second",
+   "t_s": 9.1,
+   "value": 8.4
+  },
+  {
+   "file": "shots/goblin_horde_view-2-of-3_at-12.2s.jpg",
+   "kind": "view-2-of-3",
+   "t_s": 12.2,
+   "value": 0.0
+  },
+  {
+   "file": "shots/goblin_horde_view-3-of-3_at-18.1s.jpg",
+   "kind": "view-3-of-3",
+   "t_s": 18.1,
+   "value": 0.0
+  }
+ ],
+ "stages_ms": {
+  "events": {
+   "avg": 0.014,
+   "max": 0.03,
+   "p50": 0.016,
+   "p95": 0.022,
+   "p99": 0.024
+  },
+  "gpu_wait": {
+   "avg": 0.036,
+   "max": 0.074,
+   "p50": 0.032,
+   "p95": 0.056,
+   "p99": 0.074
+  },
+  "idle": {
+   "avg": 0.008,
+   "max": 0.016,
+   "p50": 0.008,
+   "p95": 0.01,
+   "p99": 0.016
+  },
+  "present": {
+   "avg": 119.411,
+   "max": 154.547,
+   "p50": 117.911,
+   "p95": 151.709,
+   "p99": 153.075
+  },
+  "record": {
+   "avg": 0.245,
+   "max": 0.465,
+   "p50": 0.238,
+   "p95": 0.289,
+   "p99": 0.431
+  },
+  "simulate": {
+   "avg": 0.12,
+   "max": 0.141,
+   "p50": 0.12,
+   "p95": 0.129,
+   "p99": 0.14
+  },
+  "update": {
+   "avg": 0.408,
+   "max": 2.342,
+   "p50": 0.403,
+   "p95": 0.518,
+   "p99": 0.714
+  }
+ },
+ "summary": {
+  "fps_0_1pct_low": 6.435,
+  "fps_1pct_low": 6.435,
+  "fps_avg": 8.317,
+  "frame_ms": {
+   "avg": 120.243,
+   "max": 155.41,
+   "p50": 118.723,
+   "p95": 152.794,
+   "p99": 153.908
+  },
+  "frames": 137,
+  "gpu_ms": {
+   "avg": 117.606,
+   "max": 153.682,
+   "p50": 115.84,
+   "p95": 150.269,
+   "p99": 152.145
+  },
+  "hitches": {
+   "count": 0,
+   "freeze": 0,
+   "major": 0,
+   "minor": 0,
+   "per_minute": 0.0,
+   "time_lost_ms": 0.0
+  },
+  "memory_mb": {
+   "end": 324.695,
+   "peak": 325.344,
+   "start": 262.004
+  },
+  "screenshot_frames": 30,
+  "seconds": 20.141,
+  "sim_behind_frames": 137,
+  "verdict": "too slow"
+ },
+ "system": {
+  "build_type": "Release",
+  "compiler": "gcc 13-posix",
+  "cpu": "Intel(R) Core(TM) i5-4590 CPU @ 3.30GHz",
+  "cpu_logical_cores": "4",
+  "cpu_usable_cores": "4",
+  "display": "1920x1080 @ 60 Hz",
+  "engine_commit": "6c11c27096",
+  "engine_version": "windows-native",
+  "gpu": "llvmpipe (LLVM 22.1.8, 256 bits)",
+  "gpu_driver": "llvmpipe Mesa 26.2.4 (git-9a0169f2a7) (LLVM 22.1.8)",
+  "gpu_driver_version": "109060100",
+  "gpu_memory_mb": "16312",
+  "gpu_pci_id": "10005:0000",
+  "gpu_type": "cpu (software)",
+  "hardware_target": "desktop",
+  "host": "DESKTOP-387PPHP",
+  "os": "Windows",
+  "os_version": "Windows 10.0.19044",
+  "platform_backend": "desktop",
+  "ram_mb": "16312",
+  "vulkan_api_version": "1.4.354"
+ }
+}
