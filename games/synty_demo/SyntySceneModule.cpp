@@ -497,8 +497,8 @@ void SyntySceneModule::buildPanel() {
                "{synty.bones} bones  {camera.orbit} look  {camera.zoom} zoom");
     s.text([this] {
         char buf[160];
-        std::snprintf(buf, sizeof(buf), "%zu props, %zu characters, %zu draw calls, %zu culled", m_propCount, m_characters.size(),
-                      m_models->drawCallsLastFrame(), m_models->culledLastFrame());
+        std::snprintf(buf, sizeof(buf), "%zu props, %zu characters, %zu draw calls, %zu culled (%zu hidden)", m_propCount, m_characters.size(),
+                      m_models->drawCallsLastFrame(), m_models->culledLastFrame(), m_models->occludedLastFrame());
         return std::string(buf);
     });
     s.toggle("Show bones", &m_showBones);

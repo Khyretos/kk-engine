@@ -9,6 +9,9 @@
 namespace kke {
 
 class VulkanDevice;
+namespace rhi {
+class CommandList;
+}
 
 // Every knob a graphics pipeline in this engine might need to flip.
 // Grid, particles, and the cube all go through this one config struct
@@ -79,6 +82,7 @@ public:
     Pipeline& operator=(const Pipeline&) = delete;
 
     void bind(VkCommandBuffer cmd) const;
+    void bind(rhi::CommandList& list) const; // the RHI's way (docs/plans/rhi.md)
     VkPipelineLayout layout() const { return m_layout; }
 
 private:

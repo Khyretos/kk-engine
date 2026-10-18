@@ -91,7 +91,7 @@ by area. The goal is parity with the big engines and more.
 | ENG-F10 | Rendering | Post stack: bloom, depth of field, motion blur, LUT grading (tone map, exposure and grade exist). Bloom done (`bloom`, on by default); LUT grading done (a mood's `lut:`, .cube files, tetrahedral); depth of field done (`depthOfField`, off by default, auto focus); motion blur done (`motionBlur`, off by default, the camera's movement from the depth, no velocity buffer). | ✅ |
 | ENG-F11 | Rendering | GPU particle/VFX system. GPU particles in closed form (G18), and since F11 stepped on the GPU when they attract, swirl (`turbulence`: divergence-free curl waves) or collide (against the last frame's depth, no colliders needed); 100,000 for +0.08 ms. Not yet: ribbons and trails, sorted see-through GPU particles. | 🟡 |
 | ENG-F12 | Rendering | Decals: applied inside the shading of every lit surface from per-cell lists (no G-buffer, no clipped meshes), so they are lit, shadowed and reflected like the surface, keep MSAA and cost nothing where there are none; six built-in textures, PNGs from assets/decals, `decal.*` in Lua (docs/DECALS.md). | ✅ |
-| ENG-F13 | Rendering | Occlusion culling at scale, GPU-driven, HZB (frustum culling exists) | 🟡 |
+| ENG-F13 | Rendering | Occlusion culling: a small farthest-depth map of each frame read back by the CPU two frames later, so models hidden behind others are not skinned, uploaded or drawn, with the CPU's instancing kept (`occlusionCulling`, off by default; worth it in dense scenes). Not yet: GPU-driven indirect draws. | ✅ |
 | ENG-F14 | Rendering | Upscalers such as FSR (render scale exists) | 🟡 |
 | ENG-F15 | Lighting | Light probes with baking | ⬜ |
 | ENG-F16 | Lighting | Contact shadows | ⬜ |
@@ -164,3 +164,5 @@ by area. The goal is parity with the big engines and more.
 | ENG-F83 | World | Biomes | ⬜ |
 | ENG-F84 | Localization | String tables, plurals, font fallback, RTL, language switch | ⬜ |
 | ENG-F85 | Accessibility | Subtitles, colour-blind modes, UI scale, remapping, screen-reader hooks (captions and remapping exist) | 🟡 |
+| ENG-F86 | Rendering | Ray-traced shadows without ray-tracing hardware: a compute-shader BVH tracer as the fallback where the GPU has no ray query (Kees, 2026-10-18; ideas from ThreatInteractive's Apache-2.0 SWRT prototype: 4-wide compressed nodes, binned SAH, GPU refits, per-tile caster lists), measured against ray query on the RX 9070 XT. After the RHI/web work. | ⬜ |
+| ENG-F87 | Content | Biome showcase scenes from Kees's Synty biome packs, each in its full glory with our water and ray tracing, and a comparison of every rendering mode (shadow map, KKE and classic rays, software rays, GI, reflections) with frame data and pictures: is each mode faster, does it look better (Kees, 2026-10-18). | ⬜ |

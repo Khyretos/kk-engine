@@ -177,6 +177,10 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
         m_dofEnv = env[0] == '1';
         setDepthOfField(*m_dofEnv);
     }
+    if (const char* env = dev::env("KKE_OCCLUSION"); env && *env) {
+        m_occlusionEnv = env[0] == '1';
+        setOcclusionCulling(*m_occlusionEnv);
+    }
     if (const char* env = dev::env("KKE_MOTION_BLUR"); env && *env) {
         m_motionBlurEnv = env[0] == '1';
         setMotionBlur(*m_motionBlurEnv);
@@ -969,6 +973,7 @@ void Application::run() {
         const glm::mat4& proj = drawViews[0].proj;
         m_renderer->setTaaCamera(proj * view);
         m_renderer->setDofCamera(proj, dt);
+        m_renderer->setOcclusionSingleView(viewCount == 1); // its depth map is the first view's
 
         // Cascaded shadow maps (kke::ShadowMap) from the key light (lights[0])
         // only. Each view's frustum, out to kShadowDistance, is cut into
@@ -1229,6 +1234,8 @@ void Application::run() {
             // do anything here.
             ShadowRenderContext shadowCtx{};
             shadowCtx.cmd = cmd;
+            m_commandList.reset(cmd);
+            shadowCtx.list = &m_commandList;
             shadowCtx.renderPass = m_shadowMap->renderPass();
             shadowCtx.lightViewProj = lightViewProj;
             shadowCtx.frameIndex = m_renderer->currentFrameIndex();
@@ -1290,6 +1297,7 @@ void Application::run() {
             ReflectionRays frameRays; // the frame's ray scene, once (buildRayScene), for refraction and reflections
             m_renderer->beginRenderPass(refractOn);
             renderCtx.cmd = cmd;
+            renderCtx.list = &m_commandList;
             renderCtx.frameIndex = m_renderer->currentFrameIndex();
             for (uint32_t i = 0; drawScene && i < viewCount; ++i) {
                 const DrawView& d = drawViews[i];
@@ -1530,6 +1538,12 @@ void Application::setMotionBlur(bool on) {
 
 MotionBlurSettings& Application::motionBlurSettings() { return m_renderer->motionBlurSettings(); }
 
+void Application::setOcclusionCulling(bool on) {
+    m_occlusionOn = m_occlusionEnv ? *m_occlusionEnv : on;
+    m_renderer->setOcclusionCulling(m_occlusionOn);
+    updateSceneDepthReadable();
+}
+
 DecalId Application::placeDecal(const Decal& decal) {
     if (!m_decalTextures) m_decalTextures = std::make_unique<DecalTextures>(m_renderer->device());
     const int layer = m_decalTextures->layerOf(decal.texture);
@@ -1559,7 +1573,7 @@ void Application::wantSceneDepth(const void* owner, bool want) {
 
 void Application::updateSceneDepthReadable() {
     m_renderer->setSceneDepthReadable(m_screenGiOn || m_reflections != Reflections::Off || m_taaOn || m_shadowRays != ShadowRays::Off || m_dofOn ||
-                                      m_motionBlurOn || !m_depthWanted.empty());
+                                      m_motionBlurOn || m_occlusionOn || !m_depthWanted.empty());
 }
 
 void Application::setReflections(Reflections mode) {

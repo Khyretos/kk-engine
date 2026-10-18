@@ -4,6 +4,7 @@ set(ENGINE_SOURCES
     src/VulkanDevice.cpp
     src/SwapChain.cpp
     src/Pipeline.cpp
+    src/rhi/VulkanCommandList.cpp
     src/Buffer.cpp
     src/Mesh.cpp
     src/Renderer.cpp
@@ -135,6 +136,7 @@ set(ENGINE_SOURCES
     src/DecalTextures.cpp
     src/DepthOfField.cpp
     src/MotionBlur.cpp
+    src/Occlusion.cpp
     src/ColorLut.cpp
     src/ClusteredLights.cpp
     src/ShadowRays.cpp
@@ -144,6 +146,7 @@ set(ENGINE_SOURCES
     src/BloomPass.cpp
     src/DofPass.cpp
     src/MotionBlurPass.cpp
+    src/DepthMapPass.cpp
     src/ColorLutTexture.cpp
     src/RefractionRays.cpp
     src/VolumetricFogPass.cpp
@@ -327,7 +330,7 @@ endif()
 # (kke::RmlVulkanRenderInterface), the tone-map pass (kke::Renderer) and
 # particle effects (kke::ParticleEffects: Lua's fx.* works in every game).
 foreach(shader logo.vert logo.frag logo_backdrop.vert logo_backdrop.frag logo_text.vert logo_text.frag sky.vert sky.frag cloth_pairs.comp skin.comp
-               rml_fullscreen.vert rml_filter.frag rml_layer.frag tonemap_post.frag screen_gi.comp screen_gi_ms.comp reflect.comp reflect_ms.comp ray_reflect.comp ray_reflect_ms.comp ray_selftest.comp behind.comp behind_ms.comp translucent_refract.frag translucent_refract_rays.frag volumetric_scatter.comp volumetric_integrate.comp smaa_edges.comp smaa_weights.comp smaa_blend.comp taa.comp taa_ms.comp shadow_rays.comp shadow_rays_ms.comp cluster_lights.comp bloom_down.comp bloom_up.comp dof_focus.comp dof_focus_ms.comp dof_half.comp dof_half_ms.comp dof_gather.comp dof_composite.comp dof_composite_ms.comp motion_blur.comp motion_blur_ms.comp effect_step.comp effect_step_ms.comp
+               rml_fullscreen.vert rml_filter.frag rml_layer.frag tonemap_post.frag screen_gi.comp screen_gi_ms.comp reflect.comp reflect_ms.comp ray_reflect.comp ray_reflect_ms.comp ray_selftest.comp behind.comp behind_ms.comp translucent_refract.frag translucent_refract_rays.frag volumetric_scatter.comp volumetric_integrate.comp smaa_edges.comp smaa_weights.comp smaa_blend.comp taa.comp taa_ms.comp shadow_rays.comp shadow_rays_ms.comp cluster_lights.comp bloom_down.comp bloom_up.comp dof_focus.comp dof_focus_ms.comp dof_half.comp dof_half_ms.comp dof_gather.comp dof_composite.comp dof_composite_ms.comp motion_blur.comp motion_blur_ms.comp effect_step.comp effect_step_ms.comp depth_map.comp depth_map_ms.comp
                effect.vert effect_gpu.vert effect_smoke.frag effect_spark.frag effect_glow.frag effect_flake.frag effect_ring.frag)
     engine_add_shader(kke_engine ${CMAKE_SOURCE_DIR}/shaders/${shader})
 endforeach()

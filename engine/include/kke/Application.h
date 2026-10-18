@@ -16,6 +16,7 @@
 #include "kke/Reflections.h"
 #include "kke/ColorLut.h"
 #include "kke/Decals.h"
+#include "kke/rhi/VulkanCommandList.h"
 #include "kke/VolumetricFog.h"
 #include "kke/Taa.h"
 #include "kke/ShadowRays.h"
@@ -332,6 +333,9 @@ public:
     // KKE_MOTION_BLUR=1 or 0 wins over it.
     void setMotionBlur(bool on);
     MotionBlurSettings& motionBlurSettings();
+    // Occlusion culling (ENG-F13, kke/Occlusion.h): the graphics setting "occlusionCulling" (off: worth it in dense
+    // scenes, where many models hide behind others); KKE_OCCLUSION=1 or 0 wins over it.
+    void setOcclusionCulling(bool on);
     // Work an engine part (not a module) records each frame before the 3D
     // pass, paused or not (ENG-F11: kke::ParticleEffects steps its GPU
     // particles); `owner` removes it again.
@@ -555,6 +559,8 @@ private:
     bool m_dofOn = false;
     std::optional<bool> m_motionBlurEnv;                        // KKE_MOTION_BLUR
     bool m_motionBlurOn = false;
+    std::optional<bool> m_occlusionEnv; // KKE_OCCLUSION
+    bool m_occlusionOn = false;
     std::vector<std::pair<const void*, std::function<void(VkCommandBuffer)>>> m_frameCompute;
     std::vector<const void*> m_depthWanted;
     std::optional<bool> m_bloomEnv;                             // KKE_BLOOM
@@ -568,6 +574,7 @@ private:
     std::vector<GpuDecal> m_decalRecords;
     std::vector<glm::vec4> m_decalSpheres;
     float m_now = 0.0f; // seconds since the start, this frame (decals fade by it)
+    rhi::VulkanCommandList m_commandList; // the frame's command buffer as the RHI sees it (RenderContext::list)
     bool m_clustersOff = false;                         // KKE_CLUSTERS=0
     ShadowRays m_shadowRays = ShadowRays::Off;
     std::optional<ShadowRays> m_shadowRaysEnv; // KKE_SHADOW_RAYS
