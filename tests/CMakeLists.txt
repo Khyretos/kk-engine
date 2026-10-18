@@ -105,6 +105,7 @@ add_executable(kke_tests
     test_screen_gi.cpp
     test_reflection_march.cpp
     test_refraction.cpp
+    test_volumetric_fog.cpp
     test_sky.cpp
     test_envmap.cpp
     test_gpu_skin.cpp
