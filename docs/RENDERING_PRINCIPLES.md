@@ -135,8 +135,9 @@ MSAA in a forward renderer needs no G-buffer tricks at all.
 
 - Specular AA — **done today** (below).
 - Coverage-preserving alpha mips — **done today** (below).
-- MSAA 2x/4x as a setting, off on min-spec, plus optional SMAA 1x as a
-  spatial post filter: [#36](https://github.com/Khyretos/kk-engine/issues/36).
+- MSAA 2x/4x as a setting, off on min-spec, plus SMAA 1x as a spatial
+  post filter: **done** (ENG-F05, below), on by default.
+  [#36](https://github.com/Khyretos/kk-engine/issues/36).
 
 ### 3. Overdraw, quad utilisation, LODs and Nanite
 
@@ -475,6 +476,24 @@ and ImGui pipelines use `Renderer::overlayRenderPass()`. Thumbnails use
 Checked headless at 4x (Synty demo, sandbox with thumbnails, UI
 showcase): smoother edges, validation clean. SMAA 1x is still open (#36).
 
+**SMAA (ENG-F05, 2026-10-18).** The graphics setting `smaa` (on by
+default, Kees; `KKE_SMAA=0` or `1` wins) runs three compute steps over the
+finished scene before the tone map reads it: edges where the perceived
+brightness of two neighbours differs by more than 0.1; along each edge,
+the run of edge pixels followed both ways (up to 16) and the shape its
+two ends stand for (a step of a slanted line, an L corner, a U notch);
+then each pixel mixes in the neighbour across the edge by the share of it
+the shape's smooth line gives that side. What we do differently from
+SMAA 1x: the area comes straight from the line (`kke::smaaLineArea`), not
+from a precomputed area texture, so there is no data file to ship and
+the CPU copy (`kke/Smaa.h`) is the tests' reference. Tested against 16 x
+16 supersampled coverage: slanted edges come out 40% or more closer to
+the true picture than aliased ones, and the image's mean brightness
+moves by under 2%. One frame, no history: nothing ghosts. Measured on
+the RX 9070 XT, the Synty demo at 836 x 1384 with 4x MSAA: 0.356 ms off,
+0.422 on (+0.07; the machine was busy with CI, best runs compared). The
+software-GPU target keeps it off until it is measured there.
+
 **Later the same day:** shadow map quality (#38). The shadow map is
 sampled with a depth-compare sampler (each of the 9 PCF taps is a
 hardware bilinear comparison), casters get slope-scaled depth bias from
@@ -490,7 +509,7 @@ in #20.
    accumulation. (rule)
 3. Specular AA, coverage-preserving alpha mips, anisotropic filtering.
    (done)
-4. MSAA as a setting (done) + optional SMAA 1x. (#36)
+4. MSAA as a setting (done) + SMAA 1x (done, ENG-F05, on by default). (#36)
 5. AgX tone curve with exposure, selectable per game (done); HDR
    target, one tone map pass and 10-bit output (done, ENG-G17).
 6. Front-to-back sorting (done), measured prepass, overdraw view. (#37)

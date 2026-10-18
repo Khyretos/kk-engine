@@ -30,8 +30,8 @@ std::vector<HardwareTarget> builtinTargets() {
                "performance": { "renderScale": 0.75 } })" },
         { "software-gpu", "PC without a Vulkan GPU",
           "The only Vulkan device is the CPU (Mesa lavapipe: a graphics chip without a Vulkan driver, such as Intel HD 4000-series on Windows): "
-          "no MSAA or shadows, 75% render scale (the UI stays sharp), no fps cap. Measured on 4 cores: racing 11.6 -> 16.4 fps.", 30.0f,
-          R"({ "graphics": { "msaa": 1, "shadowResolution": 1024, "shadows": false, "frameRateLimit": 0 },
+          "no MSAA, SMAA or shadows, 75% render scale (the UI stays sharp), no fps cap. Measured on 4 cores: racing 11.6 -> 16.4 fps.", 30.0f,
+          R"({ "graphics": { "msaa": 1, "smaa": false, "shadowResolution": 1024, "shadows": false, "frameRateLimit": 0 },
                "performance": { "renderScale": 0.75 } })" },
         { "steam-deck", "Steam Deck",
           "Valve Steam Deck (LCD and OLED): fullscreen at the 1280x800 panel, 2x MSAA, 1024 shadow tiles, 60 fps cap, UI 25% larger for a 7-inch screen.", 60.0f,
