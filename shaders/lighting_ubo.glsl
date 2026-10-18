@@ -46,6 +46,9 @@ layout(set = 0, binding = 0) uniform LightingUBO {
     vec4 fogVolume;    // x = 1 when volumetric fog is on (ENG-F03), y = its near distance, z = its far distance, w = its slices
     mat4 shadowRayViewProj; // the camera the shadow rays were cast with (last frame's)
     vec4 shadowRays;        // x = 1 when they hold a frame's result (ENG-F07), yz = their size, w = reprojection slack
+    vec4 clusterParams;     // x = how many many-lights (ENG-F08; 0 = none), y = near, z = far distance, w = 1: walk them all (no cells)
+    vec4 clusterGrid;       // xyz = cells across, down and deep, w = lights a cell lists at most
+    vec4 clusterScreen;     // xy = the scene's size in pixels
 } lighting;
 
 // The sky prefiltered for reflections (kke::EnvMap, kke::LightingBuffer::setEnvironmentMap):
@@ -72,6 +75,17 @@ layout(set = 0, binding = 6) uniform sampler2D behindImage;
 // in exponential slices, the light the fog scatters towards the camera up
 // to each slice's far edge (rgb) and how much gets through (a).
 layout(set = 0, binding = 7) uniform sampler3D fogVolumeImage;
+
+// Many lights (ENG-F08, kke::ClusterLightPass): the small lights past the
+// 16 key ones, and per cell of the view (kke/ClusteredLights.h) how many
+// touch it and which (the cell's run of maxPerCluster entries).
+struct ManyLight {
+    vec4 positionRange;  // xyz = world position, w = reach (m)
+    vec4 colorIntensity; // rgb = colour, a = intensity
+};
+layout(std430, set = 0, binding = 9) readonly buffer ManyLights { ManyLight manyLights[]; };
+layout(std430, set = 0, binding = 10) readonly buffer ClusterCounts { uint clusterCounts[]; };
+layout(std430, set = 0, binding = 11) readonly buffer ClusterIndices { uint clusterIndices[]; };
 
 // Ray-traced sun shadows (ENG-F07, kke::ShadowRayPass): last frame's rays,
 // r = how lit, g = the view depth they were cast from (0 = not traced).

@@ -63,8 +63,11 @@ struct LightingUBOData {
     glm::vec4 fogVolume;    // x = 1 when volumetric fog is on (ENG-F03), y = its near distance, z = its far distance, w = its slices
     glm::mat4 shadowRayViewProj; // the camera the shadow rays were cast with (ENG-F07)
     glm::vec4 shadowRays;        // x = 1 when they hold a frame's result, yz = their size, w = reprojection slack
+    glm::vec4 clusterParams;     // x = how many many-lights (ENG-F08), y = near, z = far distance, w = 1: walk them all
+    glm::vec4 clusterGrid;       // cells across, down, deep; lights a cell lists at most
+    glm::vec4 clusterScreen;     // the scene's size in pixels
 };
-static_assert(sizeof(LightingUBOData) == Lighting::kMaxLights * 3 * 16 + 2 * 16 + 2 * 64 + 7 * 16 + 9 * 16 + 2 * ShadowMap::kCascades * 16 + ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces * (64 + 16) + 16 + 64 + 16 + 64 + 16 + 16 + 16 + 64 + 16, "must match shaders/lighting_ubo.glsl");
+static_assert(sizeof(LightingUBOData) == Lighting::kMaxLights * 3 * 16 + 2 * 16 + 2 * 64 + 7 * 16 + 9 * 16 + 2 * ShadowMap::kCascades * 16 + ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces * (64 + 16) + 16 + 64 + 16 + 64 + 16 + 16 + 16 + 64 + 16 + 3 * 16, "must match shaders/lighting_ubo.glsl");
 static_assert(ShadowMap::kMaxPointShadows <= Lighting::kMaxLights, "every point-shadow slot needs a light");
 
 } // namespace
@@ -74,7 +77,7 @@ LightingBuffer::LightingBuffer(VulkanDevice& device) : m_device(device) {
     // vertex and fragment stages (vertex doesn't currently need it, but
     // costs nothing to allow now rather than needing a second layout
     // later for e.g. per-vertex light-space transforms for shadows).
-    std::array<VkDescriptorSetLayoutBinding, 9> bindings{};
+    std::array<VkDescriptorSetLayoutBinding, 12> bindings{};
     bindings[0].binding = 0;
     bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     bindings[0].descriptorCount = 1;
@@ -104,6 +107,13 @@ LightingBuffer::LightingBuffer(VulkanDevice& device) : m_device(device) {
     // Binding 8: last frame's ray-traced sun shadows (setShadowRays).
     bindings[8] = bindings[1];
     bindings[8].binding = 8;
+    // Bindings 9-11: the many lights and their per-cell lists (setManyLights).
+    for (uint32_t i = 9; i < 12; ++i) {
+        bindings[i].binding = i;
+        bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        bindings[i].descriptorCount = 1;
+        bindings[i].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    }
 
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -114,7 +124,8 @@ LightingBuffer::LightingBuffer(VulkanDevice& device) : m_device(device) {
     // --- Descriptor pool: one set per frame in flight -- every lit
     // module shares these, there's no per-object growth the way
     // RmlVulkanRenderInterface's texture pool needs.
-    const std::array<VkDescriptorPoolSize, 2> poolSizes{ { { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kSlotCount },
+    const std::array<VkDescriptorPoolSize, 3> poolSizes{ { { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3 * kSlotCount },
+                                                          { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kSlotCount },
                                                           { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 8 * kSlotCount } } };
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -125,6 +136,8 @@ LightingBuffer::LightingBuffer(VulkanDevice& device) : m_device(device) {
 
     const std::array<uint16_t, 4> black{ glm::packHalf1x16(0.0f), glm::packHalf1x16(0.0f), glm::packHalf1x16(0.0f), glm::packHalf1x16(1.0f) };
     m_placeholder = std::make_unique<Texture>(device, black.data(), 1, 1, Texture::HalfFloatSky{});
+    // Bound at bindings 9-11 while there are no many lights (never read then).
+    m_placeholderBuffer = std::make_unique<Buffer>(device, 64, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
     createVolumePlaceholder();
 
     for (uint32_t i = 0; i < kSlotCount; ++i) {
@@ -259,6 +272,21 @@ void LightingBuffer::writeEnvironment(uint32_t slot) {
         write[i].pImageInfo = &info[i];
     }
     vkUpdateDescriptorSets(m_device.device(), static_cast<uint32_t>(write.size()), write.data(), 0, nullptr);
+    const bool many = m_manyLights && m_clusterCounts && m_clusterIndices;
+    const VkBuffer placeholder = m_placeholderBuffer->handle();
+    const std::array<VkDescriptorBufferInfo, 3> buffers{ { { many ? m_manyLights : placeholder, 0, VK_WHOLE_SIZE },
+                                                           { many ? m_clusterCounts : placeholder, 0, VK_WHOLE_SIZE },
+                                                           { many ? m_clusterIndices : placeholder, 0, VK_WHOLE_SIZE } } };
+    std::array<VkWriteDescriptorSet, 3> bw{};
+    for (uint32_t i = 0; i < 3; ++i) {
+        bw[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        bw[i].dstSet = m_descriptorSets[slot];
+        bw[i].dstBinding = 9 + i;
+        bw[i].descriptorCount = 1;
+        bw[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        bw[i].pBufferInfo = &buffers[i];
+    }
+    vkUpdateDescriptorSets(m_device.device(), static_cast<uint32_t>(bw.size()), bw.data(), 0, nullptr);
 }
 
 void LightingBuffer::update(const Lighting& lighting, const glm::vec3& cameraPos, const glm::mat4& lightViewProj, const glm::mat4& viewProj,
@@ -327,6 +355,12 @@ void LightingBuffer::update(const Lighting& lighting, const glm::vec3& cameraPos
     data.reflViewProj = m_reflViewProj;
     data.refl = glm::vec4(m_reflLight ? 1.0f : 0.0f, m_reflSize.x, m_reflSize.y, m_reflMaxRoughness);
     data.behind = glm::vec4(m_behind ? 1.0f : 0.0f, m_behindSize.x, m_behindSize.y, 0.0f);
+    const bool many = m_manyLights && m_clusterCounts && m_clusterIndices;
+    data.clusterParams = glm::vec4(many ? static_cast<float>(m_manyCount) : 0.0f, m_clusterGrid.nearDistance, m_clusterGrid.farDistance,
+                                   m_clusterAll ? 1.0f : 0.0f);
+    data.clusterGrid = glm::vec4(static_cast<float>(m_clusterGrid.x), static_cast<float>(m_clusterGrid.y), static_cast<float>(m_clusterGrid.z),
+                                 static_cast<float>(m_clusterGrid.maxPerCluster));
+    data.clusterScreen = glm::vec4(m_clusterScreen, 0.0f, 0.0f);
     data.shadowRayViewProj = m_shadowRayViewProj;
     data.shadowRays = glm::vec4(m_shadowRays ? 1.0f : 0.0f, m_shadowRaySize.x, m_shadowRaySize.y, m_shadowRaySlack);
     data.fogVolume = m_fogVolume ? glm::vec4(1.0f, m_fogVolumeSettings.nearDistance, m_fogVolumeSettings.farDistance,

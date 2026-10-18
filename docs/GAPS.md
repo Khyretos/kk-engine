@@ -86,7 +86,7 @@ by area. The goal is parity with the big engines and more.
 | ENG-F05 | Rendering | Anti-aliasing beyond MSAA: SMAA over MSAA, on by default (`smaa`), one frame, no ghosting; TAA as an option over the clean image (`taa`: jittered frames, reprojected and clipped history). | ✅ |
 | ENG-F06 | Rendering | Foveated rendering. Deferred until the engine has VR or eye tracking: on a flat screen it means variable-rate shading, which needs a shading-rate image in every scene pass and pipeline for small gains in a forward renderer at our frame times (decided 2026-10-18, F07 first). | ⬜ |
 | ENG-F07 | Rendering | Ray-traced shadows: `shadowRays = kke` (rays only past the shadow map's reach, through stand-ins) or `classic` (every pixel, full geometry), ray-query GPUs. | ✅ |
-| ENG-F08 | Rendering | Deferred rendering path | ⬜ |
+| ENG-F08 | Rendering | Many lights. Instead of a deferred path (which loses MSAA and glass): clustered forward lighting, up to 1024 lights past the 16 key ones, each pixel walking only its cell's list. | ✅ |
 | ENG-F09 | Rendering | Virtual texture streaming | ⬜ |
 | ENG-F10 | Rendering | Post stack: bloom, depth of field, motion blur, LUT grading (tone map, exposure and grade exist) | 🟡 |
 | ENG-F11 | Rendering | GPU particle/VFX system (one compute fountain today; G18) | 🟡 |
