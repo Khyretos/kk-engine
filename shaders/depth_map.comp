@@ -1,0 +1,4 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+// Occlusion culling's depth map (shaders/depth_map.glsl).
+#include "depth_map.glsl"

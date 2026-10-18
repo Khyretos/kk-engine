@@ -46,6 +46,8 @@ struct EngineSettings {
         bool depthOfField = false;
         // Motion blur (Renderer::setMotionBlur): the camera's movement smears the image.
         bool motionBlur = false;
+        // Occlusion culling (Renderer::setOcclusionCulling): models hidden behind others aren't drawn.
+        bool occlusionCulling = false;
         // Ray-traced sun shadows (kke/ShadowRays.h): "off", "kke" (only past
         // the shadow map's reach) or "classic" (every pixel).
         std::string shadowRays = "off";

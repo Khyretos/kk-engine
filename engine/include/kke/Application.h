@@ -332,6 +332,9 @@ public:
     // KKE_MOTION_BLUR=1 or 0 wins over it.
     void setMotionBlur(bool on);
     MotionBlurSettings& motionBlurSettings();
+    // Occlusion culling (ENG-F13, kke/Occlusion.h): the graphics setting "occlusionCulling" (off: worth it in dense
+    // scenes, where many models hide behind others); KKE_OCCLUSION=1 or 0 wins over it.
+    void setOcclusionCulling(bool on);
     // Work an engine part (not a module) records each frame before the 3D
     // pass, paused or not (ENG-F11: kke::ParticleEffects steps its GPU
     // particles); `owner` removes it again.
@@ -555,6 +558,8 @@ private:
     bool m_dofOn = false;
     std::optional<bool> m_motionBlurEnv;                        // KKE_MOTION_BLUR
     bool m_motionBlurOn = false;
+    std::optional<bool> m_occlusionEnv; // KKE_OCCLUSION
+    bool m_occlusionOn = false;
     std::vector<std::pair<const void*, std::function<void(VkCommandBuffer)>>> m_frameCompute;
     std::vector<const void*> m_depthWanted;
     std::optional<bool> m_bloomEnv;                             // KKE_BLOOM

@@ -5,6 +5,7 @@
 #include "kke/GpuSkin.h"
 #include "kke/InteriorColor.h"
 #include "kke/MeshLod.h"
+#include "kke/Occlusion.h"
 #include "kke/Log.h"
 #include "kke/Picking.h"
 #include "kke/RayScene.h"
@@ -884,7 +885,20 @@ bool ModelModule::mightBeVisible(const Instance& inst, const Frustum& f) const {
     }
     glm::vec3 wmn, wmx;
     transformAabb(mn, mx, inst.transform, wmn, wmx);
-    return f.intersectsAabb(wmn, wmx);
+    if (!f.intersectsAabb(wmn, wmx)) return false;
+    // ENG-F13: hidden behind what was on screen two frames ago (the camera's view only), worked out once per
+    // instance and draw: skinning, batching and the single draws all ask.
+    if (m_occlusion) {
+        if (inst.occlusionPass != m_viewPass) {
+            inst.occlusionPass = m_viewPass;
+            inst.occluded = occludedBy(*m_occlusion, wmn, wmx);
+        }
+        if (inst.occluded) {
+            if (m_countOccluded) ++m_occluded;
+            return false;
+        }
+    }
+    return true;
 }
 
 // Groups visible, rigid (not skinned, not deformed) instances of the same
@@ -951,6 +965,7 @@ void ModelModule::uploadInstances(int pass, uint32_t frameIndex, const std::vect
 }
 
 void ModelModule::renderShadow(const ShadowRenderContext& ctx) {
+    m_occlusion = nullptr; // the light sees what the camera's map hides
     if (ctx.tile == 0) ++m_frame; // renderShadow runs first each frame (see Application's frame loop), once per view and cascade
     const int pass = static_cast<int>(kMaxViews + std::min(ctx.tile, kShadowPasses - 1));
     m_shadowPipeline->bind(ctx.cmd);
@@ -1030,6 +1045,7 @@ void ModelModule::render(const RenderContext& ctx) {
     if (ctx.viewIndex == 0) {
         m_drawCalls = 0;
         m_culled = 0;
+        m_occluded = 0;
         m_instancedCount = 0;
     }
     m_viewPass = m_frame * kMaxViews + ctx.viewIndex;
@@ -1037,6 +1053,8 @@ void ModelModule::render(const RenderContext& ctx) {
     // Frustum culling (docs/OPTIMIZATION.md #23): an instance entirely outside
     // the view is neither skinned, uploaded nor drawn.
     const Frustum frustum = Frustum::fromViewProj(ctx.proj * ctx.view);
+    // Occlusion culling (ENG-F13): the renderer's depth map, for the first view (null in split screen or when off).
+    m_occlusion = ctx.viewIndex == 0 ? m_app->renderer().occlusionMap() : nullptr;
     VkDescriptorSet overlay = m_overlaySet ? m_overlaySet : ctx.defaultMaterialTextureDescriptorSet;
     VkDescriptorSet sets[] = { ctx.lightingDescriptorSet, ctx.shadowMapDescriptorSet, m_defaultSurface, overlay };
     const VkShaderStageFlags pcStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
@@ -1083,7 +1101,10 @@ void ModelModule::render(const RenderContext& ctx) {
         std::vector<glm::vec3> singlePos;
         for (auto& [id, inst] : m_instances) {
             if (!inst.visible) continue;
-            if (!mightBeVisible(inst, frustum)) { ++m_culled; continue; }
+            m_countOccluded = true; // each instance is counted once, here
+            const bool visible = mightBeVisible(inst, frustum);
+            m_countOccluded = false;
+            if (!visible) { ++m_culled; continue; }
             if (inst.batchedFrame == m_viewPass) continue; // drawn instanced above
             m_singles.push_back(&inst);
             singlePos.push_back(glm::vec3(inst.transform[3]));
@@ -1139,6 +1160,7 @@ void ModelModule::render(const RenderContext& ctx) {
         }
     }
 
+    m_occlusion = nullptr; // only this view's draws above use it
     if (!m_showBones) return;
     m_bonePipeline->bind(ctx.cmd);
     sets[3] = ctx.defaultMaterialTextureDescriptorSet;

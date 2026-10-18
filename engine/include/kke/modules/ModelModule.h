@@ -153,8 +153,10 @@ public:
     size_t instanceCount() const { return m_instances.size(); }
     size_t drawCallsLastFrame() const { return m_drawCalls; }
     // Instances skipped last frame because they were outside the camera
-    // frustum (see render()).
+    // frustum or hidden behind others (see render()), and of those the
+    // hidden ones (occlusion culling, ENG-F13, kke/Occlusion.h).
     size_t culledLastFrame() const { return m_culled; }
+    size_t occludedLastFrame() const { return m_occluded; }
     // Instances drawn through instancing last frame (N copies of one
     // model = one draw per mesh part), and toggling it (A/B comparisons).
     size_t instancedLastFrame() const { return m_instancedCount; }
@@ -233,6 +235,8 @@ private:
         bool clipLoop = true;
         uint64_t skinnedFrame = ~0ull;
         uint64_t batchedFrame = ~0ull; // drawn instanced in this view this frame (see render())
+        mutable uint64_t occlusionPass = ~0ull; // the draw `occluded` was worked out for (ENG-F13)
+        mutable bool occluded = false;
         std::shared_ptr<GpuSkinState> gpuSkin; // GPU skinning only (createGpuSkin)
     };
     // Per-instance data for the instanced pipelines (binding 1).
@@ -315,6 +319,9 @@ private:
     uint64_t m_frame = 0;
     size_t m_drawCalls = 0;
     size_t m_culled = 0;
+    mutable size_t m_occluded = 0;
+    bool m_countOccluded = false;
+    const struct DepthMap* m_occlusion = nullptr; // set while render() draws the first view (ENG-F13)
     size_t m_instancedCount = 0;
     bool m_instancing = true;
     std::unique_ptr<Pipeline> m_instancedPipeline, m_instancedShadowPipeline;
