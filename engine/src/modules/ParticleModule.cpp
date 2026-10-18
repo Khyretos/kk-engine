@@ -7,6 +7,7 @@
 #include <array>
 #include <vector>
 #include "kke/ImGuiPlacement.h"
+#include "kke/rhi/VulkanCommandList.h"
 
 namespace kke {
 
@@ -173,11 +174,10 @@ void ParticleModule::compute(VkCommandBuffer cmd) {
 void ParticleModule::render(const RenderContext& ctx) {
     RenderPushConstants pc{ ctx.proj * ctx.view };
 
-    m_renderPipeline->bind(ctx.cmd);
-    vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_renderPipeline->layout(),
-                             0, 1, &m_descriptorSet, 0, nullptr);
-    vkCmdPushConstants(ctx.cmd, m_renderPipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
-    vkCmdDraw(ctx.cmd, m_particleCount, 1, 0, 0);
+    m_renderPipeline->bind(*ctx.list);
+    ctx.list->bindGroups(*m_renderPipeline, 0, rhi::VulkanCommandList::groups(&m_descriptorSet, 1));
+    ctx.list->pushConstants(*m_renderPipeline, rhi::kVertex, 0, sizeof(pc), &pc);
+    ctx.list->draw(m_particleCount, 1, 0, 0);
 }
 
 void ParticleModule::renderUi() {

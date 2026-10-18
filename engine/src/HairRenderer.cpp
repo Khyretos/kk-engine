@@ -5,6 +5,7 @@
 #include "kke/ShadowMap.h"
 #include "kke/VulkanCheck.h"
 #include "kke/VulkanDevice.h"
+#include "kke/rhi/VulkanCommandList.h"
 
 #include <algorithm>
 #include <cmath>
@@ -315,10 +316,10 @@ void HairRenderer::draw(const RenderContext& ctx) {
     m_lastCamera = ctx.cameraPos;
     if (!ready()) return;
     prepare(ctx.frameIndex);
-    m_shared->pipeline->bind(ctx.cmd);
+    m_shared->pipeline->bind(*ctx.list);
     VkDescriptorSet sets[] = { ctx.lightingDescriptorSet, ctx.shadowMapDescriptorSet, m_frames[ctx.frameIndex].set };
-    vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_shared->pipeline->layout(), 0, 3, sets, 0, nullptr);
-    vkCmdDraw(ctx.cmd, vertexCount(), 1, 0, 0);
+    ctx.list->bindGroups(*m_shared->pipeline, 0, rhi::VulkanCommandList::groups(sets, 3));
+    ctx.list->draw(vertexCount(), 1, 0, 0);
 }
 
 bool HairRenderer::ready() const {
@@ -330,12 +331,12 @@ bool HairRenderer::ready() const {
 void HairRenderer::drawShadow(const ShadowRenderContext& ctx, const glm::vec3& towardsLight) {
     if (!ready()) return;
     prepare(ctx.frameIndex);
-    m_shared->shadowPipeline->bind(ctx.cmd);
+    m_shared->shadowPipeline->bind(*ctx.list);
     VkDescriptorSet set = m_frames[ctx.frameIndex].set;
-    vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_shared->shadowPipeline->layout(), 0, 1, &set, 0, nullptr);
+    ctx.list->bindGroups(*m_shared->shadowPipeline, 0, rhi::VulkanCommandList::groups(&set, 1));
     ShadowPush pc{ ctx.lightViewProj, glm::vec4(glm::normalize(towardsLight), 0.0f) };
-    vkCmdPushConstants(ctx.cmd, m_shared->shadowPipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
-    vkCmdDraw(ctx.cmd, vertexCount(), 1, 0, 0);
+    ctx.list->pushConstants(*m_shared->shadowPipeline, rhi::kVertex, 0, sizeof(pc), &pc);
+    ctx.list->draw(vertexCount(), 1, 0, 0);
 }
 
 } // namespace kke

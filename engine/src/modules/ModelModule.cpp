@@ -11,6 +11,7 @@
 #include "kke/RayScene.h"
 #include "kke/ShaderUtils.h"
 #include "kke/VulkanCheck.h"
+#include "kke/rhi/VulkanCommandList.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -974,7 +975,7 @@ void ModelModule::renderShadow(const ShadowRenderContext& ctx) {
     m_occlusion = nullptr; // the light sees what the camera's map hides
     if (ctx.tile == 0) ++m_frame; // renderShadow runs first each frame (see Application's frame loop), once per view and cascade
     const int pass = static_cast<int>(kMaxViews + std::min(ctx.tile, kShadowPasses - 1));
-    m_shadowPipeline->bind(ctx.cmd);
+    m_shadowPipeline->bind(*ctx.list);
     // Cull against the light's own frustum: things off camera still cast
     // shadows into view, things outside the shadow map can't.
     const Frustum lightFrustum = Frustum::fromViewProj(ctx.lightViewProj);
@@ -984,20 +985,20 @@ void ModelModule::renderShadow(const ShadowRenderContext& ctx) {
         buildBatches(lightFrustum, m_batches, m_instanceData, false);
         uploadInstances(pass, ctx.frameIndex, m_instanceData);
         if (!m_batches.empty()) {
-            m_instancedShadowPipeline->bind(ctx.cmd);
+            m_instancedShadowPipeline->bind(*ctx.list);
             ShadowPushConstants pc{ ctx.lightViewProj, glm::mat4(1.0f) };
-            vkCmdPushConstants(ctx.cmd, m_instancedShadowPipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
+            ctx.list->pushConstants(*m_instancedShadowPipeline, rhi::kVertex, 0, sizeof(pc), &pc);
             VkBuffer ib = m_instanceBuffers[pass][ctx.frameIndex]->handle();
             for (const Batch& b : m_batches) {
                 const LoadedModel& lm = *m_models[b.model];
                 VkDeviceSize off = sizeof(InstanceGpu) * b.first;
-                vkCmdBindVertexBuffers(ctx.cmd, 1, 1, &ib, &off);
+                ctx.list->bindVertexBuffer(1, rhi::VulkanCommandList::buffer(ib), off);
                 for (const GpuMesh& gm : lm.meshes) {
-                    gm.mesh->bind(ctx.cmd);
-                    gm.mesh->drawInstanced(ctx.cmd, b.count);
+                    gm.mesh->bind(*ctx.list);
+                    gm.mesh->drawInstanced(*ctx.list, b.count);
                 }
             }
-            m_shadowPipeline->bind(ctx.cmd);
+            m_shadowPipeline->bind(*ctx.list);
         }
     }
     // Which instances the batches covered (same rules as buildBatches).
@@ -1015,19 +1016,19 @@ void ModelModule::renderShadow(const ShadowRenderContext& ctx) {
         if (!inst.deformed.empty()) {
             uploadDeformed(inst, ctx.frameIndex);
             ShadowPushConstants pc{ ctx.lightViewProj, inst.deformedInModelSpace ? inst.transform : glm::mat4(1.0f) }; // else already world space
-            vkCmdPushConstants(ctx.cmd, m_shadowPipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
+            ctx.list->pushConstants(*m_shadowPipeline, rhi::kVertex, 0, sizeof(pc), &pc);
             for (SkinnedBuffers& sb : inst.deformed) {
                 if (!sb.indexCount) continue;
                 VkBuffer vb = sb.vertices[ctx.frameIndex]->handle();
                 VkDeviceSize off = 0;
-                vkCmdBindVertexBuffers(ctx.cmd, 0, 1, &vb, &off);
-                vkCmdBindIndexBuffer(ctx.cmd, sb.indices->handle(), 0, VK_INDEX_TYPE_UINT32);
-                vkCmdDrawIndexed(ctx.cmd, sb.indexCount, 1, 0, 0, 0);
+                ctx.list->bindVertexBuffer(0, rhi::VulkanCommandList::buffer(vb), off);
+                ctx.list->bindIndexBuffer(rhi::VulkanCommandList::buffer(sb.indices->handle()), 0, rhi::IndexType::U32);
+                ctx.list->drawIndexed(sb.indexCount, 1, 0, 0, 0);
             }
             continue;
         }
         ShadowPushConstants pc{ ctx.lightViewProj, inst.transform };
-        vkCmdPushConstants(ctx.cmd, m_shadowPipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
+        ctx.list->pushConstants(*m_shadowPipeline, rhi::kVertex, 0, sizeof(pc), &pc);
         const LoadedModel& lm = *m_models[inst.model];
         size_t si = 0;
         for (const GpuMesh& gm : lm.meshes) {
@@ -1035,12 +1036,12 @@ void ModelModule::renderShadow(const ShadowRenderContext& ctx) {
                 SkinnedBuffers& sb = inst.skinned[si++];
                 VkBuffer vb = sb.vertices[ctx.frameIndex]->handle();
                 VkDeviceSize off = 0;
-                vkCmdBindVertexBuffers(ctx.cmd, 0, 1, &vb, &off);
-                vkCmdBindIndexBuffer(ctx.cmd, sb.indices->handle(), 0, VK_INDEX_TYPE_UINT32);
-                vkCmdDrawIndexed(ctx.cmd, sb.indexCount, 1, 0, 0, 0);
+                ctx.list->bindVertexBuffer(0, rhi::VulkanCommandList::buffer(vb), off);
+                ctx.list->bindIndexBuffer(rhi::VulkanCommandList::buffer(sb.indices->handle()), 0, rhi::IndexType::U32);
+                ctx.list->drawIndexed(sb.indexCount, 1, 0, 0, 0);
             } else {
-                gm.mesh->bind(ctx.cmd);
-                gm.mesh->draw(ctx.cmd);
+                gm.mesh->bind(*ctx.list);
+                gm.mesh->draw(*ctx.list);
             }
         }
     }
@@ -1063,41 +1064,41 @@ void ModelModule::render(const RenderContext& ctx) {
     m_occlusion = ctx.viewIndex == 0 ? m_app->renderer().occlusionMap() : nullptr;
     VkDescriptorSet overlay = m_overlaySet ? m_overlaySet : ctx.defaultMaterialTextureDescriptorSet;
     VkDescriptorSet sets[] = { ctx.lightingDescriptorSet, ctx.shadowMapDescriptorSet, m_defaultSurface, overlay };
-    const VkShaderStageFlags pcStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    const uint32_t pcStages = rhi::kVertex | rhi::kFragment;
     if (m_showMeshes) {
         // Instancing (docs/OPTIMIZATION.md #25): 2+ visible copies of the same
         // rigid model (same texture/overlay) are one draw per mesh part.
         buildBatches(frustum, m_batches, m_instanceData, true, &ctx.cameraPos);
         uploadInstances(pass, ctx.frameIndex, m_instanceData);
         if (!m_batches.empty()) {
-            m_instancedPipeline->bind(ctx.cmd);
-            vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_instancedPipeline->layout(), 0, 4, sets, 0, nullptr);
+            m_instancedPipeline->bind(*ctx.list);
+            ctx.list->bindGroups(*m_instancedPipeline, 0, rhi::VulkanCommandList::groups(sets, 4));
             VkBuffer ib = m_instanceBuffers[pass][ctx.frameIndex]->handle();
             VkDescriptorSet bound = m_defaultSurface;
             for (const Batch& b : m_batches) {
                 const LoadedModel& lm = *m_models[b.model];
                 VkDeviceSize off = sizeof(InstanceGpu) * b.first;
-                vkCmdBindVertexBuffers(ctx.cmd, 1, 1, &ib, &off);
+                ctx.list->bindVertexBuffer(1, rhi::VulkanCommandList::buffer(ib), off);
                 for (const GpuMesh& gm : lm.meshes) {
                     const GpuMaterial& mat = lm.materials[gm.material];
                     VkDescriptorSet tex = mat.textureSet ? mat.textureSet : m_defaultSurface;
                     if (b.textureOverride && mat.albedo) tex = b.textureOverride;
                     if (tex != bound) {
-                        vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_instancedPipeline->layout(), 2, 1, &tex, 0, nullptr);
+                        ctx.list->bindGroups(*m_instancedPipeline, 2, rhi::VulkanCommandList::groups(&tex, 1));
                         bound = tex;
                     }
                     PushConstants pc{ glm::mat4(1.0f), glm::vec4(mat.metallic, mat.roughness, b.overlay ? m_overlayTile : 0.0f, m_overlayStrength),
                                       glm::vec4(mat.color, 0.0f) };
-                    vkCmdPushConstants(ctx.cmd, m_instancedPipeline->layout(), pcStages, 0, sizeof(pc), &pc);
-                    gm.mesh->bind(ctx.cmd);
-                    gm.mesh->drawInstanced(ctx.cmd, b.count);
+                    ctx.list->pushConstants(*m_instancedPipeline, pcStages, 0, sizeof(pc), &pc);
+                    gm.mesh->bind(*ctx.list);
+                    gm.mesh->drawInstanced(*ctx.list, b.count);
                     ++m_drawCalls;
                 }
                 m_instancedCount += b.count;
             }
         }
-        m_pipeline->bind(ctx.cmd);
-        vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->layout(), 0, 4, sets, 0, nullptr);
+        m_pipeline->bind(*ctx.list);
+        ctx.list->bindGroups(*m_pipeline, 0, rhi::VulkanCommandList::groups(sets, 4));
         VkDescriptorSet boundTexture = m_defaultSurface;
         // Single draws nearest first too (early-Z, #37). Deformed parts are
         // in world space already (identity transform): they sort by their
@@ -1131,7 +1132,7 @@ void ModelModule::render(const RenderContext& ctx) {
                 VkDescriptorSet tex = mat.textureSet ? mat.textureSet : m_defaultSurface;
                 if (inst.textureOverride && mat.albedo) tex = inst.textureOverride;
                 if (tex != boundTexture) {
-                    vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->layout(), 2, 1, &tex, 0, nullptr);
+                    ctx.list->bindGroups(*m_pipeline, 2, rhi::VulkanCommandList::groups(&tex, 1));
                     boundTexture = tex;
                 }
                 float tile = inst.overlay ? m_overlayTile : 0.0f;
@@ -1140,26 +1141,26 @@ void ModelModule::render(const RenderContext& ctx) {
                 // space: overlayScale carries the object's scale for them.
                 PushConstants pc{ worldSpace ? glm::mat4(1.0f) : inst.transform, glm::vec4(mat.metallic, mat.roughness, tile, m_overlayStrength),
                                   glm::vec4(mat.color * inst.tint, worldSpace ? instanceScale(inst.transform) : 0.0f) };
-                vkCmdPushConstants(ctx.cmd, m_pipeline->layout(), pcStages, 0, sizeof(pc), &pc);
+                ctx.list->pushConstants(*m_pipeline, pcStages, 0, sizeof(pc), &pc);
                 if (deformed) {
                     SkinnedBuffers& sb = inst.deformed[gm.meshIndex];
                     if (sb.indexCount) {
                         VkBuffer vb = sb.vertices[ctx.frameIndex]->handle();
                         VkDeviceSize off = 0;
-                        vkCmdBindVertexBuffers(ctx.cmd, 0, 1, &vb, &off);
-                        vkCmdBindIndexBuffer(ctx.cmd, sb.indices->handle(), 0, VK_INDEX_TYPE_UINT32);
-                        vkCmdDrawIndexed(ctx.cmd, sb.indexCount, 1, 0, 0, 0);
+                        ctx.list->bindVertexBuffer(0, rhi::VulkanCommandList::buffer(vb), off);
+                        ctx.list->bindIndexBuffer(rhi::VulkanCommandList::buffer(sb.indices->handle()), 0, rhi::IndexType::U32);
+                        ctx.list->drawIndexed(sb.indexCount, 1, 0, 0, 0);
                     }
                 } else if (gm.skinned) {
                     SkinnedBuffers& sb = inst.skinned[si++];
                     VkBuffer vb = sb.vertices[ctx.frameIndex]->handle();
                     VkDeviceSize off = 0;
-                    vkCmdBindVertexBuffers(ctx.cmd, 0, 1, &vb, &off);
-                    vkCmdBindIndexBuffer(ctx.cmd, sb.indices->handle(), 0, VK_INDEX_TYPE_UINT32);
-                    vkCmdDrawIndexed(ctx.cmd, sb.indexCount, 1, 0, 0, 0);
+                    ctx.list->bindVertexBuffer(0, rhi::VulkanCommandList::buffer(vb), off);
+                    ctx.list->bindIndexBuffer(rhi::VulkanCommandList::buffer(sb.indices->handle()), 0, rhi::IndexType::U32);
+                    ctx.list->drawIndexed(sb.indexCount, 1, 0, 0, 0);
                 } else {
-                    gm.mesh->bind(ctx.cmd);
-                    gm.mesh->draw(ctx.cmd);
+                    gm.mesh->bind(*ctx.list);
+                    gm.mesh->draw(*ctx.list);
                 }
                 ++m_drawCalls;
             }
@@ -1168,10 +1169,10 @@ void ModelModule::render(const RenderContext& ctx) {
 
     m_occlusion = nullptr; // only this view's draws above use it
     if (!m_showBones) return;
-    m_bonePipeline->bind(ctx.cmd);
+    m_bonePipeline->bind(*ctx.list);
     sets[3] = ctx.defaultMaterialTextureDescriptorSet;
-    vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_bonePipeline->layout(), 0, 4, sets, 0, nullptr);
-    m_boneMesh->bind(ctx.cmd);
+    ctx.list->bindGroups(*m_bonePipeline, 0, rhi::VulkanCommandList::groups(sets, 4));
+    m_boneMesh->bind(*ctx.list);
     for (auto& [id, inst] : m_instances) {
         if (!inst.visible || inst.locals.empty()) continue;
         const ModelData& data = m_models[inst.model]->data;
@@ -1190,8 +1191,8 @@ void ModelModule::render(const RenderContext& ctx) {
             float thick = std::clamp(len * 0.12f, 0.006f, 0.03f);
             glm::mat4 m(glm::vec4(x * thick, 0), glm::vec4(y * len, 0), glm::vec4(z * thick, 0), glm::vec4(a, 1));
             PushConstants pc{ m, glm::vec4(0.0f, 1.0f, 0.0f, 0.0f), glm::vec4(1.0f, 0.82f, 0.25f, 0.0f) };
-            vkCmdPushConstants(ctx.cmd, m_bonePipeline->layout(), pcStages, 0, sizeof(pc), &pc);
-            m_boneMesh->draw(ctx.cmd);
+            ctx.list->pushConstants(*m_bonePipeline, pcStages, 0, sizeof(pc), &pc);
+            m_boneMesh->draw(*ctx.list);
         }
     }
 }
