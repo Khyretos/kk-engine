@@ -823,9 +823,15 @@ void ModelModule::computeEveryFrame(VkCommandBuffer cmd) {
         const std::function<void(size_t)> job = [this, slot](size_t i) { packSkin(*m_toSkin[i], slot); };
         m_skinWorkers->run(m_toSkin.size(), job);
     }
-    // Write after read: this slot's previous frame drew from these vertex
-    // buffers. An execution dependency is enough (CI's sync validation).
-    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 0, nullptr);
+    // This slot's previous frame drew from these vertex buffers (write after
+    // read: execution is enough) and wrote them here (write after write: that
+    // write must be made available too, or sync validation flags it).
+    VkMemoryBarrier rewrite{};
+    rewrite.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+    rewrite.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+    rewrite.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1,
+                         &rewrite, 0, nullptr, 0, nullptr);
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_skinPipeline);
     for (Instance* inst : m_toSkin) recordSkin(cmd, *inst, slot);
     // The shadow, main and pick passes read the vertices as vertex input.
