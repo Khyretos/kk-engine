@@ -11,6 +11,8 @@ name: Windows (native)
 on:
   schedule:
     - cron: "0 4 * * *"
+  # PRs build and test on the Windows PC (required check); publish stays main-only.
+  pull_request:
   workflow_dispatch:
     inputs:
       quick:
@@ -19,8 +21,8 @@ on:
         default: false
 
 concurrency:
-  group: windows-native
-  cancel-in-progress: false
+  group: windows-native-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   # Dependencies come from pull mirrors on this Forgejo (khyretos/mirror-<name>,
@@ -142,7 +144,7 @@ jobs:
 
       - name: Tests and demos
         env:
-          QUICK: ${{ inputs.quick && '-Quick' || '' }}
+          QUICK: ${{ (inputs.quick || github.event_name == 'pull_request') && '-Quick' || '' }}
         run: |
           powershell -NoProfile -ExecutionPolicy Bypass -File tools\vm\windows\native_test.ps1 -Package "dist\kk-engine-%VERSION%-windows-x86_64.zip" -Tests "dist\kke_tests.exe" -SourceTar "dist\src.tar" -SourceDir "/workspace/khyretos/kk-engine" -Work "%RUNNER_TEMP%\kke-run" -Results "results" %QUICK%
 
@@ -159,7 +161,7 @@ jobs:
 
   publish:
     needs: test
-    if: always() && needs.test.result != 'skipped'
+    if: always() && needs.test.result != 'skipped' && github.event_name != 'pull_request'
     runs-on: soucouyant
     timeout-minutes: 15
     container:
