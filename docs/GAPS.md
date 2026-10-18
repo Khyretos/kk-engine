@@ -164,3 +164,5 @@ by area. The goal is parity with the big engines and more.
 | ENG-F83 | World | Biomes | ⬜ |
 | ENG-F84 | Localization | String tables, plurals, font fallback, RTL, language switch | ⬜ |
 | ENG-F85 | Accessibility | Subtitles, colour-blind modes, UI scale, remapping, screen-reader hooks (captions and remapping exist) | 🟡 |
+| ENG-F86 | Rendering | Ray-traced shadows without ray-tracing hardware: a compute-shader BVH tracer as the fallback where the GPU has no ray query (Kees, 2026-10-18; ideas from ThreatInteractive's Apache-2.0 SWRT prototype: 4-wide compressed nodes, binned SAH, GPU refits, per-tile caster lists), measured against ray query on the RX 9070 XT. After the RHI/web work. | ⬜ |
+| ENG-F87 | Content | Biome showcase scenes from Kees's Synty biome packs, each in its full glory with our water and ray tracing, and a comparison of every rendering mode (shadow map, KKE and classic rays, software rays, GI, reflections) with frame data and pictures: is each mode faster, does it look better (Kees, 2026-10-18). | ⬜ |
