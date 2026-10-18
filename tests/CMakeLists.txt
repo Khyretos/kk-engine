@@ -112,6 +112,7 @@ add_executable(kke_tests
     test_depth_of_field.cpp
     test_motion_blur.cpp
     test_particle_step.cpp
+    test_decals.cpp
     test_shadow_rays.cpp
     test_taa.cpp
     test_volumetric_fog.cpp
