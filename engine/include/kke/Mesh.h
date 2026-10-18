@@ -1,6 +1,6 @@
 #pragma once
 
-#include "kke/Buffer.h"
+#include "kke/rhi/Device.h"
 
 #include <volk.h>
 #include <glm/glm.hpp>
@@ -60,8 +60,8 @@ public:
     static Mesh createCube(VulkanDevice& device);
 
 private:
-    std::unique_ptr<Buffer> m_vertexBuffer;
-    std::unique_ptr<Buffer> m_indexBuffer;
+    std::unique_ptr<rhi::Buffer> m_vertexBuffer;
+    std::unique_ptr<rhi::Buffer> m_indexBuffer;
     uint32_t m_indexCount = 0;
 };
 

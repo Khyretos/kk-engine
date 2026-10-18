@@ -5,6 +5,7 @@
 #include "kke/Pipeline.h"
 #include "kke/Mesh.h"
 #include "kke/Buffer.h"
+#include "kke/rhi/Device.h"
 #include "kke/Texture.h"
 #include "kke/TetMeshAsset.h"
 #include "kke/VoxelTets.h"
@@ -577,7 +578,7 @@ private:
         // this frame's copy never races the GPU reading last frame's.
         std::vector<Vertex> cpuVerts;
         uint64_t cpuVersion = 0;
-        std::unique_ptr<Buffer> vertexBuffers[Renderer::kMaxFramesInFlight];
+        std::unique_ptr<rhi::Buffer> vertexBuffers[Renderer::kMaxFramesInFlight];
         uint64_t gpuVersion[Renderer::kMaxFramesInFlight] = {};
         uint32_t maxRenderVerts = 0;  // capacity of each vertexBuffers[] entry
         bool asleep = false;          // every piece asleep as of the last prepareRenderData()
@@ -690,7 +691,7 @@ private:
         std::vector<std::array<glm::vec3, 4>> tetCorners; // per part-local tet, relative to the handoff centre (render units)
         std::vector<glm::mat3> tetNormal;                 // per part-local tet: normal matrix at handoff
         std::vector<Vertex> verts;                        // surface, relative to the handoff centre (render units)
-        std::unique_ptr<Buffer> vertexBuffer;
+        std::unique_ptr<rhi::Buffer> vertexBuffer;
         Material material;
         VkDescriptorSet textureSet = VK_NULL_HANDLE;
         glm::vec3 position{0.0f};                         // physics units

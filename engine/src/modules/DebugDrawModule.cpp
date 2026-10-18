@@ -80,12 +80,11 @@ void DebugDrawModule::render(const RenderContext& ctx) {
     size_t& capacity = m_capacity[std::min(ctx.viewIndex, kMaxViews - 1)][f];
     if (capacity < m_scratch.size()) {
         capacity = std::max<size_t>(m_scratch.size() * 3 / 2, 1024);
-        buffer = std::make_unique<Buffer>(m_app->device(), capacity * sizeof(Vertex), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                                          VMA_MEMORY_USAGE_CPU_TO_GPU);
+        buffer = m_app->gpu().createBuffer({ capacity * sizeof(Vertex), rhi::kVertexBuffer, rhi::Memory::Upload });
     }
     buffer->upload(m_scratch.data(), m_scratch.size() * sizeof(Vertex));
     glm::mat4 viewProj = ctx.proj * ctx.view;
-    const rhi::BufferRef vb = rhi::VulkanCommandList::buffer(buffer->handle());
+    const rhi::BufferRef vb = buffer->ref();
     uint32_t first = 0;
     for (int layer = 0; layer < 2; ++layer) {
         uint32_t count = static_cast<uint32_t>(m_lines[layer].size() * 6);

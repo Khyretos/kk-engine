@@ -1,6 +1,6 @@
 #pragma once
 
-#include "kke/Buffer.h"
+#include "kke/rhi/Device.h"
 #include "kke/Cloth.h"
 #include "kke/Mesh.h"
 #include "kke/Module.h"
@@ -38,7 +38,7 @@ public:
 private:
     Application& m_app;
     std::unique_ptr<Pipeline> m_pipeline;
-    std::unique_ptr<Buffer> m_buffers[Renderer::kMaxFramesInFlight];
+    std::unique_ptr<rhi::Buffer> m_buffers[Renderer::kMaxFramesInFlight];
     size_t m_capacity[Renderer::kMaxFramesInFlight] = {};
     std::vector<Vertex> m_scratch;
 };
@@ -89,7 +89,7 @@ public:
     RayView rayView(uint32_t frame) const;
 
 private:
-    struct FrameBuffers { std::unique_ptr<Buffer> vertices, indices; size_t vCap = 0, iCap = 0; uint64_t version = 0; };
+    struct FrameBuffers { std::unique_ptr<rhi::Buffer> vertices, indices; size_t vCap = 0, iCap = 0; uint64_t version = 0; };
     void ensureUploaded(uint32_t frame);
     Application& m_app;
     // Shared by every DynamicMeshRenderer of the application (made once).
