@@ -24,3 +24,4 @@
 - runs/2026-10-17T2235Z-b9c1519fd7: claude/ci-mirrors, test job success
 - runs/2026-10-18T0024Z-79a1909c70: claude/cloth-passes, test job success
 - runs/2026-10-18T0118Z-bfefaf01b0: claude/screen-gi, test job success
+- runs/2026-10-18T0139Z-c7352fbaa9: claude/ray-query, test job success
