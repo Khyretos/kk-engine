@@ -1,0 +1,4 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+// Motion blur (shaders/motion_blur.glsl).
+#include "motion_blur.glsl"

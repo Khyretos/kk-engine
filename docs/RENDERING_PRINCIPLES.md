@@ -395,6 +395,25 @@ nothing read back; a game can fix the focus instead
 Synty demo at 844 x 1384 with 4x MSAA: 0.385 ms off, 0.479 on (+0.094;
 48 samples cost +0.125, and 24 left a visible pattern in heavy blur).
 
+**Motion blur (ENG-F10 part 4, 2026-10-18).** The graphics setting
+`motionBlur` (off by default; `KKE_MOTION_BLUR=0` or `1` wins) smears the
+image along the camera's movement over a 180-degree shutter (half the
+frame time), at most 4% of the image width. The usual method (McGuire et
+al. 2012, as in most engines) draws a velocity buffer in every shader and
+then finds the largest motion per tile. Ours draws nothing extra: each
+pixel's motion comes from its depth and last frame's camera, the
+reprojection TAA already uses, so every module and shader gets it for
+free and the image stays still when the camera is still. Moving things
+seen by a still camera are not smeared; that needs a velocity buffer and
+waits until a game asks for it. One compute pass gathers 12 samples along
+the motion, shifted per pixel and frame by interleaved gradient noise
+(noise, not bands), weighed by depth as McGuire does: a sample in front
+counts where its own smear reaches the pixel, one behind only within the
+pixel's smear, so a sharp thing near the camera keeps its edge. Measured
+on the RX 9070 XT, the Synty demo turning at 1.2 rad/s at 1329 x 682 with
+4x MSAA: 0.274 ms off, 0.42 on (+0.14); with a still camera every pixel
+leaves at its first test and the cost is within the noise.
+
 ### 7. Tone mapping, exposure and colour management
 
 **Argument.** (Fox Engine videos, 33 "tone mapping & exposure
