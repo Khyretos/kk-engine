@@ -13,9 +13,10 @@
 #include "tonemap.glsl"
 
 layout(set = 0, binding = 0) uniform sampler2D uScene;
+layout(set = 0, binding = 1) uniform sampler2D uBloom; // ENG-F10, half resolution; the scene itself when there is none
 
 layout(push_constant) uniform Post {
-    vec4 tone;       // x = kke::ToneMapper, y = exposure, z = 1: encode sRGB here
+    vec4 tone;       // x = kke::ToneMapper, y = exposure, z = 1: encode sRGB here, w = bloom's share of the light
     vec4 lookSlope;  // rgb = slope, a = saturation
     vec4 lookOffset; // rgb = offset, a = 1 when a look is set
     vec4 lookPower;
@@ -29,7 +30,9 @@ vec3 linearToSrgb(vec3 c) {
 }
 
 void main() {
-    vec3 c = toneMapLook(texture(uScene, inUv).rgb, post.tone, post.lookSlope, post.lookOffset, post.lookPower);
+    vec3 light = texture(uScene, inUv).rgb;
+    if (post.tone.w > 0.0) light = mix(light, texture(uBloom, inUv).rgb, post.tone.w);
+    vec3 c = toneMapLook(light, post.tone, post.lookSlope, post.lookOffset, post.lookPower);
     if (post.tone.z > 0.5) c = linearToSrgb(c);
     outColor = vec4(c, 1.0);
 }

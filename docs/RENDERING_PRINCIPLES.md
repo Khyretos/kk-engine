@@ -354,6 +354,17 @@ misty-morning mood, 1328 x 682 with 4x MSAA: 0.331 ms off, 0.377 on
 (+0.05; the grid's cost does not grow with the resolution). On lavapipe it
 costs too much for a PC without a GPU, so it stays off there.
 
+**Bloom (ENG-F10, 2026-10-18).** The graphics setting `bloom` (on by
+default at a 4% share; `KKE_BLOOM=0` or `1` wins; off on the software-GPU
+target) follows Call of Duty: Advanced Warfare (Jimenez 2014): no
+brightness threshold (everything glows a little, the brightest the most,
+as through real glass), six halvings with a 13-tap filter, the first
+weighting its five boxes by 1 / (1 + brightness) so one hot pixel can't
+flicker into a blob, then the build back up with a 3x3 tent, normalised
+so a flat image blooms to itself; the tone map mixes it in. Compute only,
+one frame, nothing carried over. Measured on the RX 9070 XT, the Synty
+demo at 836 x 1384 with 4x MSAA: 0.336 ms off, 0.384 on (+0.05).
+
 ### 7. Tone mapping, exposure and colour management
 
 **Argument.** (Fox Engine videos, 33 "tone mapping & exposure

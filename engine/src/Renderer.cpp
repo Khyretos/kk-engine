@@ -1,5 +1,6 @@
 #include "kke/Renderer.h"
 
+#include "BloomPass.h"
 #include "SmaaPass.h"
 #include "TaaPass.h"
 
@@ -36,6 +37,7 @@ Renderer::~Renderer() {
     vkDeviceWaitIdle(m_device->device());
     m_retired.releaseAll();
     m_smaa.reset();
+    m_bloom.reset();
     m_taa.reset();
     for (uint32_t i = 0; i < kMaxFramesInFlight; ++i) destroySceneTarget(i);
     destroyPostPass();
@@ -663,6 +665,13 @@ void Renderer::beginOverlayPass() {
         m_taaPrevViewProj = m_taaViewProj;
     }
     m_taaHavePrev = taa;
+    m_bloomSource = VK_NULL_HANDLE;
+    if (m_bloomOn) {
+        // Bloom over the anti-aliased light, mixed in by the tone map.
+        if (!m_bloom) m_bloom = std::make_unique<BloomPass>(*m_device);
+        m_bloom->record(cmd, m_currentFrame, m_postSource, m_postSourceLayout, t.extent);
+        m_bloomSource = m_bloom->output();
+    }
 
     // The swapchain's own pass: it clears the image (the acquire semaphore
     // is waited on at COLOR_ATTACHMENT_OUTPUT, which its dependency chains
@@ -695,18 +704,16 @@ void Renderer::createPostPass() {
     si.maxLod = 0.0f;
     VK_CHECK(vkCreateSampler(dev, &si, nullptr, &m_postSampler));
 
-    VkDescriptorSetLayoutBinding binding{};
-    binding.binding = 0;
-    binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    binding.descriptorCount = 1;
-    binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    // Binding 0: the scene light; 1: bloom (ENG-F10).
+    std::array<VkDescriptorSetLayoutBinding, 2> bindings{};
+    for (uint32_t i = 0; i < 2; ++i) bindings[i] = { i, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr };
     VkDescriptorSetLayoutCreateInfo li{};
     li.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    li.bindingCount = 1;
-    li.pBindings = &binding;
+    li.bindingCount = static_cast<uint32_t>(bindings.size());
+    li.pBindings = bindings.data();
     VK_CHECK(vkCreateDescriptorSetLayout(dev, &li, nullptr, &m_postSetLayout));
 
-    VkDescriptorPoolSize size{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, kMaxFramesInFlight };
+    VkDescriptorPoolSize size{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2 * kMaxFramesInFlight };
     VkDescriptorPoolCreateInfo pi{};
     pi.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     pi.maxSets = kMaxFramesInFlight;
@@ -753,19 +760,24 @@ void Renderer::drawPostPass(VkCommandBuffer cmd) {
     }
     // This slot's previous frame has finished (beginFrame waited on its
     // fence), so its set can point at this frame's scene image.
-    VkDescriptorImageInfo image{ m_postSampler, m_postSource, m_postSourceLayout };
-    VkWriteDescriptorSet w{};
-    w.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    w.dstSet = m_postSets[m_currentFrame];
-    w.dstBinding = 0;
-    w.descriptorCount = 1;
-    w.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    w.pImageInfo = &image;
-    vkUpdateDescriptorSets(m_device->device(), 1, &w, 0, nullptr);
+    const std::array<VkDescriptorImageInfo, 2> images{ { { m_postSampler, m_postSource, m_postSourceLayout },
+                                                         m_bloomSource ? VkDescriptorImageInfo{ m_postSampler, m_bloomSource, VK_IMAGE_LAYOUT_GENERAL }
+                                                                       : VkDescriptorImageInfo{ m_postSampler, m_postSource, m_postSourceLayout } } };
+    std::array<VkWriteDescriptorSet, 2> w{};
+    for (uint32_t i = 0; i < 2; ++i) {
+        w[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        w[i].dstSet = m_postSets[m_currentFrame];
+        w[i].dstBinding = i;
+        w[i].descriptorCount = 1;
+        w[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        w[i].pImageInfo = &images[i];
+    }
+    vkUpdateDescriptorSets(m_device->device(), static_cast<uint32_t>(w.size()), w.data(), 0, nullptr);
 
     m_postPipeline->bind(cmd);
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_postPipeline->layout(), 0, 1, &m_postSets[m_currentFrame], 0, nullptr);
     PostParams post = m_post;
+    post.tone.w = m_bloomSource && m_bloom ? m_bloom->settings().strength : 0.0f;
     post.tone.z = m_swapChain->encodesSrgb() ? 0.0f : 1.0f; // a UNORM (10-bit) swapchain: the shader encodes sRGB
     vkCmdPushConstants(cmd, m_postPipeline->layout(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PostParams), &post);
     vkCmdDraw(cmd, 3, 1, 0, 0);

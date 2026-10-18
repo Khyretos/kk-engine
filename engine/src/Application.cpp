@@ -168,6 +168,10 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
         m_shadowRaysEnv = shadowRaysFromName(env, ShadowRays::Off);
         setShadowRays(*m_shadowRaysEnv);
     }
+    if (const char* env = dev::env("KKE_BLOOM"); env && *env) {
+        m_bloomEnv = env[0] == '1';
+        setBloom(*m_bloomEnv);
+    }
     if (const char* env = dev::env("KKE_TAA"); env && *env) {
         m_taaEnv = env[0] == '1';
         setTaa(*m_taaEnv);
@@ -1456,6 +1460,8 @@ void Application::setShadowRays(ShadowRays mode) {
     updateSceneDepthReadable();
     if (m_shadowRays == ShadowRays::Off && m_shadowRayPass) m_shadowRayPass->invalidate();
 }
+
+void Application::setBloom(bool on) { m_renderer->setBloom(m_bloomEnv ? *m_bloomEnv : on); }
 
 void Application::setTaa(bool on) {
     m_taaOn = m_taaEnv ? *m_taaEnv : on;
