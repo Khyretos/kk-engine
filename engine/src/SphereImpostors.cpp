@@ -1,6 +1,7 @@
 #include "kke/SphereImpostors.h"
 
 #include "kke/Application.h"
+#include "kke/rhi/VulkanCommandList.h"
 
 #include <algorithm>
 #include <map>
@@ -51,13 +52,13 @@ void SphereImpostorRenderer::draw(const RenderContext& ctx, const std::vector<Sp
                                                 VMA_MEMORY_USAGE_CPU_TO_GPU);
     }
     m_buffers[f]->upload(m_scratch.data(), m_scratch.size() * sizeof(Vertex));
-    m_pipeline->bind(ctx.cmd);
+    m_pipeline->bind(*ctx.list);
     VkDescriptorSet sets[] = { ctx.lightingDescriptorSet, ctx.shadowMapDescriptorSet };
-    vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->layout(), 0, 2, sets, 0, nullptr);
+    ctx.list->bindGroups(*m_pipeline, 0, rhi::VulkanCommandList::groups(sets, 2));
     VkBuffer vb = m_buffers[f]->handle();
     VkDeviceSize off = 0;
-    vkCmdBindVertexBuffers(ctx.cmd, 0, 1, &vb, &off);
-    vkCmdDraw(ctx.cmd, static_cast<uint32_t>(m_scratch.size()), 1, 0, 0);
+    ctx.list->bindVertexBuffer(0, rhi::VulkanCommandList::buffer(vb), off);
+    ctx.list->draw(static_cast<uint32_t>(m_scratch.size()), 1, 0, 0);
 }
 
 namespace {
@@ -221,17 +222,17 @@ void DynamicMeshRenderer::drawCloth(const RenderContext& ctx, const Fabric& fabr
     }
     ensureUploaded(ctx.frameIndex);
     FrameBuffers& fb = m_frames[ctx.frameIndex];
-    m_clothPipeline->bind(ctx.cmd);
+    m_clothPipeline->bind(*ctx.list);
     VkDescriptorSet sets[] = { ctx.lightingDescriptorSet, ctx.shadowMapDescriptorSet, ctx.defaultMaterialTextureDescriptorSet };
-    vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_clothPipeline->layout(), 0, 3, sets, 0, nullptr);
+    ctx.list->bindGroups(*m_clothPipeline, 0, rhi::VulkanCommandList::groups(sets, 3));
     ClothPush pc{ model, 0.0f, fabric.roughness, 0.0f, 0.0f, glm::vec4(fabric.sheenColor, fabric.sheen),
                   glm::vec4(float(fabric.weave), fabric.weaveScale, fabric.fuzz, fabric.specular) };
-    vkCmdPushConstants(ctx.cmd, m_clothPipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
+    ctx.list->pushConstants(*m_clothPipeline, rhi::kVertex | rhi::kFragment, 0, sizeof(pc), &pc);
     VkBuffer vb = fb.vertices->handle();
     VkDeviceSize off = 0;
-    vkCmdBindVertexBuffers(ctx.cmd, 0, 1, &vb, &off);
-    vkCmdBindIndexBuffer(ctx.cmd, fb.indices->handle(), 0, VK_INDEX_TYPE_UINT32);
-    vkCmdDrawIndexed(ctx.cmd, static_cast<uint32_t>(m_indices.size()), 1, 0, 0, 0);
+    ctx.list->bindVertexBuffer(0, rhi::VulkanCommandList::buffer(vb), off);
+    ctx.list->bindIndexBuffer(rhi::VulkanCommandList::buffer(fb.indices->handle()), 0, rhi::IndexType::U32);
+    ctx.list->drawIndexed(static_cast<uint32_t>(m_indices.size()), 1, 0, 0, 0);
     if (m_app.recordingRays() && ctx.viewIndex == 0) m_app.recordRayDraw(this, model);
 }
 
@@ -239,31 +240,31 @@ void DynamicMeshRenderer::bindAndDraw(const RenderContext& ctx, Pipeline& pipeli
                                       VkDescriptorSet raySet) {
     ensureUploaded(ctx.frameIndex);
     FrameBuffers& fb = m_frames[ctx.frameIndex];
-    pipeline.bind(ctx.cmd);
+    pipeline.bind(*ctx.list);
     VkDescriptorSet sets[] = { ctx.lightingDescriptorSet, ctx.shadowMapDescriptorSet, ctx.defaultMaterialTextureDescriptorSet };
-    vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.layout(), 0, 3, sets, 0, nullptr);
-    if (raySet) vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.layout(), 3, 1, &raySet, 0, nullptr);
+    ctx.list->bindGroups(pipeline, 0, rhi::VulkanCommandList::groups(sets, 3));
+    if (raySet) ctx.list->bindGroups(pipeline, 3, rhi::VulkanCommandList::groups(&raySet, 1));
     MeshPush pc{ model, metallic, roughness };
-    vkCmdPushConstants(ctx.cmd, pipeline.layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
+    ctx.list->pushConstants(pipeline, rhi::kVertex, 0, sizeof(pc), &pc);
     VkBuffer vb = fb.vertices->handle();
     VkDeviceSize off = 0;
-    vkCmdBindVertexBuffers(ctx.cmd, 0, 1, &vb, &off);
-    vkCmdBindIndexBuffer(ctx.cmd, fb.indices->handle(), 0, VK_INDEX_TYPE_UINT32);
-    vkCmdDrawIndexed(ctx.cmd, static_cast<uint32_t>(m_indices.size()), 1, 0, 0, 0);
+    ctx.list->bindVertexBuffer(0, rhi::VulkanCommandList::buffer(vb), off);
+    ctx.list->bindIndexBuffer(rhi::VulkanCommandList::buffer(fb.indices->handle()), 0, rhi::IndexType::U32);
+    ctx.list->drawIndexed(static_cast<uint32_t>(m_indices.size()), 1, 0, 0, 0);
 }
 
 void DynamicMeshRenderer::drawShadow(const ShadowRenderContext& ctx, const glm::mat4& model) {
     if (m_indices.empty()) return;
     ensureUploaded(ctx.frameIndex);
     FrameBuffers& fb = m_frames[ctx.frameIndex];
-    m_shadowPipeline->bind(ctx.cmd);
+    m_shadowPipeline->bind(*ctx.list);
     ShadowPush pc{ ctx.lightViewProj, model };
-    vkCmdPushConstants(ctx.cmd, m_shadowPipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
+    ctx.list->pushConstants(*m_shadowPipeline, rhi::kVertex, 0, sizeof(pc), &pc);
     VkBuffer vb = fb.vertices->handle();
     VkDeviceSize off = 0;
-    vkCmdBindVertexBuffers(ctx.cmd, 0, 1, &vb, &off);
-    vkCmdBindIndexBuffer(ctx.cmd, fb.indices->handle(), 0, VK_INDEX_TYPE_UINT32);
-    vkCmdDrawIndexed(ctx.cmd, static_cast<uint32_t>(m_indices.size()), 1, 0, 0, 0);
+    ctx.list->bindVertexBuffer(0, rhi::VulkanCommandList::buffer(vb), off);
+    ctx.list->bindIndexBuffer(rhi::VulkanCommandList::buffer(fb.indices->handle()), 0, rhi::IndexType::U32);
+    ctx.list->drawIndexed(static_cast<uint32_t>(m_indices.size()), 1, 0, 0, 0);
 }
 
 } // namespace kke

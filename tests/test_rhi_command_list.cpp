@@ -70,3 +70,24 @@ TEST(RhiCommandList, ABackendSeesTheCallsInOrder) {
                                              "vertex 0 7", "index 8 u32", "drawIndexed 36x2", "draw 6x1" };
     EXPECT_EQ(list.calls, expected);
 }
+
+TEST(RhiCommandList, DescriptorSetsBecomeBindGroupsInOrder) {
+    VkDescriptorSet sets[3];
+    for (uint64_t i = 0; i < 3; ++i) sets[i] = rhi::VulkanCommandList::fromHandle<VkDescriptorSet>(0x100 + i);
+    const auto g = rhi::VulkanCommandList::groups(sets, 3);
+    const std::span<const rhi::BindGroup> span = g;
+    ASSERT_EQ(span.size(), 3u);
+    for (uint64_t i = 0; i < 3; ++i) EXPECT_EQ(span[i].handle, 0x100 + i);
+    RecordingList list;
+    alignas(Pipeline) unsigned char storage[sizeof(Pipeline)] = {};
+    list.bindGroups(*reinterpret_cast<const Pipeline*>(storage), 2, rhi::VulkanCommandList::groups(sets, 1));
+    EXPECT_EQ(list.calls, std::vector<std::string>{ "groups 2+1" });
+}
+
+TEST(RhiCommandList, AtMostEightGroups) {
+    VkDescriptorSet sets[10];
+    for (uint64_t i = 0; i < 10; ++i) sets[i] = rhi::VulkanCommandList::fromHandle<VkDescriptorSet>(i + 1);
+    const std::span<const rhi::BindGroup> span = rhi::VulkanCommandList::groups(sets, 10);
+    EXPECT_EQ(span.size(), 8u);
+    EXPECT_EQ(span.back().handle, 8u);
+}

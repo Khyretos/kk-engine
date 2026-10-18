@@ -4,6 +4,7 @@
 #include "kke/ShaderUtils.h"
 #include "kke/VulkanCheck.h"
 #include "kke/VulkanDevice.h"
+#include "kke/rhi/VulkanCommandList.h"
 
 #include <algorithm>
 #include <array>
@@ -224,12 +225,12 @@ void ParticleEffects::drawGpu(const RenderContext& ctx, Kind kind) {
         g.setBuffers[f][0] = records;
         g.setBuffers[f][1] = state;
     }
-    pipe.bind(ctx.cmd);
+    pipe.bind(*ctx.list);
     VkDescriptorSet sets[] = { ctx.lightingDescriptorSet, ctx.shadowMapDescriptorSet, g.sets[f] };
-    vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe.layout(), 0, 3, sets, 0, nullptr);
+    ctx.list->bindGroups(pipe, 0, rhi::VulkanCommandList::groups(sets, 3));
     const glm::vec4 push[2] = { glm::vec4(m_sim.time(), m_sim.wind()), glm::vec4(static_cast<float>(kind), 0.0f, 0.0f, 0.0f) };
-    vkCmdPushConstants(ctx.cmd, pipe.layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(push), push);
-    vkCmdDraw(ctx.cmd, 6, static_cast<uint32_t>(g.ring.used()), 0, 0); // one instance per slot; dead ones draw nothing
+    ctx.list->pushConstants(pipe, rhi::kVertex, 0, sizeof(push), push);
+    ctx.list->draw(6, static_cast<uint32_t>(g.ring.used()), 0, 0); // one instance per slot; dead ones draw nothing
 }
 
 namespace {
@@ -489,13 +490,13 @@ void ParticleEffects::drawBatch(const RenderContext& ctx, Kind kind, const std::
     }
     slot.buffer->upload(instances.data(), instances.size() * sizeof(GpuInstance));
     Pipeline& pipe = pipeline(kind);
-    pipe.bind(ctx.cmd);
+    pipe.bind(*ctx.list);
     VkDescriptorSet sets[] = { ctx.lightingDescriptorSet, ctx.shadowMapDescriptorSet };
-    vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe.layout(), 0, 2, sets, 0, nullptr);
+    ctx.list->bindGroups(pipe, 0, rhi::VulkanCommandList::groups(sets, 2));
     VkBuffer vb = slot.buffer->handle();
     VkDeviceSize off = 0;
-    vkCmdBindVertexBuffers(ctx.cmd, 0, 1, &vb, &off);
-    vkCmdDraw(ctx.cmd, 6, static_cast<uint32_t>(instances.size()), 0, 0); // six corners, one instance per particle
+    ctx.list->bindVertexBuffer(0, rhi::VulkanCommandList::buffer(vb), off);
+    ctx.list->draw(6, static_cast<uint32_t>(instances.size()), 0, 0); // six corners, one instance per particle
 }
 
 void ParticleEffects::draw(const RenderContext& ctx) {
