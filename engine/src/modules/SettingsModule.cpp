@@ -34,6 +34,7 @@ void SettingsModule::apply() {
     m_app->setBloom(g.bloom);
     m_app->setDepthOfField(g.depthOfField);
     m_app->setMotionBlur(g.motionBlur);
+    m_app->setOcclusionCulling(g.occlusionCulling);
     m_app->setShadowRays(shadowRaysFromName(g.shadowRays, ShadowRays::Off));
     m_app->shadowMap().setBaseTileResolution(static_cast<uint32_t>(g.shadowResolution));
     m_app->lighting().ambientColor = m_baseAmbient * g.brightness;
