@@ -3,6 +3,7 @@
 #include "BloomPass.h"
 #include "ColorLutTexture.h"
 #include "DofPass.h"
+#include "MotionBlurPass.h"
 #include "SmaaPass.h"
 #include "TaaPass.h"
 
@@ -44,6 +45,7 @@ Renderer::~Renderer() {
     m_identityLut.reset();
     m_taa.reset();
     m_dof.reset();
+    m_motionBlur.reset();
     for (uint32_t i = 0; i < kMaxFramesInFlight; ++i) destroySceneTarget(i);
     destroyPostPass();
     if (m_scenePass) vkDestroyRenderPass(m_device->device(), m_scenePass, nullptr);
@@ -686,6 +688,18 @@ void Renderer::beginOverlayPass() {
         m_postSource = m_dof->output();
         m_postSourceLayout = VK_IMAGE_LAYOUT_GENERAL;
     }
+    const bool blur = m_motionBlurOn && t.depthSampleView != VK_NULL_HANDLE;
+    if (blur) {
+        // Motion blur along each pixel's movement since last frame, before bloom spreads the light.
+        if (!m_motionBlur) m_motionBlur = std::make_unique<MotionBlurPass>(*m_device);
+        m_motionBlur->settings() = m_motionBlurSettings;
+        m_motionBlur->record(cmd, m_currentFrame, m_postSource, m_postSourceLayout, t.depthSampleView, m_scenePassSamples, t.extent,
+                             m_motionBlurPrevViewProj * glm::inverse(m_taaViewProj), m_dofProj, m_motionBlurHavePrev);
+        m_postSource = m_motionBlur->output();
+        m_postSourceLayout = VK_IMAGE_LAYOUT_GENERAL;
+    }
+    m_motionBlurPrevViewProj = m_taaViewProj;
+    m_motionBlurHavePrev = blur;
     m_bloomSource = VK_NULL_HANDLE;
     if (m_bloomOn) {
         // Bloom over the anti-aliased light, mixed in by the tone map.

@@ -5,6 +5,7 @@
 #include "kke/Buffer.h"
 #include "kke/DepthOfField.h"
 #include "kke/FrameRetireQueue.h"
+#include "kke/MotionBlur.h"
 #include "kke/ToneMap.h"
 
 #include <glm/glm.hpp>
@@ -51,6 +52,7 @@ class SmaaPass;
 class TaaPass;
 class BloomPass;
 class DofPass;
+class MotionBlurPass;
 class ColorLutTexture;
 struct ColorLut;
 
@@ -142,6 +144,13 @@ public:
         m_dofProj = proj;
         m_dofDt = dt;
     }
+    // Motion blur from the camera's movement (ENG-F10 part 4, kke/MotionBlur.h),
+    // after depth of field and before bloom. Needs the scene's depth readable
+    // and each frame's viewProj (setTaaCamera) and projection (setDofCamera).
+    // Off by default.
+    void setMotionBlur(bool on) { m_motionBlurOn = on; }
+    bool motionBlur() const { return m_motionBlurOn; }
+    MotionBlurSettings& motionBlurSettings() { return m_motionBlurSettings; }
     float renderScale() const { return m_renderScale; }
     // Size of the 3D image: extent() times the render scale.
     VkExtent2D renderExtent() const;
@@ -284,6 +293,10 @@ private:
     DofSettings m_dofSettings;
     glm::mat4 m_dofProj{1.0f};
     float m_dofDt = 0.0f;
+    std::unique_ptr<MotionBlurPass> m_motionBlur; // made the first time motion blur is on
+    bool m_motionBlurOn = false, m_motionBlurHavePrev = false;
+    MotionBlurSettings m_motionBlurSettings;
+    glm::mat4 m_motionBlurPrevViewProj{1.0f}; // last frame's camera, for the motion
     bool m_taaOn = false, m_taaHavePrev = false;
     glm::mat4 m_taaViewProj{1.0f}, m_taaPrevViewProj{1.0f};
     VkImageView m_postSource = VK_NULL_HANDLE; // what the tone map reads this frame (the scene, or SMAA's or TAA's result)

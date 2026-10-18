@@ -326,6 +326,10 @@ public:
     // wins over it. Its focus, aperture and blur: depthOfFieldSettings() (focusDistance 0 = auto focus).
     void setDepthOfField(bool on);
     DofSettings& depthOfFieldSettings();
+    // Motion blur from the camera's movement (ENG-F10 part 4, kke/MotionBlur.h): the graphics setting "motionBlur";
+    // KKE_MOTION_BLUR=1 or 0 wins over it.
+    void setMotionBlur(bool on);
+    MotionBlurSettings& motionBlurSettings();
     // Ray-traced sun shadows (ENG-F07, kke/ShadowRays.h): Kke traces only
     // past the shadow map's reach, Classic every pixel; ray-query devices,
     // one view. The graphics setting "shadowRays" or KKE_SHADOW_RAYS.
@@ -531,6 +535,8 @@ private:
     std::optional<bool> m_taaEnv;                               // KKE_TAA
     std::optional<bool> m_dofEnv;                               // KKE_DOF
     bool m_dofOn = false;
+    std::optional<bool> m_motionBlurEnv;                        // KKE_MOTION_BLUR
+    bool m_motionBlurOn = false;
     std::optional<bool> m_bloomEnv;                             // KKE_BLOOM
     std::unique_ptr<ShadowRayPass> m_shadowRayPass; // made the first time shadow rays are on
     std::unique_ptr<ClusterLightPass> m_clusterLights; // made the first time there are many lights (ENG-F08)
