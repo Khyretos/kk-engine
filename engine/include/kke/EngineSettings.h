@@ -42,6 +42,8 @@ struct EngineSettings {
         bool taa = false;
         // Bloom (Renderer::setBloom): bright light bleeding into what is around it.
         bool bloom = true;
+        // Depth of field (Renderer::setDepthOfField): a lens's blur in front of and behind the focus.
+        bool depthOfField = false;
         // Ray-traced sun shadows (kke/ShadowRays.h): "off", "kke" (only past
         // the shadow map's reach) or "classic" (every pixel).
         std::string shadowRays = "off";

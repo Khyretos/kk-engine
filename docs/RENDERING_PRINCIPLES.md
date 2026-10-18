@@ -375,6 +375,26 @@ the tests check greys stay grey through a contrast table. One 3D texture
 and eight texel reads per pixel at most; no measurable cost on the RX
 9070 XT.
 
+**Depth of field (ENG-F10 part 3, 2026-10-18).** The graphics setting
+`depthOfField` (off by default; `KKE_DOF=0` or `1` wins, `KKE_DOF_FOCUS`
+fixes the focus in metres) blurs what is nearer or farther than the focus
+by a thin lens's circle of confusion: a 50 mm lens at f/1.4 by default
+(the lens that matches a game's wide view leaves almost everything sharp,
+as on a real camera), the circle capped at 1.2% of the image height. The
+usual method (Call of Duty: Advanced Warfare) needs tiles of the largest
+nearby circle and separate near and far layers. Ours is one gather at half
+size: every pixel looks out to the largest circle with 32 golden-angle
+samples, and a sample counts where its own circle reaches the pixel,
+weighed by one over its area. A sample behind the pixel counts only within
+the pixel's own circle, so the background never blurs over a sharp thing
+in front of it, while a near sample spreads freely over what is behind.
+Auto focus averages 64 depths at the middle of the screen in log distance
+and follows them over about a sixth of a second, all on the GPU with
+nothing read back; a game can fix the focus instead
+(`Application::depthOfFieldSettings()`). Measured on the RX 9070 XT, the
+Synty demo at 844 x 1384 with 4x MSAA: 0.385 ms off, 0.479 on (+0.094;
+48 samples cost +0.125, and 24 left a visible pattern in heavy blur).
+
 ### 7. Tone mapping, exposure and colour management
 
 **Argument.** (Fox Engine videos, 33 "tone mapping & exposure

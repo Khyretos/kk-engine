@@ -1,0 +1,5 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+// Depth of field, the focus at the middle of the screen (shaders/dof.glsl).
+#define DOF_FOCUS
+#include "dof.glsl"
