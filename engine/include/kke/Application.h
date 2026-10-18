@@ -15,6 +15,7 @@
 #include "kke/RayScene.h"
 #include "kke/Reflections.h"
 #include "kke/VolumetricFog.h"
+#include "kke/Taa.h"
 #include "kke/ScreenGi.h"
 #include "kke/ShadowMap.h"
 #include "kke/Texture.h"
@@ -300,6 +301,11 @@ public:
     // Morphological anti-aliasing (ENG-F05, Renderer::setSmaa): the graphics
     // setting "smaa"; KKE_SMAA=1 or 0 wins over it.
     void setSmaa(bool on);
+    // Temporal anti-aliasing (ENG-F05 part 2, kke/Taa.h), an option over the
+    // clean image: the graphics setting "taa"; KKE_TAA=1 or 0 wins over it.
+    // One view only (split screen draws without it).
+    void setTaa(bool on);
+    TaaSettings& taaSettings() { return m_taaSettings; }
     bool volumetricFog() const { return m_volumetricFogOn; }
     VolumetricFogSettings& volumetricFogSettings() { return m_volumetricFogSettings; }
     // Set 3's layout for see-through surfaces that trace refracted rays
@@ -495,6 +501,11 @@ private:
     VolumetricFogSettings m_volumetricFogSettings;
     bool m_volumetricFogOn = false, m_volumetricFogEnv = false; // KKE_VOLUMETRIC_FOG=1 keeps it on
     std::optional<bool> m_smaaEnv;                              // KKE_SMAA
+    std::optional<bool> m_taaEnv;                               // KKE_TAA
+    bool m_taaOn = false;
+    TaaSettings m_taaSettings;
+    uint32_t m_taaFrame = 0; // which sub-pixel offset this frame draws with
+    void updateSceneDepthReadable(); // kept when GI, reflections or TAA read it
     std::unique_ptr<RefractionRays> m_refractionRays; // made the first time refraction traces rays
     // This frame's kke::RayScene from what is drawn (KKE and classic ray tracing), into rays; once a frame.
     void buildRayScene(VkCommandBuffer cmd, const glm::mat4& view, const SkyEnvironment* sky, ReflectionRays& rays);
