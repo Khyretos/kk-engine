@@ -39,3 +39,4 @@
 - runs/2026-10-18T0913Z-c3737c4a38: claude/many-lights, test job success
 - runs/2026-10-18T1027Z-8e499f6daa: claude/bloom, test job success
 - runs/2026-10-18T1110Z-9a57b1e696: claude/bloom-barrier, test job success
+- runs/2026-10-18T1132Z-173ee2d2af: claude/menu-shade, test job success

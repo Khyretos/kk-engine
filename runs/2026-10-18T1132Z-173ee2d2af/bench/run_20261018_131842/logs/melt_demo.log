@@ -1,0 +1,23 @@
+[2026-10-18 13:20:09.436][engine][Application][Kreative Kompas Engine - Melt Demo][info]: Hardware target: desktop (no specific device recognised); platform backend: desktop
+[2026-10-18 13:20:09.436][engine][Application][Kreative Kompas Engine - Melt Demo][info]: UI profile: desktop
+[2026-10-18 13:20:09.436][engine][Governor][Kreative Kompas Engine - Melt Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 1.00
+[2026-10-18 13:20:09.441][engine][VulkanDevice][Kreative Kompas Engine - Melt Demo][info]: using device: llvmpipe (LLVM 22.1.8, 256 bits)
+[2026-10-18 13:20:09.441][engine][VulkanDevice][Kreative Kompas Engine - Melt Demo][info]: inline ray tracing (VK_KHR_ray_query): on
+[2026-10-18 13:20:09.501][engine][SwapChain][Kreative Kompas Engine - Melt Demo][info]: colour output: format 50 (8-bit sRGB)
+[2026-10-18 13:20:09.501][engine][Application][Kreative Kompas Engine - Melt Demo][info]: Hardware target: software-gpu (the only Vulkan device is a CPU: llvmpipe (LLVM 22.1.8, 256 bits))
+[2026-10-18 13:20:09.502][engine][Governor][Kreative Kompas Engine - Melt Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+[2026-10-18 13:20:09.502][engine][Application][Kreative Kompas Engine - Melt Demo][info]: MSAA 1x (software rasteriser)
+[2026-10-18 13:20:09.587][engine][Application][Kreative Kompas Engine - Melt Demo][info]: mood 'dusk' (assets/moods/dusk.yaml)
+[2026-10-18 13:20:09.588][engine][Benchmark][Kreative Kompas Engine - Melt Demo][info]: benchmark: 3 s warm-up, then 20 s measured, uncapped (no vsync, no frame cap)
+[rmlui] Loaded font face 'Noto Sans' [regular] from 'assets/fonts/NotoSans-Regular.ttf'.
+[rmlui] Loaded font face 'Noto Sans' [bold] from 'assets/fonts/NotoSans-Bold.ttf'.
+[rmlui] Loaded font face 'Noto Sans' [italic] from 'assets/fonts/NotoSans-Italic.ttf'.
+[rmlui] Loaded font face 'Noto Color Emoji' [regular] from 'assets/fonts/NotoColorEmoji.ttf'.
+[ui] RmlUi initialised with real Vulkan rendering (text via glyph textures, <img>/background-image via stb_image, both real now -- see RmlVulkanRenderInterface.h)
+[2026-10-18 13:20:09.716][engine][Audio][Kreative Kompas Engine - Melt Demo][info]: Audio ready: 48000 Hz, 32 voices, output: Speakers (Realtek High Definition Audio) (WASAPI)
+[2026-10-18 13:20:09.820][engine][GameShell][Kreative Kompas Engine - Melt Demo][info]: no settings file at 'settings.json' (using defaults)
+[2026-10-18 13:20:09.820][engine][Governor][Kreative Kompas Engine - Melt Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+[2026-10-18 13:20:09.828][engine][Governor][Kreative Kompas Engine - Melt Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 0, render scale 0.75
+[2026-10-18 13:20:09.828][engine][Input][Kreative Kompas Engine - Melt Demo][info]: touch controls: stick left, button melt.pour, button melt.reset, button melt.smooth, button melt.block, button camera.zoom, pause
+[2026-10-18 13:20:33.186][engine][Benchmark][Kreative Kompas Engine - Melt Demo][info]: benchmark: 6 screenshot(s) in C:/forgejo-runner/work/9e55ff511af0e6e2/hostexecutor/results/bench/run_20261018_131842/reports/shots
+[2026-10-18 13:20:33.187][engine][Benchmark][Kreative Kompas Engine - Melt Demo][info]: benchmark: 155 frames, 8.7 fps avg, 6.8 fps 1% low, 0 hitch(es), verdict too slow; report C:\forgejo-runner\work\9e55ff511af0e6e2\hostexecutor\results\bench\run_20261018_131842\reports\melt_demo.json
