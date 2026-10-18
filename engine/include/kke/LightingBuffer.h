@@ -88,6 +88,17 @@ public:
         m_fogVolumeSampler = sampler;
         m_fogVolumeSettings = settings;
     }
+    // Ray-traced sun shadows (ENG-F07, set 0 binding 8): last frame's rays
+    // (kke::ShadowRayPass, GENERAL layout) cast with camera `viewProj`, `size`
+    // pixels; a ray's depth may differ by `slack` of the distance and still
+    // count. Null: none (the shadow map alone).
+    void setShadowRays(VkImageView image, VkSampler sampler, const glm::mat4& viewProj, const glm::vec2& size, float slack) {
+        m_shadowRays = image;
+        m_shadowRaySampler = sampler;
+        m_shadowRayViewProj = viewProj;
+        m_shadowRaySize = size;
+        m_shadowRaySlack = slack;
+    }
     void setBehind(VkImageView image, VkSampler sampler, const glm::vec2& size) {
         m_behind = image;
         m_behindSampler = sampler;
@@ -122,7 +133,7 @@ private:
     std::unique_ptr<Buffer> m_buffers[kSlotCount];
     uint32_t m_slot = 0;
 
-    void writeEnvironment(uint32_t slot); // bindings 1-7 of that slot: m_envMap, the GI, reflection, behind and fog images, or placeholders
+    void writeEnvironment(uint32_t slot); // bindings 1-8 of that slot: m_envMap, the GI, reflection, behind, fog and shadow-ray images, or placeholders
     void createVolumePlaceholder();
     std::unique_ptr<Texture> m_placeholder; // 1x1 black, bound while there is no map
     const Texture* m_envMap = nullptr;
@@ -139,6 +150,11 @@ private:
     VkImageView m_behind = VK_NULL_HANDLE;
     VkSampler m_behindSampler = VK_NULL_HANDLE;
     glm::vec2 m_behindSize{0.0f};
+    VkImageView m_shadowRays = VK_NULL_HANDLE;
+    VkSampler m_shadowRaySampler = VK_NULL_HANDLE;
+    glm::mat4 m_shadowRayViewProj{1.0f};
+    glm::vec2 m_shadowRaySize{0.0f};
+    float m_shadowRaySlack = 0.03f;
     VkImageView m_fogVolume = VK_NULL_HANDLE;
     VkSampler m_fogVolumeSampler = VK_NULL_HANDLE;
     VolumetricFogSettings m_fogVolumeSettings;

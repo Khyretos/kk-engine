@@ -40,6 +40,9 @@ struct EngineSettings {
         // Temporal anti-aliasing (Application::setTaa), an option over the clean
         // image: smoother still when standing still, a little softer in motion.
         bool taa = false;
+        // Ray-traced sun shadows (kke/ShadowRays.h): "off", "kke" (only past
+        // the shadow map's reach) or "classic" (every pixel).
+        std::string shadowRays = "off";
         float brightness = 1.0f;       // multiplies ambient light
         float uiScale = 1.0f;          // see UiModule::setUiScale()
         bool showDebugOverlay = false; // the ImGui developer panels (F1 in the showcase)

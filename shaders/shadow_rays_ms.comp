@@ -1,0 +1,5 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+// Ray-traced sun shadows, multisampled depth: sample 0 (shaders/shadow_rays.glsl).
+#define DEPTH_MS
+#include "shadow_rays.glsl"

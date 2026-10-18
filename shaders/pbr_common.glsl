@@ -244,6 +244,9 @@ vec3 shadeSurfaceAA(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
     float shadow = lighting.ambient.a > 0.5 ? computeShadow(fragPosLightSpace) : 1.0;
+    // Ray-traced sun shadows (ENG-F07): last frame's ray where there is one.
+    float rayShadow = lighting.ambient.a > 0.5 ? shadowRayAt(fragPosWorld) : -1.0;
+    if (rayShadow >= 0.0) shadow = rayShadow;
     vec3 Lo = vec3(0.0);
 
     for (int i = 0; i < MAX_LIGHTS; ++i) {
