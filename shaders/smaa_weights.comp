@@ -1,0 +1,5 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+// Anti-aliasing, the weights step (shaders/smaa.glsl).
+#define STEP_WEIGHTS
+#include "smaa.glsl"

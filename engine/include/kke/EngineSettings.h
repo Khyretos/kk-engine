@@ -33,6 +33,10 @@ struct EngineSettings {
         // Volumetric fog (Application::setVolumetricFog): the height fog lit
         // for real, with light shafts in the sun's shadow and halos round lamps.
         bool volumetricFog = false;
+        // Morphological anti-aliasing over MSAA (Renderer::setSmaa): edges in
+        // shading and alpha tests that MSAA can't smooth. One frame, no ghosting.
+        // On by default (Kees, 2026-10-18); TAA comes as an option beside it.
+        bool smaa = true;
         float brightness = 1.0f;       // multiplies ambient light
         float uiScale = 1.0f;          // see UiModule::setUiScale()
         bool showDebugOverlay = false; // the ImGui developer panels (F1 in the showcase)
