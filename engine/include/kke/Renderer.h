@@ -110,6 +110,16 @@ public:
     };
     // This frame's scene images (between beginFrame and endFrame).
     SceneImages sceneImages() const;
+    // The last finished frame's depth (ENG-F11: GPU particles bounce off it),
+    // in DEPTH_STENCIL_READ_ONLY, with the viewProj it was drawn with; a null
+    // view when there is none (the depth isn't kept, the first frame).
+    struct LastFrameDepth {
+        VkImageView view = VK_NULL_HANDLE;
+        VkExtent2D extent{};
+        uint32_t samples = 1;
+        glm::mat4 viewProj{1.0f};
+    };
+    LastFrameDepth lastFrameDepth() const;
 
     // 3D resolution relative to the window (resource governor, 1.6).
     // Clamped to 0.5..1. Takes effect on the next frame.
@@ -297,6 +307,8 @@ private:
     bool m_motionBlurOn = false, m_motionBlurHavePrev = false;
     MotionBlurSettings m_motionBlurSettings;
     glm::mat4 m_motionBlurPrevViewProj{1.0f}; // last frame's camera, for the motion
+    int m_lastDepthFrame = -1;                // the frame in flight whose depth lastFrameDepth() gives
+    uint32_t m_lastDepthSamples = 1;
     bool m_taaOn = false, m_taaHavePrev = false;
     glm::mat4 m_taaViewProj{1.0f}, m_taaPrevViewProj{1.0f};
     VkImageView m_postSource = VK_NULL_HANDLE; // what the tone map reads this frame (the scene, or SMAA's or TAA's result)

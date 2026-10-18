@@ -70,8 +70,11 @@ public:
 
     // Layers marked gpu (and ParticleSim::emitGpu) are moved by the GPU
     // (ENG-G18 part 4): each particle is written once, at birth, and
-    // effect_gpu.vert works out where it is from then on. On by default;
-    // off (or KKE_PARTICLES_CPU=1) they are ordinary CPU particles.
+    // effect_gpu.vert works out where it is from then on. One that attracts,
+    // has turbulence or collides is stepped by the GPU each frame instead
+    // (ENG-F11, kke/ParticleStep.h), colliding with the last frame's depth.
+    // On by default; off (or KKE_PARTICLES_CPU=1) they are ordinary CPU
+    // particles.
     void setGpuParticles(bool on) { m_sim.setGpuBorn(on); }
     bool gpuParticles() const { return m_sim.gpuBorn(); }
 
@@ -99,6 +102,12 @@ private:
         glm::vec4 shape;        // radius, stretch (spark) or thickness (ring), flutter, floor
         glm::vec4 turn;         // angle, flip angle, flip, seed
         glm::vec4 swirl;        // xyz = origin, w = vortex
+        glm::vec4 step;         // attract, turbulence, turbulence size, flags (1 = stepped, 2 = collides)
+    };
+    // A stepped particle's state (shaders/effect_step.glsl), on the GPU only.
+    struct GpuStepped {
+        glm::vec4 posBirth; // where it is now, the birth time this state belongs to
+        glm::vec4 velRest;  // velocity, 1 when it came to rest on something
     };
     // One kind's GPU particles: the ring of slots, the CPU's copy of every
     // record, and per frame in flight its own buffer, written only while
@@ -111,10 +120,21 @@ private:
         std::unique_ptr<Buffer> buffers[Renderer::kMaxFramesInFlight];
         size_t bufferSlots[Renderer::kMaxFramesInFlight] = {};
         VkDescriptorSet sets[Renderer::kMaxFramesInFlight] = {};
+        VkBuffer setBuffers[Renderer::kMaxFramesInFlight][2] = {}; // what each set points at now (records, state)
+        // ENG-F11: the stepped particles' state, one per slot, kept between frames.
+        std::unique_ptr<Buffer> state;
+        size_t stateSlots = 0;
+        bool stepped = false; // any particle of this kind was stepped since the last clear()
+        VkDescriptorSet stepSets[Renderer::kMaxFramesInFlight] = {};
     };
     void takeBorn();
+    // This frame's buffer of a kind's records up to date; false when it has none.
+    bool syncGpu(Kind kind, uint32_t frame);
     void drawGpu(const RenderContext& ctx, Kind kind);
     Pipeline& gpuPipeline(Kind kind);
+    // ENG-F11: steps the stepped particles before the 3D pass (Application::addFrameCompute).
+    void step(VkCommandBuffer cmd);
+    VkPipeline stepPipeline(bool multisampled);
 
     Application& m_app;
     ParticleSim m_sim;
@@ -129,6 +149,20 @@ private:
     VkDescriptorSetLayout m_gpuSetLayout = VK_NULL_HANDLE;
     VkDescriptorPool m_gpuPool = VK_NULL_HANDLE;
     std::vector<ParticleSim::Born> m_born;
+    // ENG-F11: the step's pipeline (single-sampled depth, multisampled), its sets, its per-frame
+    // uniforms, a one-slot state for kinds with none and a 1x1 depth for frames with none.
+    VkDescriptorSetLayout m_stepSetLayout = VK_NULL_HANDLE;
+    VkPipelineLayout m_stepLayout = VK_NULL_HANDLE;
+    VkPipeline m_stepPipelines[2] = { VK_NULL_HANDLE, VK_NULL_HANDLE };
+    VkDescriptorPool m_stepPool = VK_NULL_HANDLE;
+    std::unique_ptr<Buffer> m_stepFrames[Renderer::kMaxFramesInFlight];
+    std::unique_ptr<Buffer> m_noState;
+    VkImage m_noDepth = VK_NULL_HANDLE;
+    VmaAllocation m_noDepthAlloc = VK_NULL_HANDLE;
+    VkImageView m_noDepthView = VK_NULL_HANDLE;
+    VkSampler m_nearest = VK_NULL_HANDLE;
+    float m_steppedAt = -1.0f; // the sim time of the last step
+    bool m_wantDepth = false;
 };
 
 } // namespace kke

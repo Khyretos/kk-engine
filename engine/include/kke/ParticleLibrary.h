@@ -123,10 +123,15 @@ public:
         float attract = 0.0f;
         bool collide = false;
         std::string onDeath;
+        // ENG-F11: swirling air, m/s, and the size of its eddies (m).
+        float turbulence = 0.0f;
+        float turbulenceSize = 2.0f;
         // ENG-G18 part 4: the GPU moves these (written once at birth, closed-form
-        // motion; ParticleSim::emitGpu): cheap in the tens of thousands, but no
-        // collide, onDeath, attract or curves, and never sorted (best for light
-        // and small falling things: rain, snow, sparks, confetti).
+        // motion; ParticleSim::emitGpu): cheap in the hundreds of thousands, but no
+        // onDeath or curves, and never sorted (best for light and small falling
+        // things: rain, snow, sparks, confetti). ENG-F11: with attract, turbulence
+        // or collide they are stepped on the GPU each frame, colliding with what
+        // was on screen last frame.
         bool gpu = false;
         uint16_t curve = 0; // set by add(): the sim's OverLife for the curves above
         uint16_t death = 0; // set by add(): onDeath's index in m_deathNames + 1

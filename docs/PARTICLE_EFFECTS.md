@@ -145,6 +145,8 @@ effect has a steady stream (start it) or only bursts (play it).
 | `coins` | gold coins bursting out and spinning to the ground |
 | `firework_rocket` | a rocket climbing on a trail of sparks that bursts into `fireworks` where it runs out |
 | `dust_devil` | a whirl of dust and leaves spinning up round its spot |
+| `fireflies` | fireflies drifting on turbulent air round their spot: `start()` it |
+| `spark_shower` | a stream of welding sparks bouncing off whatever is on screen |
 
 `ParticleLibrary::builtInYaml()` is the whole set as YAML: the best
 place to start your own.
@@ -195,7 +197,8 @@ Since ENG-G18 a layer can also have:
 | `attract: 1` | m/s² pull toward the spot (negative pushes away) |
 | `collide: true` | bounces off the world (sparks, glows), settles on it (flakes), slides along it (smoke), where the game has physics: one ray per particle per frame, at most 512 a frame |
 | `onDeath: fireworks` | plays that effect where each particle dies (a rocket bursting, a drop splashing); at most 64 a frame |
-| `gpu: true` | the GPU moves this layer's particles (part 4, below): tens of thousands cost what a few hundred did; not with `collide`, `onDeath`, `attract` or the curves, and never sorted |
+| `turbulence: 1.2` | m/s of swirling air carrying it (ENG-F11), with `turbulenceSize: 3` the size of its eddies in m (2 if not given) |
+| `gpu: true` | the GPU moves this layer's particles (part 4, below): hundreds of thousands cost what a few hundred did; not with `onDeath` or the curves, and never sorted. With `collide`, `attract` or `turbulence` the GPU steps them each frame (ENG-F11) |
 
 `dust_devil` and `firework_rocket` use them, and the impact effects
 (`explosion`, `sparks`, the chips and the glass) collide. `rain`, `snow`,
@@ -215,6 +218,24 @@ The CPU copy of the same formulas, `kke::particleMotion`
 spark that reaches its floor is gone (rain hitting the ground) and a flake
 rests there. `ParticleEffects::setGpuParticles(false)` or
 `KKE_PARTICLES_CPU=1` moves them on the CPU instead, as ordinary particles.
+
+**Stepped on the GPU (ENG-F11).** A `gpu` particle that attracts, has
+`turbulence` or collides has no closed form, so a compute pass
+(`shaders/effect_step.glsl`) steps it each frame before the 3D pass, from
+a state kept on the GPU; its record is still written only once. Nothing
+comes back to the CPU. `collide` there needs no physics: each particle is
+tested against the last frame's depth, so it bounces off (sparks, glows),
+lands on (flakes) or slides along (smoke) whatever was on screen, one
+frame late, at no cost per collider. Off screen or far behind what is on
+screen, it flies on. Turbulence is four travelling waves of curl (no
+noise texture), divergence free, so it swirls without bunching up or
+thinning out. The CPU copy, `kke::particleStep` (`kke/ParticleStep.h`),
+is tested against `kke::ParticleSim`. A game with none of these pays
+nothing: the pass only runs while there are stepped particles. Measured
+on the RX 9070 XT (particles demo, 4x MSAA): about 100,000 glows born at
+50,000 a second cost 0.516 ms in closed form and 0.595 ms stepped with
+turbulence and depth collisions (+0.08 ms); the CPU's frame time stays
+the same, since nothing comes back from the GPU.
 
 A mistake names the effect and what's wrong ("effect 'puff': unknown
 kind 'plasma'"), and nothing from that file is added.

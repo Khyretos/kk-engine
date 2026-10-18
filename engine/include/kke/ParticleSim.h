@@ -56,7 +56,10 @@ public:
         glm::vec3 origin{0.0f};    // the emitter's spot: what vortex and attract act around
         float vortex = 0.0f;       // m/s of swirl round the vertical line through origin (positive: counter-clockwise from above)
         float attract = 0.0f;      // m/s^2 toward origin (negative pushes away)
-        bool collide = false;      // bounces off (sparks, glows) or settles on (flakes) the world, through setCollider
+        bool collide = false;      // bounces off (sparks, glows) or settles on (flakes) the world, through setCollider (GPU: the depth)
+        // ENG-F11: swirling air (kke/ParticleStep.h's particleTurbulence): m/s, and the size of its eddies in m.
+        float turbulence = 0.0f;
+        float turbulenceSize = 2.0f;
         uint16_t curve = 0;        // 1-based index of an OverLife added with addCurve; 0: the kind's own fade
         uint16_t onDeath = 0;      // given back in deaths() when it dies of age (the library's sub-effect); 0: nothing
         float age = 0.0f;
@@ -93,8 +96,9 @@ public:
     // A particle that may live on the GPU (ENG-G18 part 4): with setGpuBorn(true)
     // it is only recorded here, with its birth time, for kke::ParticleEffects
     // to write once into a GPU ring (its motion is closed-form, see
-    // kke/ParticleMotion.h); otherwise it is emit()ted like any other. It must
-    // not need the CPU: no collide, onDeath, attract or curve.
+    // kke/ParticleMotion.h, or stepped on the GPU when it attracts, has
+    // turbulence or collides, see kke/ParticleStep.h); otherwise it is
+    // emit()ted like any other. It must not need the CPU: no onDeath or curve.
     void emitGpu(const Particle& p);
     void setGpuBorn(bool on) { m_gpuBorn = on; }
     bool gpuBorn() const { return m_gpuBorn; }

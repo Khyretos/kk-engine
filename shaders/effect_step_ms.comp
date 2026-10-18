@@ -1,0 +1,5 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+// GPU particles stepped each frame, multisampled depth: sample 0 (shaders/effect_step.glsl).
+#define DEPTH_MS
+#include "effect_step.glsl"

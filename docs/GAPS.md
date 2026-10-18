@@ -89,7 +89,7 @@ by area. The goal is parity with the big engines and more.
 | ENG-F08 | Rendering | Many lights. Instead of a deferred path (which loses MSAA and glass): clustered forward lighting, up to 1024 lights past the 16 key ones, each pixel walking only its cell's list. | ✅ |
 | ENG-F09 | Rendering | Virtual texture streaming. Deferred (Kees, 2026-10-18): our games' textures fit in memory, and it needs a page table, feedback pass and streaming in every material for no gain yet. Revisit for open worlds whose textures don't fit. | ⬜ |
 | ENG-F10 | Rendering | Post stack: bloom, depth of field, motion blur, LUT grading (tone map, exposure and grade exist). Bloom done (`bloom`, on by default); LUT grading done (a mood's `lut:`, .cube files, tetrahedral); depth of field done (`depthOfField`, off by default, auto focus); motion blur done (`motionBlur`, off by default, the camera's movement from the depth, no velocity buffer). | ✅ |
-| ENG-F11 | Rendering | GPU particle/VFX system (one compute fountain today; G18) | 🟡 |
+| ENG-F11 | Rendering | GPU particle/VFX system. GPU particles in closed form (G18), and since F11 stepped on the GPU when they attract, swirl (`turbulence`: divergence-free curl waves) or collide (against the last frame's depth, no colliders needed); 100,000 for +0.08 ms. Not yet: ribbons and trails, sorted see-through GPU particles. | 🟡 |
 | ENG-F12 | Rendering | Decals | ⬜ |
 | ENG-F13 | Rendering | Occlusion culling at scale, GPU-driven, HZB (frustum culling exists) | 🟡 |
 | ENG-F14 | Rendering | Upscalers such as FSR (render scale exists) | 🟡 |
