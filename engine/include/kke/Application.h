@@ -14,6 +14,7 @@
 #include "kke/UiProfile.h"
 #include "kke/RayScene.h"
 #include "kke/Reflections.h"
+#include "kke/VolumetricFog.h"
 #include "kke/ScreenGi.h"
 #include "kke/ShadowMap.h"
 #include "kke/Texture.h"
@@ -40,6 +41,7 @@ class SkyRenderer;
 class ScreenGiPass;
 class ReflectionPass;
 class BehindPass;
+class VolumetricFogPass;
 class RefractionRays;
 struct ReflectionRays;
 struct SkyEnvironment;
@@ -290,6 +292,13 @@ public:
     void recordRayDraw(DynamicMeshRenderer* mesh, const glm::mat4& model) { m_rayDraws.push_back({ mesh, model }); }
     void forgetRayDraws(DynamicMeshRenderer* mesh);
     Reflections reflections() const { return m_reflections; }
+    // Volumetric fog (ENG-F03, kke/VolumetricFog.h): the height fog (Lighting::fog)
+    // lit with the sun's shadow and the point lights, in a grid over the view.
+    // Off by default; the graphics setting "volumetricFog" or KKE_VOLUMETRIC_FOG=1
+    // turn it on. One view only, and only while the fog is on.
+    void setVolumetricFog(bool on) { m_volumetricFogOn = on || m_volumetricFogEnv; }
+    bool volumetricFog() const { return m_volumetricFogOn; }
+    VolumetricFogSettings& volumetricFogSettings() { return m_volumetricFogSettings; }
     // Set 3's layout for see-through surfaces that trace refracted rays
     // (RenderContext::refractionRays); made on first use, ray-query devices only.
     VkDescriptorSetLayout refractionRayLayout();
@@ -479,6 +488,9 @@ private:
     // Refraction (ENG-F02 part 4): on with reflections (one view), unless
     // KKE_REFRACTIONS=0. The scene before the see-through surfaces.
     std::unique_ptr<BehindPass> m_behindPass;
+    std::unique_ptr<VolumetricFogPass> m_volumetricFog; // made the first time volumetric fog is on
+    VolumetricFogSettings m_volumetricFogSettings;
+    bool m_volumetricFogOn = false, m_volumetricFogEnv = false; // KKE_VOLUMETRIC_FOG=1 keeps it on
     std::unique_ptr<RefractionRays> m_refractionRays; // made the first time refraction traces rays
     // This frame's kke::RayScene from what is drawn (KKE and classic ray tracing), into rays; once a frame.
     void buildRayScene(VkCommandBuffer cmd, const glm::mat4& view, const SkyEnvironment* sky, ReflectionRays& rays);

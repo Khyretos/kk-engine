@@ -1,0 +1,32 @@
+#version 450
+// Volumetric fog, step 2 of 2 (ENG-F03, kke::VolumetricFogPass): each column
+// of cells from the camera outwards, Hillaire's energy-conserving step: the
+// light scattered towards the camera up to each slice's far edge (rgb) and
+// how much of what lies behind gets through (a). The CPU copy is
+// kke::integrateFogColumn. Lit shaders read the result (lighting_ubo.glsl fogAlong).
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(set = 0, binding = 0, rgba16f) uniform readonly image3D cells;
+layout(set = 0, binding = 1, rgba16f) uniform writeonly image3D volume;
+
+layout(push_constant) uniform Push {
+    mat4 invViewProj; // unused here (the same block as the scatter step)
+    vec4 grid;        // x = near distance, y = far distance, z = slices
+} pc;
+
+float sliceDistance(float s) { return pc.grid.x * pow(pc.grid.y / pc.grid.x, s / pc.grid.z); }
+
+void main() {
+    ivec2 xy = ivec2(gl_GlobalInvocationID.xy);
+    ivec3 size = imageSize(cells);
+    if (xy.x >= size.x || xy.y >= size.y) return;
+    vec3 scattered = vec3(0.0);
+    float through = 1.0;
+    for (int z = 0; z < size.z; ++z) {
+        vec4 c = imageLoad(cells, ivec3(xy, z));
+        float t = exp(-c.a * (sliceDistance(float(z + 1)) - sliceDistance(float(z))));
+        scattered += through * c.rgb * (1.0 - t);
+        through *= t;
+        imageStore(volume, ivec3(xy, z), vec4(scattered, through));
+    }
+}

@@ -43,6 +43,7 @@ layout(set = 0, binding = 0) uniform LightingUBO {
     mat4 reflViewProj; // the camera the reflection images were made with (last frame's)
     vec4 refl;         // x = 1 when they hold a frame's result, yz = their size, w = the roughest surface they're for
     vec4 behind;       // x = 1 when this frame's behind image is there (refraction), yz = its size in pixels
+    vec4 fogVolume;    // x = 1 when volumetric fog is on (ENG-F03), y = its near distance, z = its far distance, w = its slices
 } lighting;
 
 // The sky prefiltered for reflections (kke::EnvMap, kke::LightingBuffer::setEnvironmentMap):
@@ -64,6 +65,11 @@ layout(set = 0, binding = 5) uniform sampler2D reflDepth;
 // before the see-through surfaces, with the distance from the camera in
 // alpha (0 = sky). Only translucent_refract.frag reads it.
 layout(set = 0, binding = 6) uniform sampler2D behindImage;
+
+// Volumetric fog (ENG-F03, kke::VolumetricFogPass): over the view frustum,
+// in exponential slices, the light the fog scatters towards the camera up
+// to each slice's far edge (rgb) and how much gets through (a).
+layout(set = 0, binding = 7) uniform sampler3D fogVolumeImage;
 
 // The four nearest texels of a half-resolution screen image made with camera
 // `viewProj`, weighted by bilinear distance and by how close their depth is
@@ -200,7 +206,7 @@ vec3 fogInscatter(vec3 rd) {
 // How much fog lies between the camera and a point `dist` away along
 // `rd` (normalised): exponential height fog integrated analytically
 // (Inigo Quilez, "Better Fog"). dist < 0 means "to infinity" (the sky).
-float fogAmount(vec3 ro, vec3 rd, float dist) {
+float fogDepth(vec3 ro, vec3 rd, float dist) {
     float a = lighting.fogColor.a;
     if (a <= 0.0) return 0.0;
     float b = max(lighting.fogParams.x, 1e-4);
@@ -214,7 +220,33 @@ float fogAmount(vec3 ro, vec3 rd, float dist) {
         float k = dist * rd.y * b;
         depth = abs(k) < 1e-4 ? base * dist : base * (1.0 - exp(-k)) / (b * rd.y);
     }
-    return clamp(1.0 - exp(-depth), 0.0, lighting.fogParams.z);
+    return depth;
+}
+float fogAmount(vec3 ro, vec3 rd, float dist) { return clamp(1.0 - exp(-fogDepth(ro, rd, dist)), 0.0, lighting.fogParams.z); }
+
+// What reaches the camera from `color` seen `dist` away along `rd` (dist < 0:
+// the sky). With volumetric fog: the lit fog in the grid up to its far
+// distance (shafts and halos; the CPU copy is kke::integrateFogColumn),
+// then the analytic fog beyond it. Without: the analytic fog alone.
+vec3 fogAlong(vec3 color, vec3 ro, vec3 rd, float dist) {
+    if (lighting.fogColor.a <= 0.0) return color;
+    if (lighting.fogVolume.x < 0.5) return mix(color, fogInscatter(rd), fogAmount(ro, rd, dist));
+    float near = lighting.fogVolume.y, far = lighting.fogVolume.z, slices = lighting.fogVolume.w;
+    float inside = dist < 0.0 ? far : min(dist, far);
+    vec4 c = lighting.viewProj * vec4(ro + rd * inside, 1.0);
+    float s = slices * log(max(inside, 1e-4) / near) / log(far / near);
+    vec4 v = texture(fogVolumeImage, vec3(c.xy / c.w * 0.5 + 0.5, (s - 0.5) / slices));
+    // Past the grid: the analytic fog from its far distance on.
+    float tail = (dist < 0.0 || dist > far) ? 1.0 - exp(-max(fogDepth(ro, rd, dist) - fogDepth(ro, rd, far), 0.0)) : 0.0;
+    vec3 scattered = v.rgb + v.a * tail * fogInscatter(rd);
+    float through = v.a * (1.0 - tail);
+    // The analytic fog's cap (Fog::maxOpacity), so far hills never vanish.
+    float amount = 1.0 - through, cap = lighting.fogParams.z;
+    if (amount > cap) {
+        scattered *= cap / amount;
+        through = 1.0 - cap;
+    }
+    return color * through + scattered;
 }
 
 vec3 applyFog(vec3 color, vec3 worldPos) {
@@ -223,8 +255,7 @@ vec3 applyFog(vec3 color, vec3 worldPos) {
     vec3 d = worldPos - ro;
     float dist = length(d);
     if (dist < 1e-4) return color;
-    vec3 rd = d / dist;
-    return mix(color, fogInscatter(rd), fogAmount(ro, rd, dist));
+    return fogAlong(color, ro, d / dist, dist);
 }
 
 #endif

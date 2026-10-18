@@ -180,6 +180,7 @@ vec3 srgbToLinear(vec3 c) {
 // Spatial and per-frame: no temporal accumulation, no dithering, no blur
 // of the image (docs/RENDERING_PRINCIPLES.md). Returns the extra alpha^2.
 // Derivatives: call it before any discard.
+#ifndef KKE_COMPUTE // derivatives: fragment shaders only (compute includes this for the shadow lookups)
 float specularAAKernel(vec3 normalWorld) {
     vec3 n = normalize(normalWorld);
     vec3 du = dFdx(n);
@@ -187,8 +188,11 @@ float specularAAKernel(vec3 normalWorld) {
     float variance = 0.15 * (dot(du, du) + dot(dv, dv));
     return min(2.0 * variance, 0.2);
 }
+#endif
 
+#ifndef KKE_COMPUTE
 vec3 shadeSurfaceAA(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 posWorld, vec4 posLightSpace, float specAAKernel);
+#endif
 
 // What a lit opaque surface writes as its alpha (ENG-F02): 2 + smoothness.
 // Translucent shaders, particles and the sky write 1 or less, so the
@@ -200,10 +204,13 @@ float reflectionMark(float roughness) { return 2.0 + clamp(1.0 - roughness, 0.0,
 // shadow on light 0, ambient from the sky, fog; returns scene light. Shared by every
 // lit mesh shader (cube.frag, model.frag) so they can't drift apart.
 // Shaders that discard call shadeSurfaceAA with a kernel taken first.
+#ifndef KKE_COMPUTE
 vec3 shadeSurface(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 posWorld, vec4 posLightSpace) {
     return shadeSurfaceAA(albedo, metallicRoughness, normalWorld, posWorld, posLightSpace, specularAAKernel(normalWorld));
 }
+#endif
 
+#ifndef KKE_COMPUTE
 vec3 shadeSurfaceAA(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 posWorld, vec4 posLightSpace, float specAAKernel) {
     vec2 fragMetallicRoughness = metallicRoughness;
     vec3 fragNormalWorld = normalWorld;
@@ -310,3 +317,4 @@ vec3 shadeSurfaceAA(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 
     vec3 color = ambient + Lo;
     return applyFog(color, fragPosWorld);
 }
+#endif
