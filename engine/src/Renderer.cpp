@@ -426,6 +426,7 @@ void Renderer::createScenePass() {
 }
 
 void Renderer::destroySceneTarget(uint32_t frame) {
+    if (m_lastDepthFrame == static_cast<int>(frame)) m_lastDepthFrame = -1; // its depth goes with it
     SceneTarget& t = m_sceneTargets[frame];
     VkDevice dev = m_device->device();
     if (t.framebuffer) vkDestroyFramebuffer(dev, t.framebuffer, nullptr);
@@ -565,6 +566,13 @@ Renderer::SceneImages Renderer::sceneImages() const {
     return SceneImages{ t.colorView, t.depthSampleView, t.extent, m_scenePassSamples };
 }
 
+Renderer::LastFrameDepth Renderer::lastFrameDepth() const {
+    if (m_lastDepthFrame < 0 || static_cast<uint32_t>(m_lastDepthFrame) == m_currentFrame) return {};
+    const SceneTarget& t = m_sceneTargets[m_lastDepthFrame];
+    if (!t.depthSampleView) return {};
+    return LastFrameDepth{ t.depthSampleView, t.extent, m_lastDepthSamples, m_motionBlurPrevViewProj };
+}
+
 void Renderer::endScenePass() {
     if (!m_inScenePass) return;
     m_inScenePass = false;
@@ -700,6 +708,8 @@ void Renderer::beginOverlayPass() {
     }
     m_motionBlurPrevViewProj = m_taaViewProj;
     m_motionBlurHavePrev = blur;
+    m_lastDepthFrame = t.depthSampleView ? static_cast<int>(m_currentFrame) : -1;
+    m_lastDepthSamples = m_scenePassSamples;
     m_bloomSource = VK_NULL_HANDLE;
     if (m_bloomOn) {
         // Bloom over the anti-aliased light, mixed in by the tone map.

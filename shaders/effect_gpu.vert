@@ -6,7 +6,9 @@
 // and the time, with no state kept between frames. The same formulas run
 // on the CPU in engine/src/ParticleMotion.cpp (tested against the stepped
 // simulation): change both together. One instance per ring slot; a slot
-// whose particle is not alive draws nothing.
+// whose particle is not alive draws nothing. A particle stepped on the GPU
+// (ENG-F11: attract, turbulence, collide) takes where it is and how fast it
+// goes from its state (shaders/effect_step.glsl) instead.
 
 #include "lighting_ubo.glsl"
 #include "effect_quad.glsl"
@@ -20,8 +22,14 @@ struct GpuParticle {
     vec4 shape;        // radius, stretch (spark) or thickness (ring), flutter, floor
     vec4 turn;         // angle, flip angle, flip, seed
     vec4 swirl;        // xyz = origin, w = vortex
+    vec4 step;         // attract, turbulence, turbulence size, flags (1 = stepped, 2 = collides)
 };
 layout(std430, set = 2, binding = 0) readonly buffer Particles { GpuParticle particles[]; };
+struct Stepped {
+    vec4 posBirth; // xyz = where it is now, w = the birth time this state belongs to
+    vec4 velRest;  // xyz = velocity, w = 1 when it came to rest on something
+};
+layout(std430, set = 2, binding = 1) readonly buffer States { Stepped states[]; };
 
 layout(push_constant) uniform Frame {
     vec4 timeWind; // x = the sim's time (s), yzw = wind (m/s)
@@ -83,18 +91,28 @@ void main() {
         radius += growth * t;
     }
     vec3 pos = p.posBirth.xyz + x;
-    if (p.swirl.w != 0.0) {
+    bool stepped = (int(p.step.w + 0.5) & 1) != 0;
+    if (stepped) {
+        Stepped s = states[gl_InstanceIndex];
+        if (s.posBirth.w != p.posBirth.w) {
+            gl_Position = vec4(2.0, 2.0, 2.0, 1.0); // not stepped yet
+            return;
+        }
+        pos = s.posBirth.xyz;
+        v = s.velRest.xyz;
+        if (s.velRest.w > 0.5 || (kind == kFlake && v == vec3(0.0))) flipAngle = 0.0; // landed: lies flat, face-on
+    } else if (p.swirl.w != 0.0) {
         vec2 r = pos.xz - p.swirl.xz;
         float a = p.swirl.w * t / max(length(r), 0.05);
         float c = cos(a), s = sin(a);
         pos.xz = p.swirl.xz + vec2(r.x * c - r.y * s, r.x * s + r.y * c);
         v.xz = vec2(v.x * c - v.z * s, v.x * s + v.z * c);
     }
-    if (kind == kSpark && pos.y <= p.shape.w + 0.02) {
+    if (!stepped && kind == kSpark && pos.y <= p.shape.w + 0.02) {
         gl_Position = vec4(2.0, 2.0, 2.0, 1.0); // landed: rain hitting the ground is gone
         return;
     }
-    if (kind == kFlake) pos.y = max(pos.y, p.shape.w + 1e-3);
+    if (!stepped && kind == kFlake) pos.y = max(pos.y, p.shape.w + 1e-3);
 
     // How it looks at this point of its life: the CPU's ParticleEffects::build().
     float u = clamp(t / life, 0.0, 1.0);

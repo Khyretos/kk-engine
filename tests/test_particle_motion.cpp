@@ -154,7 +154,8 @@ TEST(ParticleLibraryV2, GpuLayersGoToTheGpuAndRefuseCpuOnlyFields) {
     std::vector<ParticleSim::Born> out;
     sim.takeBorn(out);
     EXPECT_EQ(out.size(), 7u);
-    for (const char* field : { R"("collide": true)", R"("onDeath": "drops")", R"("attract": 1)", R"("sizeOverLife": [1, 2])" }) {
+    // collide and attract are fine since ENG-F11 (stepped on the GPU): tests/test_particle_step.cpp.
+    for (const char* field : { R"("onDeath": "drops")", R"("sizeOverLife": [1, 2])", R"("opacityOverLife": [1, 0])" }) {
         const std::string effect = std::string(R"({"x": {"layers": [{"count": 1, "gpu": true, )") + field + "}]}}";
         EXPECT_FALSE(kke::ParticleLibrary::validate(nlohmann::json::parse(effect), &error)) << field;
         EXPECT_NE(error.find("gpu"), std::string::npos) << error;
