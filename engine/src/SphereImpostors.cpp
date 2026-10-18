@@ -182,8 +182,27 @@ void DynamicMeshRenderer::drawTranslucent(const RenderContext& ctx, const glm::m
                                               config(VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ZERO));
         });
     }
+    if (ctx.refractionRays && !m_refractRaysPipeline) {
+        Application& app = m_app;
+        m_refractRaysPipeline = sharedPipeline(app, app.renderer().renderPass(), "mesh refract rays", [&app] {
+            PipelineConfig c;
+            c.cullMode = VK_CULL_MODE_BACK_BIT;
+            c.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+            c.depthWriteEnable = false;
+            c.blendEnable = true;
+            c.customColorBlend = true;
+            c.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPush) };
+            c.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), app.shadowMapSetLayout(), app.materialTextureSetLayout(),
+                                       app.refractionRayLayout() };
+            c.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+            c.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+            return std::make_shared<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/cube.vert.spv",
+                                              "shaders/translucent_refract_rays.frag.spv", c);
+        });
+    }
     // The refracting pass gets the index of refraction where the others get metallic.
-    if (ctx.refraction) bindAndDraw(ctx, *m_refractPipeline, model, ior, roughness);
+    if (ctx.refractionRays) bindAndDraw(ctx, *m_refractRaysPipeline, model, ior, roughness, ctx.refractionRays);
+    else if (ctx.refraction) bindAndDraw(ctx, *m_refractPipeline, model, ior, roughness);
     else bindAndDraw(ctx, *m_absorbPipeline, model, 0.0f, roughness);
     bindAndDraw(ctx, *m_lightPipeline, model, 0.0f, roughness);
 }
@@ -216,12 +235,14 @@ void DynamicMeshRenderer::drawCloth(const RenderContext& ctx, const Fabric& fabr
     if (m_app.recordingRays() && ctx.viewIndex == 0) m_app.recordRayDraw(this, model);
 }
 
-void DynamicMeshRenderer::bindAndDraw(const RenderContext& ctx, Pipeline& pipeline, const glm::mat4& model, float metallic, float roughness) {
+void DynamicMeshRenderer::bindAndDraw(const RenderContext& ctx, Pipeline& pipeline, const glm::mat4& model, float metallic, float roughness,
+                                      VkDescriptorSet raySet) {
     ensureUploaded(ctx.frameIndex);
     FrameBuffers& fb = m_frames[ctx.frameIndex];
     pipeline.bind(ctx.cmd);
     VkDescriptorSet sets[] = { ctx.lightingDescriptorSet, ctx.shadowMapDescriptorSet, ctx.defaultMaterialTextureDescriptorSet };
     vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.layout(), 0, 3, sets, 0, nullptr);
+    if (raySet) vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.layout(), 3, 1, &raySet, 0, nullptr);
     MeshPush pc{ model, metallic, roughness };
     vkCmdPushConstants(ctx.cmd, pipeline.layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
     VkBuffer vb = fb.vertices->handle();

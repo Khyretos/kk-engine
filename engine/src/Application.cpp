@@ -1,6 +1,7 @@
 #include "kke/Application.h"
 #include "kke/SkyRenderer.h"
 #include "BehindPass.h"
+#include "RefractionRays.h"
 #include "ReflectionPass.h"
 #include "ScreenGiPass.h"
 #include "kke/Capabilities.h"
@@ -1167,6 +1168,7 @@ void Application::run() {
                 safeInvoke(m, "prepass", [&] { m->prepass(prepassCtx); });
             }
 
+            ReflectionRays frameRays; // the frame's ray scene, once (buildRayScene), for refraction and reflections
             m_renderer->beginRenderPass(refractOn);
             renderCtx.cmd = cmd;
             renderCtx.frameIndex = m_renderer->currentFrameIndex();
@@ -1189,6 +1191,14 @@ void Application::run() {
                     // What's drawn so far, readable by the see-through surfaces drawn next.
                     m_renderer->pauseScenePass();
                     m_behindPass->record(cmd, m_renderer->currentFrameIndex(), m_renderer->sceneImages(), d.proj);
+                    if (m_recordRays) {
+                        // Rays for refraction: the ray scene from the opaque draws, built now (outside the pass).
+                        buildRayScene(cmd, d.view, skyEnv, frameRays);
+                        if (!m_refractionRays) m_refractionRays = std::make_unique<RefractionRays>(m_renderer->device());
+                        renderCtx.refractionRays = m_refractionRays->update(m_renderer->currentFrameIndex(), *m_rayScene, m_rayMaterials,
+                                                                            frameRays.viewToWorld, frameRays.sunDirection, frameRays.sunColor,
+                                                                            frameRays.ambient, frameRays.classic);
+                    }
                     m_renderer->resumeScenePass();
                 }
                 renderCtx.refraction = refractOn;
@@ -1196,6 +1206,7 @@ void Application::run() {
                     safeInvoke(m, "renderTranslucent", [&] { m->renderTranslucent(renderCtx); });
                 }
                 renderCtx.refraction = false;
+                renderCtx.refractionRays = VK_NULL_HANDLE;
             }
             // GI from this frame's scene, for the next frame's shading.
             if (giOn && drawScene) {
@@ -1206,30 +1217,11 @@ void Application::run() {
             }
             if (reflOn && drawScene) {
                 m_renderer->endScenePass();
-                // KKE ray tracing: this frame's stand-ins from every module that has them.
-                ReflectionRays rays;
+                // KKE ray tracing: this frame's stand-ins from every module that has them (built already when refraction traced).
                 const bool traced = (m_reflections == Reflections::Kke || m_reflections == Reflections::Classic) && m_renderer->device().rayQuery();
-                if (traced) {
-                    if (!m_rayScene) m_rayScene = std::make_unique<RayScene>(m_renderer->device());
-                    m_rayScene->clear();
-                    m_rayMaterials.clear();
-                    RaySceneContext context{ m_reflections == Reflections::Classic, cmd, m_renderer->currentFrameIndex() };
-                    for (IRayContributor* c : findCapability<IRayContributor>()) c->addToRayScene(*m_rayScene, m_rayMaterials, context);
-                    addMeshesToRayScene(context.classic, cmd, context.frame);
-                    rays.scene = m_rayScene.get();
-                    rays.materials = &m_rayMaterials;
-                    rays.viewToWorld = glm::inverse(view);
-                    const Light& sun = m_lighting.lights[0];
-                    if (sun.enabled && sun.isDirectional) {
-                        rays.sunDirection = -sun.direction;
-                        rays.sunColor = sun.color * sun.intensity;
-                    }
-                    rays.ambient = skyEnv ? skyEnv->ambientAverage : m_lighting.ambientColor;
-                    rays.classic = context.classic;
-                    rays.budget = context.classic ? ~0u : m_reflectionSettings.rayBudget; // classic: every smooth pixel
-                }
+                if (traced && !frameRays.built) buildRayScene(cmd, view, skyEnv, frameRays);
                 m_reflectionPass->record(cmd, m_renderer->currentFrameIndex(), m_renderer->sceneImages(), view, proj, m_reflectionSettings,
-                                         traced ? &rays : nullptr);
+                                         traced ? &frameRays : nullptr);
             } else if (m_reflectionPass) {
                 m_reflectionPass->invalidate();
             }
@@ -1348,6 +1340,33 @@ void Application::addMeshesToRayScene(bool classic, VkCommandBuffer cmd, uint32_
         scene.add(r.geometry, d.model, static_cast<uint32_t>(m_rayMaterials.size() - 1));
     }
     m_rayDraws.clear();
+}
+
+void Application::buildRayScene(VkCommandBuffer cmd, const glm::mat4& view, const SkyEnvironment* sky, ReflectionRays& rays) {
+    if (!m_rayScene) m_rayScene = std::make_unique<RayScene>(m_renderer->device());
+    m_rayScene->clear();
+    m_rayMaterials.clear();
+    RaySceneContext context{ m_reflections == Reflections::Classic, cmd, m_renderer->currentFrameIndex() };
+    for (IRayContributor* c : findCapability<IRayContributor>()) c->addToRayScene(*m_rayScene, m_rayMaterials, context);
+    addMeshesToRayScene(context.classic, cmd, context.frame);
+    m_rayScene->build(cmd, context.frame);
+    rays.scene = m_rayScene.get();
+    rays.materials = &m_rayMaterials;
+    rays.viewToWorld = glm::inverse(view);
+    const Light& sun = m_lighting.lights[0];
+    if (sun.enabled && sun.isDirectional) {
+        rays.sunDirection = -sun.direction;
+        rays.sunColor = sun.color * sun.intensity;
+    }
+    rays.ambient = sky ? sky->ambientAverage : m_lighting.ambientColor;
+    rays.classic = context.classic;
+    rays.budget = context.classic ? ~0u : m_reflectionSettings.rayBudget; // classic: every smooth pixel
+    rays.built = true;
+}
+
+VkDescriptorSetLayout Application::refractionRayLayout() {
+    if (!m_refractionRays) m_refractionRays = std::make_unique<RefractionRays>(m_renderer->device());
+    return m_refractionRays->setLayout();
 }
 
 void Application::setReflections(Reflections mode) {
