@@ -1,6 +1,7 @@
 #include "kke/Application.h"
 #include "kke/SkyRenderer.h"
 #include "BehindPass.h"
+#include "ShadowRayPass.h"
 #include "VolumetricFogPass.h"
 #include "RefractionRays.h"
 #include "ReflectionPass.h"
@@ -159,6 +160,11 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
     // KKE_REFLECT_ROUGHNESS=1: every surface up to that roughness reflects (benchmarks: the most work).
     if (const char* env = dev::env("KKE_REFLECT_ROUGHNESS"); env && *env)
         m_reflectionSettings.maxRoughness = std::clamp(static_cast<float>(std::atof(env)), 0.01f, 1.0f);
+    // KKE_SHADOW_RAYS=off|kke|classic: that, whatever the settings say.
+    if (const char* env = dev::env("KKE_SHADOW_RAYS"); env && *env) {
+        m_shadowRaysEnv = shadowRaysFromName(env, ShadowRays::Off);
+        setShadowRays(*m_shadowRaysEnv);
+    }
     if (const char* env = dev::env("KKE_TAA"); env && *env) {
         m_taaEnv = env[0] == '1';
         setTaa(*m_taaEnv);
@@ -1074,8 +1080,15 @@ void Application::run() {
             }
             // Meshes record themselves for rays while they draw (recordRayDraw).
             m_rayDraws.clear();
-            m_recordRays = reflOn && (m_reflections == Reflections::Kke || m_reflections == Reflections::Classic) &&
-                           m_renderer->device().rayQuery();
+            // Ray-traced sun shadows (ENG-F07): last frame's rays for this frame's shading, cast again after it.
+            const bool shadowRaysOn = m_shadowRays != ShadowRays::Off && viewCount == 1 && m_renderer->device().rayQuery() && !m_sceneCovered;
+            if (shadowRaysOn) {
+                if (!m_shadowRayPass) m_shadowRayPass = std::make_unique<ShadowRayPass>(m_renderer->device());
+                m_shadowRayPass->prepare(sceneExtent);
+            }
+            const bool shadowRaysReady = shadowRaysOn && m_shadowRayPass->ready();
+            m_recordRays = shadowRaysOn || (reflOn && (m_reflections == Reflections::Kke || m_reflections == Reflections::Classic) &&
+                                            m_renderer->device().rayQuery());
             for (uint32_t i = 0; i < viewCount; ++i) {
                 if (i == 0 && giReady)
                     drawViews[i].lighting->setScreenGi(m_screenGi->light(), m_screenGi->depth(), m_screenGi->sampler(), m_screenGi->viewProj(),
@@ -1084,6 +1097,11 @@ void Application::run() {
                     drawViews[i].lighting->setScreenGi(VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE, glm::mat4(1.0f), glm::vec2(0.0f));
                 if (i == 0 && fogVolumeOn) drawViews[i].lighting->setFogVolume(m_volumetricFog->volume(), m_volumetricFog->sampler(), m_volumetricFog->settings());
                 else drawViews[i].lighting->setFogVolume(VK_NULL_HANDLE, VK_NULL_HANDLE, m_volumetricFogSettings);
+                if (i == 0 && shadowRaysReady)
+                    drawViews[i].lighting->setShadowRays(m_shadowRayPass->image(), m_shadowRayPass->sampler(), m_shadowRayPass->viewProj(),
+                                                         m_shadowRayPass->size(), m_shadowRaySettings.reprojectSlack);
+                else
+                    drawViews[i].lighting->setShadowRays(VK_NULL_HANDLE, VK_NULL_HANDLE, glm::mat4(1.0f), glm::vec2(0.0f), m_shadowRaySettings.reprojectSlack);
                 if (i == 0 && refractOn) drawViews[i].lighting->setBehind(m_behindPass->image(), m_behindPass->sampler(), m_behindPass->size());
                 else drawViews[i].lighting->setBehind(VK_NULL_HANDLE, VK_NULL_HANDLE, glm::vec2(0.0f));
                 if (i == 0 && reflReady)
@@ -1254,6 +1272,15 @@ void Application::run() {
             } else if (m_reflectionPass) {
                 m_reflectionPass->invalidate();
             }
+            if (shadowRaysOn && drawScene) {
+                m_renderer->endScenePass();
+                if (!frameRays.built) buildRayScene(cmd, view, skyEnv, frameRays);
+                ReflectionRays shadowRays = frameRays;
+                shadowRays.classic = m_shadowRays == ShadowRays::Classic; // every pixel, or only past the shadow map
+                m_shadowRayPass->record(cmd, m_renderer->currentFrameIndex(), m_renderer->sceneImages(), view, proj, shadowRays, m_shadowRaySettings);
+            } else if (m_shadowRayPass) {
+                m_shadowRayPass->invalidate();
+            }
             // The overlay covers the whole window with the first camera.
             renderCtx.view = view;
             renderCtx.proj = proj;
@@ -1375,7 +1402,8 @@ void Application::buildRayScene(VkCommandBuffer cmd, const glm::mat4& view, cons
     if (!m_rayScene) m_rayScene = std::make_unique<RayScene>(m_renderer->device());
     m_rayScene->clear();
     m_rayMaterials.clear();
-    RaySceneContext context{ m_reflections == Reflections::Classic, cmd, m_renderer->currentFrameIndex() };
+    // Full meshes when either ray user is classic; stand-ins otherwise.
+    RaySceneContext context{ m_reflections == Reflections::Classic || m_shadowRays == ShadowRays::Classic, cmd, m_renderer->currentFrameIndex() };
     for (IRayContributor* c : findCapability<IRayContributor>()) c->addToRayScene(*m_rayScene, m_rayMaterials, context);
     addMeshesToRayScene(context.classic, cmd, context.frame);
     m_rayScene->build(cmd, context.frame);
@@ -1400,6 +1428,12 @@ VkDescriptorSetLayout Application::refractionRayLayout() {
 
 void Application::setSmaa(bool on) { m_renderer->setSmaa(m_smaaEnv ? *m_smaaEnv : on); }
 
+void Application::setShadowRays(ShadowRays mode) {
+    m_shadowRays = m_shadowRaysEnv ? *m_shadowRaysEnv : mode;
+    updateSceneDepthReadable();
+    if (m_shadowRays == ShadowRays::Off && m_shadowRayPass) m_shadowRayPass->invalidate();
+}
+
 void Application::setTaa(bool on) {
     m_taaOn = m_taaEnv ? *m_taaEnv : on;
     m_renderer->setTaa(m_taaOn);
@@ -1407,7 +1441,7 @@ void Application::setTaa(bool on) {
 }
 
 void Application::updateSceneDepthReadable() {
-    m_renderer->setSceneDepthReadable(m_screenGiOn || m_reflections != Reflections::Off || m_taaOn);
+    m_renderer->setSceneDepthReadable(m_screenGiOn || m_reflections != Reflections::Off || m_taaOn || m_shadowRays != ShadowRays::Off);
 }
 
 void Application::setReflections(Reflections mode) {

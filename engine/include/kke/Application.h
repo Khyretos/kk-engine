@@ -16,6 +16,7 @@
 #include "kke/Reflections.h"
 #include "kke/VolumetricFog.h"
 #include "kke/Taa.h"
+#include "kke/ShadowRays.h"
 #include "kke/ScreenGi.h"
 #include "kke/ShadowMap.h"
 #include "kke/Texture.h"
@@ -42,6 +43,7 @@ class SkyRenderer;
 class ScreenGiPass;
 class ReflectionPass;
 class BehindPass;
+class ShadowRayPass;
 class VolumetricFogPass;
 class RefractionRays;
 struct ReflectionRays;
@@ -305,6 +307,12 @@ public:
     // clean image: the graphics setting "taa"; KKE_TAA=1 or 0 wins over it.
     // One view only (split screen draws without it).
     void setTaa(bool on);
+    // Ray-traced sun shadows (ENG-F07, kke/ShadowRays.h): Kke traces only
+    // past the shadow map's reach, Classic every pixel; ray-query devices,
+    // one view. The graphics setting "shadowRays" or KKE_SHADOW_RAYS.
+    void setShadowRays(ShadowRays mode);
+    ShadowRays shadowRays() const { return m_shadowRays; }
+    ShadowRaySettings& shadowRaySettings() { return m_shadowRaySettings; }
     TaaSettings& taaSettings() { return m_taaSettings; }
     bool volumetricFog() const { return m_volumetricFogOn; }
     VolumetricFogSettings& volumetricFogSettings() { return m_volumetricFogSettings; }
@@ -502,6 +510,10 @@ private:
     bool m_volumetricFogOn = false, m_volumetricFogEnv = false; // KKE_VOLUMETRIC_FOG=1 keeps it on
     std::optional<bool> m_smaaEnv;                              // KKE_SMAA
     std::optional<bool> m_taaEnv;                               // KKE_TAA
+    std::unique_ptr<ShadowRayPass> m_shadowRayPass; // made the first time shadow rays are on
+    ShadowRays m_shadowRays = ShadowRays::Off;
+    std::optional<ShadowRays> m_shadowRaysEnv; // KKE_SHADOW_RAYS
+    ShadowRaySettings m_shadowRaySettings;
     bool m_taaOn = false;
     TaaSettings m_taaSettings;
     uint32_t m_taaFrame = 0; // which sub-pixel offset this frame draws with

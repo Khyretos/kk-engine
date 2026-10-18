@@ -44,6 +44,8 @@ layout(set = 0, binding = 0) uniform LightingUBO {
     vec4 refl;         // x = 1 when they hold a frame's result, yz = their size, w = the roughest surface they're for
     vec4 behind;       // x = 1 when this frame's behind image is there (refraction), yz = its size in pixels
     vec4 fogVolume;    // x = 1 when volumetric fog is on (ENG-F03), y = its near distance, z = its far distance, w = its slices
+    mat4 shadowRayViewProj; // the camera the shadow rays were cast with (last frame's)
+    vec4 shadowRays;        // x = 1 when they hold a frame's result (ENG-F07), yz = their size, w = reprojection slack
 } lighting;
 
 // The sky prefiltered for reflections (kke::EnvMap, kke::LightingBuffer::setEnvironmentMap):
@@ -70,6 +72,22 @@ layout(set = 0, binding = 6) uniform sampler2D behindImage;
 // in exponential slices, the light the fog scatters towards the camera up
 // to each slice's far edge (rgb) and how much gets through (a).
 layout(set = 0, binding = 7) uniform sampler3D fogVolumeImage;
+
+// Ray-traced sun shadows (ENG-F07, kke::ShadowRayPass): last frame's rays,
+// r = how lit, g = the view depth they were cast from (0 = not traced).
+layout(set = 0, binding = 8) uniform sampler2D shadowRayImage;
+
+// kke::shadowRayLookup: last frame's ray for this surface, or -1 when there
+// is none (not traced, or the pixel showed something else): then the map answers.
+float shadowRayAt(vec3 worldPos) {
+    if (lighting.shadowRays.x < 0.5) return -1.0;
+    vec4 c = lighting.shadowRayViewProj * vec4(worldPos, 1.0);
+    vec2 uv = c.xy / c.w * 0.5 + 0.5;
+    if (c.w <= 0.0 || any(lessThan(uv, vec2(0.0))) || any(greaterThanEqual(uv, vec2(1.0)))) return -1.0;
+    vec2 t = texelFetch(shadowRayImage, ivec2(uv * lighting.shadowRays.yz), 0).rg;
+    if (t.y <= 0.0) return -1.0;
+    return abs(t.y - c.w) <= lighting.shadowRays.w * c.w + 0.05 ? t.x : -1.0;
+}
 
 // The four nearest texels of a half-resolution screen image made with camera
 // `viewProj`, weighted by bilinear distance and by how close their depth is
