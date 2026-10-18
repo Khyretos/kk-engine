@@ -1,0 +1,53 @@
+[2026-10-18 11:04:28.919][engine][Application][Kreative Kompas Engine - Sandbox][info]: Hardware target: desktop (no specific device recognised); platform backend: desktop
+[2026-10-18 11:04:28.919][engine][Application][Kreative Kompas Engine - Sandbox][info]: UI profile: desktop
+[2026-10-18 11:04:28.920][engine][Governor][Kreative Kompas Engine - Sandbox][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 1.00
+[2026-10-18 11:04:28.923][engine][VulkanDevice][Kreative Kompas Engine - Sandbox][info]: using device: llvmpipe (LLVM 22.1.8, 256 bits)
+[2026-10-18 11:04:28.923][engine][VulkanDevice][Kreative Kompas Engine - Sandbox][info]: inline ray tracing (VK_KHR_ray_query): on
+[2026-10-18 11:04:28.981][engine][SwapChain][Kreative Kompas Engine - Sandbox][info]: colour output: format 50 (8-bit sRGB)
+[2026-10-18 11:04:28.982][engine][Application][Kreative Kompas Engine - Sandbox][info]: Hardware target: software-gpu (the only Vulkan device is a CPU: llvmpipe (LLVM 22.1.8, 256 bits))
+[2026-10-18 11:04:28.982][engine][Governor][Kreative Kompas Engine - Sandbox][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+[2026-10-18 11:04:28.982][engine][Application][Kreative Kompas Engine - Sandbox][info]: MSAA 1x (software rasteriser)
+[2026-10-18 11:04:29.066][engine][Application][Kreative Kompas Engine - Sandbox][info]: mood 'clear_day' (assets/moods/clear_day.yaml)
+[2026-10-18 11:04:29.066][engine][Benchmark][Kreative Kompas Engine - Sandbox][info]: benchmark: 3 s warm-up, then 20 s measured, uncapped (no vsync, no frame cap)
+[2026-10-18 11:04:29.225][engine][ClothGpu][Kreative Kompas Engine - Sandbox][info]: no compute queue of its own on this GPU: cloth pairs are searched on the CPU (KKE_CLOTH_GPU=shared to try the graphics queue)
+[2026-10-18 11:04:29.225][engine][RigidBodies][Kreative Kompas Engine - Sandbox][info]: Jolt rigid-body world ready (65536 max bodies)
+[2026-10-18 11:04:29.270][engine][Audio][Kreative Kompas Engine - Sandbox][info]: Audio ready: 48000 Hz, 32 voices, output: Speakers (Realtek High Definition Audio) (WASAPI)
+[2026-10-18 11:04:29.270][engine][Physics][Kreative Kompas Engine - Sandbox][info]: Task system: 2 worker(s) (4 usable cores)
+[2026-10-18 11:04:29.270][engine][Physics][Kreative Kompas Engine - Sandbox][info]: FEMFX constraint solver memory: 67.2 MB
+[2026-10-18 11:04:29.304][engine][Physics][Kreative Kompas Engine - Sandbox][info]: FEMFX scene created (ground + 0 object(s), cap=512)
+[rmlui] Loaded font face 'Noto Sans' [regular] from 'assets/fonts/NotoSans-Regular.ttf'.
+[rmlui] Loaded font face 'Noto Sans' [bold] from 'assets/fonts/NotoSans-Bold.ttf'.
+[rmlui] Loaded font face 'Noto Sans' [italic] from 'assets/fonts/NotoSans-Italic.ttf'.
+[rmlui] Loaded font face 'Noto Color Emoji' [regular] from 'assets/fonts/NotoColorEmoji.ttf'.
+[ui] RmlUi initialised with real Vulkan rendering (text via glyph textures, <img>/background-image via stb_image, both real now -- see RmlVulkanRenderInterface.h)
+[2026-10-18 11:04:29.332][engine][Thumbnails][Kreative Kompas Engine - Sandbox][info]: Thumbnails: 128 px, 256 in the atlas, cache C:\Users\runner\AppData\Local/kk-engine/thumbnails
+[2026-10-18 11:04:29.333][engine][GameShell][Kreative Kompas Engine - Sandbox][info]: no settings file at 'settings.json' (using defaults)
+[2026-10-18 11:04:29.333][engine][Governor][Kreative Kompas Engine - Sandbox][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+[2026-10-18 11:04:29.347][engine][Sandbox][Kreative Kompas Engine - Sandbox][info]: no asset folder found - the Assets panel lists where it looked and takes a path
+[2026-10-18 11:04:29.360][engine][Governor][Kreative Kompas Engine - Sandbox][info]: budget: 2 worker thread(s), frame cap 0, background cap 0, render scale 0.75
+[2026-10-18 11:04:29.360][engine][Input][Kreative Kompas Engine - Sandbox][info]: touch controls: stick left, look look.rate, button fire, button jump, button interact, button crouch, button camera.toggle, button sandbox.getup, pause
+[2026-10-18 11:04:30.335][engine][Physics][Kreative Kompas Engine - Sandbox][info]: perf: 5.8 fps, 9.7 ticks/s, step avg 0.04 ms max 0.16 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 11:04:31.340][engine][Physics][Kreative Kompas Engine - Sandbox][info]: perf: 29.9 fps, 50.8 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 11:04:32.342][engine][Physics][Kreative Kompas Engine - Sandbox][info]: perf: 29.9 fps, 48.9 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 11:04:33.350][engine][Physics][Kreative Kompas Engine - Sandbox][info]: perf: 29.8 fps, 51.6 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 11:04:34.357][engine][Physics][Kreative Kompas Engine - Sandbox][info]: perf: 29.8 fps, 51.7 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 11:04:35.363][engine][Physics][Kreative Kompas Engine - Sandbox][info]: perf: 29.8 fps, 49.7 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 11:04:36.371][engine][Physics][Kreative Kompas Engine - Sandbox][info]: perf: 29.8 fps, 53.6 ticks/s, step avg 0.03 ms max 0.03 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 11:04:37.372][engine][Physics][Kreative Kompas Engine - Sandbox][info]: perf: 30.0 fps, 49.9 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 11:04:38.379][engine][Physics][Kreative Kompas Engine - Sandbox][info]: perf: 29.8 fps, 52.6 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 11:04:39.384][engine][Physics][Kreative Kompas Engine - Sandbox][info]: perf: 29.8 fps, 54.7 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 11:04:40.388][engine][Physics][Kreative Kompas Engine - Sandbox][info]: perf: 29.9 fps, 52.8 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 11:04:41.390][engine][Physics][Kreative Kompas Engine - Sandbox][info]: perf: 29.9 fps, 49.9 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 11:04:42.392][engine][Physics][Kreative Kompas Engine - Sandbox][info]: perf: 29.9 fps, 49.9 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 11:04:43.402][engine][Physics][Kreative Kompas Engine - Sandbox][info]: perf: 29.7 fps, 55.5 ticks/s, step avg 0.02 ms max 0.03 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 11:04:44.405][engine][Physics][Kreative Kompas Engine - Sandbox][info]: perf: 29.9 fps, 52.8 ticks/s, step avg 0.03 ms max 0.05 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 11:04:45.409][engine][Physics][Kreative Kompas Engine - Sandbox][info]: perf: 29.9 fps, 52.8 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 11:04:46.411][engine][Physics][Kreative Kompas Engine - Sandbox][info]: perf: 29.9 fps, 47.9 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 11:04:47.415][engine][Physics][Kreative Kompas Engine - Sandbox][info]: perf: 29.9 fps, 52.8 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 11:04:48.420][engine][Physics][Kreative Kompas Engine - Sandbox][info]: perf: 29.8 fps, 52.7 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 11:04:49.422][engine][Physics][Kreative Kompas Engine - Sandbox][info]: perf: 29.9 fps, 52.9 ticks/s, step avg 0.03 ms max 0.03 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 11:04:50.425][engine][Physics][Kreative Kompas Engine - Sandbox][info]: perf: 29.9 fps, 51.9 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 11:04:51.433][engine][Physics][Kreative Kompas Engine - Sandbox][info]: perf: 29.8 fps, 50.6 ticks/s, step avg 0.03 ms max 0.04 ms, render prep 0.00 ms, 0 object(s) / 0 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-18 11:04:52.576][engine][Benchmark][Kreative Kompas Engine - Sandbox][info]: benchmark: 6 screenshot(s) in C:/forgejo-runner/work/b6a2b49aff5c707d/hostexecutor/results/bench/run_20261018_110039/reports/shots
+[2026-10-18 11:04:52.577][engine][Benchmark][Kreative Kompas Engine - Sandbox][info]: benchmark: 584 frames, 29.9 fps avg, 28.9 fps 1% low, 0 hitch(es), verdict struggles; report C:\forgejo-runner\work\b6a2b49aff5c707d\hostexecutor\results\bench\run_20261018_110039\reports\sandbox.json
+[2026-10-18 11:04:52.581][engine][Physics][Kreative Kompas Engine - Sandbox][info]: FEMFX scene destroyed
