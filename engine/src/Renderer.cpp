@@ -2,6 +2,7 @@
 
 #include "BloomPass.h"
 #include "ColorLutTexture.h"
+#include "DepthMapPass.h"
 #include "DofPass.h"
 #include "MotionBlurPass.h"
 #include "SmaaPass.h"
@@ -46,6 +47,7 @@ Renderer::~Renderer() {
     m_taa.reset();
     m_dof.reset();
     m_motionBlur.reset();
+    m_depthMap.reset();
     for (uint32_t i = 0; i < kMaxFramesInFlight; ++i) destroySceneTarget(i);
     destroyPostPass();
     if (m_scenePass) vkDestroyRenderPass(m_device->device(), m_scenePass, nullptr);
@@ -229,6 +231,7 @@ bool Renderer::beginFrame() {
         recreateSwapChain();
     }
     vkWaitForFences(m_device->device(), 1, &m_inFlightFences[m_currentFrame], VK_TRUE, UINT64_MAX);
+    m_occlusionReadThisFrame = false; // this slot's depth map is finished now: occlusionMap() reads it
     collectCapture(m_currentFrame); // the fence says this slot's copy is done
 
     // The fence wait above guarantees this frame slot's prior GPU work (if
@@ -573,6 +576,15 @@ Renderer::LastFrameDepth Renderer::lastFrameDepth() const {
     return LastFrameDepth{ t.depthSampleView, t.extent, m_lastDepthSamples, m_motionBlurPrevViewProj };
 }
 
+const DepthMap* Renderer::occlusionMap() {
+    if (!m_occlusionOn || !m_occlusionSingleView || !m_depthMap) return nullptr;
+    if (!m_occlusionReadThisFrame) {
+        m_occlusionRead = m_depthMap->read(m_currentFrame);
+        m_occlusionReadThisFrame = true;
+    }
+    return m_occlusionRead;
+}
+
 void Renderer::endScenePass() {
     if (!m_inScenePass) return;
     m_inScenePass = false;
@@ -709,6 +721,13 @@ void Renderer::beginOverlayPass() {
     m_motionBlurPrevViewProj = m_taaViewProj;
     m_motionBlurHavePrev = blur;
     m_lastDepthFrame = t.depthSampleView ? static_cast<int>(m_currentFrame) : -1;
+    if (m_occlusionOn && m_occlusionSingleView && t.depthSampleView) {
+        // This frame's depth map for the CPU, two frames from now (occlusionMap()).
+        if (!m_depthMap) m_depthMap = std::make_unique<DepthMapPass>(*m_device);
+        m_depthMap->record(cmd, m_currentFrame, t.depthSampleView, m_scenePassSamples, t.extent, m_taaViewProj);
+    } else if (m_depthMap) {
+        m_depthMap->forget(); // off or split: an old map would hide things wrongly when it comes back
+    }
     m_lastDepthSamples = m_scenePassSamples;
     m_bloomSource = VK_NULL_HANDLE;
     if (m_bloomOn) {

@@ -6,6 +6,7 @@
 #include "kke/DepthOfField.h"
 #include "kke/FrameRetireQueue.h"
 #include "kke/MotionBlur.h"
+#include "kke/Occlusion.h"
 #include "kke/ToneMap.h"
 
 #include <glm/glm.hpp>
@@ -53,6 +54,7 @@ class TaaPass;
 class BloomPass;
 class DofPass;
 class MotionBlurPass;
+class DepthMapPass;
 class ColorLutTexture;
 struct ColorLut;
 
@@ -161,6 +163,16 @@ public:
     void setMotionBlur(bool on) { m_motionBlurOn = on; }
     bool motionBlur() const { return m_motionBlurOn; }
     MotionBlurSettings& motionBlurSettings() { return m_motionBlurSettings; }
+    // Occlusion culling (ENG-F13, kke/Occlusion.h): after each frame's 3D
+    // pass, a small map of its farthest depth goes to the CPU. occlusionMap()
+    // gives the one from two frames ago (between beginFrame and endFrame), or
+    // null: off, split screen (setOcclusionSingleView(false)), none yet.
+    // Needs the scene's depth readable and the camera (setTaaCamera). Off by
+    // default.
+    void setOcclusionCulling(bool on) { m_occlusionOn = on; }
+    bool occlusionCulling() const { return m_occlusionOn; }
+    void setOcclusionSingleView(bool single) { m_occlusionSingleView = single; }
+    const DepthMap* occlusionMap();
     float renderScale() const { return m_renderScale; }
     // Size of the 3D image: extent() times the render scale.
     VkExtent2D renderExtent() const;
@@ -307,6 +319,10 @@ private:
     bool m_motionBlurOn = false, m_motionBlurHavePrev = false;
     MotionBlurSettings m_motionBlurSettings;
     glm::mat4 m_motionBlurPrevViewProj{1.0f}; // last frame's camera, for the motion
+    std::unique_ptr<DepthMapPass> m_depthMap; // made the first time occlusion culling is on
+    bool m_occlusionOn = false, m_occlusionSingleView = true;
+    const DepthMap* m_occlusionRead = nullptr; // this frame's, once read
+    bool m_occlusionReadThisFrame = false;
     int m_lastDepthFrame = -1;                // the frame in flight whose depth lastFrameDepth() gives
     uint32_t m_lastDepthSamples = 1;
     bool m_taaOn = false, m_taaHavePrev = false;

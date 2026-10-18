@@ -91,7 +91,7 @@ by area. The goal is parity with the big engines and more.
 | ENG-F10 | Rendering | Post stack: bloom, depth of field, motion blur, LUT grading (tone map, exposure and grade exist). Bloom done (`bloom`, on by default); LUT grading done (a mood's `lut:`, .cube files, tetrahedral); depth of field done (`depthOfField`, off by default, auto focus); motion blur done (`motionBlur`, off by default, the camera's movement from the depth, no velocity buffer). | ✅ |
 | ENG-F11 | Rendering | GPU particle/VFX system. GPU particles in closed form (G18), and since F11 stepped on the GPU when they attract, swirl (`turbulence`: divergence-free curl waves) or collide (against the last frame's depth, no colliders needed); 100,000 for +0.08 ms. Not yet: ribbons and trails, sorted see-through GPU particles. | 🟡 |
 | ENG-F12 | Rendering | Decals: applied inside the shading of every lit surface from per-cell lists (no G-buffer, no clipped meshes), so they are lit, shadowed and reflected like the surface, keep MSAA and cost nothing where there are none; six built-in textures, PNGs from assets/decals, `decal.*` in Lua (docs/DECALS.md). | ✅ |
-| ENG-F13 | Rendering | Occlusion culling at scale, GPU-driven, HZB (frustum culling exists) | 🟡 |
+| ENG-F13 | Rendering | Occlusion culling: a small farthest-depth map of each frame read back by the CPU two frames later, so models hidden behind others are not skinned, uploaded or drawn, with the CPU's instancing kept (`occlusionCulling`, off by default; worth it in dense scenes). Not yet: GPU-driven indirect draws. | ✅ |
 | ENG-F14 | Rendering | Upscalers such as FSR (render scale exists) | 🟡 |
 | ENG-F15 | Lighting | Light probes with baking | ⬜ |
 | ENG-F16 | Lighting | Contact shadows | ⬜ |
