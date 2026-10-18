@@ -2,6 +2,7 @@
 
 #include "BloomPass.h"
 #include "ColorLutTexture.h"
+#include "DofPass.h"
 #include "SmaaPass.h"
 #include "TaaPass.h"
 
@@ -42,6 +43,7 @@ Renderer::~Renderer() {
     m_lutTexture.reset();
     m_identityLut.reset();
     m_taa.reset();
+    m_dof.reset();
     for (uint32_t i = 0; i < kMaxFramesInFlight; ++i) destroySceneTarget(i);
     destroyPostPass();
     if (m_scenePass) vkDestroyRenderPass(m_device->device(), m_scenePass, nullptr);
@@ -676,6 +678,14 @@ void Renderer::beginOverlayPass() {
         m_taaPrevViewProj = m_taaViewProj;
     }
     m_taaHavePrev = taa;
+    if (m_dofOn && t.depthSampleView != VK_NULL_HANDLE) {
+        // Depth of field over the anti-aliased light, before bloom spreads it.
+        if (!m_dof) m_dof = std::make_unique<DofPass>(*m_device);
+        m_dof->settings() = m_dofSettings;
+        m_dof->record(cmd, m_currentFrame, m_postSource, m_postSourceLayout, t.depthSampleView, m_scenePassSamples, t.extent, m_dofProj, m_dofDt);
+        m_postSource = m_dof->output();
+        m_postSourceLayout = VK_IMAGE_LAYOUT_GENERAL;
+    }
     m_bloomSource = VK_NULL_HANDLE;
     if (m_bloomOn) {
         // Bloom over the anti-aliased light, mixed in by the tone map.

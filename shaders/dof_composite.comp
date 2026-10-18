@@ -1,0 +1,5 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+// Depth of field, the mix into the sharp image (shaders/dof.glsl).
+#define DOF_COMPOSITE
+#include "dof.glsl"
