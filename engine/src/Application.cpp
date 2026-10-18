@@ -172,6 +172,11 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
         m_bloomEnv = env[0] == '1';
         setBloom(*m_bloomEnv);
     }
+    if (const char* env = dev::env("KKE_DOF"); env && *env) {
+        m_dofEnv = env[0] == '1';
+        setDepthOfField(*m_dofEnv);
+    }
+    if (const char* env = dev::env("KKE_DOF_FOCUS"); env && *env) depthOfFieldSettings().focusDistance = std::strtof(env, nullptr); // metres
     if (const char* env = dev::env("KKE_TAA"); env && *env) {
         m_taaEnv = env[0] == '1';
         setTaa(*m_taaEnv);
@@ -957,6 +962,7 @@ void Application::run() {
         const glm::mat4& view = drawViews[0].view;
         const glm::mat4& proj = drawViews[0].proj;
         m_renderer->setTaaCamera(proj * view);
+        m_renderer->setDofCamera(proj, dt);
 
         // Cascaded shadow maps (kke::ShadowMap) from the key light (lights[0])
         // only. Each view's frustum, out to kShadowDistance, is cut into
@@ -1470,8 +1476,16 @@ void Application::setTaa(bool on) {
     updateSceneDepthReadable();
 }
 
+void Application::setDepthOfField(bool on) {
+    m_dofOn = m_dofEnv ? *m_dofEnv : on;
+    m_renderer->setDepthOfField(m_dofOn);
+    updateSceneDepthReadable();
+}
+
+DofSettings& Application::depthOfFieldSettings() { return m_renderer->depthOfFieldSettings(); }
+
 void Application::updateSceneDepthReadable() {
-    m_renderer->setSceneDepthReadable(m_screenGiOn || m_reflections != Reflections::Off || m_taaOn || m_shadowRays != ShadowRays::Off);
+    m_renderer->setSceneDepthReadable(m_screenGiOn || m_reflections != Reflections::Off || m_taaOn || m_shadowRays != ShadowRays::Off || m_dofOn);
 }
 
 void Application::setReflections(Reflections mode) {

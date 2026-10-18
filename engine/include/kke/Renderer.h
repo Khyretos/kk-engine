@@ -3,6 +3,7 @@
 #include "kke/VulkanDevice.h"
 #include "kke/SwapChain.h"
 #include "kke/Buffer.h"
+#include "kke/DepthOfField.h"
 #include "kke/FrameRetireQueue.h"
 #include "kke/ToneMap.h"
 
@@ -49,6 +50,7 @@ struct OverlayTarget {
 class SmaaPass;
 class TaaPass;
 class BloomPass;
+class DofPass;
 class ColorLutTexture;
 struct ColorLut;
 
@@ -129,6 +131,17 @@ public:
     // A new one is uploaded once (the call waits for the GPU).
     void setColorLut(std::shared_ptr<const ColorLut> lut);
     bool bloom() const { return m_bloomOn; }
+    // Depth of field (ENG-F10 part 3, kke/DepthOfField.h): a lens's blur in
+    // front of and behind the focus, after anti-aliasing and before bloom.
+    // Needs the scene's depth readable and each frame the projection and the
+    // seconds since the last frame (setDofCamera). Off by default.
+    void setDepthOfField(bool on) { m_dofOn = on; }
+    bool depthOfField() const { return m_dofOn; }
+    DofSettings& depthOfFieldSettings() { return m_dofSettings; }
+    void setDofCamera(const glm::mat4& proj, float dt) {
+        m_dofProj = proj;
+        m_dofDt = dt;
+    }
     float renderScale() const { return m_renderScale; }
     // Size of the 3D image: extent() times the render scale.
     VkExtent2D renderExtent() const;
@@ -266,6 +279,11 @@ private:
     bool m_bloomOn = true;
     VkImageView m_bloomSource = VK_NULL_HANDLE; // this frame's bloom (GENERAL), or none
     std::unique_ptr<TaaPass> m_taa; // made the first time TAA is on
+    std::unique_ptr<DofPass> m_dof; // made the first time depth of field is on
+    bool m_dofOn = false;
+    DofSettings m_dofSettings;
+    glm::mat4 m_dofProj{1.0f};
+    float m_dofDt = 0.0f;
     bool m_taaOn = false, m_taaHavePrev = false;
     glm::mat4 m_taaViewProj{1.0f}, m_taaPrevViewProj{1.0f};
     VkImageView m_postSource = VK_NULL_HANDLE; // what the tone map reads this frame (the scene, or SMAA's or TAA's result)
