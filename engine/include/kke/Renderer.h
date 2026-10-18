@@ -49,6 +49,8 @@ struct OverlayTarget {
 class SmaaPass;
 class TaaPass;
 class BloomPass;
+class ColorLutTexture;
+struct ColorLut;
 
 class Renderer {
 public:
@@ -123,6 +125,9 @@ public:
     // Bloom (ENG-F10, kke/Bloom.h): bright light bleeding into what is around
     // it, mixed in before the tone map. On by default (graphics setting "bloom").
     void setBloom(bool on) { m_bloomOn = on; }
+    // A colour LUT after the tone map (ENG-F10, kke/ColorLut.h); null = none.
+    // A new one is uploaded once (the call waits for the GPU).
+    void setColorLut(std::shared_ptr<const ColorLut> lut);
     bool bloom() const { return m_bloomOn; }
     float renderScale() const { return m_renderScale; }
     // Size of the 3D image: extent() times the render scale.
@@ -256,6 +261,8 @@ private:
     std::unique_ptr<SmaaPass> m_smaa; // made the first time SMAA is on
     bool m_smaaOn = false;
     std::unique_ptr<BloomPass> m_bloom; // made the first time bloom is on
+    std::shared_ptr<const ColorLut> m_lut;
+    std::unique_ptr<ColorLutTexture> m_lutTexture, m_identityLut; // the LUT on the GPU; a 2^3 identity bound while there is none
     bool m_bloomOn = true;
     VkImageView m_bloomSource = VK_NULL_HANDLE; // this frame's bloom (GENERAL), or none
     std::unique_ptr<TaaPass> m_taa; // made the first time TAA is on

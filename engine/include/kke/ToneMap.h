@@ -22,7 +22,7 @@ struct PostParams {
                                             // w = bloom's share of the light (ENG-F10; Renderer sets it), 0 = none
     glm::vec4 lookSlope{1.0f};              // rgb = slope, a = saturation
     glm::vec4 lookOffset{0.0f};             // rgb = offset, a = 1 when a look is set
-    glm::vec4 lookPower{1.0f};              // rgb = power
+    glm::vec4 lookPower{1.0f};              // rgb = power, a = the colour LUT's size (ENG-F10; Renderer sets it), 0 = none
 };
 static_assert(sizeof(PostParams) == 64, "the tone-map pass's push constants");
 
