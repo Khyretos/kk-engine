@@ -1234,6 +1234,8 @@ void Application::run() {
             // do anything here.
             ShadowRenderContext shadowCtx{};
             shadowCtx.cmd = cmd;
+            m_commandList.reset(cmd);
+            shadowCtx.list = &m_commandList;
             shadowCtx.renderPass = m_shadowMap->renderPass();
             shadowCtx.lightViewProj = lightViewProj;
             shadowCtx.frameIndex = m_renderer->currentFrameIndex();
@@ -1295,6 +1297,7 @@ void Application::run() {
             ReflectionRays frameRays; // the frame's ray scene, once (buildRayScene), for refraction and reflections
             m_renderer->beginRenderPass(refractOn);
             renderCtx.cmd = cmd;
+            renderCtx.list = &m_commandList;
             renderCtx.frameIndex = m_renderer->currentFrameIndex();
             for (uint32_t i = 0; drawScene && i < viewCount; ++i) {
                 const DrawView& d = drawViews[i];

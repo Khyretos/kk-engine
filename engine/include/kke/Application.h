@@ -16,6 +16,7 @@
 #include "kke/Reflections.h"
 #include "kke/ColorLut.h"
 #include "kke/Decals.h"
+#include "kke/rhi/VulkanCommandList.h"
 #include "kke/VolumetricFog.h"
 #include "kke/Taa.h"
 #include "kke/ShadowRays.h"
@@ -573,6 +574,7 @@ private:
     std::vector<GpuDecal> m_decalRecords;
     std::vector<glm::vec4> m_decalSpheres;
     float m_now = 0.0f; // seconds since the start, this frame (decals fade by it)
+    rhi::VulkanCommandList m_commandList; // the frame's command buffer as the RHI sees it (RenderContext::list)
     bool m_clustersOff = false;                         // KKE_CLUSTERS=0
     ShadowRays m_shadowRays = ShadowRays::Off;
     std::optional<ShadowRays> m_shadowRaysEnv; // KKE_SHADOW_RAYS

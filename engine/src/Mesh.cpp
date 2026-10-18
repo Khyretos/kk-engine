@@ -1,5 +1,6 @@
 #include "kke/Mesh.h"
 #include "kke/VulkanDevice.h"
+#include "kke/rhi/VulkanCommandList.h"
 
 namespace kke {
 
@@ -71,6 +72,17 @@ void Mesh::draw(VkCommandBuffer cmd) const {
 
 void Mesh::drawInstanced(VkCommandBuffer cmd, uint32_t instances, uint32_t firstInstance) const {
     vkCmdDrawIndexed(cmd, m_indexCount, instances, 0, 0, firstInstance);
+}
+
+void Mesh::bind(rhi::CommandList& list) const {
+    list.bindVertexBuffer(0, rhi::VulkanCommandList::buffer(m_vertexBuffer->handle()), 0);
+    list.bindIndexBuffer(rhi::VulkanCommandList::buffer(m_indexBuffer->handle()), 0, rhi::IndexType::U32);
+}
+
+void Mesh::draw(rhi::CommandList& list) const { list.drawIndexed(m_indexCount, 1, 0, 0, 0); }
+
+void Mesh::drawInstanced(rhi::CommandList& list, uint32_t instances, uint32_t firstInstance) const {
+    list.drawIndexed(m_indexCount, instances, 0, 0, firstInstance);
 }
 
 Mesh Mesh::createCube(VulkanDevice& device) {

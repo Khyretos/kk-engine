@@ -1,4 +1,5 @@
 #include "kke/Pipeline.h"
+#include "kke/rhi/CommandList.h"
 #include "kke/VulkanDevice.h"
 #include "kke/Mesh.h"
 #include "kke/ShaderUtils.h"
@@ -182,5 +183,7 @@ Pipeline::~Pipeline() {
 void Pipeline::bind(VkCommandBuffer cmd) const {
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
 }
+
+void Pipeline::bind(rhi::CommandList& list) const { list.bindPipeline(*this); }
 
 } // namespace kke
