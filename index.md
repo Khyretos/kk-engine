@@ -27,3 +27,4 @@
 - runs/2026-10-18T0139Z-c7352fbaa9: claude/ray-query, test job success
 - runs/2026-10-18T0203Z-b60a3cc24d: claude/reflections, test job success
 - runs/2026-10-18T0223Z-4d83aceb02: claude/kke-rays, test job success
+- runs/2026-10-18T0243Z-4a885a550c: claude/cloth-passes, test job success
