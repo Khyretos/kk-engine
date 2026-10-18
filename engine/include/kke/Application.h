@@ -17,6 +17,7 @@
 #include "kke/ColorLut.h"
 #include "kke/Decals.h"
 #include "kke/rhi/VulkanCommandList.h"
+#include "kke/rhi/VulkanDevice.h"
 #include "kke/VolumetricFog.h"
 #include "kke/Taa.h"
 #include "kke/ShadowRays.h"
@@ -267,6 +268,10 @@ public:
     Window& window() { return m_window; }
     Renderer& renderer() { return *m_renderer; }
     VulkanDevice& device() { return m_renderer->device(); }
+    // The RHI device: GPU buffers for drawing (docs/plans/rhi.md, R1c).
+    rhi::Device& gpu() { return *m_gpu; }
+    // The same on Vulkan, for buffers the Vulkan-only passes also use.
+    rhi::VulkanGpuDevice& vulkanGpu() { return *m_gpu; }
     Camera& camera() { return m_camera; }
     // Split screen / picture-in-picture (ACTION_PLAN.md 1.3): each view
     // is a camera drawn into its part of the window (kke/Viewports.h for
@@ -575,6 +580,7 @@ private:
     std::vector<glm::vec4> m_decalSpheres;
     float m_now = 0.0f; // seconds since the start, this frame (decals fade by it)
     rhi::VulkanCommandList m_commandList; // the frame's command buffer as the RHI sees it (RenderContext::list)
+    std::unique_ptr<rhi::VulkanGpuDevice> m_gpu; // gpu(), made with the renderer
     bool m_clustersOff = false;                         // KKE_CLUSTERS=0
     ShadowRays m_shadowRays = ShadowRays::Off;
     std::optional<ShadowRays> m_shadowRaysEnv; // KKE_SHADOW_RAYS

@@ -1,6 +1,6 @@
 #include "kke/Mesh.h"
 #include "kke/VulkanDevice.h"
-#include "kke/rhi/VulkanCommandList.h"
+#include "kke/rhi/VulkanDevice.h"
 
 namespace kke {
 
@@ -39,12 +39,9 @@ std::array<VkVertexInputAttributeDescription, 4> Vertex::attributeDescriptions()
 
 Mesh::Mesh(VulkanDevice& device, const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices)
     : m_indexCount(static_cast<uint32_t>(indices.size())) {
-    m_vertexBuffer = std::make_unique<Buffer>(
-        Buffer::createDeviceLocal(device, vertices.data(), sizeof(Vertex) * vertices.size(),
-                                   VK_BUFFER_USAGE_VERTEX_BUFFER_BIT));
-    m_indexBuffer = std::make_unique<Buffer>(
-        Buffer::createDeviceLocal(device, indices.data(), sizeof(uint32_t) * indices.size(),
-                                   VK_BUFFER_USAGE_INDEX_BUFFER_BIT));
+    rhi::VulkanGpuDevice gpu(device);
+    m_vertexBuffer = gpu.createBuffer({ sizeof(Vertex) * vertices.size(), rhi::kVertexBuffer, rhi::Memory::Device }, vertices.data());
+    m_indexBuffer = gpu.createBuffer({ sizeof(uint32_t) * indices.size(), rhi::kIndexBuffer, rhi::Memory::Device }, indices.data());
 }
 
 Mesh::Mesh(VulkanDevice& device, const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices, Memory memory)
@@ -53,17 +50,16 @@ Mesh::Mesh(VulkanDevice& device, const std::vector<Vertex>& vertices, const std:
         *this = Mesh(device, vertices, indices);
         return;
     }
-    m_vertexBuffer = std::make_unique<Buffer>(device, sizeof(Vertex) * vertices.size(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-    m_vertexBuffer->upload(vertices.data(), sizeof(Vertex) * vertices.size());
-    m_indexBuffer = std::make_unique<Buffer>(device, sizeof(uint32_t) * indices.size(), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-    m_indexBuffer->upload(indices.data(), sizeof(uint32_t) * indices.size());
+    rhi::VulkanGpuDevice gpu(device);
+    m_vertexBuffer = gpu.createBuffer({ sizeof(Vertex) * vertices.size(), rhi::kVertexBuffer, rhi::Memory::Upload }, vertices.data());
+    m_indexBuffer = gpu.createBuffer({ sizeof(uint32_t) * indices.size(), rhi::kIndexBuffer, rhi::Memory::Upload }, indices.data());
 }
 
 void Mesh::bind(VkCommandBuffer cmd) const {
-    VkBuffer buffers[] = { m_vertexBuffer->handle() };
+    VkBuffer buffers[] = { rhi::VulkanBuffer::handle(*m_vertexBuffer) };
     VkDeviceSize offsets[] = { 0 };
     vkCmdBindVertexBuffers(cmd, 0, 1, buffers, offsets);
-    vkCmdBindIndexBuffer(cmd, m_indexBuffer->handle(), 0, VK_INDEX_TYPE_UINT32);
+    vkCmdBindIndexBuffer(cmd, rhi::VulkanBuffer::handle(*m_indexBuffer), 0, VK_INDEX_TYPE_UINT32);
 }
 
 void Mesh::draw(VkCommandBuffer cmd) const {
@@ -75,8 +71,8 @@ void Mesh::drawInstanced(VkCommandBuffer cmd, uint32_t instances, uint32_t first
 }
 
 void Mesh::bind(rhi::CommandList& list) const {
-    list.bindVertexBuffer(0, rhi::VulkanCommandList::buffer(m_vertexBuffer->handle()), 0);
-    list.bindIndexBuffer(rhi::VulkanCommandList::buffer(m_indexBuffer->handle()), 0, rhi::IndexType::U32);
+    list.bindVertexBuffer(0, m_vertexBuffer->ref(), 0);
+    list.bindIndexBuffer(m_indexBuffer->ref(), 0, rhi::IndexType::U32);
 }
 
 void Mesh::draw(rhi::CommandList& list) const { list.drawIndexed(m_indexCount, 1, 0, 0, 0); }

@@ -5,6 +5,7 @@ set(ENGINE_SOURCES
     src/SwapChain.cpp
     src/Pipeline.cpp
     src/rhi/VulkanCommandList.cpp
+    src/rhi/VulkanDevice.cpp
     src/Buffer.cpp
     src/Mesh.cpp
     src/Renderer.cpp

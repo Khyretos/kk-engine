@@ -1270,8 +1270,7 @@ PhysicsModule::ObjectHandle PhysicsModule::spawnTetMeshInternal(const TetMeshDat
     // See SpawnedTet's own comment for why only exterior faces are drawn.
     obj->maxRenderVerts = bounds.maxExteriorFaces * 3;
     for (auto& vb : obj->vertexBuffers) {
-        vb = std::make_unique<Buffer>(
-            m_app->device(), sizeof(Vertex) * obj->maxRenderVerts, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+        vb = m_app->gpu().createBuffer({ sizeof(Vertex) * obj->maxRenderVerts, rhi::kVertexBuffer, rhi::Memory::Upload });
     }
     obj->color = kColorPalette[m_nextHandle % (sizeof(kColorPalette) / sizeof(kColorPalette[0]))];
 
@@ -1789,18 +1788,14 @@ void PhysicsModule::renderShadow(const ShadowRenderContext& ctx) {
     ctx.list->pushConstants(*m_shadowPipeline, rhi::kVertex, 0, sizeof(pc), &pc);
     for (auto& [handle, obj] : m_objects) {
         if (obj->cpuVerts.empty() || obj->gpuVersion[ctx.frameIndex] != obj->cpuVersion) continue;
-        VkBuffer buffers[] = { obj->vertexBuffers[ctx.frameIndex]->handle() };
-        VkDeviceSize offsets[] = { 0 };
-        ctx.list->bindVertexBuffer(0, rhi::VulkanCommandList::buffer(buffers[0]), offsets[0]);
+        ctx.list->bindVertexBuffer(0, obj->vertexBuffers[ctx.frameIndex]->ref(), 0);
         ctx.list->draw(static_cast<uint32_t>(obj->cpuVerts.size()), 1, 0, 0);
     }
     for (auto& [handle, r] : m_rubble) {
         if (!r.vertexBuffer) continue;
         ShadowPushConstants rpc{ ctx.lightViewProj, rubbleModel(r) };
         ctx.list->pushConstants(*m_shadowPipeline, rhi::kVertex, 0, sizeof(rpc), &rpc);
-        VkBuffer buffers[] = { r.vertexBuffer->handle() };
-        VkDeviceSize offsets[] = { 0 };
-        ctx.list->bindVertexBuffer(0, rhi::VulkanCommandList::buffer(buffers[0]), offsets[0]);
+        ctx.list->bindVertexBuffer(0, r.vertexBuffer->ref(), 0);
         ctx.list->draw(static_cast<uint32_t>(r.verts.size()), 1, 0, 0);
     }
 }
@@ -1924,9 +1919,7 @@ void PhysicsModule::render(const RenderContext& ctx) {
         bindMaterialTexture(obj->material, obj->textureSet);
         PhysicsPushConstants pc{ glm::mat4(1.0f), obj->material.metallic, obj->material.roughness };
         ctx.list->pushConstants(*m_pipeline, rhi::kVertex, 0, sizeof(pc), &pc);
-        VkBuffer buffers[] = { obj->vertexBuffers[ctx.frameIndex]->handle() };
-        VkDeviceSize offsets[] = { 0 };
-        ctx.list->bindVertexBuffer(0, rhi::VulkanCommandList::buffer(buffers[0]), offsets[0]);
+        ctx.list->bindVertexBuffer(0, obj->vertexBuffers[ctx.frameIndex]->ref(), 0);
         ctx.list->draw(static_cast<uint32_t>(obj->cpuVerts.size()), 1, 0, 0);
     }
     // Rubble (convertToRubble): a frozen shape where the other world put it.
@@ -1935,9 +1928,7 @@ void PhysicsModule::render(const RenderContext& ctx) {
         bindMaterialTexture(r.material, r.textureSet);
         PhysicsPushConstants pc{ rubbleModel(r), r.material.metallic, r.material.roughness };
         ctx.list->pushConstants(*m_pipeline, rhi::kVertex, 0, sizeof(pc), &pc);
-        VkBuffer buffers[] = { r.vertexBuffer->handle() };
-        VkDeviceSize offsets[] = { 0 };
-        ctx.list->bindVertexBuffer(0, rhi::VulkanCommandList::buffer(buffers[0]), offsets[0]);
+        ctx.list->bindVertexBuffer(0, r.vertexBuffer->ref(), 0);
         ctx.list->draw(static_cast<uint32_t>(r.verts.size()), 1, 0, 0);
     }
     ++m_frameCounter;

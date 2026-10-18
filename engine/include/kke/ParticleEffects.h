@@ -1,6 +1,7 @@
 #pragma once
 
 #include "kke/Buffer.h"
+#include "kke/rhi/Device.h"
 #include "kke/GpuParticleRing.h"
 #include "kke/Module.h"
 #include "kke/Pipeline.h"
@@ -140,7 +141,7 @@ private:
     ParticleSim m_sim;
     std::unique_ptr<Pipeline> m_pipelines[kKindCount]; // made the first time that kind is drawn
     // [frame in flight][view * kKindCount + kind]: each view sorts its own smoke back to front.
-    struct Slot { std::unique_ptr<Buffer> buffer; size_t capacity = 0; };
+    struct Slot { std::unique_ptr<rhi::Buffer> buffer; size_t capacity = 0; };
     std::vector<Slot> m_slots[Renderer::kMaxFramesInFlight];
     std::vector<GpuInstance> m_scratch;
     mutable std::vector<uint32_t> m_order;

@@ -157,9 +157,7 @@ bool PhysicsModule::convertToRubble(ObjectHandle piece) {
         r.tetNormal[t] = std::fabs(glm::determinant(f)) > 1e-12f ? glm::transpose(glm::inverse(f)) : glm::mat3(1.0f);
     }
     if (m_app) {
-        r.vertexBuffer = std::make_unique<Buffer>(m_app->device(), sizeof(Vertex) * r.verts.size(), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                                                  VMA_MEMORY_USAGE_CPU_TO_GPU);
-        r.vertexBuffer->upload(r.verts.data(), sizeof(Vertex) * r.verts.size());
+        r.vertexBuffer = m_app->gpu().createBuffer({ sizeof(Vertex) * r.verts.size(), rhi::kVertexBuffer, rhi::Memory::Upload }, r.verts.data());
     }
     const ObjectHandle bh = part.breakable;
     // Out of FEMFX. partOfTet keeps pointing at the handle: deformEmbedded

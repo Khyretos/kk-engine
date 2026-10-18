@@ -1,7 +1,7 @@
 #include "kke/SphereImpostors.h"
 
 #include "kke/Application.h"
-#include "kke/rhi/VulkanCommandList.h"
+#include "kke/rhi/VulkanDevice.h"
 
 #include <algorithm>
 #include <map>
@@ -48,16 +48,13 @@ void SphereImpostorRenderer::draw(const RenderContext& ctx, const std::vector<Sp
     uint32_t f = ctx.frameIndex;
     if (m_capacity[f] < m_scratch.size()) {
         m_capacity[f] = std::max<size_t>(m_scratch.size() * 3 / 2, 6 * 256);
-        m_buffers[f] = std::make_unique<Buffer>(m_app.device(), m_capacity[f] * sizeof(Vertex), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                                                VMA_MEMORY_USAGE_CPU_TO_GPU);
+        m_buffers[f] = m_app.gpu().createBuffer({ m_capacity[f] * sizeof(Vertex), rhi::kVertexBuffer, rhi::Memory::Upload });
     }
     m_buffers[f]->upload(m_scratch.data(), m_scratch.size() * sizeof(Vertex));
     m_pipeline->bind(*ctx.list);
     VkDescriptorSet sets[] = { ctx.lightingDescriptorSet, ctx.shadowMapDescriptorSet };
     ctx.list->bindGroups(*m_pipeline, 0, rhi::VulkanCommandList::groups(sets, 2));
-    VkBuffer vb = m_buffers[f]->handle();
-    VkDeviceSize off = 0;
-    ctx.list->bindVertexBuffer(0, rhi::VulkanCommandList::buffer(vb), off);
+    ctx.list->bindVertexBuffer(0, m_buffers[f]->ref(), 0);
     ctx.list->draw(static_cast<uint32_t>(m_scratch.size()), 1, 0, 0);
 }
 
@@ -106,8 +103,8 @@ DynamicMeshRenderer::RayView DynamicMeshRenderer::rayView(uint32_t frame) const 
     RayView v;
     const FrameBuffers& fb = m_frames[frame % Renderer::kMaxFramesInFlight];
     if (fb.vertices && fb.indices && m_app.device().rayQuery()) {
-        v.vertices = fb.vertices->deviceAddress();
-        v.indices = fb.indices->deviceAddress();
+        v.vertices = rhi::VulkanBuffer::deviceAddress(*fb.vertices);
+        v.indices = rhi::VulkanBuffer::deviceAddress(*fb.indices);
         v.vertexBuffer = fb.vertices.get();
     }
     v.vertexCount = static_cast<uint32_t>(m_vertices.size());
@@ -128,13 +125,11 @@ void DynamicMeshRenderer::ensureUploaded(uint32_t f) {
                                         : 0;
     if (fb.vCap < m_vertices.size()) {
         fb.vCap = m_vertices.size() * 3 / 2 + 64;
-        fb.vertices = std::make_unique<Buffer>(m_app.device(), fb.vCap * sizeof(Vertex), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | rays,
-                                               VMA_MEMORY_USAGE_CPU_TO_GPU);
+        fb.vertices = m_app.vulkanGpu().createBuffer({ fb.vCap * sizeof(Vertex), rhi::kVertexBuffer, rhi::Memory::Upload }, nullptr, rays);
     }
     if (fb.iCap < m_indices.size()) {
         fb.iCap = m_indices.size() * 3 / 2 + 192;
-        fb.indices = std::make_unique<Buffer>(m_app.device(), fb.iCap * sizeof(uint32_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT | rays,
-                                              VMA_MEMORY_USAGE_CPU_TO_GPU);
+        fb.indices = m_app.vulkanGpu().createBuffer({ fb.iCap * sizeof(uint32_t), rhi::kIndexBuffer, rhi::Memory::Upload }, nullptr, rays);
     }
     fb.vertices->upload(m_vertices.data(), m_vertices.size() * sizeof(Vertex));
     fb.indices->upload(m_indices.data(), m_indices.size() * sizeof(uint32_t));
@@ -228,10 +223,8 @@ void DynamicMeshRenderer::drawCloth(const RenderContext& ctx, const Fabric& fabr
     ClothPush pc{ model, 0.0f, fabric.roughness, 0.0f, 0.0f, glm::vec4(fabric.sheenColor, fabric.sheen),
                   glm::vec4(float(fabric.weave), fabric.weaveScale, fabric.fuzz, fabric.specular) };
     ctx.list->pushConstants(*m_clothPipeline, rhi::kVertex | rhi::kFragment, 0, sizeof(pc), &pc);
-    VkBuffer vb = fb.vertices->handle();
-    VkDeviceSize off = 0;
-    ctx.list->bindVertexBuffer(0, rhi::VulkanCommandList::buffer(vb), off);
-    ctx.list->bindIndexBuffer(rhi::VulkanCommandList::buffer(fb.indices->handle()), 0, rhi::IndexType::U32);
+    ctx.list->bindVertexBuffer(0, fb.vertices->ref(), 0);
+    ctx.list->bindIndexBuffer(fb.indices->ref(), 0, rhi::IndexType::U32);
     ctx.list->drawIndexed(static_cast<uint32_t>(m_indices.size()), 1, 0, 0, 0);
     if (m_app.recordingRays() && ctx.viewIndex == 0) m_app.recordRayDraw(this, model);
 }
@@ -246,10 +239,8 @@ void DynamicMeshRenderer::bindAndDraw(const RenderContext& ctx, Pipeline& pipeli
     if (raySet) ctx.list->bindGroups(pipeline, 3, rhi::VulkanCommandList::groups(&raySet, 1));
     MeshPush pc{ model, metallic, roughness };
     ctx.list->pushConstants(pipeline, rhi::kVertex, 0, sizeof(pc), &pc);
-    VkBuffer vb = fb.vertices->handle();
-    VkDeviceSize off = 0;
-    ctx.list->bindVertexBuffer(0, rhi::VulkanCommandList::buffer(vb), off);
-    ctx.list->bindIndexBuffer(rhi::VulkanCommandList::buffer(fb.indices->handle()), 0, rhi::IndexType::U32);
+    ctx.list->bindVertexBuffer(0, fb.vertices->ref(), 0);
+    ctx.list->bindIndexBuffer(fb.indices->ref(), 0, rhi::IndexType::U32);
     ctx.list->drawIndexed(static_cast<uint32_t>(m_indices.size()), 1, 0, 0, 0);
 }
 
@@ -260,10 +251,8 @@ void DynamicMeshRenderer::drawShadow(const ShadowRenderContext& ctx, const glm::
     m_shadowPipeline->bind(*ctx.list);
     ShadowPush pc{ ctx.lightViewProj, model };
     ctx.list->pushConstants(*m_shadowPipeline, rhi::kVertex, 0, sizeof(pc), &pc);
-    VkBuffer vb = fb.vertices->handle();
-    VkDeviceSize off = 0;
-    ctx.list->bindVertexBuffer(0, rhi::VulkanCommandList::buffer(vb), off);
-    ctx.list->bindIndexBuffer(rhi::VulkanCommandList::buffer(fb.indices->handle()), 0, rhi::IndexType::U32);
+    ctx.list->bindVertexBuffer(0, fb.vertices->ref(), 0);
+    ctx.list->bindIndexBuffer(fb.indices->ref(), 0, rhi::IndexType::U32);
     ctx.list->drawIndexed(static_cast<uint32_t>(m_indices.size()), 1, 0, 0, 0);
 }
 

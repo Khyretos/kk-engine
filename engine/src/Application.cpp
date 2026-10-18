@@ -118,6 +118,7 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
         setResourceBudget(computeBudget(defaults, usableCpuCount()));
     }
     m_renderer = std::make_unique<Renderer>(m_window);
+    m_gpu = std::make_unique<rhi::VulkanGpuDevice>(m_renderer->device());
     {
         // A CPU-only Vulkan device draws every pixel and triangle on the CPU:
         // the automatic target moves to software-gpu (kke/HardwareTarget.h),
