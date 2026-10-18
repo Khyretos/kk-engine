@@ -365,6 +365,16 @@ so a flat image blooms to itself; the tone map mixes it in. Compute only,
 one frame, nothing carried over. Measured on the RX 9070 XT, the Synty
 demo at 836 x 1384 with 4x MSAA: 0.336 ms off, 0.384 on (+0.05).
 
+**LUT colour grading (ENG-F10 part 2, 2026-10-18).** A mood's `lut:`
+names a `.cube` file (docs/MOODS.md), the format every grading tool
+exports. The tone map applies it last, to the display colours, with a
+tetrahedral read (each cell of the table cut into six tetrahedra, four
+corners per lookup, as colour tools do) instead of the GPU's trilinear
+filter, which bends straight lines through the table and tints greys;
+the tests check greys stay grey through a contrast table. One 3D texture
+and eight texel reads per pixel at most; no measurable cost on the RX
+9070 XT.
+
 ### 7. Tone mapping, exposure and colour management
 
 **Argument.** (Fox Engine videos, 33 "tone mapping & exposure

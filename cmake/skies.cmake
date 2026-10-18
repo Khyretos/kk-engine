@@ -73,6 +73,12 @@ function(kke_add_moods TARGET)
         get_filename_component(n ${f} NAME)
         engine_copy_runtime_file(${TARGET} ${f} assets/moods/${n})
     endforeach()
+    # The moods' colour LUTs (ENG-F10; made by tools/luts/make_luts.py).
+    file(GLOB lut_files CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/assets/luts/*.cube)
+    foreach(f ${lut_files})
+        get_filename_component(n ${f} NAME)
+        engine_copy_runtime_file(${TARGET} ${f} assets/luts/${n})
+    endforeach()
     # The moods' ambience loops (CC0, from OpenGameArt; docs/DEPENDENCIES.md).
     file(GLOB ambience_files CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/assets/ambience/*.flac)
     foreach(f ${ambience_files})

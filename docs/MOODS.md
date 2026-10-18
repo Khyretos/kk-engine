@@ -26,6 +26,7 @@ KKE_MOOD=night ./climb_race
 | `morning` | Low sun, clean pale sky, cool shadows | Qwantani Mid Morning | birds |
 | `noon` | The sun almost straight up, a deep blue sky | Qwantani Noon | birds |
 | `golden_hour` | Low warm sun, long shadows, soft golden haze | Qwantani Late Afternoon | soft wind |
+| `cinematic` | The golden hour through a teal-and-orange film grade (a colour LUT) | Qwantani Late Afternoon | soft wind |
 | `sunset` | Orange sun on the horizon, purple shadows | Qwantani Sunset | soft wind |
 | `dusk` | Blue hour: the sun just down, a warm band at the horizon | Qwantani Dusk 2 | crickets |
 | `night` | Stars, cool moonlight, dark but readable | Qwantani Night | crickets |
@@ -122,6 +123,14 @@ The colour grade, applied inside the tone curve: the standard ASC CDL
 contrast), `none`. With AgX (the default tone curve) the look sits where
 AgX's own "punchy" and "golden" looks do. `exposure` brightens or darkens
 everything before the tone curve.
+
+`lut: name` grades the finished picture with a colour LUT, a `.cube` file
+as DaVinci Resolve, Photoshop and other grading tools export it (3D,
+any size up to 65): `name.cube` next to the mood, in a `luts/` folder
+beside the moods folder, or in `assets/luts/`. It applies after the tone
+curve and the look, to the colours on screen, read with tetrahedral
+interpolation (greys stay grey). The engine ships `teal_orange` and
+`bleach_bypass` (made by `tools/luts/make_luts.py`).
 
 ## In C++
 

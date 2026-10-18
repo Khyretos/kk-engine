@@ -1,10 +1,12 @@
 #pragma once
 
+#include "kke/ColorLut.h"
 #include "kke/Sky.h"
 
 #include <nlohmann/json.hpp>
 
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -48,6 +50,9 @@ struct Mood {
     float fillIntensity = 0.0f;
     Fog fog;
     ColorGrade grade;
+    // A colour LUT (`lut: name`, kke/ColorLut.h): assets/luts/<name>.cube or
+    // next to the mood; null = none.
+    std::shared_ptr<const ColorLut> lut;
     float exposure = 1.0f;
     std::string ambience; // a looping sound's name (assets/ambience); empty = none
 

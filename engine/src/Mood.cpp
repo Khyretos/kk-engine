@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cctype>
+#include <fstream>
+#include <iterator>
 #include <set>
 #include <sstream>
 #include <system_error>
@@ -89,7 +91,7 @@ const std::vector<fs::path>& moodFolders() {
 }
 
 const std::set<std::string>& knownKeys() {
-    static const std::set<std::string> k{ "title", "description", "sky", "sun", "fill", "fog", "look", "exposure", "ambience" };
+    static const std::set<std::string> k{ "title", "description", "sky", "sun", "fill", "fog", "look", "lut", "exposure", "ambience" };
     return k;
 }
 
@@ -112,7 +114,7 @@ bool parseMood(const nlohmann::json& data, const fs::path& baseDir, Mood& out, s
     }
     for (auto it = data.begin(); it != data.end(); ++it) {
         if (!knownKeys().count(it.key())) {
-            if (error) *error = "unknown field '" + it.key() + "' (known: title, description, sky, sun, fill, fog, look, exposure, ambience)";
+            if (error) *error = "unknown field '" + it.key() + "' (known: title, description, sky, sun, fill, fog, look, lut, exposure, ambience)";
             return false;
         }
     }
@@ -235,6 +237,34 @@ bool parseMood(const nlohmann::json& data, const fs::path& baseDir, Mood& out, s
         }
     }
 
+    if (auto l = data.find("lut"); l != data.end()) {
+        // A .cube file: next to the mood, in a luts/ folder beside the mood's folder, then assets/luts/.
+        if (!l->is_string()) {
+            if (error) *error = "lut: the name of a .cube file in assets/luts";
+            return false;
+        }
+        const std::string name = l->get<std::string>(), file = fs::path(name).has_extension() ? name : name + ".cube";
+        std::error_code ec;
+        fs::path found;
+        for (const fs::path& c : { baseDir / file, baseDir.parent_path() / "luts" / file, fs::path("assets") / "luts" / file })
+            if (fs::is_regular_file(c, ec)) {
+                found = c;
+                break;
+            }
+        std::ifstream in(found, std::ios::binary);
+        if (found.empty() || !in) {
+            if (error) *error = "lut: no " + file + " in assets/luts or next to the mood";
+            return false;
+        }
+        const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        auto lut = std::make_shared<ColorLut>();
+        std::string why;
+        if (!parseCubeLut(text, *lut, why)) {
+            if (error) *error = "lut: " + file + ": " + why;
+            return false;
+        }
+        m.lut = std::move(lut);
+    }
     if (!readNumber(data, "exposure", "", m.exposure, error, 0.01f, 64.0f)) return false;
     if (auto a = data.find("ambience"); a != data.end()) {
         if (!a->is_string()) {
@@ -251,6 +281,7 @@ void Mood::applyTo(Lighting& lighting) const {
     lighting.sky = sky;
     lighting.fog = fog;
     lighting.grade = grade;
+    lighting.lut = lut;
     lighting.exposure = exposure;
 
     float elevation = sunElevationDegrees.value_or(35.0f);

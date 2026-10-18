@@ -14,6 +14,7 @@
 #include "kke/UiProfile.h"
 #include "kke/RayScene.h"
 #include "kke/Reflections.h"
+#include "kke/ColorLut.h"
 #include "kke/VolumetricFog.h"
 #include "kke/Taa.h"
 #include "kke/ShadowRays.h"
@@ -143,6 +144,8 @@ struct Lighting {
     // instant), but lit shaders ignore it when this is false.
     bool shadowsEnabled = true;
     ToneMapper toneMapper = ToneMapper::AgX;
+    // A colour LUT applied after the tone map (ENG-F10, kke/ColorLut.h); null = none. A mood sets it.
+    std::shared_ptr<const ColorLut> lut;
     // Multiplies scene light before tone mapping: > 1 brightens, < 1 darkens.
     float exposure = 1.0f;
     // The sky, the air and the colour look (kke/Sky.h). All off by default;

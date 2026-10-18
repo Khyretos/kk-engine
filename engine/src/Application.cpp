@@ -1027,6 +1027,7 @@ void Application::run() {
         // and frame in flight (see LightingBuffer.h).
         if (m_toneMapperOverride) m_lighting.toneMapper = *m_toneMapperOverride;
         m_renderer->setPostParams(makePostParams(m_lighting.toneMapper, m_lighting.exposure, m_lighting.grade));
+        m_renderer->setColorLut(m_lighting.lut);
         const SkyEnvironment* skyEnv = nullptr;
         if (m_lighting.sky.kind != Sky::Kind::None && !m_skyRenderer) m_skyRenderer = std::make_unique<SkyRenderer>(*this);
         if (m_skyRenderer) skyEnv = &m_skyRenderer->prepare(m_lighting.sky, m_lighting.fog, m_lighting.ambientColor);
