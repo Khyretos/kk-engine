@@ -1,0 +1,23 @@
+[2026-10-18 06:53:01.474][engine][Application][Kreative Kompas Engine - Jiggle Demo][info]: Hardware target: desktop (no specific device recognised); platform backend: desktop
+[2026-10-18 06:53:01.474][engine][Application][Kreative Kompas Engine - Jiggle Demo][info]: UI profile: desktop
+[2026-10-18 06:53:01.475][engine][Governor][Kreative Kompas Engine - Jiggle Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 1.00
+[2026-10-18 06:53:01.478][engine][VulkanDevice][Kreative Kompas Engine - Jiggle Demo][info]: using device: llvmpipe (LLVM 22.1.8, 256 bits)
+[2026-10-18 06:53:01.478][engine][VulkanDevice][Kreative Kompas Engine - Jiggle Demo][info]: inline ray tracing (VK_KHR_ray_query): on
+[2026-10-18 06:53:01.536][engine][SwapChain][Kreative Kompas Engine - Jiggle Demo][info]: colour output: format 50 (8-bit sRGB)
+[2026-10-18 06:53:01.537][engine][Application][Kreative Kompas Engine - Jiggle Demo][info]: Hardware target: software-gpu (the only Vulkan device is a CPU: llvmpipe (LLVM 22.1.8, 256 bits))
+[2026-10-18 06:53:01.537][engine][Governor][Kreative Kompas Engine - Jiggle Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+[2026-10-18 06:53:01.537][engine][Application][Kreative Kompas Engine - Jiggle Demo][info]: MSAA 1x (software rasteriser)
+[2026-10-18 06:53:01.540][engine][Application][Kreative Kompas Engine - Jiggle Demo][info]: mood 'playful' (assets/moods/playful.yaml)
+[2026-10-18 06:53:01.540][engine][Benchmark][Kreative Kompas Engine - Jiggle Demo][info]: benchmark: 3 s warm-up, then 20 s measured, uncapped (no vsync, no frame cap)
+[rmlui] Loaded font face 'Noto Sans' [regular] from 'assets/fonts/NotoSans-Regular.ttf'.
+[rmlui] Loaded font face 'Noto Sans' [bold] from 'assets/fonts/NotoSans-Bold.ttf'.
+[rmlui] Loaded font face 'Noto Sans' [italic] from 'assets/fonts/NotoSans-Italic.ttf'.
+[rmlui] Loaded font face 'Noto Color Emoji' [regular] from 'assets/fonts/NotoColorEmoji.ttf'.
+[ui] RmlUi initialised with real Vulkan rendering (text via glyph textures, <img>/background-image via stb_image, both real now -- see RmlVulkanRenderInterface.h)
+[2026-10-18 06:53:02.033][engine][JiggleDemo][Kreative Kompas Engine - Jiggle Demo][info]: No body found. Put female_body (or a female Synty character: POLYGON Fantasy Characters, City Characters) in assets/synty/ or set KKE_ASSETS_DIR.
+[2026-10-18 06:53:02.035][engine][GameShell][Kreative Kompas Engine - Jiggle Demo][info]: no settings file at 'settings.json' (using defaults)
+[2026-10-18 06:53:02.035][engine][Governor][Kreative Kompas Engine - Jiggle Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+[2026-10-18 06:53:02.043][engine][Governor][Kreative Kompas Engine - Jiggle Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 0, render scale 0.75
+[2026-10-18 06:53:02.043][engine][Input][Kreative Kompas Engine - Jiggle Demo][info]: touch controls: stick left, button jiggle.go, button jiggle.ball, button jiggle.reset, button jiggle.squish, button jiggle.move, button jiggle.scene, pause
+[2026-10-18 06:53:25.252][engine][Benchmark][Kreative Kompas Engine - Jiggle Demo][info]: benchmark: 6 screenshot(s) in C:/forgejo-runner/work/884f364a8bcf7e3e/hostexecutor/results/bench/run_20261018_065111/reports/shots
+[2026-10-18 06:53:25.253][engine][Benchmark][Kreative Kompas Engine - Jiggle Demo][info]: benchmark: 277 frames, 14.5 fps avg, 14.2 fps 1% low, 0 hitch(es), verdict too slow; report C:\forgejo-runner\work\884f364a8bcf7e3e\hostexecutor\results\bench\run_20261018_065111\reports\jiggle_demo.json
