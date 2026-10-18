@@ -266,6 +266,7 @@ public:
     void setWind(const glm::vec3& velocity); // m/s, pushes on every cloth by its fabric's airDrag
     glm::vec3 wind() const;
     double lastClothMs() const;            // the engine's protection pass, last step (Jolt's own cloth solve is in lastStepMs)
+    uint32_t lastClothPasses() const;      // cloths that pass worked on, last step: 0 while every cloth sleeps
     // Full protection's pair search on the GPU (kke/ClothGpu.h;
     // ClothGpu::create(app.device()), null = the CPU, the default).
     void setClothGpu(std::shared_ptr<ClothGpu> gpu);

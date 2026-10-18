@@ -69,6 +69,8 @@ public:
     // Full protection's pair search on the GPU (null: the CPU).
     void setGpu(std::shared_ptr<ClothGpu> gpu) { m_gpu = std::move(gpu); }
     double lastMs() const { return m_lastMs; }
+    // Cloths the engine's pass worked on last step (air, lifting, protection): 0 while every cloth sleeps.
+    uint32_t lastPasses() const { return m_lastPasses; }
     // Called by RigidWorld::step before Jolt's update. Returns how many
     // sub-steps to cut each collision step into: more than one while the
     // protection pass is undoing crossings (RigidWorld::Settings::clothSubsteps).
@@ -216,6 +218,7 @@ private:
     void setIterations();
     bool tangledAt(uint8_t streak) const;
     double m_stepMs = 0.0, m_lastMs = 0.0;
+    uint32_t m_passes = 0, m_lastPasses = 0;
     // Protection scratch, reused.
     std::vector<CellBox> m_triBox, m_edgeBox;
     std::vector<glm::vec3> m_triLo, m_triHi;        // per triangle: swept bounds + thickness
