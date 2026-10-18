@@ -1,0 +1,133 @@
+=== KKE benchmark: stress ===
+
+System
+  os                  Windows
+  os_version          Windows 10.0.19044
+  platform_backend    desktop
+  hardware_target     desktop
+  host                DESKTOP-387PPHP
+  cpu                 Intel(R) Core(TM) i5-4590 CPU @ 3.30GHz
+  cpu_logical_cores   4
+  cpu_usable_cores    4
+  ram_mb              16312
+  gpu                 llvmpipe (LLVM 22.1.8, 256 bits)
+  gpu_type            cpu (software)
+  gpu_driver_version  109060100
+  vulkan_api_version  1.4.354
+  gpu_pci_id          10005:0000
+  gpu_driver          llvmpipe Mesa 26.2.4 (git-9a0169f2a7) (LLVM 22.1.8)
+  gpu_memory_mb       16312
+  display             1920x1080 @ 60 Hz
+  engine_version      windows-native
+  engine_commit       bfefaf01b0
+  build_type          Release
+  compiler            gcc 13-posix
+
+Config
+  script               showcase stress test: walk (autopilot, animation + IK, shadows), crates (300 Jolt boxes rain), impacts (FEMFX iron balls breaking glass/wood/stone)
+  phases_s             warmup 2 (not recorded), walk 10, crates 12, impacts 12
+  resolution           1280x720
+  render_resolution    960x540
+  render_scale         0.750000
+  vsync_and_frame_cap  off during the test (measures the machine, not the cap)
+  worker_threads       2
+  usable_cores         4
+  use_everything       no
+  character            UAL mannequin
+  femfx                on
+  modules              Settings, Input, RigidBodies, Network, Models, UI, GameShell, Audio, Voice, SoundVisualizer, Physics, PhysicsBridge, Showcase, Scripts, DebugControl, Stats
+  vram_budget_mb       none (whole GPU)
+
+Results
+  fps_avg                 4.000
+  fps_1pct_low            0.411
+  frame_avg_ms            250.012
+  frame_p50_ms            232.621
+  frame_p95_ms            265.436
+  frame_p99_ms            520.089
+  frame_max_ms            2432.891
+  gpu_avg_ms              207.325
+  physics_avg_ms          20.991
+  physics_max_ms          52.825
+  bodies_max              738
+  frames                  143
+  seconds                 35.752
+  walk.fps_avg            3.375
+  walk.fps_1pct_low       0.411
+  walk.frame_avg_ms       296.293
+  walk.frame_p50_ms       237.637
+  walk.frame_p95_ms       266.924
+  walk.frame_p99_ms       2432.891
+  walk.frame_max_ms       2432.891
+  walk.gpu_avg_ms         259.289
+  walk.physics_avg_ms     16.876
+  walk.physics_max_ms     23.123
+  walk.bodies_max         347
+  walk.frames             40
+  walk.seconds            11.852
+  crates.fps_avg          4.191
+  crates.fps_1pct_low     1.923
+  crates.frame_avg_ms     238.615
+  crates.frame_p50_ms     227.552
+  crates.frame_p95_ms     266.183
+  crates.frame_p99_ms     520.089
+  crates.frame_max_ms     520.089
+  crates.gpu_avg_ms       198.836
+  crates.physics_avg_ms   12.341
+  crates.physics_max_ms   13.694
+  crates.bodies_max       648
+  crates.frames           50
+  crates.seconds          11.931
+  impacts.fps_avg         4.428
+  impacts.fps_1pct_low    3.767
+  impacts.frame_avg_ms    225.834
+  impacts.frame_p50_ms    229.203
+  impacts.frame_p95_ms    258.645
+  impacts.frame_p99_ms    265.436
+  impacts.frame_max_ms    265.436
+  impacts.gpu_avg_ms      178.076
+  impacts.physics_avg_ms  32.256
+  impacts.physics_max_ms  52.825
+  impacts.bodies_max      738
+  impacts.frames          53
+  impacts.seconds         11.969
+  peak_rss_mb             505.012
+
+Samples
+  t_s	phase	fps	frame_avg_ms	frame_max_ms	gpu_avg_ms	physics_avg_ms	bodies	
+  2.433	0	0.411	2432.891	2432.891	-1	0.592	347	
+  3.598	0	4.291	233.071	265.871	679.697	16.227	347	
+  4.810	0	4.127	242.331	266.924	195.979	23.113	347	
+  5.996	0	4.217	237.156	242.887	212.974	22.633	347	
+  7.219	0	4.086	244.761	262.520	210.761	21.161	347	
+  8.227	0	3.972	251.772	269.746	216.258	20.377	347	
+  9.429	0	4.158	240.509	254.632	213.950	11.828	347	
+  10.627	0	4.174	239.596	251.218	209.320	11.826	347	
+  11.852	0	4.083	244.924	259.218	210.847	11.797	347	
+  12.927	1	3.719	268.893	381.842	205.695	11.860	372	
+  14.018	1	4.586	218.075	230.940	217.742	11.813	405	
+  15.115	1	4.555	219.523	227.532	189.087	11.920	438	
+  16.305	1	3.362	297.462	520.089	245.883	12.193	474	
+  17.461	1	4.325	231.220	246.245	183.745	13.680	509	
+  18.594	1	4.413	226.591	241.177	188.720	12.535	543	
+  19.745	1	4.344	230.210	247.373	183.591	12.181	577	
+  20.927	1	4.231	236.336	249.906	197.104	12.410	613	
+  22.111	1	4.223	236.806	265.063	186.754	12.335	648	
+  23.317	1	4.145	241.269	266.183	197.998	12.379	648	
+  23.782	1	4.300	232.580	233.235	205.890	12.297	648	
+  24.871	2	4.593	217.730	239.838	180.206	12.428	651	
+  25.883	2	4.943	202.288	215.323	178.949	13.803	655	
+  26.901	2	4.907	203.789	225.307	168.529	16.338	662	
+  27.925	2	4.883	204.776	206.994	173.864	20.548	666	
+  29.056	2	4.423	226.072	244.196	174.973	26.153	701	
+  30.218	2	4.301	232.522	245.501	178.856	33.963	705	
+  31.382	2	4.296	232.769	246.634	175.954	43.406	710	
+  32.575	2	4.190	238.658	253.272	183.879	45.668	726	
+  33.802	2	4.078	245.242	265.436	175.098	47.292	730	
+  35.013	2	4.126	242.336	259.588	186.540	52.271	735	
+  35.752	2	4.063	246.105	258.645	184.591	50.074	738	
+
+Note: Verdict: too slow (by the 1% low fps). Per phase: walk: too slow, crates: too slow, impacts: too slow.
+Note: Verdicts: smooth = 1% low >= 55 fps, playable >= 30, struggles >= 15, too slow below.
+Note: fps_1pct_low = frames per second over the slowest 1% of frames (the stutter you feel); gpu_avg_ms = GPU time of the frame's passes (-1 = the driver doesn't report it).
+Note: Sample column 'phase': 0 = walk, 1 = crates, 2 = impacts.
