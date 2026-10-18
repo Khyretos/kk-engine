@@ -410,6 +410,9 @@ void Renderer::createScenePass() {
     if (m_scenePass && m_scenePassFormats[0] == color && m_scenePassFormats[1] == depth && m_scenePassSamples == m_msaa &&
         m_scenePassDepthStored == m_depthReadable)
         return;
+    // A pass made before may still be in use by a frame in flight (the depth turned readable mid-game: a GPU
+    // particle that collides, ENG-F11): wait for them first. Rare: a setting changed.
+    if (m_scenePass) vkDeviceWaitIdle(m_device->device());
     if (m_scenePass) vkDestroyRenderPass(m_device->device(), m_scenePass, nullptr);
     if (m_scenePassSplit) vkDestroyRenderPass(m_device->device(), m_scenePassSplit, nullptr);
     if (m_scenePassResume) vkDestroyRenderPass(m_device->device(), m_scenePassResume, nullptr);
