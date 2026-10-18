@@ -120,6 +120,23 @@ void AnimDemoModule::init(kke::Application& app) {
     if (const char* rest = std::getenv("KKE_ANIM_REST")) m_showRest = rest[0] == '1';
     if (const char* mirror = std::getenv("KKE_ANIM_MIRROR")) m_mirrorFloor = mirror[0] == '1';
     if (const char* glass = std::getenv("KKE_ANIM_GLASS")) m_glassBlock = glass[0] == '1';
+    // KKE_ANIM_LIGHTS=n: n small coloured lamps over the floor (the many lights, ENG-F08; try it with KKE_MOOD=night).
+    if (const char* lamps = std::getenv("KKE_ANIM_LIGHTS")) {
+        const int n = std::clamp(std::atoi(lamps), 0, static_cast<int>(kke::Lighting::kMaxManyLights));
+        const int side = static_cast<int>(std::ceil(std::sqrt(static_cast<float>(std::max(n, 1)))));
+        for (int i = 0; i < n; ++i) {
+            kke::Light l;
+            l.enabled = true;
+            l.isDirectional = false;
+            const float u = (static_cast<float>(i % side) + 0.5f) / static_cast<float>(side), v = (static_cast<float>(i / side) + 0.5f) / static_cast<float>(side);
+            l.position = glm::vec3(-8.5f + 17.0f * u, 0.4f, -8.5f + 17.0f * v);
+            const float hue = static_cast<float>(i % 7) / 7.0f;
+            l.color = glm::clamp(glm::abs(glm::fract(glm::vec3(hue) + glm::vec3(1.0f, 2.0f / 3.0f, 1.0f / 3.0f)) * 6.0f - 3.0f) - 1.0f, 0.0f, 1.0f);
+            l.intensity = 3.0f;
+            l.range = 17.0f / static_cast<float>(side) * 1.5f;
+            app.lighting().manyLights.push_back(l);
+        }
+    }
     // KKE_ANIM_VIEW=distance,pitch,yaw (metres, radians): where the camera starts, for pictures.
     if (const char* view = std::getenv("KKE_ANIM_VIEW")) {
         float d = 0.0f, pitch = 0.0f, yaw = 0.0f;

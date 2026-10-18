@@ -213,6 +213,21 @@ something else last frame, the shadow map answers. Measured on the RX
 kke (+0.26, mostly building the ray scene of moving cars every frame),
 1.16 classic (+0.44).
 
+**Many lights without a deferred path (ENG-F08, 2026-10-18).** The gap
+asked for a deferred path; a deferred renderer pays for many lights with
+a G-buffer: no MSAA (section 2), no glass, a fat target read back per
+light. KKE stays forward and clusters instead (Olsson et al. 2012): the
+16 key lights (with shadows) are untouched, and the small lights past
+them (`Lighting::manyLights`, up to 1024; script lights spill over there
+when the key slots are full) go into a storage buffer. A compute pass
+lists per cell of the view (16 x 9 cells, 24 slices spaced exponentially
+in depth) the lights whose reach touches it, and each lit pixel walks
+only its cell's list. Measured on the RX 9070 XT, anim_demo at night at
+1019 x 1384 with 4x MSAA (`KKE_ANIM_LIGHTS`; `KKE_CLUSTERS=0` walks every
+light, which is what forward rendering without clusters costs): no lamps
+0.27 ms; 256 lamps 0.52 clustered against 1.16; 1024 lamps 0.75 against
+2.70. Hair, cloth and see-through surfaces take the 16 key lights only.
+
 ### 6. Lighting and GI: stable beats noisy
 
 **Argument.** (Video "Dynamic lighting was better nine years ago",

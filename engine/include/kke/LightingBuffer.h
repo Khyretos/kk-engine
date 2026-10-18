@@ -2,6 +2,7 @@
 
 #include "kke/Buffer.h"
 #include "kke/VolumetricFog.h"
+#include "kke/ClusteredLights.h"
 
 #include <volk.h>
 #include <glm/glm.hpp>
@@ -92,6 +93,20 @@ public:
     // (kke::ShadowRayPass, GENERAL layout) cast with camera `viewProj`, `size`
     // pixels; a ray's depth may differ by `slack` of the distance and still
     // count. Null: none (the shadow map alone).
+    // Many lights (ENG-F08, bindings 9-11): this frame's light buffer (`count`
+    // of them) and the per-cell lists made with `grid` on a `screen`-pixel
+    // scene (kke::ClusterLightPass). `all`: the shaders walk every light
+    // instead (split screen, or KKE_CLUSTERS=0). Null: none.
+    void setManyLights(VkBuffer lights, VkBuffer counts, VkBuffer indices, uint32_t count, const ClusterGrid& grid, const glm::vec2& screen,
+                       bool all) {
+        m_manyLights = lights;
+        m_clusterCounts = counts;
+        m_clusterIndices = indices;
+        m_manyCount = count;
+        m_clusterGrid = grid;
+        m_clusterScreen = screen;
+        m_clusterAll = all;
+    }
     void setShadowRays(VkImageView image, VkSampler sampler, const glm::mat4& viewProj, const glm::vec2& size, float slack) {
         m_shadowRays = image;
         m_shadowRaySampler = sampler;
@@ -150,6 +165,12 @@ private:
     VkImageView m_behind = VK_NULL_HANDLE;
     VkSampler m_behindSampler = VK_NULL_HANDLE;
     glm::vec2 m_behindSize{0.0f};
+    VkBuffer m_manyLights = VK_NULL_HANDLE, m_clusterCounts = VK_NULL_HANDLE, m_clusterIndices = VK_NULL_HANDLE;
+    uint32_t m_manyCount = 0;
+    ClusterGrid m_clusterGrid;
+    glm::vec2 m_clusterScreen{1.0f};
+    bool m_clusterAll = false;
+    std::unique_ptr<Buffer> m_placeholderBuffer; // bindings 9-11 while there are no many lights
     VkImageView m_shadowRays = VK_NULL_HANDLE;
     VkSampler m_shadowRaySampler = VK_NULL_HANDLE;
     glm::mat4 m_shadowRayViewProj{1.0f};

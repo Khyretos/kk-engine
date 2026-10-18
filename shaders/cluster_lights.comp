@@ -1,0 +1,47 @@
+#version 450
+// Many lights (ENG-F08, kke::ClusterLightPass): one invocation per cell of
+// the view (16 x 9 x 24, slices exponential in depth) lists the lights
+// whose sphere touches the cell's box in view space. The CPU copy is
+// kke::clusterLights (engine/src/ClusteredLights.cpp).
+layout(local_size_x = 64) in;
+
+struct ManyLight {
+    vec4 positionRange;  // xyz = world position, w = reach (m)
+    vec4 colorIntensity;
+};
+layout(std430, set = 0, binding = 0) readonly buffer ManyLights { ManyLight lights[]; };
+layout(std430, set = 0, binding = 1) writeonly buffer ClusterCounts { uint counts[]; };
+layout(std430, set = 0, binding = 2) writeonly buffer ClusterIndices { uint indices[]; };
+
+layout(push_constant) uniform Push {
+    mat4 view;
+    vec4 proj;  // x = proj[0][0], y = proj[1][1] (Vulkan's flipped Y), z = near, w = far distance
+    uvec4 grid; // xyz = cells across, down and deep, w = lights a cell lists at most
+    uvec4 count; // x = how many lights
+} pc;
+
+float sliceDepth(float s) { return pc.proj.z * pow(pc.proj.w / pc.proj.z, s / float(pc.grid.z)); }
+
+void main() {
+    uint cell = gl_GlobalInvocationID.x;
+    uint cells = pc.grid.x * pc.grid.y * pc.grid.z;
+    if (cell >= cells) return;
+    uint cx = cell % pc.grid.x, cy = (cell / pc.grid.x) % pc.grid.y, cz = cell / (pc.grid.x * pc.grid.y);
+    vec3 lo = vec3(1e30), hi = vec3(-1e30);
+    for (int k = 0; k < 8; ++k) {
+        float nx = float(cx + uint(k & 1)) / float(pc.grid.x) * 2.0 - 1.0;
+        float ny = float(cy + uint((k >> 1) & 1)) / float(pc.grid.y) * 2.0 - 1.0;
+        float d = sliceDepth(float(cz + uint((k >> 2) & 1)));
+        vec3 p = vec3(nx * d / pc.proj.x, ny * d / pc.proj.y, -d);
+        lo = min(lo, p);
+        hi = max(hi, p);
+    }
+    uint n = 0u, base = cell * pc.grid.w;
+    for (uint i = 0u; i < pc.count.x && n < pc.grid.w; ++i) {
+        vec3 c = (pc.view * vec4(lights[i].positionRange.xyz, 1.0)).xyz;
+        vec3 d = c - clamp(c, lo, hi);
+        float r = lights[i].positionRange.w;
+        if (dot(d, d) <= r * r) indices[base + n++] = i;
+    }
+    counts[cell] = n;
+}

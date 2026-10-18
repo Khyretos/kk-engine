@@ -43,6 +43,7 @@ class SkyRenderer;
 class ScreenGiPass;
 class ReflectionPass;
 class BehindPass;
+class ClusterLightPass;
 class ShadowRayPass;
 class VolumetricFogPass;
 class RefractionRays;
@@ -114,6 +115,15 @@ std::optional<ToneMapper> parseToneMapper(const std::string& name);
 struct Lighting {
     static constexpr int kMaxLights = 16;
     std::array<Light, kMaxLights> lights;
+    // Many lights (ENG-F08, kke/ClusteredLights.h): point lights past the 16
+    // key ones, without shadows, each lit pixel touched only by those near it
+    // (clustered on the GPU). Up to kMaxManyLights; a light with range 0 gets
+    // kDefaultManyRange. Script lights spill over here when the key slots are full.
+    static constexpr size_t kMaxManyLights = 1024;
+    static constexpr float kDefaultManyRange = 10.0f;
+    std::vector<Light> manyLights;
+    // A light by slot: 0..15 the key lights, 16 and up the many lights (ScriptLights hands out both).
+    Light& at(int slot) { return slot < kMaxLights ? lights[static_cast<size_t>(slot)] : manyLights[static_cast<size_t>(slot - kMaxLights)]; }
     // Point shadow slots: -1 means no slot, otherwise the index (0..3) of the point-shadow map this light draws into.
     // Slots are assigned in light order to the first ShadowMap::kMaxPointShadows lights that cast shadows and have shadows enabled.
     std::array<int, kMaxLights> pointShadowSlots() const {
@@ -511,6 +521,8 @@ private:
     std::optional<bool> m_smaaEnv;                              // KKE_SMAA
     std::optional<bool> m_taaEnv;                               // KKE_TAA
     std::unique_ptr<ShadowRayPass> m_shadowRayPass; // made the first time shadow rays are on
+    std::unique_ptr<ClusterLightPass> m_clusterLights; // made the first time there are many lights (ENG-F08)
+    bool m_clustersOff = false;                         // KKE_CLUSTERS=0
     ShadowRays m_shadowRays = ShadowRays::Off;
     std::optional<ShadowRays> m_shadowRaysEnv; // KKE_SHADOW_RAYS
     ShadowRaySettings m_shadowRaySettings;

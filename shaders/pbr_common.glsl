@@ -293,6 +293,38 @@ vec3 shadeSurfaceAA(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 
         Lo += (kD * albedo / PI + specular) * radiance * NdotL * thisLightShadow;
     }
 
+    // Many lights (ENG-F08): only the ones this pixel's cell lists (kke::clusterIndex).
+    uint manyCount = uint(lighting.clusterParams.x + 0.5);
+    if (manyCount > 0u) {
+        float viewDepth = (lighting.viewProj * vec4(fragPosWorld, 1.0)).w;
+        uint first = 0u, count = 0u;
+        bool all = lighting.clusterParams.w > 0.5; // KKE_CLUSTERS=0: every light, for comparison
+        if (all) {
+            count = manyCount;
+        } else if (viewDepth >= lighting.clusterParams.y && viewDepth < lighting.clusterParams.z) {
+            uvec3 g = uvec3(lighting.clusterGrid.xyz);
+            uint cz = min(uint(lighting.clusterGrid.z * log(viewDepth / lighting.clusterParams.y) / log(lighting.clusterParams.z / lighting.clusterParams.y)), g.z - 1u);
+            uvec2 cxy = min(uvec2(gl_FragCoord.xy / lighting.clusterScreen.xy * vec2(g.xy)), g.xy - 1u);
+            uint cell = (cz * g.y + cxy.y) * g.x + cxy.x;
+            first = cell * uint(lighting.clusterGrid.w);
+            count = clusterCounts[cell];
+        }
+        for (uint k = 0u; k < count; ++k) {
+            ManyLight m = manyLights[all ? k : clusterIndices[first + k]];
+            vec3 toLight = m.positionRange.xyz - fragPosWorld;
+            float t = length(toLight) / m.positionRange.w;
+            float w = clamp(1.0 - t * t * t * t, 0.0, 1.0); // kke::Light::falloffAt
+            if (w <= 0.0) continue;
+            vec3 L = toLight / max(length(toLight), 1e-4);
+            vec3 H = normalize(V + L);
+            vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
+            vec3 specular = distributionGGX(N, H, roughness) * geometrySmith(N, V, L, roughness) * F /
+                            (4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001);
+            vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
+            Lo += (kD * albedo / PI + specular) * m.colorIntensity.rgb * m.colorIntensity.a * w * w * max(dot(N, L), 0.0);
+        }
+    }
+
     // Ambient: light from the sky (kke::Sky::lightsScene). Diffuse from its
     // spherical harmonics (kke::SkySH), so a surface facing up takes the sky's
     // blue and one facing down the ground's bounce; with no sky it is the flat
