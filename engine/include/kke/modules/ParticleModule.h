@@ -3,6 +3,7 @@
 #include "kke/Module.h"
 #include "kke/Pipeline.h"
 #include "kke/Buffer.h"
+#include "kke/rhi/Device.h"
 
 #include <memory>
 #include <cstdint>
@@ -41,12 +42,13 @@ private:
     void createComputePipeline();
 
     VulkanDevice* m_device = nullptr;
+    rhi::Device* m_gpu = nullptr;
     uint32_t m_particleCount;
 
     std::unique_ptr<Buffer> m_particleBuffer;
 
-    VkDescriptorSetLayout m_descriptorSetLayout = VK_NULL_HANDLE;
-    VkDescriptorPool m_descriptorPool = VK_NULL_HANDLE;
+    std::unique_ptr<rhi::BindGroupLayout> m_groupLayout; // made by the RHI device
+    VkDescriptorSetLayout m_descriptorSetLayout = VK_NULL_HANDLE; // m_groupLayout's, for the pipelines
     VkDescriptorSet m_descriptorSet = VK_NULL_HANDLE;
 
     VkPipelineLayout m_computeLayout = VK_NULL_HANDLE;

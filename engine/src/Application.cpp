@@ -271,52 +271,13 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
         const uint8_t whitePixel[4] = { 255, 255, 255, 255 };
         m_defaultWhiteTexture = std::make_unique<Texture>(m_renderer->device(), whitePixel, 1, 1);
 
-        VkDescriptorSetLayoutBinding binding{};
-        binding.binding = 0;
-        binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        binding.descriptorCount = 1;
-        binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-        VkDescriptorSetLayoutCreateInfo layoutInfo{};
-        layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        layoutInfo.bindingCount = 1;
-        layoutInfo.pBindings = &binding;
-        VK_CHECK(vkCreateDescriptorSetLayout(m_renderer->device().device(), &layoutInfo, nullptr, &m_materialTextureSetLayout));
-
-        // maxSets=2, not 1 -- this pool needs to cover both the default
-        // texture's own set (allocated below) and CubeModule's real
-        // one (allocated separately, using this same layout, when it
-        // creates its own texture). A single shared pool for both, not
-        // a second pool just for CubeModule, since there's only ever
-        // one other real consumer of this exact layout right now.
-        VkDescriptorPoolSize poolSize{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2 };
-        VkDescriptorPoolCreateInfo poolInfo{};
-        poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        poolInfo.maxSets = 2;
-        poolInfo.poolSizeCount = 1;
-        poolInfo.pPoolSizes = &poolSize;
-        VK_CHECK(vkCreateDescriptorPool(m_renderer->device().device(), &poolInfo, nullptr, &m_materialTextureDescriptorPool));
-
-        VkDescriptorSetAllocateInfo allocInfo{};
-        allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        allocInfo.descriptorPool = m_materialTextureDescriptorPool;
-        allocInfo.descriptorSetCount = 1;
-        allocInfo.pSetLayouts = &m_materialTextureSetLayout;
-        VK_CHECK(vkAllocateDescriptorSets(m_renderer->device().device(), &allocInfo, &m_defaultTextureDescriptorSet));
-
-        VkDescriptorImageInfo imageInfo{};
-        imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        imageInfo.imageView = m_defaultWhiteTexture->imageView();
-        imageInfo.sampler = m_defaultWhiteTexture->sampler();
-
-        VkWriteDescriptorSet write{};
-        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        write.dstSet = m_defaultTextureDescriptorSet;
-        write.dstBinding = 0;
-        write.descriptorCount = 1;
-        write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        write.pImageInfo = &imageInfo;
-        vkUpdateDescriptorSets(m_renderer->device().device(), 1, &write, 0, nullptr);
+        // Set 2 (cube.frag): one texture, made by the RHI device (R1d).
+        const rhi::BindingLayout binding{ 0, rhi::BindingType::Texture, rhi::kFragment };
+        m_materialTextureLayout = m_gpu->createBindGroupLayout({ &binding, 1 });
+        const rhi::BindGroup group = m_gpu->createBindGroup(*m_materialTextureLayout);
+        const rhi::BindingWrite write{ .binding = 0, .texture = rhi::VulkanGpuDevice::texture(*m_defaultWhiteTexture) };
+        m_gpu->writeBindGroup(group, *m_materialTextureLayout, { &write, 1 });
+        m_defaultTextureDescriptorSet = rhi::VulkanGpuDevice::set(group);
     }
 
     m_debugUi = std::make_unique<DebugUi>(m_window, m_renderer->device(), m_renderer->overlayRenderPass(),
@@ -404,10 +365,8 @@ Application::~Application() {
         VkDevice dev = m_renderer->device().device();
         if (m_shadowMapDescriptorPool) vkDestroyDescriptorPool(dev, m_shadowMapDescriptorPool, nullptr);
         if (m_shadowMapSetLayout) vkDestroyDescriptorSetLayout(dev, m_shadowMapSetLayout, nullptr);
-        if (m_materialTextureDescriptorPool) vkDestroyDescriptorPool(dev, m_materialTextureDescriptorPool, nullptr);
         m_textureCache.clear();
-        if (m_textureCachePool) vkDestroyDescriptorPool(dev, m_textureCachePool, nullptr);
-        if (m_materialTextureSetLayout) vkDestroyDescriptorSetLayout(dev, m_materialTextureSetLayout, nullptr);
+        m_materialTextureLayout.reset();
     }
 
     quitStep("flushing the log");
@@ -1609,37 +1568,17 @@ void Application::setResourceBudget(const ResourceBudget& budget) {
 VkDescriptorSet Application::textureSet(const std::string& path) {
     if (path.empty()) return VK_NULL_HANDLE;
     if (auto it = m_textureCache.find(path); it != m_textureCache.end()) return it->second.set;
-    VkDevice dev = m_renderer->device().device();
-    if (!m_textureCachePool) {
-        constexpr uint32_t kMaxCachedTextures = 1024;
-        VkDescriptorPoolSize size{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, kMaxCachedTextures };
-        VkDescriptorPoolCreateInfo info{};
-        info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        info.maxSets = kMaxCachedTextures;
-        info.poolSizeCount = 1;
-        info.pPoolSizes = &size;
-        VK_CHECK(vkCreateDescriptorPool(dev, &info, nullptr, &m_textureCachePool));
-    }
     CachedTexture entry;
     try {
         entry.texture = std::make_unique<Texture>(m_renderer->device(), path);
-        VkDescriptorSetAllocateInfo alloc{};
-        alloc.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        alloc.descriptorPool = m_textureCachePool;
-        alloc.descriptorSetCount = 1;
-        alloc.pSetLayouts = &m_materialTextureSetLayout;
-        if (vkAllocateDescriptorSets(dev, &alloc, &entry.set) != VK_SUCCESS) {
-            log::get("Textures")->warn("texture cache full; '{}' drawn untextured", path);
+        const rhi::BindGroup group = m_gpu->createBindGroup(*m_materialTextureLayout);
+        if (!group.handle) {
+            log::get("Textures")->warn("no room for another texture's set; '{}' drawn untextured", path);
             entry = {};
         } else {
-            VkDescriptorImageInfo image{ entry.texture->sampler(), entry.texture->imageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
-            VkWriteDescriptorSet write{};
-            write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            write.dstSet = entry.set;
-            write.descriptorCount = 1;
-            write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            write.pImageInfo = &image;
-            vkUpdateDescriptorSets(dev, 1, &write, 0, nullptr);
+            const rhi::BindingWrite write{ .binding = 0, .texture = rhi::VulkanGpuDevice::texture(*entry.texture) };
+            m_gpu->writeBindGroup(group, *m_materialTextureLayout, { &write, 1 });
+            entry.set = rhi::VulkanGpuDevice::set(group);
         }
     } catch (const std::exception& e) {
         log::get("Textures")->warn("texture '{}' failed to load ({}); drawn untextured", path, e.what());

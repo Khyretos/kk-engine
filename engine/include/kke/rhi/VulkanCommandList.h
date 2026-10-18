@@ -28,6 +28,8 @@ public:
     }
     static BindGroup group(VkDescriptorSet set) { return BindGroup{ toHandle(set) }; }
     static BufferRef buffer(VkBuffer buffer) { return BufferRef{ toHandle(buffer) }; }
+    // Stage bits as Vulkan's.
+    static VkShaderStageFlags stagesOf(uint32_t stages);
     // `count` descriptor sets as bind groups, for bindGroups() (at most 8).
     struct Groups {
         std::array<BindGroup, 8> groups{};

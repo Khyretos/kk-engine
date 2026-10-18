@@ -147,8 +147,7 @@ private:
     mutable std::vector<uint32_t> m_order;
     GpuKind m_gpu[kKindCount];
     std::unique_ptr<Pipeline> m_gpuPipelines[kKindCount];
-    VkDescriptorSetLayout m_gpuSetLayout = VK_NULL_HANDLE;
-    VkDescriptorPool m_gpuPool = VK_NULL_HANDLE;
+    std::unique_ptr<rhi::BindGroupLayout> m_gpuSetLayout; // set 2 of the GPU-stepped draw (made by the RHI device)
     std::vector<ParticleSim::Born> m_born;
     // ENG-F11: the step's pipeline (single-sampled depth, multisampled), its sets, its per-frame
     // uniforms, a one-slot state for kinds with none and a 1x1 depth for frames with none.

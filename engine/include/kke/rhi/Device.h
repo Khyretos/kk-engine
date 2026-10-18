@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <span>
 
 namespace kke::rhi {
 
@@ -30,6 +31,37 @@ public:
     virtual void upload(const void* data, uint64_t bytes, uint64_t offset = 0) = 0;
 };
 
+// What one binding of a bind group holds (R1d).
+enum class BindingType : uint8_t { UniformBuffer, StorageBuffer, Texture };
+
+struct BindingLayout {
+    uint32_t binding = 0;
+    BindingType type = BindingType::Texture;
+    uint32_t stages = 0; // Stage bits
+};
+
+// The shape of a bind group: its bindings, as a pipeline expects them.
+class BindGroupLayout {
+public:
+    virtual ~BindGroupLayout() = default;
+};
+
+// A sampled texture as a binding sees it: its view and its sampler (an
+// rhi::Texture once the device makes textures).
+struct TextureRef {
+    uint64_t view = 0;
+    uint64_t sampler = 0;
+};
+
+// What to put at one binding: a buffer range or a texture.
+struct BindingWrite {
+    uint32_t binding = 0;
+    BufferRef buffer{};
+    uint64_t offset = 0;
+    uint64_t range = 0; // 0: to the buffer's end
+    TextureRef texture{};
+};
+
 // Makes the GPU resources a backend draws with.
 class Device {
 public:
@@ -37,6 +69,13 @@ public:
     // `initial` (desc.size bytes) fills the buffer when it is made; Device
     // memory without it starts undefined (for buffers the GPU writes).
     virtual std::unique_ptr<Buffer> createBuffer(const BufferDesc& desc, const void* initial = nullptr) = 0;
+    virtual std::unique_ptr<BindGroupLayout> createBindGroupLayout(std::span<const BindingLayout> bindings) = 0;
+    // A bind group of `layout`, kept until the device goes; {0} when none can be made.
+    virtual BindGroup createBindGroup(const BindGroupLayout& layout) = 0;
+    // Points the group's bindings at buffers and textures (each binding's type from the layout).
+    virtual void writeBindGroup(BindGroup group, const BindGroupLayout& layout, std::span<const BindingWrite> writes) = 0;
+    // Gives a group back, once the GPU is done with it (its owner going away).
+    virtual void releaseBindGroup(BindGroup group) = 0;
 };
 
 } // namespace kke::rhi

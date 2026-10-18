@@ -5,7 +5,7 @@
 #include "kke/ShadowMap.h"
 #include "kke/VulkanCheck.h"
 #include "kke/VulkanDevice.h"
-#include "kke/rhi/VulkanCommandList.h"
+#include "kke/rhi/VulkanDevice.h"
 
 #include <algorithm>
 #include <cmath>
@@ -43,24 +43,17 @@ struct ShadowPush {
 
 struct HairRenderer::Shared {
     VkDevice device = VK_NULL_HANDLE;
-    VkDescriptorSetLayout setLayout = VK_NULL_HANDLE;
+    std::unique_ptr<rhi::BindGroupLayout> group; // made by the RHI device (R1d)
+    VkDescriptorSetLayout setLayout = VK_NULL_HANDLE; // group's, for the pipelines
     std::unique_ptr<Pipeline> pipeline, shadowPipeline;
     VkPipelineLayout pointsLayout = VK_NULL_HANDLE;
     VkPipeline pointsPipeline = VK_NULL_HANDLE; // hair_points.comp
     Shared(Application& app) : device(app.device().device()) {
         // The hairs, the frame (header, guides, frames), the built points.
-        VkDescriptorSetLayoutBinding b[3]{};
-        for (uint32_t i = 0; i < 3; ++i) {
-            b[i].binding = i;
-            b[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-            b[i].descriptorCount = 1;
-            b[i].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
-        }
-        VkDescriptorSetLayoutCreateInfo li{};
-        li.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        li.bindingCount = 3;
-        li.pBindings = b;
-        VK_CHECK(vkCreateDescriptorSetLayout(device, &li, nullptr, &setLayout));
+        rhi::BindingLayout b[3];
+        for (uint32_t i = 0; i < 3; ++i) b[i] = { i, rhi::BindingType::StorageBuffer, rhi::kVertex | rhi::kFragment | rhi::kCompute };
+        group = app.gpu().createBindGroupLayout(b);
+        setLayout = rhi::VulkanBindGroupLayout::vk(*group);
         VkPushConstantRange push{ VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(uint32_t) };
         VkPipelineLayoutCreateInfo pl{};
         pl.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -97,7 +90,6 @@ struct HairRenderer::Shared {
         shadowPipeline.reset();
         if (pointsPipeline) vkDestroyPipeline(device, pointsPipeline, nullptr);
         if (pointsLayout) vkDestroyPipelineLayout(device, pointsLayout, nullptr);
-        if (setLayout) vkDestroyDescriptorSetLayout(device, setLayout, nullptr);
     }
     Shared(const Shared&) = delete;
     Shared& operator=(const Shared&) = delete;
@@ -115,30 +107,16 @@ HairRenderer::HairRenderer(Application& app) : m_app(app) {
             slot = m_shared;
         }
     }
-    VkDevice dev = m_app.device().device();
-    VkDescriptorPoolSize size{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3 * Renderer::kMaxFramesInFlight };
-    VkDescriptorPoolCreateInfo pi{};
-    pi.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    pi.maxSets = Renderer::kMaxFramesInFlight;
-    pi.poolSizeCount = 1;
-    pi.pPoolSizes = &size;
-    VK_CHECK(vkCreateDescriptorPool(dev, &pi, nullptr, &m_pool));
-    for (FrameData& f : m_frames) {
-        VkDescriptorSetAllocateInfo ai{};
-        ai.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        ai.descriptorPool = m_pool;
-        ai.descriptorSetCount = 1;
-        ai.pSetLayouts = &m_shared->setLayout;
-        VK_CHECK(vkAllocateDescriptorSets(dev, &ai, &f.set));
-    }
+    for (FrameData& f : m_frames) f.set = rhi::VulkanGpuDevice::set(m_app.gpu().createBindGroup(*m_shared->group));
 }
 
 HairRenderer::~HairRenderer() {
-    VkDevice dev = m_app.device().device();
-    for (FrameData& f : m_frames) f.buffer.reset();
+    for (FrameData& frame : m_frames) {
+        frame.buffer.reset();
+        if (frame.set) m_app.gpu().releaseBindGroup(rhi::VulkanCommandList::group(frame.set));
+    }
     m_hairBuffer.reset();
     m_points.reset();
-    if (m_pool) vkDestroyDescriptorPool(dev, m_pool, nullptr);
 }
 
 void HairRenderer::build(const HairDesc& desc) {
@@ -225,19 +203,10 @@ void HairRenderer::prepare(uint32_t frame) {
         f.version = m_version;
     }
     if (!f.bound) {
-        VkDescriptorBufferInfo infos[3] = { { m_hairBuffer->handle(), 0, VK_WHOLE_SIZE },
-                                            { f.buffer->handle(), 0, VK_WHOLE_SIZE },
-                                            { m_points->handle(), 0, VK_WHOLE_SIZE } };
-        VkWriteDescriptorSet w[3]{};
-        for (uint32_t i = 0; i < 3; ++i) {
-            w[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            w[i].dstSet = f.set;
-            w[i].dstBinding = i;
-            w[i].descriptorCount = 1;
-            w[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-            w[i].pBufferInfo = &infos[i];
-        }
-        vkUpdateDescriptorSets(m_app.device().device(), 3, w, 0, nullptr);
+        const rhi::BindingWrite w[3] = { { .binding = 0, .buffer = rhi::VulkanCommandList::buffer(m_hairBuffer->handle()) },
+                                         { .binding = 1, .buffer = rhi::VulkanCommandList::buffer(f.buffer->handle()) },
+                                         { .binding = 2, .buffer = rhi::VulkanCommandList::buffer(m_points->handle()) } };
+        m_app.gpu().writeBindGroup(rhi::VulkanCommandList::group(f.set), *m_shared->group, w);
         f.bound = true;
     }
 }

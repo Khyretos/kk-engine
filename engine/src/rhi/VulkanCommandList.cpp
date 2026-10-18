@@ -7,16 +7,13 @@
 
 namespace kke::rhi {
 
-namespace {
-
-VkShaderStageFlags stagesOf(uint32_t stages) {
+VkShaderStageFlags VulkanCommandList::stagesOf(uint32_t stages) {
     VkShaderStageFlags out = 0;
     if (stages & kVertex) out |= VK_SHADER_STAGE_VERTEX_BIT;
     if (stages & kFragment) out |= VK_SHADER_STAGE_FRAGMENT_BIT;
+    if (stages & kCompute) out |= VK_SHADER_STAGE_COMPUTE_BIT;
     return out;
 }
-
-} // namespace
 
 void VulkanCommandList::bindPipeline(const Pipeline& pipeline) { pipeline.bind(m_cmd); }
 

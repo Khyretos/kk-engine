@@ -7,7 +7,7 @@
 #include <array>
 #include <vector>
 #include "kke/ImGuiPlacement.h"
-#include "kke/rhi/VulkanCommandList.h"
+#include "kke/rhi/VulkanDevice.h"
 
 namespace kke {
 
@@ -35,6 +35,7 @@ ParticleModule::~ParticleModule() = default;
 
 void ParticleModule::init(Application& app) {
     m_device = &app.device();
+    m_gpu = &app.gpu();
 
     createBuffer();
     createDescriptors();
@@ -67,47 +68,14 @@ void ParticleModule::createBuffer() {
 }
 
 void ParticleModule::createDescriptors() {
-    VkDescriptorSetLayoutBinding binding{};
-    binding.binding = 0;
-    binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    binding.descriptorCount = 1;
-    binding.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT;
-
-    VkDescriptorSetLayoutCreateInfo layoutInfo{};
-    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layoutInfo.bindingCount = 1;
-    layoutInfo.pBindings = &binding;
-    VK_CHECK(vkCreateDescriptorSetLayout(m_device->device(), &layoutInfo, nullptr, &m_descriptorSetLayout));
-
-    VkDescriptorPoolSize poolSize{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1 };
-    VkDescriptorPoolCreateInfo poolInfo{};
-    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    poolInfo.maxSets = 1;
-    poolInfo.poolSizeCount = 1;
-    poolInfo.pPoolSizes = &poolSize;
-    VK_CHECK(vkCreateDescriptorPool(m_device->device(), &poolInfo, nullptr, &m_descriptorPool));
-
-    VkDescriptorSetAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    allocInfo.descriptorPool = m_descriptorPool;
-    allocInfo.descriptorSetCount = 1;
-    allocInfo.pSetLayouts = &m_descriptorSetLayout;
-    VK_CHECK(vkAllocateDescriptorSets(m_device->device(), &allocInfo, &m_descriptorSet));
-
-    VkDescriptorBufferInfo bufferInfo{};
-    bufferInfo.buffer = m_particleBuffer->handle();
-    bufferInfo.offset = 0;
-    bufferInfo.range = VK_WHOLE_SIZE;
-
-    VkWriteDescriptorSet write{};
-    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    write.dstSet = m_descriptorSet;
-    write.dstBinding = 0;
-    write.descriptorCount = 1;
-    write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    write.pBufferInfo = &bufferInfo;
-
-    vkUpdateDescriptorSets(m_device->device(), 1, &write, 0, nullptr);
+    // The particles, read by the compute step and the draw; made by the RHI device (R1d).
+    const rhi::BindingLayout binding{ 0, rhi::BindingType::StorageBuffer, rhi::kCompute | rhi::kVertex };
+    m_groupLayout = m_gpu->createBindGroupLayout({ &binding, 1 });
+    m_descriptorSetLayout = rhi::VulkanBindGroupLayout::vk(*m_groupLayout);
+    const rhi::BindGroup group = m_gpu->createBindGroup(*m_groupLayout);
+    const rhi::BindingWrite write{ .binding = 0, .buffer = rhi::VulkanCommandList::buffer(m_particleBuffer->handle()) };
+    m_gpu->writeBindGroup(group, *m_groupLayout, { &write, 1 });
+    m_descriptorSet = rhi::VulkanGpuDevice::set(group);
 }
 
 void ParticleModule::createComputePipeline() {
@@ -194,12 +162,12 @@ void ParticleModule::shutdown() {
 
     if (m_computePipeline) vkDestroyPipeline(dev, m_computePipeline, nullptr);
     if (m_computeLayout) vkDestroyPipelineLayout(dev, m_computeLayout, nullptr);
-    if (m_descriptorPool) vkDestroyDescriptorPool(dev, m_descriptorPool, nullptr);
-    if (m_descriptorSetLayout) vkDestroyDescriptorSetLayout(dev, m_descriptorSetLayout, nullptr);
+    if (m_descriptorSet) m_gpu->releaseBindGroup(rhi::VulkanCommandList::group(m_descriptorSet));
+    m_groupLayout.reset();
 
     m_computePipeline = VK_NULL_HANDLE;
     m_computeLayout = VK_NULL_HANDLE;
-    m_descriptorPool = VK_NULL_HANDLE;
+    m_descriptorSet = VK_NULL_HANDLE;
     m_descriptorSetLayout = VK_NULL_HANDLE;
 }
 

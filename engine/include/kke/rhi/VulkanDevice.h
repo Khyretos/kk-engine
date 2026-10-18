@@ -6,9 +6,12 @@
 
 #include <volk.h>
 
+#include <unordered_map>
 #include <utility>
+#include <vector>
 
 namespace kke {
+class Texture;
 class VulkanDevice;
 }
 
@@ -32,19 +35,49 @@ private:
     uint64_t m_size;
 };
 
+// A bind group layout on Vulkan: a VkDescriptorSetLayout (what pipelines are made with).
+class VulkanBindGroupLayout final : public BindGroupLayout {
+public:
+    VulkanBindGroupLayout(VkDevice device, std::span<const BindingLayout> bindings);
+    ~VulkanBindGroupLayout() override;
+    VulkanBindGroupLayout(const VulkanBindGroupLayout&) = delete;
+    VulkanBindGroupLayout& operator=(const VulkanBindGroupLayout&) = delete;
+    VkDescriptorSetLayout vk() const { return m_layout; }
+    static VkDescriptorSetLayout vk(const BindGroupLayout& layout) { return static_cast<const VulkanBindGroupLayout&>(layout).m_layout; }
+    // The binding's type (Texture when the layout has no such binding).
+    BindingType type(uint32_t binding) const;
+
+private:
+    VkDevice m_device;
+    VkDescriptorSetLayout m_layout = VK_NULL_HANDLE;
+    std::vector<BindingLayout> m_bindings;
+};
+
 // The Device on Vulkan.
 class VulkanGpuDevice final : public Device {
 public:
     explicit VulkanGpuDevice(kke::VulkanDevice& device) : m_device(device) {}
+    ~VulkanGpuDevice() override;
+    VulkanGpuDevice(const VulkanGpuDevice&) = delete;
+    VulkanGpuDevice& operator=(const VulkanGpuDevice&) = delete;
     std::unique_ptr<Buffer> createBuffer(const BufferDesc& desc, const void* initial = nullptr) override {
         return createBuffer(desc, initial, 0);
     }
+    std::unique_ptr<BindGroupLayout> createBindGroupLayout(std::span<const BindingLayout> bindings) override;
+    BindGroup createBindGroup(const BindGroupLayout& layout) override;
+    void writeBindGroup(BindGroup group, const BindGroupLayout& layout, std::span<const BindingWrite> writes) override;
+    void releaseBindGroup(BindGroup group) override;
+    // A texture as a binding sees it.
+    static TextureRef texture(const kke::Texture& texture);
+    static VkDescriptorSet set(BindGroup group) { return VulkanCommandList::fromHandle<VkDescriptorSet>(group.handle); }
     // With Vulkan usage bits the RHI does not name (ray-traced geometry, compute writes).
     std::unique_ptr<Buffer> createBuffer(const BufferDesc& desc, const void* initial, VkBufferUsageFlags extra);
     static VkBufferUsageFlags usageFlags(uint32_t usage);
 
 private:
     kke::VulkanDevice& m_device;
+    std::vector<VkDescriptorPool> m_pools; // bind groups come from the last; a full one gets a successor
+    std::unordered_map<uint64_t, VkDescriptorPool> m_poolOf; // each live group's pool, to give it back
 };
 
 } // namespace kke::rhi
