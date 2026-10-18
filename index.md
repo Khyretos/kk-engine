@@ -35,3 +35,4 @@
 - runs/2026-10-18T0558Z-ccdd85c9ed: claude/volumetric-fog, test job success
 - runs/2026-10-18T0707Z-2843d59e6e: claude/smaa, test job success
 - runs/2026-10-18T0748Z-6e8108be75: claude/taa, test job success
+- runs/2026-10-18T0831Z-e405ff46f2: claude/shadow-rays, test job success
