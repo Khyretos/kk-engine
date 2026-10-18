@@ -9,6 +9,9 @@
 namespace kke {
 
 class Application;
+namespace rhi {
+class CommandList;
+}
 
 // Per-frame CPU-side timing handed to Module::update(). Use this for
 // anything that's fine drifting with frame rate: camera easing, UI
@@ -47,6 +50,9 @@ constexpr uint32_t kMaxViews = 4;
 
 struct RenderContext {
     VkCommandBuffer cmd;
+    // The same pass through the RHI (docs/plans/rhi.md): draw with this and the
+    // module draws on every backend. Never null in render() and renderTranslucent().
+    rhi::CommandList* list = nullptr;
     glm::mat4 view;
     glm::mat4 proj;      // already has the Vulkan Y-flip applied
     glm::vec3 cameraPos;
@@ -105,6 +111,7 @@ struct RenderContext {
 // minimal struct.
 struct ShadowRenderContext {
     VkCommandBuffer cmd;
+    rhi::CommandList* list = nullptr; // the RHI's view of cmd (RenderContext::list)
     VkRenderPass renderPass;
     glm::mat4 lightViewProj;
     uint32_t frameIndex = 0; // same as RenderContext::frameIndex
