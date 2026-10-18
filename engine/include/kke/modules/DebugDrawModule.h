@@ -1,7 +1,7 @@
 #pragma once
 
 #include "kke/Module.h"
-#include "kke/Buffer.h"
+#include "kke/rhi/Device.h"
 #include "kke/Mesh.h"
 #include "kke/Pipeline.h"
 #include "kke/Renderer.h"
@@ -41,7 +41,7 @@ private:
     std::vector<Line> m_lines[2]; // [0] depth-tested, [1] on top
     std::vector<Vertex> m_scratch;
     // Per split-screen view (the quads face each view's camera) and frame.
-    std::unique_ptr<Buffer> m_buffers[kMaxViews][Renderer::kMaxFramesInFlight];
+    std::unique_ptr<rhi::Buffer> m_buffers[kMaxViews][Renderer::kMaxFramesInFlight];
     size_t m_capacity[kMaxViews][Renderer::kMaxFramesInFlight] = {};
     std::unique_ptr<Pipeline> m_pipeline, m_pipelineOnTop;
     Application* m_app = nullptr;

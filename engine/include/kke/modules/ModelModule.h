@@ -3,6 +3,7 @@
 #include "kke/Capabilities.h"
 #include "kke/Module.h"
 #include "kke/Buffer.h"
+#include "kke/rhi/Device.h"
 #include "kke/JigglePhysics.h"
 #include "kke/Mesh.h"
 #include "kke/ModelAsset.h"
@@ -190,8 +191,8 @@ private:
         std::vector<GpuMaterial> materials;
     };
     struct SkinnedBuffers {
-        std::unique_ptr<Buffer> vertices[Renderer::kMaxFramesInFlight];
-        std::unique_ptr<Buffer> indices;
+        std::unique_ptr<rhi::Buffer> vertices[Renderer::kMaxFramesInFlight];
+        std::unique_ptr<rhi::Buffer> indices;
         std::vector<Vertex> cpu;
         uint32_t indexCount = 0;
         VkDescriptorSet skinSets[Renderer::kMaxFramesInFlight] = {}; // GPU skinning: skin.comp's set per frame slot
@@ -331,7 +332,7 @@ private:
     // One instance buffer per pass and frame in flight: the views' passes
     // (0 .. kMaxViews-1), then their shadow passes (kMaxViews + ShadowRenderContext::tile).
     static constexpr uint32_t kShadowPasses = kMaxViews * ShadowMap::kCascades + ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces;
-    std::unique_ptr<Buffer> m_instanceBuffers[kMaxViews + kShadowPasses][Renderer::kMaxFramesInFlight];
+    std::unique_ptr<rhi::Buffer> m_instanceBuffers[kMaxViews + kShadowPasses][Renderer::kMaxFramesInFlight];
     size_t m_instanceCapacity[kMaxViews + kShadowPasses][Renderer::kMaxFramesInFlight] = {};
     uint64_t m_viewPass = 0; // m_frame and the view: which draw batchedFrame means
     std::vector<Batch> m_batches;

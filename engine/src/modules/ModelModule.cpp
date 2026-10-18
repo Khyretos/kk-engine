@@ -11,7 +11,7 @@
 #include "kke/RayScene.h"
 #include "kke/ShaderUtils.h"
 #include "kke/VulkanCheck.h"
-#include "kke/rhi/VulkanCommandList.h"
+#include "kke/rhi/VulkanDevice.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -433,14 +433,12 @@ ModelModule::InstanceId ModelModule::spawn(ModelId modelId, const glm::mat4& tra
         const VkBufferUsageFlags rays = m_app->device().rayQuery() ? VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
                                                                          VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR
                                                                    : 0;
-        const VkBufferUsageFlags usage =
-            (m_gpuSkinning ? VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT : VK_BUFFER_USAGE_VERTEX_BUFFER_BIT) | rays;
-        for (auto& vb : sb.vertices) {
-            vb = std::make_unique<Buffer>(m_app->device(), sizeof(Vertex) * std::max<size_t>(1, src.vertices.size()), usage,
-                                          m_gpuSkinning ? VMA_MEMORY_USAGE_GPU_ONLY : VMA_MEMORY_USAGE_CPU_TO_GPU);
-        }
-        sb.indices = std::make_unique<Buffer>(Buffer::createDeviceLocal(m_app->device(), src.indices.data(),
-                                                                        src.indices.size() * sizeof(uint32_t), VK_BUFFER_USAGE_INDEX_BUFFER_BIT | rays));
+        const rhi::BufferDesc desc{ sizeof(Vertex) * std::max<size_t>(1, src.vertices.size()),
+                                    m_gpuSkinning ? rhi::kVertexBuffer | rhi::kStorageBuffer : rhi::kVertexBuffer,
+                                    m_gpuSkinning ? rhi::Memory::Device : rhi::Memory::Upload };
+        for (auto& vb : sb.vertices) vb = m_app->vulkanGpu().createBuffer(desc, nullptr, rays);
+        sb.indices = m_app->vulkanGpu().createBuffer({ src.indices.size() * sizeof(uint32_t), rhi::kIndexBuffer, rhi::Memory::Device },
+                                                     src.indices.data(), rays);
         sb.indexCount = static_cast<uint32_t>(src.indices.size());
         inst.skinned.push_back(std::move(sb));
     }
@@ -619,13 +617,10 @@ void ModelModule::setDeformedVertices(InstanceId id, const std::vector<std::vect
             for (size_t v = 0; v < src.vertices.size(); ++v) {
                 sb.cpu[v] = toVertex(src.vertices[v]);
             }
-            for (auto& vb : sb.vertices) {
-                vb = std::make_unique<Buffer>(m_app->device(), sizeof(Vertex) * std::max<size_t>(1, src.vertices.size()),
-                                              VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
-            }
-            sb.indices = std::make_unique<Buffer>(Buffer::createDeviceLocal(m_app->device(), src.indices.data(),
-                                                                            std::max<size_t>(1, src.indices.size()) * sizeof(uint32_t),
-                                                                            VK_BUFFER_USAGE_INDEX_BUFFER_BIT));
+            for (auto& vb : sb.vertices)
+                vb = m_app->gpu().createBuffer({ sizeof(Vertex) * std::max<size_t>(1, src.vertices.size()), rhi::kVertexBuffer, rhi::Memory::Upload });
+            sb.indices = m_app->gpu().createBuffer({ std::max<size_t>(1, src.indices.size()) * sizeof(uint32_t), rhi::kIndexBuffer, rhi::Memory::Device },
+                                                   src.indices.data());
             sb.indexCount = static_cast<uint32_t>(src.indices.size());
             inst.deformed.push_back(std::move(sb));
         }
@@ -662,13 +657,10 @@ void ModelModule::setDeformedTopology(InstanceId id, const std::vector<std::vect
         }
         std::vector<uint32_t> indices(src.size());
         for (uint32_t i = 0; i < indices.size(); ++i) indices[i] = i;
-        for (auto& vb : sb.vertices) {
-            vb = std::make_unique<Buffer>(m_app->device(), sizeof(Vertex) * std::max<size_t>(1, src.size()), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                                          VMA_MEMORY_USAGE_CPU_TO_GPU);
-        }
+        for (auto& vb : sb.vertices)
+            vb = m_app->gpu().createBuffer({ sizeof(Vertex) * std::max<size_t>(1, src.size()), rhi::kVertexBuffer, rhi::Memory::Upload });
         if (indices.empty()) indices.push_back(0);
-        sb.indices = std::make_unique<Buffer>(Buffer::createDeviceLocal(m_app->device(), indices.data(), indices.size() * sizeof(uint32_t),
-                                                                        VK_BUFFER_USAGE_INDEX_BUFFER_BIT));
+        sb.indices = m_app->gpu().createBuffer({ indices.size() * sizeof(uint32_t), rhi::kIndexBuffer, rhi::Memory::Device }, indices.data());
         sb.indexCount = static_cast<uint32_t>(src.size());
         inst.deformed.push_back(std::move(sb));
     }
@@ -757,7 +749,7 @@ void ModelModule::writeSkinSets(Instance& inst, uint32_t slot) {
         if (!gm.skinBind) continue;
         const VkDescriptorBufferInfo infos[3] = { { gm.skinBind->handle(), 0, VK_WHOLE_SIZE },
                                                   { inst.gpuSkin->data[slot]->handle(), 0, VK_WHOLE_SIZE },
-                                                  { sb.vertices[slot]->handle(), 0, VK_WHOLE_SIZE } };
+                                                  { rhi::VulkanBuffer::handle(*sb.vertices[slot]), 0, VK_WHOLE_SIZE } };
         VkWriteDescriptorSet writes[3]{};
         for (uint32_t b = 0; b < 3; ++b) {
             writes[b].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -966,7 +958,7 @@ void ModelModule::uploadInstances(int pass, uint32_t frameIndex, const std::vect
     size_t& cap = m_instanceCapacity[pass][frameIndex];
     if (!buf || cap < data.size()) {
         cap = std::max<size_t>(64, data.size() * 2);
-        buf = std::make_unique<Buffer>(m_app->device(), sizeof(InstanceGpu) * cap, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+        buf = m_app->gpu().createBuffer({ sizeof(InstanceGpu) * cap, rhi::kVertexBuffer, rhi::Memory::Upload });
     }
     buf->upload(data.data(), sizeof(InstanceGpu) * data.size());
 }
@@ -988,11 +980,11 @@ void ModelModule::renderShadow(const ShadowRenderContext& ctx) {
             m_instancedShadowPipeline->bind(*ctx.list);
             ShadowPushConstants pc{ ctx.lightViewProj, glm::mat4(1.0f) };
             ctx.list->pushConstants(*m_instancedShadowPipeline, rhi::kVertex, 0, sizeof(pc), &pc);
-            VkBuffer ib = m_instanceBuffers[pass][ctx.frameIndex]->handle();
+            const rhi::BufferRef ib = m_instanceBuffers[pass][ctx.frameIndex]->ref();
             for (const Batch& b : m_batches) {
                 const LoadedModel& lm = *m_models[b.model];
                 VkDeviceSize off = sizeof(InstanceGpu) * b.first;
-                ctx.list->bindVertexBuffer(1, rhi::VulkanCommandList::buffer(ib), off);
+                ctx.list->bindVertexBuffer(1, ib, off);
                 for (const GpuMesh& gm : lm.meshes) {
                     gm.mesh->bind(*ctx.list);
                     gm.mesh->drawInstanced(*ctx.list, b.count);
@@ -1019,10 +1011,8 @@ void ModelModule::renderShadow(const ShadowRenderContext& ctx) {
             ctx.list->pushConstants(*m_shadowPipeline, rhi::kVertex, 0, sizeof(pc), &pc);
             for (SkinnedBuffers& sb : inst.deformed) {
                 if (!sb.indexCount) continue;
-                VkBuffer vb = sb.vertices[ctx.frameIndex]->handle();
-                VkDeviceSize off = 0;
-                ctx.list->bindVertexBuffer(0, rhi::VulkanCommandList::buffer(vb), off);
-                ctx.list->bindIndexBuffer(rhi::VulkanCommandList::buffer(sb.indices->handle()), 0, rhi::IndexType::U32);
+                ctx.list->bindVertexBuffer(0, sb.vertices[ctx.frameIndex]->ref(), 0);
+                ctx.list->bindIndexBuffer(sb.indices->ref(), 0, rhi::IndexType::U32);
                 ctx.list->drawIndexed(sb.indexCount, 1, 0, 0, 0);
             }
             continue;
@@ -1034,10 +1024,8 @@ void ModelModule::renderShadow(const ShadowRenderContext& ctx) {
         for (const GpuMesh& gm : lm.meshes) {
             if (gm.skinned) {
                 SkinnedBuffers& sb = inst.skinned[si++];
-                VkBuffer vb = sb.vertices[ctx.frameIndex]->handle();
-                VkDeviceSize off = 0;
-                ctx.list->bindVertexBuffer(0, rhi::VulkanCommandList::buffer(vb), off);
-                ctx.list->bindIndexBuffer(rhi::VulkanCommandList::buffer(sb.indices->handle()), 0, rhi::IndexType::U32);
+                ctx.list->bindVertexBuffer(0, sb.vertices[ctx.frameIndex]->ref(), 0);
+                ctx.list->bindIndexBuffer(sb.indices->ref(), 0, rhi::IndexType::U32);
                 ctx.list->drawIndexed(sb.indexCount, 1, 0, 0, 0);
             } else {
                 gm.mesh->bind(*ctx.list);
@@ -1073,12 +1061,12 @@ void ModelModule::render(const RenderContext& ctx) {
         if (!m_batches.empty()) {
             m_instancedPipeline->bind(*ctx.list);
             ctx.list->bindGroups(*m_instancedPipeline, 0, rhi::VulkanCommandList::groups(sets, 4));
-            VkBuffer ib = m_instanceBuffers[pass][ctx.frameIndex]->handle();
+            const rhi::BufferRef ib = m_instanceBuffers[pass][ctx.frameIndex]->ref();
             VkDescriptorSet bound = m_defaultSurface;
             for (const Batch& b : m_batches) {
                 const LoadedModel& lm = *m_models[b.model];
                 VkDeviceSize off = sizeof(InstanceGpu) * b.first;
-                ctx.list->bindVertexBuffer(1, rhi::VulkanCommandList::buffer(ib), off);
+                ctx.list->bindVertexBuffer(1, ib, off);
                 for (const GpuMesh& gm : lm.meshes) {
                     const GpuMaterial& mat = lm.materials[gm.material];
                     VkDescriptorSet tex = mat.textureSet ? mat.textureSet : m_defaultSurface;
@@ -1145,18 +1133,14 @@ void ModelModule::render(const RenderContext& ctx) {
                 if (deformed) {
                     SkinnedBuffers& sb = inst.deformed[gm.meshIndex];
                     if (sb.indexCount) {
-                        VkBuffer vb = sb.vertices[ctx.frameIndex]->handle();
-                        VkDeviceSize off = 0;
-                        ctx.list->bindVertexBuffer(0, rhi::VulkanCommandList::buffer(vb), off);
-                        ctx.list->bindIndexBuffer(rhi::VulkanCommandList::buffer(sb.indices->handle()), 0, rhi::IndexType::U32);
+                        ctx.list->bindVertexBuffer(0, sb.vertices[ctx.frameIndex]->ref(), 0);
+                        ctx.list->bindIndexBuffer(sb.indices->ref(), 0, rhi::IndexType::U32);
                         ctx.list->drawIndexed(sb.indexCount, 1, 0, 0, 0);
                     }
                 } else if (gm.skinned) {
                     SkinnedBuffers& sb = inst.skinned[si++];
-                    VkBuffer vb = sb.vertices[ctx.frameIndex]->handle();
-                    VkDeviceSize off = 0;
-                    ctx.list->bindVertexBuffer(0, rhi::VulkanCommandList::buffer(vb), off);
-                    ctx.list->bindIndexBuffer(rhi::VulkanCommandList::buffer(sb.indices->handle()), 0, rhi::IndexType::U32);
+                    ctx.list->bindVertexBuffer(0, sb.vertices[ctx.frameIndex]->ref(), 0);
+                    ctx.list->bindIndexBuffer(sb.indices->ref(), 0, rhi::IndexType::U32);
                     ctx.list->drawIndexed(sb.indexCount, 1, 0, 0, 0);
                 } else {
                     gm.mesh->bind(*ctx.list);
@@ -1323,24 +1307,28 @@ void ModelModule::addToRayScene(RayScene& scene, std::vector<RayMaterial>& mater
             if (!gm.skinned) continue;
             if (si >= inst.skinned.size()) break;
             SkinnedBuffers& sb = inst.skinned[si];
-            const Buffer& vb = *sb.vertices[context.frame % Renderer::kMaxFramesInFlight];
+            rhi::Buffer& vb = *sb.vertices[context.frame % Renderer::kMaxFramesInFlight];
             const uint32_t vertexCount = static_cast<uint32_t>(lm.data.meshes[gm.meshIndex].vertices.size());
             uint32_t indexCount = sb.indexCount;
-            const Buffer* ib = sb.indices.get();
-            if (!context.classic) ib = simplifiedIndices(inst.model, gm.meshIndex, indexCount);
-            if (!ib || indexCount < 3) {
+            VkDeviceAddress indices = 0;
+            if (context.classic) {
+                if (sb.indices) indices = rhi::VulkanBuffer::deviceAddress(*sb.indices);
+            } else if (const Buffer* simple = simplifiedIndices(inst.model, gm.meshIndex, indexCount)) {
+                indices = simple->deviceAddress();
+            }
+            if (!indices || indexCount < 3) {
                 ++si;
                 continue;
             }
             if (parts.size() <= si)
-                parts.push_back({ scene.addDynamic(vb.deviceAddress(), sizeof(Vertex), vertexCount, ib->deviceAddress(), indexCount),
+                parts.push_back({ scene.addDynamic(rhi::VulkanBuffer::deviceAddress(vb), sizeof(Vertex), vertexCount, indices, indexCount),
                                   partColor(lm.data, lm.data.meshes[gm.meshIndex]) });
-            scene.refit(context.cmd, parts[si].geometry, vb.deviceAddress());
+            scene.refit(context.cmd, parts[si].geometry, rhi::VulkanBuffer::deviceAddress(vb));
             // The hit reads the skinned vertex (kke::Vertex: normal at byte 24; its colour slot isn't a colour here).
             RayMaterial m;
             m.color = parts[si].color * glm::vec4(inst.tint, 1.0f);
-            m.vertices = vb.deviceAddress();
-            m.indices = ib->deviceAddress();
+            m.vertices = rhi::VulkanBuffer::deviceAddress(vb);
+            m.indices = indices;
             m.stride = sizeof(Vertex);
             m.normalOffset = offsetof(Vertex, normal);
             materials.push_back(m);

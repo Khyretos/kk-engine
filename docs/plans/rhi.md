@@ -31,12 +31,19 @@ That halves the RHI: the ~20 compute passes stay as they are, behind a
   `ShadowRenderContext::list` carry the frame's; `VulkanCommandList` is
   each call's one vkCmd*. `Pipeline::bind` and `Mesh` draw through it,
   and the grid and debug-draw modules are the first moved.
-- **R1a then the resources.** `kke::rhi` Device: Buffer, Texture (2D,
-  array, cube, 3D), Sampler, ShaderModule (SPIR-V in, the backend
-  converts), GraphicsPipeline, BindGroupLayout and BindGroup made by the
-  device instead of each module's descriptor-set code. Vulkan implements
-  each by wrapping today's code; output must not change (benchmarks within
-  2%, pictures identical).
+- **R1c, the draw buffers (done).** `kke::rhi::Device` (`kke/rhi/Device.h`)
+  makes `rhi::Buffer`s (vertex, index, uniform, storage; Upload memory the
+  CPU writes, or Device memory filled once), and a draw names one by
+  `ref()`. `Application::gpu()` is the frame's device; meshes, debug draw,
+  sphere impostors, cloth, particle instances, physics objects and rubble,
+  and models' instance, skinned and deformed buffers are made by it.
+  `VulkanGpuDevice` wraps `kke::Buffer`; buffers that ray tracing or
+  compute skinning also read get their extra Vulkan bits there.
+- **R1d, the other resources.** Texture (2D, array, cube, 3D), Sampler,
+  ShaderModule (SPIR-V in, the backend converts), GraphicsPipeline,
+  BindGroupLayout and BindGroup made by the device instead of each
+  module's descriptor-set code. Vulkan implements each by wrapping today's
+  code; output must not change (benchmarks within 2%, pictures identical).
 - **R1b, the modules moved (done).** Models (scene and shadow), physics
   objects and rubble, particle effects (CPU batches and GPU-stepped),
   particle systems, ocean, hair, sphere impostors and cloth record their
@@ -45,7 +52,7 @@ That halves the RHI: the ~20 compute passes stay as they are, behind a
   until the device makes them. Still on a VkCommandBuffer: the fluid
   surface (its own render pass), thumbnails, the RmlUi and ImGui
   renderers, the sky and the Renderer's own passes.
-- **R1c, the rest of the graphics path.** Renderer's scene, shadow and overlay
+- **R1e, the rest of the graphics path.** Renderer's scene, shadow and overlay
   passes, Pipeline, Mesh, Texture, ShadowMap, LightingBuffer's uniform
   part, SkyRenderer, and every module's render(): ModelModule,
   PhysicsModule, ParticleEffects' instanced path, DebugDraw, Grid, Ocean,

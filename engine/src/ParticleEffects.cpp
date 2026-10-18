@@ -485,17 +485,14 @@ void ParticleEffects::drawBatch(const RenderContext& ctx, Kind kind, const std::
     if (slot.capacity < instances.size()) {
         if (slot.buffer) m_app.renderer().retire(std::move(slot.buffer));
         slot.capacity = std::max<size_t>(instances.size() * 3 / 2, 256);
-        slot.buffer = std::make_unique<Buffer>(m_app.device(), slot.capacity * sizeof(GpuInstance), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                                               VMA_MEMORY_USAGE_CPU_TO_GPU);
+        slot.buffer = m_app.gpu().createBuffer({ slot.capacity * sizeof(GpuInstance), rhi::kVertexBuffer, rhi::Memory::Upload });
     }
     slot.buffer->upload(instances.data(), instances.size() * sizeof(GpuInstance));
     Pipeline& pipe = pipeline(kind);
     pipe.bind(*ctx.list);
     VkDescriptorSet sets[] = { ctx.lightingDescriptorSet, ctx.shadowMapDescriptorSet };
     ctx.list->bindGroups(pipe, 0, rhi::VulkanCommandList::groups(sets, 2));
-    VkBuffer vb = slot.buffer->handle();
-    VkDeviceSize off = 0;
-    ctx.list->bindVertexBuffer(0, rhi::VulkanCommandList::buffer(vb), off);
+    ctx.list->bindVertexBuffer(0, slot.buffer->ref(), 0);
     ctx.list->draw(6, static_cast<uint32_t>(instances.size()), 0, 0); // six corners, one instance per particle
 }
 
