@@ -211,8 +211,41 @@ vec3 shadeSurface(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 po
 #endif
 
 #ifndef KKE_COMPUTE
+// Decals (ENG-F12, kke/Decals.h): the ones this pixel's cell lists, mixed into
+// its colour and roughness before it is lit, oldest first so the newest is on
+// top. kke::decalWeight decides how much shows (inside the box, facing it);
+// the texture is read with this pixel's own gradients, so it filters right
+// even though the loop is not uniform across the quad.
+void applyDecals(inout vec3 albedo, inout float roughness, vec3 pos, vec3 N) {
+    uint count = uint(lighting.decalParams.x + 0.5);
+    vec3 dpdx = dFdx(pos), dpdy = dFdy(pos);
+    if (count == 0u) return;
+    float viewDepth = (lighting.viewProj * vec4(pos, 1.0)).w;
+    if (viewDepth < lighting.decalParams.y || viewDepth >= lighting.decalParams.z) return;
+    uvec3 g = uvec3(lighting.clusterGrid.xyz);
+    uint cz = min(uint(lighting.clusterGrid.z * log(viewDepth / lighting.decalParams.y) / log(lighting.decalParams.z / lighting.decalParams.y)), g.z - 1u);
+    uvec2 cxy = min(uvec2(gl_FragCoord.xy / lighting.decalScreen.xy * vec2(g.xy)), g.xy - 1u);
+    uint cell = (cz * g.y + cxy.y) * g.x + cxy.x;
+    uint first = cell * uint(lighting.clusterGrid.w), n = decalCounts[cell];
+    for (uint k = 0u; k < n; ++k) {
+        DecalData d = decals[decalIndices[first + k]];
+        vec3 local = (d.worldToDecal * vec4(pos, 1.0)).xyz;
+        if (any(greaterThan(abs(local), vec3(1.0)))) continue;
+        // kke::decalWeight
+        float facing = smoothstep(0.2, 0.5, dot(N, d.normal.xyz));
+        float w = facing * (1.0 - clamp((abs(local.z) - 0.6) / 0.4, 0.0, 1.0));
+        if (w <= 0.0) continue;
+        mat3 m = mat3(d.worldToDecal);
+        vec4 t = textureGrad(decalTextures, vec3(local.xy * 0.5 + 0.5, d.params.x), (m * dpdx).xy * 0.5, (m * dpdy).xy * 0.5);
+        float a = t.a * d.colorOpacity.a * w;
+        albedo = mix(albedo, t.rgb * d.colorOpacity.rgb, a);
+        if (d.params.y >= 0.0) roughness = mix(roughness, d.params.y, a);
+    }
+}
+
 vec3 shadeSurfaceAA(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 posWorld, vec4 posLightSpace, float specAAKernel) {
     vec2 fragMetallicRoughness = metallicRoughness;
+    applyDecals(albedo, fragMetallicRoughness.y, posWorld, normalize(normalWorld));
     vec3 fragNormalWorld = normalWorld;
     vec3 fragPosWorld = posWorld;
     vec4 fragPosLightSpace = posLightSpace;

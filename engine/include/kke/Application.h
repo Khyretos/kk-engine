@@ -15,6 +15,7 @@
 #include "kke/RayScene.h"
 #include "kke/Reflections.h"
 #include "kke/ColorLut.h"
+#include "kke/Decals.h"
 #include "kke/VolumetricFog.h"
 #include "kke/Taa.h"
 #include "kke/ShadowRays.h"
@@ -45,6 +46,7 @@ class ScreenGiPass;
 class ReflectionPass;
 class BehindPass;
 class ClusterLightPass;
+class DecalTextures;
 class ShadowRayPass;
 class VolumetricFogPass;
 class RefractionRays;
@@ -335,6 +337,14 @@ public:
     // particles); `owner` removes it again.
     void addFrameCompute(const void* owner, std::function<void(VkCommandBuffer)> step);
     void removeFrameCompute(const void* owner);
+    // Decals (ENG-F12, kke/Decals.h): scorch marks, splats, cracks, holes,
+    // puddles and footprints laid onto whatever lit surface is in their box.
+    // placeDecal returns 0 when its texture is neither a built-in nor
+    // assets/decals/<name>.png. At most DecalSet::kMax; the oldest goes.
+    DecalId placeDecal(const Decal& decal);
+    bool removeDecal(DecalId id);
+    void clearDecals();
+    size_t decalCount() const { return m_decals.count(); }
     // Asks for the scene's depth to be kept for the next frame (ENG-F11: GPU
     // particles bounce off it); `owner` gives the wish back with false.
     void wantSceneDepth(const void* owner, bool want);
@@ -550,6 +560,14 @@ private:
     std::optional<bool> m_bloomEnv;                             // KKE_BLOOM
     std::unique_ptr<ShadowRayPass> m_shadowRayPass; // made the first time shadow rays are on
     std::unique_ptr<ClusterLightPass> m_clusterLights; // made the first time there are many lights (ENG-F08)
+    // Decals (ENG-F12): every one placed, their textures, their per-cell lists and per frame their records.
+    DecalSet m_decals;
+    std::unique_ptr<DecalTextures> m_decalTextures; // made by the first placeDecal
+    std::unique_ptr<ClusterLightPass> m_decalCells;
+    std::unique_ptr<Buffer> m_decalBuffers[Renderer::kMaxFramesInFlight];
+    std::vector<GpuDecal> m_decalRecords;
+    std::vector<glm::vec4> m_decalSpheres;
+    float m_now = 0.0f; // seconds since the start, this frame (decals fade by it)
     bool m_clustersOff = false;                         // KKE_CLUSTERS=0
     ShadowRays m_shadowRays = ShadowRays::Off;
     std::optional<ShadowRays> m_shadowRaysEnv; // KKE_SHADOW_RAYS

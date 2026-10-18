@@ -107,6 +107,21 @@ public:
         m_clusterScreen = screen;
         m_clusterAll = all;
     }
+    // Decals (ENG-F12, bindings 12-15): this frame's decal records (`count`,
+    // kke::GpuDecal), their per-cell lists made with `grid` on a `screen`-pixel
+    // scene (a kke::ClusterLightPass of their bounding spheres), and their
+    // texture array (kke::DecalTextures). Null: none.
+    void setDecals(VkBuffer decals, VkBuffer counts, VkBuffer indices, uint32_t count, const ClusterGrid& grid, const glm::vec2& screen,
+                   VkImageView textures, VkSampler sampler) {
+        m_decals = decals;
+        m_decalCounts = counts;
+        m_decalIndices = indices;
+        m_decalCount = count;
+        m_decalGrid = grid;
+        m_decalScreen = screen;
+        m_decalTextures = textures;
+        m_decalSampler = sampler;
+    }
     void setShadowRays(VkImageView image, VkSampler sampler, const glm::mat4& viewProj, const glm::vec2& size, float slack) {
         m_shadowRays = image;
         m_shadowRaySampler = sampler;
@@ -170,7 +185,18 @@ private:
     ClusterGrid m_clusterGrid;
     glm::vec2 m_clusterScreen{1.0f};
     bool m_clusterAll = false;
-    std::unique_ptr<Buffer> m_placeholderBuffer; // bindings 9-11 while there are no many lights
+    std::unique_ptr<Buffer> m_placeholderBuffer; // bindings 9-14 while there are no many lights or decals
+    VkBuffer m_decals = VK_NULL_HANDLE, m_decalCounts = VK_NULL_HANDLE, m_decalIndices = VK_NULL_HANDLE;
+    uint32_t m_decalCount = 0;
+    ClusterGrid m_decalGrid;
+    glm::vec2 m_decalScreen{1.0f};
+    VkImageView m_decalTextures = VK_NULL_HANDLE;
+    VkSampler m_decalSampler = VK_NULL_HANDLE;
+    // Binding 15 while there are no decals: a 1x1 array of one layer.
+    VkImage m_decalArray = VK_NULL_HANDLE;
+    VmaAllocation m_decalArrayAlloc = VK_NULL_HANDLE;
+    VkImageView m_decalArrayView = VK_NULL_HANDLE;
+    VkSampler m_decalArraySampler = VK_NULL_HANDLE;
     VkImageView m_shadowRays = VK_NULL_HANDLE;
     VkSampler m_shadowRaySampler = VK_NULL_HANDLE;
     glm::mat4 m_shadowRayViewProj{1.0f};

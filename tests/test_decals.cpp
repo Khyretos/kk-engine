@@ -6,6 +6,7 @@
 #include <glm/gtc/constants.hpp>
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cmath>
 
 using namespace kke;

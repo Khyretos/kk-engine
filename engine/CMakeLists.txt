@@ -131,6 +131,8 @@ set(ENGINE_SOURCES
     src/Smaa.cpp
     src/ClusterLightPass.cpp
     src/Bloom.cpp
+    src/Decals.cpp
+    src/DecalTextures.cpp
     src/DepthOfField.cpp
     src/MotionBlur.cpp
     src/ColorLut.cpp

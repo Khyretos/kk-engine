@@ -66,8 +66,10 @@ struct LightingUBOData {
     glm::vec4 clusterParams;     // x = how many many-lights (ENG-F08), y = near, z = far distance, w = 1: walk them all
     glm::vec4 clusterGrid;       // cells across, down, deep; lights a cell lists at most
     glm::vec4 clusterScreen;     // the scene's size in pixels
+    glm::vec4 decalParams;       // x = how many decals (ENG-F12; 0 = none), y = near, z = far distance of their cells
+    glm::vec4 decalScreen;       // xy = the scene's size in pixels (their cells')
 };
-static_assert(sizeof(LightingUBOData) == Lighting::kMaxLights * 3 * 16 + 2 * 16 + 2 * 64 + 7 * 16 + 9 * 16 + 2 * ShadowMap::kCascades * 16 + ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces * (64 + 16) + 16 + 64 + 16 + 64 + 16 + 16 + 16 + 64 + 16 + 3 * 16, "must match shaders/lighting_ubo.glsl");
+static_assert(sizeof(LightingUBOData) == Lighting::kMaxLights * 3 * 16 + 2 * 16 + 2 * 64 + 7 * 16 + 9 * 16 + 2 * ShadowMap::kCascades * 16 + ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces * (64 + 16) + 16 + 64 + 16 + 64 + 16 + 16 + 16 + 64 + 16 + 3 * 16 + 2 * 16, "must match shaders/lighting_ubo.glsl");
 static_assert(ShadowMap::kMaxPointShadows <= Lighting::kMaxLights, "every point-shadow slot needs a light");
 
 } // namespace
@@ -77,7 +79,7 @@ LightingBuffer::LightingBuffer(VulkanDevice& device) : m_device(device) {
     // vertex and fragment stages (vertex doesn't currently need it, but
     // costs nothing to allow now rather than needing a second layout
     // later for e.g. per-vertex light-space transforms for shadows).
-    std::array<VkDescriptorSetLayoutBinding, 12> bindings{};
+    std::array<VkDescriptorSetLayoutBinding, 16> bindings{};
     bindings[0].binding = 0;
     bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     bindings[0].descriptorCount = 1;
@@ -107,13 +109,16 @@ LightingBuffer::LightingBuffer(VulkanDevice& device) : m_device(device) {
     // Binding 8: last frame's ray-traced sun shadows (setShadowRays).
     bindings[8] = bindings[1];
     bindings[8].binding = 8;
-    // Bindings 9-11: the many lights and their per-cell lists (setManyLights).
-    for (uint32_t i = 9; i < 12; ++i) {
+    // Bindings 9-11: the many lights and their per-cell lists (setManyLights); 12-14 the decals and theirs (setDecals).
+    for (uint32_t i = 9; i < 15; ++i) {
         bindings[i].binding = i;
         bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         bindings[i].descriptorCount = 1;
         bindings[i].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
     }
+    // Binding 15: the decals' textures (setDecals).
+    bindings[15] = bindings[1];
+    bindings[15].binding = 15;
 
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -124,9 +129,9 @@ LightingBuffer::LightingBuffer(VulkanDevice& device) : m_device(device) {
     // --- Descriptor pool: one set per frame in flight -- every lit
     // module shares these, there's no per-object growth the way
     // RmlVulkanRenderInterface's texture pool needs.
-    const std::array<VkDescriptorPoolSize, 3> poolSizes{ { { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3 * kSlotCount },
+    const std::array<VkDescriptorPoolSize, 3> poolSizes{ { { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 6 * kSlotCount },
                                                           { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kSlotCount },
-                                                          { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 8 * kSlotCount } } };
+                                                          { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 9 * kSlotCount } } };
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     poolInfo.maxSets = kSlotCount;
@@ -171,6 +176,9 @@ LightingBuffer::LightingBuffer(VulkanDevice& device) : m_device(device) {
 }
 
 LightingBuffer::~LightingBuffer() {
+    if (m_decalArraySampler) vkDestroySampler(m_device.device(), m_decalArraySampler, nullptr);
+    if (m_decalArrayView) vkDestroyImageView(m_device.device(), m_decalArrayView, nullptr);
+    if (m_decalArray) vmaDestroyImage(m_device.allocator(), m_decalArray, m_decalArrayAlloc);
     if (m_volumeSampler) vkDestroySampler(m_device.device(), m_volumeSampler, nullptr);
     if (m_volumeView) vkDestroyImageView(m_device.device(), m_volumeView, nullptr);
     if (m_volumeImage) vmaDestroyImage(m_device.allocator(), m_volumeImage, m_volumeAlloc);
@@ -206,6 +214,15 @@ void LightingBuffer::createVolumePlaceholder() {
     si.magFilter = si.minFilter = VK_FILTER_NEAREST;
     si.addressModeU = si.addressModeV = si.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
     VK_CHECK(vkCreateSampler(m_device.device(), &si, nullptr, &m_volumeSampler));
+    // And a 1x1 array of one transparent layer, bound while there are no decals (ENG-F12).
+    ii.imageType = VK_IMAGE_TYPE_2D;
+    ii.format = VK_FORMAT_R8G8B8A8_UNORM;
+    VK_CHECK(vmaCreateImage(m_device.allocator(), &ii, &ai, &m_decalArray, &m_decalArrayAlloc, nullptr));
+    vi.image = m_decalArray;
+    vi.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+    vi.format = ii.format;
+    VK_CHECK(vkCreateImageView(m_device.device(), &vi, nullptr, &m_decalArrayView));
+    VK_CHECK(vkCreateSampler(m_device.device(), &si, nullptr, &m_decalArraySampler));
 
     VkCommandBufferAllocateInfo cai{};
     cai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -234,6 +251,20 @@ void LightingBuffer::createVolumePlaceholder() {
     b.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
     b.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
     vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &b);
+    VkImageMemoryBarrier d = b;
+    d.image = m_decalArray;
+    d.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    d.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    d.srcAccessMask = 0;
+    d.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &d);
+    const VkClearColorValue transparent{ { 0.0f, 0.0f, 0.0f, 0.0f } };
+    vkCmdClearColorImage(cmd, m_decalArray, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &transparent, 1, &d.subresourceRange);
+    d.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    d.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    d.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    d.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &d);
     VK_CHECK(vkEndCommandBuffer(cmd));
     VkSubmitInfo submit{};
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -273,12 +304,16 @@ void LightingBuffer::writeEnvironment(uint32_t slot) {
     }
     vkUpdateDescriptorSets(m_device.device(), static_cast<uint32_t>(write.size()), write.data(), 0, nullptr);
     const bool many = m_manyLights && m_clusterCounts && m_clusterIndices;
+    const bool decals = m_decals && m_decalCounts && m_decalIndices && m_decalTextures;
     const VkBuffer placeholder = m_placeholderBuffer->handle();
-    const std::array<VkDescriptorBufferInfo, 3> buffers{ { { many ? m_manyLights : placeholder, 0, VK_WHOLE_SIZE },
+    const std::array<VkDescriptorBufferInfo, 6> buffers{ { { many ? m_manyLights : placeholder, 0, VK_WHOLE_SIZE },
                                                            { many ? m_clusterCounts : placeholder, 0, VK_WHOLE_SIZE },
-                                                           { many ? m_clusterIndices : placeholder, 0, VK_WHOLE_SIZE } } };
-    std::array<VkWriteDescriptorSet, 3> bw{};
-    for (uint32_t i = 0; i < 3; ++i) {
+                                                           { many ? m_clusterIndices : placeholder, 0, VK_WHOLE_SIZE },
+                                                           { decals ? m_decals : placeholder, 0, VK_WHOLE_SIZE },
+                                                           { decals ? m_decalCounts : placeholder, 0, VK_WHOLE_SIZE },
+                                                           { decals ? m_decalIndices : placeholder, 0, VK_WHOLE_SIZE } } };
+    std::array<VkWriteDescriptorSet, 7> bw{};
+    for (uint32_t i = 0; i < 6; ++i) {
         bw[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         bw[i].dstSet = m_descriptorSets[slot];
         bw[i].dstBinding = 9 + i;
@@ -286,6 +321,15 @@ void LightingBuffer::writeEnvironment(uint32_t slot) {
         bw[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         bw[i].pBufferInfo = &buffers[i];
     }
+    // Without decals the black placeholder stands in for their textures (never read: decalParams.x = 0).
+    const VkDescriptorImageInfo decalImage = decals ? VkDescriptorImageInfo{ m_decalSampler, m_decalTextures, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
+                                                    : VkDescriptorImageInfo{ m_decalArraySampler, m_decalArrayView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+    bw[6].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    bw[6].dstSet = m_descriptorSets[slot];
+    bw[6].dstBinding = 15;
+    bw[6].descriptorCount = 1;
+    bw[6].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    bw[6].pImageInfo = &decalImage;
     vkUpdateDescriptorSets(m_device.device(), static_cast<uint32_t>(bw.size()), bw.data(), 0, nullptr);
 }
 
@@ -361,6 +405,9 @@ void LightingBuffer::update(const Lighting& lighting, const glm::vec3& cameraPos
     data.clusterGrid = glm::vec4(static_cast<float>(m_clusterGrid.x), static_cast<float>(m_clusterGrid.y), static_cast<float>(m_clusterGrid.z),
                                  static_cast<float>(m_clusterGrid.maxPerCluster));
     data.clusterScreen = glm::vec4(m_clusterScreen, 0.0f, 0.0f);
+    const bool decals = m_decals && m_decalCounts && m_decalIndices && m_decalTextures;
+    data.decalParams = glm::vec4(decals ? static_cast<float>(m_decalCount) : 0.0f, m_decalGrid.nearDistance, m_decalGrid.farDistance, 0.0f);
+    data.decalScreen = glm::vec4(m_decalScreen, 0.0f, 0.0f);
     data.shadowRayViewProj = m_shadowRayViewProj;
     data.shadowRays = glm::vec4(m_shadowRays ? 1.0f : 0.0f, m_shadowRaySize.x, m_shadowRaySize.y, m_shadowRaySlack);
     data.fogVolume = m_fogVolume ? glm::vec4(1.0f, m_fogVolumeSettings.nearDistance, m_fogVolumeSettings.farDistance,
