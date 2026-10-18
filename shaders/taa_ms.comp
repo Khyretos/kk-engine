@@ -1,0 +1,5 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+// Temporal anti-aliasing, multisampled depth: sample 0 (shaders/taa.glsl).
+#define DEPTH_MS
+#include "taa.glsl"

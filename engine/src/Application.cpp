@@ -159,6 +159,10 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
     // KKE_REFLECT_ROUGHNESS=1: every surface up to that roughness reflects (benchmarks: the most work).
     if (const char* env = dev::env("KKE_REFLECT_ROUGHNESS"); env && *env)
         m_reflectionSettings.maxRoughness = std::clamp(static_cast<float>(std::atof(env)), 0.01f, 1.0f);
+    if (const char* env = dev::env("KKE_TAA"); env && *env) {
+        m_taaEnv = env[0] == '1';
+        setTaa(*m_taaEnv);
+    }
     if (const char* env = dev::env("KKE_SMAA"); env && *env) {
         m_smaaEnv = env[0] == '1';
         setSmaa(*m_smaaEnv);
@@ -931,8 +935,15 @@ void Application::run() {
         if (m_views.empty()) addView(m_camera, ViewRect{});
         for (const View& v : m_views)
             if (viewCount < kMaxViews) addView(v.camera, v.rect);
+        // TAA (ENG-F05 part 2): one view drawn with a sub-pixel offset that changes every frame.
+        const bool taaOn = m_taaOn && viewCount == 1;
+        if (taaOn)
+            drawViews[0].proj = taaJitteredProjection(drawViews[0].proj, taaJitter(m_taaFrame++, m_taaSettings),
+                                                      glm::vec2(static_cast<float>(sceneExtent.width), static_cast<float>(sceneExtent.height)));
+        m_renderer->setTaa(taaOn);
         const glm::mat4& view = drawViews[0].view;
         const glm::mat4& proj = drawViews[0].proj;
+        m_renderer->setTaaCamera(proj * view);
 
         // Cascaded shadow maps (kke::ShadowMap) from the key light (lights[0])
         // only. Each view's frustum, out to kShadowDistance, is cut into
@@ -1291,7 +1302,7 @@ void Application::run() {
 void Application::setScreenGi(bool on) {
     m_screenGiOn = on || m_screenGiEnv;
     // The scene's depth is kept only while something reads it.
-    m_renderer->setSceneDepthReadable(m_screenGiOn || m_reflections != Reflections::Off);
+    updateSceneDepthReadable();
     if (!m_screenGiOn && m_screenGi) m_screenGi->invalidate();
 }
 
@@ -1389,10 +1400,20 @@ VkDescriptorSetLayout Application::refractionRayLayout() {
 
 void Application::setSmaa(bool on) { m_renderer->setSmaa(m_smaaEnv ? *m_smaaEnv : on); }
 
+void Application::setTaa(bool on) {
+    m_taaOn = m_taaEnv ? *m_taaEnv : on;
+    m_renderer->setTaa(m_taaOn);
+    updateSceneDepthReadable();
+}
+
+void Application::updateSceneDepthReadable() {
+    m_renderer->setSceneDepthReadable(m_screenGiOn || m_reflections != Reflections::Off || m_taaOn);
+}
+
 void Application::setReflections(Reflections mode) {
     m_reflections = m_reflectionsEnv ? *m_reflectionsEnv : mode;
     // Kke and classic trace rays only where the device can; screen space works everywhere.
-    m_renderer->setSceneDepthReadable(m_screenGiOn || m_reflections != Reflections::Off);
+    updateSceneDepthReadable();
     if (m_reflections == Reflections::Off && m_reflectionPass) m_reflectionPass->invalidate();
 }
 

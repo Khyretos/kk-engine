@@ -1,6 +1,7 @@
 #include "kke/Renderer.h"
 
 #include "SmaaPass.h"
+#include "TaaPass.h"
 
 #include <cmath>
 #include "kke/Window.h"
@@ -35,6 +36,7 @@ Renderer::~Renderer() {
     vkDeviceWaitIdle(m_device->device());
     m_retired.releaseAll();
     m_smaa.reset();
+    m_taa.reset();
     for (uint32_t i = 0; i < kMaxFramesInFlight; ++i) destroySceneTarget(i);
     destroyPostPass();
     if (m_scenePass) vkDestroyRenderPass(m_device->device(), m_scenePass, nullptr);
@@ -640,12 +642,27 @@ void Renderer::beginOverlayPass() {
     endScenePass();
     m_overlayOpen = true;
     VkCommandBuffer cmd = m_commandBuffers[m_currentFrame];
+    const SceneTarget& t = m_sceneTargets[m_currentFrame];
+    m_postSource = t.colorView;
+    m_postSourceLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     if (m_smaaOn) {
         // Anti-aliasing over the finished scene, before the tone map reads it (outside any pass).
         if (!m_smaa) m_smaa = std::make_unique<SmaaPass>(*m_device);
-        const SceneTarget& t = m_sceneTargets[m_currentFrame];
         m_smaa->record(cmd, m_currentFrame, t.colorView, t.extent);
+        m_postSource = m_smaa->output();
+        m_postSourceLayout = VK_IMAGE_LAYOUT_GENERAL;
     }
+    const bool taa = m_taaOn && t.depthSampleView != VK_NULL_HANDLE;
+    if (taa) {
+        // Then the history of earlier frames, reprojected with last frame's camera.
+        if (!m_taa) m_taa = std::make_unique<TaaPass>(*m_device);
+        m_taa->record(cmd, m_currentFrame, m_postSource, m_postSourceLayout, t.depthSampleView, m_scenePassSamples, t.extent,
+                      m_taaPrevViewProj * glm::inverse(m_taaViewProj), m_taaHavePrev);
+        m_postSource = m_taa->output();
+        m_postSourceLayout = VK_IMAGE_LAYOUT_GENERAL;
+        m_taaPrevViewProj = m_taaViewProj;
+    }
+    m_taaHavePrev = taa;
 
     // The swapchain's own pass: it clears the image (the acquire semaphore
     // is waited on at COLOR_ATTACHMENT_OUTPUT, which its dependency chains
@@ -736,8 +753,7 @@ void Renderer::drawPostPass(VkCommandBuffer cmd) {
     }
     // This slot's previous frame has finished (beginFrame waited on its
     // fence), so its set can point at this frame's scene image.
-    VkDescriptorImageInfo image{ m_postSampler, m_sceneTargets[m_currentFrame].colorView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
-    if (m_smaaOn && m_smaa) image = { m_postSampler, m_smaa->output(), VK_IMAGE_LAYOUT_GENERAL };
+    VkDescriptorImageInfo image{ m_postSampler, m_postSource, m_postSourceLayout };
     VkWriteDescriptorSet w{};
     w.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
     w.dstSet = m_postSets[m_currentFrame];
