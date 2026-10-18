@@ -61,7 +61,8 @@ public:
 
     // Begins the swapchain's render pass (color+depth clear) and sets a
     // full-viewport/scissor. Call after beginFrame(), before any draws.
-    void beginRenderPass();
+    // `split`: the pass keeps its colour and depth, for pauseScenePass().
+    void beginRenderPass(bool split = false);
 
     // Switches to full-resolution drawing for what goes on top of the 3D
     // image (UI, debug overlay): ends the HDR scene pass and opens the
@@ -85,6 +86,12 @@ public:
     // depth (when readable) in DEPTH_STENCIL_READ_ONLY, both written and
     // visible to compute and fragment shaders.
     void endScenePass();
+    // Refraction (ENG-F02 part 4), after beginRenderPass(true): ends the 3D
+    // pass as endScenePass() does, so a pass can read what is drawn so far,
+    // then resumeScenePass() opens one that goes on drawing over the same
+    // colour and depth (its pipelines are the scene pass's).
+    void pauseScenePass();
+    void resumeScenePass();
     struct SceneImages {
         VkImageView color = VK_NULL_HANDLE; // single-sample HDR (kSceneColorFormat)
         VkImageView depth = VK_NULL_HANDLE; // depth aspect only; null unless sceneDepthReadable()
@@ -128,7 +135,10 @@ public:
     // count, resolve and subpass dependency), so every scene pipeline works
     // in it; its single-sample colour ends in colorFinalLayout. For
     // offscreen views of the scene (thumbnails). Caller destroys it.
-    VkRenderPass createSceneCompatiblePass(VkImageLayout colorFinalLayout);
+    // `kind`: Split keeps the colour and depth (stored) for a Resume pass,
+    // which loads them instead of clearing.
+    enum class PassKind { Whole, Split, Resume };
+    VkRenderPass createSceneCompatiblePass(VkImageLayout colorFinalLayout, PassKind kind = PassKind::Whole);
     VkExtent2D extent() const { return m_swapChain->extent(); }
     bool hasStencil() const { return m_swapChain->hasStencil(); }
     // The scene pass's attachment formats: an offscreen pass with the same
@@ -264,6 +274,7 @@ private:
     bool m_depthReadable = false;
     bool m_overlayOpen = false; // beginOverlayPass() opened the swapchain's pass this frame
     VkRenderPass m_scenePass = VK_NULL_HANDLE;
+    VkRenderPass m_scenePassSplit = VK_NULL_HANDLE, m_scenePassResume = VK_NULL_HANDLE; // pauseScenePass()
     VkFormat m_scenePassFormats[2] = {};
     uint32_t m_scenePassSamples = 0;
     bool m_scenePassDepthStored = false;

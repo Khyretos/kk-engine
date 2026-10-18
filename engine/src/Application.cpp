@@ -1,5 +1,6 @@
 #include "kke/Application.h"
 #include "kke/SkyRenderer.h"
+#include "BehindPass.h"
 #include "ReflectionPass.h"
 #include "ScreenGiPass.h"
 #include "kke/Capabilities.h"
@@ -151,6 +152,8 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
         m_reflectionsEnv = reflectionsFromName(env, Reflections::Off);
         setReflections(*m_reflectionsEnv);
     }
+    // KKE_REFRACTIONS=0: see-through surfaces don't bend what's behind them, whatever the reflections (benchmarks).
+    if (const char* env = dev::env("KKE_REFRACTIONS"); env && *env) m_refractionsOff = std::string(env) == "0";
     // KKE_REFLECT_ROUGHNESS=1: every surface up to that roughness reflects (benchmarks: the most work).
     if (const char* env = dev::env("KKE_REFLECT_ROUGHNESS"); env && *env)
         m_reflectionSettings.maxRoughness = std::clamp(static_cast<float>(std::atof(env)), 0.01f, 1.0f);
@@ -1036,6 +1039,12 @@ void Application::run() {
                 m_reflectionPass->prepare(sceneExtent);
             }
             const bool reflReady = reflOn && m_reflectionPass->ready();
+            // Refraction: this frame's scene before the see-through surfaces, copied mid-pass (ENG-F02 part 4).
+            const bool refractOn = reflOn && !m_refractionsOff && !m_sceneCovered;
+            if (refractOn) {
+                if (!m_behindPass) m_behindPass = std::make_unique<BehindPass>(m_renderer->device());
+                m_behindPass->prepare(sceneExtent);
+            }
             // Meshes record themselves for rays while they draw (recordRayDraw).
             m_rayDraws.clear();
             m_recordRays = reflOn && (m_reflections == Reflections::Kke || m_reflections == Reflections::Classic) &&
@@ -1046,6 +1055,8 @@ void Application::run() {
                                                        m_screenGi->size());
                 else
                     drawViews[i].lighting->setScreenGi(VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE, glm::mat4(1.0f), glm::vec2(0.0f));
+                if (i == 0 && refractOn) drawViews[i].lighting->setBehind(m_behindPass->image(), m_behindPass->sampler(), m_behindPass->size());
+                else drawViews[i].lighting->setBehind(VK_NULL_HANDLE, VK_NULL_HANDLE, glm::vec2(0.0f));
                 if (i == 0 && reflReady)
                     drawViews[i].lighting->setReflections(m_reflectionPass->light(), m_reflectionPass->depth(), m_reflectionPass->sampler(),
                                                           m_reflectionPass->viewProj(), m_reflectionPass->size(), m_reflectionSettings.maxRoughness);
@@ -1156,7 +1167,7 @@ void Application::run() {
                 safeInvoke(m, "prepass", [&] { m->prepass(prepassCtx); });
             }
 
-            m_renderer->beginRenderPass();
+            m_renderer->beginRenderPass(refractOn);
             renderCtx.cmd = cmd;
             renderCtx.frameIndex = m_renderer->currentFrameIndex();
             for (uint32_t i = 0; drawScene && i < viewCount; ++i) {
@@ -1174,9 +1185,17 @@ void Application::run() {
                 for (Module* m : m_initOrder) {
                     safeInvoke(m, "render", [&] { m->render(renderCtx); });
                 }
+                if (refractOn) {
+                    // What's drawn so far, readable by the see-through surfaces drawn next.
+                    m_renderer->pauseScenePass();
+                    m_behindPass->record(cmd, m_renderer->currentFrameIndex(), m_renderer->sceneImages(), d.proj);
+                    m_renderer->resumeScenePass();
+                }
+                renderCtx.refraction = refractOn;
                 for (Module* m : m_initOrder) {
                     safeInvoke(m, "renderTranslucent", [&] { m->renderTranslucent(renderCtx); });
                 }
+                renderCtx.refraction = false;
             }
             // GI from this frame's scene, for the next frame's shading.
             if (giOn && drawScene) {

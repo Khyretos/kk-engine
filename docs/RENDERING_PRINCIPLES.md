@@ -270,6 +270,25 @@ kke, 21.8 classic. On this GPU classic is only a little dearer: KKE's
 gains are the budget (a frame never pays more than it allows) and that it
 falls back to screen space where there is no ray tracing.
 
+**Refraction (ENG-F02 part 4, 2026-10-18).** With reflections on (one
+view; `KKE_REFRACTIONS=0` turns it off for comparisons), see-through
+surfaces drawn with `DynamicMeshRenderer::drawTranslucent` bend what is
+behind them by their index of refraction (`ior`: water 1.33, glass 1.5).
+Before the translucent draws the 3D pass pauses: one compute dispatch
+copies the scene drawn so far, with each pixel's distance from the camera
+in alpha, and a pass that loads the same colour and depth goes on. The
+first translucent pass then reads that copy where the refracted ray
+leads, taken as solid for up to a metre behind the surface, times the
+transmittance. What a plain grab pass gets wrong: a sample that lands on
+something nearer than the glass (in front of it) is not used, so nothing
+in front smears into the glass; the straight-through pixel is read
+instead. Measured on the RX 9070 XT with 4x MSAA, anim_demo's glass block
+(`KKE_ANIM_GLASS=1`): +0.02 to +0.03 ms (905 x 682: 0.209 to 0.237 ms;
+1020 x 1384: 0.319 to 0.341 ms); lavapipe at 960 x 540, 39.8 to 38.1 fps.
+Translucents seen through other translucents show only the opaque scene
+behind both. Ray-traced refraction (rays for what the screen cannot
+show) is the next part.
+
 ### 7. Tone mapping, exposure and colour management
 
 **Argument.** (Fox Engine videos, 33 "tone mapping & exposure

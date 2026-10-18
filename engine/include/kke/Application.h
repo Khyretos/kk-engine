@@ -39,6 +39,7 @@ struct BenchOptions;
 class SkyRenderer;
 class ScreenGiPass;
 class ReflectionPass;
+class BehindPass;
 class DynamicMeshRenderer;
 struct Mood;
 
@@ -469,6 +470,10 @@ private:
     std::unique_ptr<ReflectionPass> m_reflectionPass; // made the first time reflections are on
     Reflections m_reflections = Reflections::Off;
     std::optional<Reflections> m_reflectionsEnv; // KKE_REFLECTIONS
+    // Refraction (ENG-F02 part 4): on with reflections (one view), unless
+    // KKE_REFRACTIONS=0. The scene before the see-through surfaces.
+    std::unique_ptr<BehindPass> m_behindPass;
+    bool m_refractionsOff = false;
     ReflectionSettings m_reflectionSettings;
     std::unique_ptr<RayScene> m_rayScene;    // KKE ray tracing's stand-ins, made the first time they're traced
     std::vector<RayMaterial> m_rayMaterials; // how each instance looks to a ray, this frame

@@ -1,0 +1,5 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+// What see-through surfaces show behind them, multisampled depth: sample 0 (shaders/behind.glsl).
+#define DEPTH_MS
+#include "behind.glsl"

@@ -28,6 +28,7 @@ public:
     void update(const kke::UpdateContext& ctx) override;
     void render(const kke::RenderContext& ctx) override;
     void renderShadow(const kke::ShadowRenderContext& ctx) override;
+    void renderTranslucent(const kke::RenderContext& ctx) override;
 
 private:
     struct Tentacle {
@@ -50,7 +51,7 @@ private:
 
     kke::Application* m_app = nullptr;
     kke::ModelModule* m_models = nullptr;
-    std::unique_ptr<kke::DynamicMeshRenderer> m_ground, m_arms;
+    std::unique_ptr<kke::DynamicMeshRenderer> m_ground, m_arms, m_glass;
 
     // The mannequin and its clips (UAL1, plus UAL2's directions if found).
     kke::ModelData m_rig;
@@ -76,6 +77,7 @@ private:
     float m_circle = 0.0f;     // KKE_ANIM_CIRCLE: that stick turns round once in this many seconds
     bool m_showRest = false;   // the rest pose instead of the clips (KKE_ANIM_REST=1)
     bool m_mirrorFloor = false; // a polished floor, to see reflections (KKE_ANIM_MIRROR=1)
+    bool m_glassBlock = false;  // a glass block before the tentacles, to see refraction (KKE_ANIM_GLASS=1)
     float m_runSpeed = 3.5f;
     float m_walkSpeed = 1.5f;
 
