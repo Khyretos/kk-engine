@@ -89,6 +89,9 @@ struct RenderContext {
     // (kke::LightingBuffer binding 6), so see-through surfaces refract it
     // (DynamicMeshRenderer::drawTranslucent; ENG-F02 part 4).
     bool refraction = false;
+    // With refraction and `reflections = kke / classic`: set 3 of the
+    // refracting pass, the frame's ray scene (Application::refractionRayLayout()).
+    VkDescriptorSet refractionRays = VK_NULL_HANDLE;
 };
 
 // Passed to Module::renderShadow() — a real, separate, depth-only pass

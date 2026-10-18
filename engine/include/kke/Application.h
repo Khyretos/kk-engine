@@ -40,6 +40,9 @@ class SkyRenderer;
 class ScreenGiPass;
 class ReflectionPass;
 class BehindPass;
+class RefractionRays;
+struct ReflectionRays;
+struct SkyEnvironment;
 class DynamicMeshRenderer;
 struct Mood;
 
@@ -287,6 +290,9 @@ public:
     void recordRayDraw(DynamicMeshRenderer* mesh, const glm::mat4& model) { m_rayDraws.push_back({ mesh, model }); }
     void forgetRayDraws(DynamicMeshRenderer* mesh);
     Reflections reflections() const { return m_reflections; }
+    // Set 3's layout for see-through surfaces that trace refracted rays
+    // (RenderContext::refractionRays); made on first use, ray-query devices only.
+    VkDescriptorSetLayout refractionRayLayout();
     ReflectionSettings& reflectionSettings() { return m_reflectionSettings; }
     // The shadow map sampler's descriptor SET LAYOUT (not the set
     // itself -- that's bound automatically via RenderContext, see
@@ -473,6 +479,9 @@ private:
     // Refraction (ENG-F02 part 4): on with reflections (one view), unless
     // KKE_REFRACTIONS=0. The scene before the see-through surfaces.
     std::unique_ptr<BehindPass> m_behindPass;
+    std::unique_ptr<RefractionRays> m_refractionRays; // made the first time refraction traces rays
+    // This frame's kke::RayScene from what is drawn (KKE and classic ray tracing), into rays; once a frame.
+    void buildRayScene(VkCommandBuffer cmd, const glm::mat4& view, const SkyEnvironment* sky, ReflectionRays& rays);
     bool m_refractionsOff = false;
     ReflectionSettings m_reflectionSettings;
     std::unique_ptr<RayScene> m_rayScene;    // KKE ray tracing's stand-ins, made the first time they're traced

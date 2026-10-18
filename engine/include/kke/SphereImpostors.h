@@ -95,8 +95,11 @@ private:
     // Shared by every DynamicMeshRenderer of the application (made once).
     std::shared_ptr<Pipeline> m_pipeline, m_shadowPipeline;
     std::shared_ptr<Pipeline> m_absorbPipeline, m_lightPipeline, m_refractPipeline; // drawTranslucent(), made on first use
+    std::shared_ptr<Pipeline> m_refractRaysPipeline; // drawTranslucent() tracing refracted rays, made on first use
     std::shared_ptr<Pipeline> m_clothPipeline;                   // drawCloth(), made on first use
-    void bindAndDraw(const RenderContext& ctx, Pipeline& pipeline, const glm::mat4& model, float metallic, float roughness);
+    // raySet: bound as set 3 (the refracting pass with rays, RenderContext::refractionRays).
+    void bindAndDraw(const RenderContext& ctx, Pipeline& pipeline, const glm::mat4& model, float metallic, float roughness,
+                     VkDescriptorSet raySet = VK_NULL_HANDLE);
     FrameBuffers m_frames[Renderer::kMaxFramesInFlight];
     std::vector<Vertex> m_vertices;
     std::vector<uint32_t> m_indices;
