@@ -51,6 +51,13 @@ Two changes to the idea:
    on the CPU where there is no compute. `Capabilities` already asks
    "can this GPU do X" (`rayQuery()`), and the tiers build on that.
 
+Decided by Kees (2026-10-18): a developer can always select and enable
+every feature, in the project and in an export, even when their own machine
+can't run it. It is the engine's job to detect the player's hardware at run
+time and turn on what that hardware can run. Only the player's settings
+menu greys out what their GPU lacks. A feature the developer could not test
+on their own machine is a known gap that we accept.
+
 Costs, honestly: moving 41 files behind the RHI is the biggest refactor
 the renderer will have. Every later feature has to be built and tested
 twice, and CI needs a GL job (Mesa llvmpipe can run it headless, as
