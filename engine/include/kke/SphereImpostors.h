@@ -64,8 +64,10 @@ public:
     // multiplies what's already drawn by the transmittance, one adds the
     // light. Draw it after everything opaque. Per vertex: color = tint,
     // uv.x = density (absorption; 0 = clear, ~2-6 = jelly), uv.y =
-    // milkiness (0 = clear, 1 = opaque-ish, like panna cotta).
-    void drawTranslucent(const RenderContext& ctx, const glm::mat4& model = glm::mat4(1.0f), float roughness = 0.08f);
+    // milkiness (0 = clear, 1 = opaque-ish, like panna cotta). With
+    // ctx.refraction the first pass bends what's behind instead, by the
+    // index of refraction `ior` (water 1.33, glass 1.5; 1 = straight).
+    void drawTranslucent(const RenderContext& ctx, const glm::mat4& model = glm::mat4(1.0f), float roughness = 0.08f, float ior = 1.33f);
     // Fabric (cloth.frag): two-sided, woven, with sheen and thread gloss
     // from the Fabric (kke/Cloth.h). Per vertex: color = sRGB albedo
     // (usually fabric.color), normal, uv = cloth coordinates in metres.
@@ -92,9 +94,12 @@ private:
     Application& m_app;
     // Shared by every DynamicMeshRenderer of the application (made once).
     std::shared_ptr<Pipeline> m_pipeline, m_shadowPipeline;
-    std::shared_ptr<Pipeline> m_absorbPipeline, m_lightPipeline; // drawTranslucent(), made on first use
+    std::shared_ptr<Pipeline> m_absorbPipeline, m_lightPipeline, m_refractPipeline; // drawTranslucent(), made on first use
+    std::shared_ptr<Pipeline> m_refractRaysPipeline; // drawTranslucent() tracing refracted rays, made on first use
     std::shared_ptr<Pipeline> m_clothPipeline;                   // drawCloth(), made on first use
-    void bindAndDraw(const RenderContext& ctx, Pipeline& pipeline, const glm::mat4& model, float metallic, float roughness);
+    // raySet: bound as set 3 (the refracting pass with rays, RenderContext::refractionRays).
+    void bindAndDraw(const RenderContext& ctx, Pipeline& pipeline, const glm::mat4& model, float metallic, float roughness,
+                     VkDescriptorSet raySet = VK_NULL_HANDLE);
     FrameBuffers m_frames[Renderer::kMaxFramesInFlight];
     std::vector<Vertex> m_vertices;
     std::vector<uint32_t> m_indices;

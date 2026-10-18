@@ -1,6 +1,8 @@
 #pragma once
 
 #include "kke/Buffer.h"
+#include "kke/VolumetricFog.h"
+#include "kke/ClusteredLights.h"
 
 #include <volk.h>
 #include <glm/glm.hpp>
@@ -76,6 +78,47 @@ public:
         m_reflSize = size;
         m_reflMaxRoughness = maxRoughness;
     }
+    // Refraction (ENG-F02 part 4, set 0 binding 6): this frame's scene drawn
+    // before the see-through surfaces (kke::BehindPass, GENERAL layout),
+    // `size` pixels. Null: none (translucents absorb what is behind them).
+    // Volumetric fog (ENG-F03, set 0 binding 7): this frame's integrated grid
+    // (kke::VolumetricFogPass, GENERAL layout) made with `settings`. Null:
+    // none (the analytic height fog alone).
+    void setFogVolume(VkImageView volume, VkSampler sampler, const VolumetricFogSettings& settings) {
+        m_fogVolume = volume;
+        m_fogVolumeSampler = sampler;
+        m_fogVolumeSettings = settings;
+    }
+    // Ray-traced sun shadows (ENG-F07, set 0 binding 8): last frame's rays
+    // (kke::ShadowRayPass, GENERAL layout) cast with camera `viewProj`, `size`
+    // pixels; a ray's depth may differ by `slack` of the distance and still
+    // count. Null: none (the shadow map alone).
+    // Many lights (ENG-F08, bindings 9-11): this frame's light buffer (`count`
+    // of them) and the per-cell lists made with `grid` on a `screen`-pixel
+    // scene (kke::ClusterLightPass). `all`: the shaders walk every light
+    // instead (split screen, or KKE_CLUSTERS=0). Null: none.
+    void setManyLights(VkBuffer lights, VkBuffer counts, VkBuffer indices, uint32_t count, const ClusterGrid& grid, const glm::vec2& screen,
+                       bool all) {
+        m_manyLights = lights;
+        m_clusterCounts = counts;
+        m_clusterIndices = indices;
+        m_manyCount = count;
+        m_clusterGrid = grid;
+        m_clusterScreen = screen;
+        m_clusterAll = all;
+    }
+    void setShadowRays(VkImageView image, VkSampler sampler, const glm::mat4& viewProj, const glm::vec2& size, float slack) {
+        m_shadowRays = image;
+        m_shadowRaySampler = sampler;
+        m_shadowRayViewProj = viewProj;
+        m_shadowRaySize = size;
+        m_shadowRaySlack = slack;
+    }
+    void setBehind(VkImageView image, VkSampler sampler, const glm::vec2& size) {
+        m_behind = image;
+        m_behindSampler = sampler;
+        m_behindSize = size;
+    }
     void setScreenGi(VkImageView light, VkImageView depth, VkSampler sampler, const glm::mat4& viewProj, const glm::vec2& size) {
         m_giLight = light;
         m_giDepth = depth;
@@ -105,7 +148,8 @@ private:
     std::unique_ptr<Buffer> m_buffers[kSlotCount];
     uint32_t m_slot = 0;
 
-    void writeEnvironment(uint32_t slot); // bindings 1-5 of that slot: m_envMap, the GI and reflection images, or m_placeholder
+    void writeEnvironment(uint32_t slot); // bindings 1-8 of that slot: m_envMap, the GI, reflection, behind, fog and shadow-ray images, or placeholders
+    void createVolumePlaceholder();
     std::unique_ptr<Texture> m_placeholder; // 1x1 black, bound while there is no map
     const Texture* m_envMap = nullptr;
     uint32_t m_envLevels = 0;
@@ -118,6 +162,28 @@ private:
     glm::mat4 m_reflViewProj{1.0f};
     glm::vec2 m_reflSize{0.0f};
     float m_reflMaxRoughness = 0.3f;
+    VkImageView m_behind = VK_NULL_HANDLE;
+    VkSampler m_behindSampler = VK_NULL_HANDLE;
+    glm::vec2 m_behindSize{0.0f};
+    VkBuffer m_manyLights = VK_NULL_HANDLE, m_clusterCounts = VK_NULL_HANDLE, m_clusterIndices = VK_NULL_HANDLE;
+    uint32_t m_manyCount = 0;
+    ClusterGrid m_clusterGrid;
+    glm::vec2 m_clusterScreen{1.0f};
+    bool m_clusterAll = false;
+    std::unique_ptr<Buffer> m_placeholderBuffer; // bindings 9-11 while there are no many lights
+    VkImageView m_shadowRays = VK_NULL_HANDLE;
+    VkSampler m_shadowRaySampler = VK_NULL_HANDLE;
+    glm::mat4 m_shadowRayViewProj{1.0f};
+    glm::vec2 m_shadowRaySize{0.0f};
+    float m_shadowRaySlack = 0.03f;
+    VkImageView m_fogVolume = VK_NULL_HANDLE;
+    VkSampler m_fogVolumeSampler = VK_NULL_HANDLE;
+    VolumetricFogSettings m_fogVolumeSettings;
+    // 1x1x1, bound while there is no fog volume.
+    VkImage m_volumeImage = VK_NULL_HANDLE;
+    VmaAllocation m_volumeAlloc = VK_NULL_HANDLE;
+    VkImageView m_volumeView = VK_NULL_HANDLE;
+    VkSampler m_volumeSampler = VK_NULL_HANDLE;
 };
 
 } // namespace kke

@@ -135,8 +135,9 @@ MSAA in a forward renderer needs no G-buffer tricks at all.
 
 - Specular AA — **done today** (below).
 - Coverage-preserving alpha mips — **done today** (below).
-- MSAA 2x/4x as a setting, off on min-spec, plus optional SMAA 1x as a
-  spatial post filter: [#36](https://github.com/Khyretos/kk-engine/issues/36).
+- MSAA 2x/4x as a setting, off on min-spec, plus SMAA 1x as a spatial
+  post filter: **done** (ENG-F05, below), on by default.
+  [#36](https://github.com/Khyretos/kk-engine/issues/36).
 
 ### 3. Overdraw, quad utilisation, LODs and Nanite
 
@@ -195,6 +196,37 @@ in this order: hardware depth-compare sampler (bilinear PCF for free),
 slope-scaled bias, texel-snapped light projection (no shimmer when the
 camera moves), then cascades as already planned in #20:
 [#38](https://github.com/Khyretos/kk-engine/issues/38).
+
+**Ray-traced shadows (ENG-F07, 2026-10-18).** The setting `shadowRays`
+(off by default; `KKE_SHADOW_RAYS`) is `kke` or `classic`, on GPUs with
+ray query. KKE keeps the argument above: the shadow maps stay, and a ray
+towards the sun is cast only where they don't reach (past 75 m, up to
+600 m), through the stand-ins, so a far grandstand or hill shades the land
+behind it again instead of everything past 80 m being lit. `classic`
+casts a ray from every pixel through the full geometry and uses it instead
+of the map: hard shadows everywhere, the textbook ray-traced look, for
+comparison. Both are cast after the frame from its depth (one compute
+dispatch, sharing the frame's `RayScene` with reflections and refraction)
+and read by the next frame's lit shaders, reprojected; where a pixel showed
+something else last frame, the shadow map answers. Measured on the RX
+9070 XT, the racing demo at 1019 x 1384 with 4x MSAA: 0.716 ms off, 0.98
+kke (+0.26, mostly building the ray scene of moving cars every frame),
+1.16 classic (+0.44).
+
+**Many lights without a deferred path (ENG-F08, 2026-10-18).** The gap
+asked for a deferred path; a deferred renderer pays for many lights with
+a G-buffer: no MSAA (section 2), no glass, a fat target read back per
+light. KKE stays forward and clusters instead (Olsson et al. 2012): the
+16 key lights (with shadows) are untouched, and the small lights past
+them (`Lighting::manyLights`, up to 1024; script lights spill over there
+when the key slots are full) go into a storage buffer. A compute pass
+lists per cell of the view (16 x 9 cells, 24 slices spaced exponentially
+in depth) the lights whose reach touches it, and each lit pixel walks
+only its cell's list. Measured on the RX 9070 XT, anim_demo at night at
+1019 x 1384 with 4x MSAA (`KKE_ANIM_LIGHTS`; `KKE_CLUSTERS=0` walks every
+light, which is what forward rendering without clusters costs): no lamps
+0.27 ms; 256 lamps 0.52 clustered against 1.16; 1024 lamps 0.75 against
+2.70. Hair, cloth and see-through surfaces take the 16 key lights only.
 
 ### 6. Lighting and GI: stable beats noisy
 
@@ -269,6 +301,69 @@ demo with every surface reflecting (`KKE_REFLECT_ROUGHNESS=1`) 0.33 off,
 kke, 21.8 classic. On this GPU classic is only a little dearer: KKE's
 gains are the budget (a frame never pays more than it allows) and that it
 falls back to screen space where there is no ray tracing.
+
+**Refraction (ENG-F02 part 4, 2026-10-18).** With reflections on (one
+view; `KKE_REFRACTIONS=0` turns it off for comparisons), see-through
+surfaces drawn with `DynamicMeshRenderer::drawTranslucent` bend what is
+behind them by their index of refraction (`ior`: water 1.33, glass 1.5).
+Before the translucent draws the 3D pass pauses: one compute dispatch
+copies the scene drawn so far, with each pixel's distance from the camera
+in alpha, and a pass that loads the same colour and depth goes on. The
+first translucent pass then reads that copy where the refracted ray
+leads, taken as solid for up to a metre behind the surface, times the
+transmittance. What a plain grab pass gets wrong: a sample that lands on
+something nearer than the glass (in front of it) is not used, so nothing
+in front smears into the glass; the straight-through pixel is read
+instead. Measured on the RX 9070 XT with 4x MSAA, anim_demo's glass block
+(`KKE_ANIM_GLASS=1`): +0.02 to +0.03 ms (905 x 682: 0.209 to 0.237 ms;
+1020 x 1384: 0.319 to 0.341 ms); lavapipe at 960 x 540, 39.8 to 38.1 fps.
+Translucents seen through other translucents show only the opaque scene
+behind both.
+
+With `reflections = kke` or `classic`, refraction traces rays too,
+through the same ray scene as reflections, built once a frame while the
+3D pass is paused (outside a render pass, as acceleration structures
+need). `kke` traces a refracted ray only where the screen could not show
+what is behind the surface: the bent spot is off screen or something in
+front of the glass covers it. `classic` traces every refracting pixel.
+A hit is shaded as reflections' hits are (normal and vertex colour under
+the sky and the sun; classic adds the sun's shadow), so classic shows
+textured models in their vertex and material colours only. Measured on
+the RX 9070 XT, 1288 x 682 with 4x MSAA, anim_demo's glass block: `kke`
+0.473 ms without refraction and 0.519 with (+0.05), `classic` 0.503 and
+0.795 (+0.29): KKE refraction costs a sixth of classic's. (Lavapipe was
+not measured: the build machine was busy with CI, load 24.)
+
+**Volumetric fog (ENG-F03, 2026-10-18).** The graphics setting
+`volumetricFog` (off by default; `KKE_VOLUMETRIC_FOG=1`) lights the height
+fog for real: a grid of 128 x 72 cells over the view, in 48 slices spaced
+exponentially from 0.5 m to 96 m, is lit after the shadow pass (one
+compute dispatch: the fog's thickness there, the sky's light, the sun's
+where its shadow map says it reaches, the point lights' halos) and
+summed per column from the camera outwards (a second dispatch, Hillaire's
+energy-conserving step). Every lit shader and the sky read it through
+the same `fogAlong()`; past 96 m the analytic fog takes over, so far
+hills are fogged exactly as before. Fully lit, a cell sends exactly what
+the analytic fog does (`fogInscatter`): turning it on only darkens fog in
+the sun's shadow (light shafts) and adds lamp halos. What the usual
+froxel fog (Frostbite, Unreal) does differently: it jitters the cells and
+relies on TAA to blend the noise over frames, which ghosts behind moving
+things. Ours has no jitter and nothing carried between frames: stable on
+its own (section 1). Measured on the RX 9070 XT, the Synty demo in the
+misty-morning mood, 1328 x 682 with 4x MSAA: 0.331 ms off, 0.377 on
+(+0.05; the grid's cost does not grow with the resolution). On lavapipe it
+costs too much for a PC without a GPU, so it stays off there.
+
+**Bloom (ENG-F10, 2026-10-18).** The graphics setting `bloom` (on by
+default at a 4% share; `KKE_BLOOM=0` or `1` wins; off on the software-GPU
+target) follows Call of Duty: Advanced Warfare (Jimenez 2014): no
+brightness threshold (everything glows a little, the brightest the most,
+as through real glass), six halvings with a 13-tap filter, the first
+weighting its five boxes by 1 / (1 + brightness) so one hot pixel can't
+flicker into a blob, then the build back up with a 3x3 tent, normalised
+so a flat image blooms to itself; the tone map mixes it in. Compute only,
+one frame, nothing carried over. Measured on the RX 9070 XT, the Synty
+demo at 836 x 1384 with 4x MSAA: 0.336 ms off, 0.384 on (+0.05).
 
 ### 7. Tone mapping, exposure and colour management
 
@@ -423,6 +518,39 @@ and ImGui pipelines use `Renderer::overlayRenderPass()`. Thumbnails use
 Checked headless at 4x (Synty demo, sandbox with thumbnails, UI
 showcase): smoother edges, validation clean. SMAA 1x is still open (#36).
 
+**SMAA (ENG-F05, 2026-10-18).** The graphics setting `smaa` (on by
+default, Kees; `KKE_SMAA=0` or `1` wins) runs three compute steps over the
+finished scene before the tone map reads it: edges where the perceived
+brightness of two neighbours differs by more than 0.1; along each edge,
+the run of edge pixels followed both ways (up to 16) and the shape its
+two ends stand for (a step of a slanted line, an L corner, a U notch);
+then each pixel mixes in the neighbour across the edge by the share of it
+the shape's smooth line gives that side. What we do differently from
+SMAA 1x: the area comes straight from the line (`kke::smaaLineArea`), not
+from a precomputed area texture, so there is no data file to ship and
+the CPU copy (`kke/Smaa.h`) is the tests' reference. Tested against 16 x
+16 supersampled coverage: slanted edges come out 40% or more closer to
+the true picture than aliased ones, and the image's mean brightness
+moves by under 2%. One frame, no history: nothing ghosts. Measured on
+the RX 9070 XT, the Synty demo at 836 x 1384 with 4x MSAA: 0.356 ms off,
+0.422 on (+0.07; the machine was busy with CI, best runs compared). The
+software-GPU target keeps it off until it is measured there.
+
+**TAA, an option (ENG-F05 part 2, 2026-10-18).** Kees wanted both: SMAA by
+default and TAA beside it. The graphics setting `taa` (off by default;
+`KKE_TAA=1` or `0` wins) follows rule 1 above: nothing needs it, it only
+adds on top of the clean image. The projection moves by under a pixel each
+frame (Halton 2, 3 over 8 frames); after SMAA, one compute dispatch mixes
+the frame into the history of earlier ones (10% new), found through the
+depth with last frame's camera and read between pixels by a Catmull-Rom
+curve (a bilinear read blurred the floor lines a little more each frame);
+the history is clipped to the mean and spread of the colours around the
+pixel now (YCoCg), so a moving arm leaves no trail. Honest limits: there
+are no motion vectors, so on moving things the history is clipped rather
+than followed (a little softer in motion, no ghost), and split screen
+draws without it. Measured on the RX 9070 XT, the Synty demo at 1019 x 1384
+with 4x MSAA and SMAA: 0.393 ms off, 0.448 on (+0.055).
+
 **Later the same day:** shadow map quality (#38). The shadow map is
 sampled with a depth-compare sampler (each of the 9 PCF taps is a
 hardware bilinear comparison), casters get slope-scaled depth bias from
@@ -438,7 +566,7 @@ in #20.
    accumulation. (rule)
 3. Specular AA, coverage-preserving alpha mips, anisotropic filtering.
    (done)
-4. MSAA as a setting (done) + optional SMAA 1x. (#36)
+4. MSAA as a setting (done) + SMAA 1x (done, ENG-F05, on by default). (#36)
 5. AgX tone curve with exposure, selectable per game (done); HDR
    target, one tone map pass and 10-bit output (done, ENG-G17).
 6. Front-to-back sorting (done), measured prepass, overdraw view. (#37)

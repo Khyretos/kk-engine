@@ -56,7 +56,7 @@ Status: ⬜ not started, 🔨 in progress, ✅ done.
 | ENG-G09 | UI | RmlUi Vulkan `filter`, `box-shadow`, `backdrop-filter` and `mask-image`: RmlUi's layer API in `RmlVulkanRenderInterface` (full-frame layer images, filters as full-screen passes in `shaders/rml_filter.frag`, `kke/RmlFilters.h`); rmlui_demo's glass panels use them. | ✅ |
 | ENG-G17 | Rendering | Tone mapping as one post pass on an HDR scene target: the 3D pass draws scene light into an RGBA16F image and `shaders/tonemap_post.frag`, the first draw of the UI pass, applies the curve, exposure and look once per pixel and does the render-scale upscale (`kke/ToneMap.h` mirrors it on the CPU for clear colours and thumbnails). 10-bit output where the display offers it (A2B10G10R10; the tone-map pass and the UI encode sRGB themselves on such a UNORM swapchain). | ✅ |
 | ENG-G18 | Rendering | Particle system v2: emitters and a Lua API (#22). Part 1 done: `fx.*` in Lua (play, start, move, stop, define, wind). Part 2 done: `kke::ParticleSim` (the GPU-free half, tested), curves over life, vortex and attract, physics colliders, sub-effects (`onDeath`). Part 3 done: instanced draw (36% less CPU recording). Part 4 done: `gpu` layers moved by the GPU in closed form, written once at birth (a 28,000-drop downpour 6x faster), the CPU as fallback. | ✅ |
-| ENG-G12 | Physics | Liquids: transparency, refraction and thickness; meltable solids from meshes and refreezing. | ⬜ |
+| ENG-G12 | Physics | Liquids: transparency, refraction and thickness; meltable solids from meshes and refreezing. Planned basis: GPU MLS-MPM water (Hu et al. 2018, docs/RESEARCH.md) with two-way coupling to Jolt rigid bodies, benchmarked against the current particle fluid. | ⬜ |
 | ENG-G10 | Physics | FEMFX <-> Jolt bridge leftovers: rubble breaking again, same-step pushes from heavy FEMFX bodies. | ⬜ |
 | ENG-G13 | Network | FEMFX breakables per machine; relay and join codes (#44); world saves (#45); shared roles (#46). | ⬜ |
 | ENG-G14 | Mods | Pack system in every game and a mod screen (#61). | ⬜ |
@@ -80,15 +80,15 @@ by area. The goal is parity with the big engines and more.
 | ID | Area | Feature | Status |
 |---|---|---|---|
 | ENG-F01 | Rendering | Real-time global illumination. Screen-space done: a visibility bitmask, one frame late, off by default (`globalIllumination`, docs/RENDERING_PRINCIPLES.md). Not yet: light from what is off screen (probes, ENG-F15). | 🟡 |
-| ENG-F02 | Rendering | Ray-traced reflections and refractions. Reflections done: `reflections = screen`, `kke` (screen first, then rays through simplified stand-ins within a budget) and `classic` (every triangle, sun shadows), inline ray queries on any vendor (`kke::RayScene`, a GPU self-test in CI). Not yet: refractions. | 🟡 |
-| ENG-F03 | Rendering | Volumetric lighting and fog (height fog only today) | 🟡 |
+| ENG-F02 | Rendering | Ray-traced reflections and refractions. Reflections done: `reflections = screen`, `kke` (screen first, then rays through simplified stand-ins within a budget) and `classic` (every triangle, sun shadows), inline ray queries on any vendor (`kke::RayScene`, a GPU self-test in CI). Refractions: see-through surfaces bend the scene drawn before them by their index of refraction, never smearing in what is in front of them; `kke` traces rays only where the screen can't show what's behind, `classic` for every refracting pixel. | ✅ |
+| ENG-F03 | Rendering | Volumetric lighting and fog: `volumetricFog` lights the height fog in a grid over the view with the sun's shadow (light shafts) and the point lights (halos), stable without TAA. | ✅ |
 | ENG-F04 | Rendering | Screen-space ambient occlusion (GTAO/SSAO). Done with ENG-F01's screen-space GI: its visibility shades the sky light and reflections. | ✅ |
-| ENG-F05 | Rendering | Temporal anti-aliasing (MSAA only today) | ⬜ |
-| ENG-F06 | Rendering | Foveated rendering | ⬜ |
-| ENG-F07 | Rendering | Ray-traced shadows | ⬜ |
-| ENG-F08 | Rendering | Deferred rendering path | ⬜ |
+| ENG-F05 | Rendering | Anti-aliasing beyond MSAA: SMAA over MSAA, on by default (`smaa`), one frame, no ghosting; TAA as an option over the clean image (`taa`: jittered frames, reprojected and clipped history). | ✅ |
+| ENG-F06 | Rendering | Foveated rendering. Deferred until the engine has VR or eye tracking: on a flat screen it means variable-rate shading, which needs a shading-rate image in every scene pass and pipeline for small gains in a forward renderer at our frame times (decided 2026-10-18, F07 first). | ⬜ |
+| ENG-F07 | Rendering | Ray-traced shadows: `shadowRays = kke` (rays only past the shadow map's reach, through stand-ins) or `classic` (every pixel, full geometry), ray-query GPUs. | ✅ |
+| ENG-F08 | Rendering | Many lights. Instead of a deferred path (which loses MSAA and glass): clustered forward lighting, up to 1024 lights past the 16 key ones, each pixel walking only its cell's list. | ✅ |
 | ENG-F09 | Rendering | Virtual texture streaming | ⬜ |
-| ENG-F10 | Rendering | Post stack: bloom, depth of field, motion blur, LUT grading (tone map, exposure and grade exist) | 🟡 |
+| ENG-F10 | Rendering | Post stack: bloom, depth of field, motion blur, LUT grading (tone map, exposure and grade exist). Bloom done (`bloom`, on by default). Not yet: depth of field, motion blur, LUT grading. | 🟡 |
 | ENG-F11 | Rendering | GPU particle/VFX system (one compute fountain today; G18) | 🟡 |
 | ENG-F12 | Rendering | Decals | ⬜ |
 | ENG-F13 | Rendering | Occlusion culling at scale, GPU-driven, HZB (frustum culling exists) | 🟡 |

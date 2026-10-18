@@ -18,6 +18,7 @@ public:
         bool shadows = false;
     };
     // Adds a new point light to the first available free slot and returns its index, or -1 if none are free.
+    // With the 16 key slots full, a light without shadows goes to Lighting::manyLights (slot 16 and up).
     int add(Lighting& lighting, const std::string& owner, const Desc& desc);
     // Returns true if the specified slot is owned by the given owner; otherwise false.
     bool owns(int slot, const std::string& owner) const;

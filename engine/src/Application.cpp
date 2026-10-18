@@ -1,5 +1,10 @@
 #include "kke/Application.h"
 #include "kke/SkyRenderer.h"
+#include "BehindPass.h"
+#include "ClusterLightPass.h"
+#include "ShadowRayPass.h"
+#include "VolumetricFogPass.h"
+#include "RefractionRays.h"
 #include "ReflectionPass.h"
 #include "ScreenGiPass.h"
 #include "kke/Capabilities.h"
@@ -151,9 +156,34 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
         m_reflectionsEnv = reflectionsFromName(env, Reflections::Off);
         setReflections(*m_reflectionsEnv);
     }
+    // KKE_REFRACTIONS=0: see-through surfaces don't bend what's behind them, whatever the reflections (benchmarks).
+    if (const char* env = dev::env("KKE_REFRACTIONS"); env && *env) m_refractionsOff = std::string(env) == "0";
     // KKE_REFLECT_ROUGHNESS=1: every surface up to that roughness reflects (benchmarks: the most work).
     if (const char* env = dev::env("KKE_REFLECT_ROUGHNESS"); env && *env)
         m_reflectionSettings.maxRoughness = std::clamp(static_cast<float>(std::atof(env)), 0.01f, 1.0f);
+    // KKE_CLUSTERS=0: every lit pixel walks all the many lights (benchmarks: what clustering saves).
+    if (const char* env = dev::env("KKE_CLUSTERS"); env && *env) m_clustersOff = env[0] == '0';
+    // KKE_SHADOW_RAYS=off|kke|classic: that, whatever the settings say.
+    if (const char* env = dev::env("KKE_SHADOW_RAYS"); env && *env) {
+        m_shadowRaysEnv = shadowRaysFromName(env, ShadowRays::Off);
+        setShadowRays(*m_shadowRaysEnv);
+    }
+    if (const char* env = dev::env("KKE_BLOOM"); env && *env) {
+        m_bloomEnv = env[0] == '1';
+        setBloom(*m_bloomEnv);
+    }
+    if (const char* env = dev::env("KKE_TAA"); env && *env) {
+        m_taaEnv = env[0] == '1';
+        setTaa(*m_taaEnv);
+    }
+    if (const char* env = dev::env("KKE_SMAA"); env && *env) {
+        m_smaaEnv = env[0] == '1';
+        setSmaa(*m_smaaEnv);
+    }
+    if (const char* env = dev::env("KKE_VOLUMETRIC_FOG"); env && env[0] == '1') {
+        m_volumetricFogEnv = true;
+        setVolumetricFog(true);
+    }
     if (const char* env = dev::env("KKE_GI"); env && env[0] == '1') {
         m_screenGiEnv = true;
         setScreenGi(true);
@@ -188,7 +218,7 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
         for (int i = 0; i < 2; ++i) {
             bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
             bindings[i].descriptorCount = 1;
-            bindings[i].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+            bindings[i].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT; // compute: volumetric fog's shafts
         }
 
         VkDescriptorSetLayoutCreateInfo layoutInfo{};
@@ -918,8 +948,15 @@ void Application::run() {
         if (m_views.empty()) addView(m_camera, ViewRect{});
         for (const View& v : m_views)
             if (viewCount < kMaxViews) addView(v.camera, v.rect);
+        // TAA (ENG-F05 part 2): one view drawn with a sub-pixel offset that changes every frame.
+        const bool taaOn = m_taaOn && viewCount == 1;
+        if (taaOn)
+            drawViews[0].proj = taaJitteredProjection(drawViews[0].proj, taaJitter(m_taaFrame++, m_taaSettings),
+                                                      glm::vec2(static_cast<float>(sceneExtent.width), static_cast<float>(sceneExtent.height)));
+        m_renderer->setTaa(taaOn);
         const glm::mat4& view = drawViews[0].view;
         const glm::mat4& proj = drawViews[0].proj;
+        m_renderer->setTaaCamera(proj * view);
 
         // Cascaded shadow maps (kke::ShadowMap) from the key light (lights[0])
         // only. Each view's frustum, out to kShadowDistance, is cut into
@@ -1036,16 +1073,63 @@ void Application::run() {
                 m_reflectionPass->prepare(sceneExtent);
             }
             const bool reflReady = reflOn && m_reflectionPass->ready();
+            // Refraction: this frame's scene before the see-through surfaces, copied mid-pass (ENG-F02 part 4).
+            const bool refractOn = reflOn && !m_refractionsOff && !m_sceneCovered;
+            // Volumetric fog (ENG-F03): this frame's grid, lit after the shadow pass, read by this frame's shading.
+            const bool fogVolumeOn = m_volumetricFogOn && viewCount == 1 && m_lighting.fog.enabled && !m_sceneCovered;
+            if (fogVolumeOn && !m_volumetricFog)
+                m_volumetricFog = std::make_unique<VolumetricFogPass>(m_renderer->device(), m_lightingBuffer->descriptorSetLayout(),
+                                                                      m_shadowMapSetLayout);
+            if (fogVolumeOn) m_volumetricFog->prepare(m_volumetricFogSettings);
+            if (refractOn) {
+                if (!m_behindPass) m_behindPass = std::make_unique<BehindPass>(m_renderer->device());
+                m_behindPass->prepare(sceneExtent);
+            }
             // Meshes record themselves for rays while they draw (recordRayDraw).
             m_rayDraws.clear();
-            m_recordRays = reflOn && (m_reflections == Reflections::Kke || m_reflections == Reflections::Classic) &&
-                           m_renderer->device().rayQuery();
+            // Ray-traced sun shadows (ENG-F07): last frame's rays for this frame's shading, cast again after it.
+            const bool shadowRaysOn = m_shadowRays != ShadowRays::Off && viewCount == 1 && m_renderer->device().rayQuery() && !m_sceneCovered;
+            if (shadowRaysOn) {
+                if (!m_shadowRayPass) m_shadowRayPass = std::make_unique<ShadowRayPass>(m_renderer->device());
+                m_shadowRayPass->prepare(sceneExtent);
+            }
+            const bool shadowRaysReady = shadowRaysOn && m_shadowRayPass->ready();
+            // Many lights (ENG-F08): this frame's, listed per cell after the shadow pass (one view; split screen walks them all).
+            std::vector<ClusterLightPass::GpuLight> manyLights;
+            for (const Light& l : m_lighting.manyLights)
+                if (l.enabled && !l.isDirectional && l.intensity > 0.0f)
+                    manyLights.push_back({ glm::vec4(l.position, l.range > 0.0f ? l.range : Lighting::kDefaultManyRange), glm::vec4(l.color, l.intensity) });
+            if (!manyLights.empty()) {
+                if (!m_clusterLights) m_clusterLights = std::make_unique<ClusterLightPass>(m_renderer->device());
+                m_clusterLights->upload(m_renderer->currentFrameIndex(), manyLights);
+            }
+            const bool manyOn = !manyLights.empty();
+            m_recordRays = shadowRaysOn || (reflOn && (m_reflections == Reflections::Kke || m_reflections == Reflections::Classic) &&
+                                            m_renderer->device().rayQuery());
             for (uint32_t i = 0; i < viewCount; ++i) {
                 if (i == 0 && giReady)
                     drawViews[i].lighting->setScreenGi(m_screenGi->light(), m_screenGi->depth(), m_screenGi->sampler(), m_screenGi->viewProj(),
                                                        m_screenGi->size());
                 else
                     drawViews[i].lighting->setScreenGi(VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE, glm::mat4(1.0f), glm::vec2(0.0f));
+                if (i == 0 && fogVolumeOn) drawViews[i].lighting->setFogVolume(m_volumetricFog->volume(), m_volumetricFog->sampler(), m_volumetricFog->settings());
+                else drawViews[i].lighting->setFogVolume(VK_NULL_HANDLE, VK_NULL_HANDLE, m_volumetricFogSettings);
+                if (manyOn) {
+                    const uint32_t f = m_renderer->currentFrameIndex();
+                    drawViews[i].lighting->setManyLights(m_clusterLights->lights(f), m_clusterLights->counts(f), m_clusterLights->indices(f),
+                                                         m_clusterLights->count(f), m_clusterLights->grid(),
+                                                         glm::vec2(static_cast<float>(sceneExtent.width), static_cast<float>(sceneExtent.height)),
+                                                         viewCount > 1 || m_clustersOff);
+                } else {
+                    drawViews[i].lighting->setManyLights(VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE, 0, ClusterGrid{}, glm::vec2(1.0f), false);
+                }
+                if (i == 0 && shadowRaysReady)
+                    drawViews[i].lighting->setShadowRays(m_shadowRayPass->image(), m_shadowRayPass->sampler(), m_shadowRayPass->viewProj(),
+                                                         m_shadowRayPass->size(), m_shadowRaySettings.reprojectSlack);
+                else
+                    drawViews[i].lighting->setShadowRays(VK_NULL_HANDLE, VK_NULL_HANDLE, glm::mat4(1.0f), glm::vec2(0.0f), m_shadowRaySettings.reprojectSlack);
+                if (i == 0 && refractOn) drawViews[i].lighting->setBehind(m_behindPass->image(), m_behindPass->sampler(), m_behindPass->size());
+                else drawViews[i].lighting->setBehind(VK_NULL_HANDLE, VK_NULL_HANDLE, glm::vec2(0.0f));
                 if (i == 0 && reflReady)
                     drawViews[i].lighting->setReflections(m_reflectionPass->light(), m_reflectionPass->depth(), m_reflectionPass->sampler(),
                                                           m_reflectionPass->viewProj(), m_reflectionPass->size(), m_reflectionSettings.maxRoughness);
@@ -1150,13 +1234,16 @@ void Application::run() {
                 m_pointShadowMap->endRenderPass(cmd);
             }
 
+            if (manyOn && viewCount == 1 && !m_clustersOff) m_clusterLights->record(cmd, m_renderer->currentFrameIndex(), view, proj);
+            if (fogVolumeOn) m_volumetricFog->record(cmd, drawViews[0].lighting->descriptorSet(), m_shadowMapDescriptorSet, glm::inverse(proj * view));
             PrepassContext prepassCtx{ cmd, view, proj, drawViews[0].camera.position, sceneExtent, m_lightingBuffer->descriptorSet(),
                                        m_renderer->currentFrameIndex(), m_sceneCovered };
             for (Module* m : m_initOrder) {
                 safeInvoke(m, "prepass", [&] { m->prepass(prepassCtx); });
             }
 
-            m_renderer->beginRenderPass();
+            ReflectionRays frameRays; // the frame's ray scene, once (buildRayScene), for refraction and reflections
+            m_renderer->beginRenderPass(refractOn);
             renderCtx.cmd = cmd;
             renderCtx.frameIndex = m_renderer->currentFrameIndex();
             for (uint32_t i = 0; drawScene && i < viewCount; ++i) {
@@ -1174,9 +1261,26 @@ void Application::run() {
                 for (Module* m : m_initOrder) {
                     safeInvoke(m, "render", [&] { m->render(renderCtx); });
                 }
+                if (refractOn) {
+                    // What's drawn so far, readable by the see-through surfaces drawn next.
+                    m_renderer->pauseScenePass();
+                    m_behindPass->record(cmd, m_renderer->currentFrameIndex(), m_renderer->sceneImages(), d.proj);
+                    if (m_recordRays) {
+                        // Rays for refraction: the ray scene from the opaque draws, built now (outside the pass).
+                        buildRayScene(cmd, d.view, skyEnv, frameRays);
+                        if (!m_refractionRays) m_refractionRays = std::make_unique<RefractionRays>(m_renderer->device());
+                        renderCtx.refractionRays = m_refractionRays->update(m_renderer->currentFrameIndex(), *m_rayScene, m_rayMaterials,
+                                                                            frameRays.viewToWorld, frameRays.sunDirection, frameRays.sunColor,
+                                                                            frameRays.ambient, frameRays.classic);
+                    }
+                    m_renderer->resumeScenePass();
+                }
+                renderCtx.refraction = refractOn;
                 for (Module* m : m_initOrder) {
                     safeInvoke(m, "renderTranslucent", [&] { m->renderTranslucent(renderCtx); });
                 }
+                renderCtx.refraction = false;
+                renderCtx.refractionRays = VK_NULL_HANDLE;
             }
             // GI from this frame's scene, for the next frame's shading.
             if (giOn && drawScene) {
@@ -1187,32 +1291,22 @@ void Application::run() {
             }
             if (reflOn && drawScene) {
                 m_renderer->endScenePass();
-                // KKE ray tracing: this frame's stand-ins from every module that has them.
-                ReflectionRays rays;
+                // KKE ray tracing: this frame's stand-ins from every module that has them (built already when refraction traced).
                 const bool traced = (m_reflections == Reflections::Kke || m_reflections == Reflections::Classic) && m_renderer->device().rayQuery();
-                if (traced) {
-                    if (!m_rayScene) m_rayScene = std::make_unique<RayScene>(m_renderer->device());
-                    m_rayScene->clear();
-                    m_rayMaterials.clear();
-                    RaySceneContext context{ m_reflections == Reflections::Classic, cmd, m_renderer->currentFrameIndex() };
-                    for (IRayContributor* c : findCapability<IRayContributor>()) c->addToRayScene(*m_rayScene, m_rayMaterials, context);
-                    addMeshesToRayScene(context.classic, cmd, context.frame);
-                    rays.scene = m_rayScene.get();
-                    rays.materials = &m_rayMaterials;
-                    rays.viewToWorld = glm::inverse(view);
-                    const Light& sun = m_lighting.lights[0];
-                    if (sun.enabled && sun.isDirectional) {
-                        rays.sunDirection = -sun.direction;
-                        rays.sunColor = sun.color * sun.intensity;
-                    }
-                    rays.ambient = skyEnv ? skyEnv->ambientAverage : m_lighting.ambientColor;
-                    rays.classic = context.classic;
-                    rays.budget = context.classic ? ~0u : m_reflectionSettings.rayBudget; // classic: every smooth pixel
-                }
+                if (traced && !frameRays.built) buildRayScene(cmd, view, skyEnv, frameRays);
                 m_reflectionPass->record(cmd, m_renderer->currentFrameIndex(), m_renderer->sceneImages(), view, proj, m_reflectionSettings,
-                                         traced ? &rays : nullptr);
+                                         traced ? &frameRays : nullptr);
             } else if (m_reflectionPass) {
                 m_reflectionPass->invalidate();
+            }
+            if (shadowRaysOn && drawScene) {
+                m_renderer->endScenePass();
+                if (!frameRays.built) buildRayScene(cmd, view, skyEnv, frameRays);
+                ReflectionRays shadowRays = frameRays;
+                shadowRays.classic = m_shadowRays == ShadowRays::Classic; // every pixel, or only past the shadow map
+                m_shadowRayPass->record(cmd, m_renderer->currentFrameIndex(), m_renderer->sceneImages(), view, proj, shadowRays, m_shadowRaySettings);
+            } else if (m_shadowRayPass) {
+                m_shadowRayPass->invalidate();
             }
             // The overlay covers the whole window with the first camera.
             renderCtx.view = view;
@@ -1262,7 +1356,7 @@ void Application::run() {
 void Application::setScreenGi(bool on) {
     m_screenGiOn = on || m_screenGiEnv;
     // The scene's depth is kept only while something reads it.
-    m_renderer->setSceneDepthReadable(m_screenGiOn || m_reflections != Reflections::Off);
+    updateSceneDepthReadable();
     if (!m_screenGiOn && m_screenGi) m_screenGi->invalidate();
 }
 
@@ -1331,10 +1425,58 @@ void Application::addMeshesToRayScene(bool classic, VkCommandBuffer cmd, uint32_
     m_rayDraws.clear();
 }
 
+void Application::buildRayScene(VkCommandBuffer cmd, const glm::mat4& view, const SkyEnvironment* sky, ReflectionRays& rays) {
+    if (!m_rayScene) m_rayScene = std::make_unique<RayScene>(m_renderer->device());
+    m_rayScene->clear();
+    m_rayMaterials.clear();
+    // Full meshes when either ray user is classic; stand-ins otherwise.
+    RaySceneContext context{ m_reflections == Reflections::Classic || m_shadowRays == ShadowRays::Classic, cmd, m_renderer->currentFrameIndex() };
+    for (IRayContributor* c : findCapability<IRayContributor>()) c->addToRayScene(*m_rayScene, m_rayMaterials, context);
+    addMeshesToRayScene(context.classic, cmd, context.frame);
+    m_rayScene->build(cmd, context.frame);
+    rays.scene = m_rayScene.get();
+    rays.materials = &m_rayMaterials;
+    rays.viewToWorld = glm::inverse(view);
+    const Light& sun = m_lighting.lights[0];
+    if (sun.enabled && sun.isDirectional) {
+        rays.sunDirection = -sun.direction;
+        rays.sunColor = sun.color * sun.intensity;
+    }
+    rays.ambient = sky ? sky->ambientAverage : m_lighting.ambientColor;
+    rays.classic = context.classic;
+    rays.budget = context.classic ? ~0u : m_reflectionSettings.rayBudget; // classic: every smooth pixel
+    rays.built = true;
+}
+
+VkDescriptorSetLayout Application::refractionRayLayout() {
+    if (!m_refractionRays) m_refractionRays = std::make_unique<RefractionRays>(m_renderer->device());
+    return m_refractionRays->setLayout();
+}
+
+void Application::setSmaa(bool on) { m_renderer->setSmaa(m_smaaEnv ? *m_smaaEnv : on); }
+
+void Application::setShadowRays(ShadowRays mode) {
+    m_shadowRays = m_shadowRaysEnv ? *m_shadowRaysEnv : mode;
+    updateSceneDepthReadable();
+    if (m_shadowRays == ShadowRays::Off && m_shadowRayPass) m_shadowRayPass->invalidate();
+}
+
+void Application::setBloom(bool on) { m_renderer->setBloom(m_bloomEnv ? *m_bloomEnv : on); }
+
+void Application::setTaa(bool on) {
+    m_taaOn = m_taaEnv ? *m_taaEnv : on;
+    m_renderer->setTaa(m_taaOn);
+    updateSceneDepthReadable();
+}
+
+void Application::updateSceneDepthReadable() {
+    m_renderer->setSceneDepthReadable(m_screenGiOn || m_reflections != Reflections::Off || m_taaOn || m_shadowRays != ShadowRays::Off);
+}
+
 void Application::setReflections(Reflections mode) {
     m_reflections = m_reflectionsEnv ? *m_reflectionsEnv : mode;
     // Kke and classic trace rays only where the device can; screen space works everywhere.
-    m_renderer->setSceneDepthReadable(m_screenGiOn || m_reflections != Reflections::Off);
+    updateSceneDepthReadable();
     if (m_reflections == Reflections::Off && m_reflectionPass) m_reflectionPass->invalidate();
 }
 

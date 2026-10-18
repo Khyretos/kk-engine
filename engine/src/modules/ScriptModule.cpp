@@ -206,7 +206,8 @@ void ScriptModule::bindAll() {
         const int slot = m_lights.add(app->lighting(), m_vm->currentSource(), d);
         if (slot < 0) {
             lua_pushnil(L);
-            lua_pushfstring(L, "all %d lights are in use", Lighting::kMaxLights);
+            lua_pushfstring(L, "all %d key lights are in use (a light without shadows can still be added: %d more)", Lighting::kMaxLights,
+                            static_cast<int>(Lighting::kMaxManyLights));
             return 2;
         }
         lua_pushinteger(L, slot);
@@ -218,11 +219,11 @@ void ScriptModule::bindAll() {
         return slot;
     };
     vm.registerFunction("light", "move", [app, ownLight](lua_State* L) {
-        app->lighting().lights[ownLight(L, "light.move")].position = ScriptVM::toVec3(L, 2);
+        app->lighting().at(ownLight(L, "light.move")).position = ScriptVM::toVec3(L, 2);
         return 0;
     });
     vm.registerFunction("light", "set", [app, ownLight](lua_State* L) {
-        Light& l = app->lighting().lights[ownLight(L, "light.set")];
+        Light& l = app->lighting().at(ownLight(L, "light.set"));
         luaL_checktype(L, 2, LUA_TTABLE);
         l.color = ScriptVM::fieldVec3(L, 2, "color", l.color);
         l.intensity = ScriptVM::fieldNumber(L, 2, "intensity", l.intensity);

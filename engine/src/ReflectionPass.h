@@ -30,6 +30,7 @@ struct ReflectionRays {
     glm::vec3 ambient{0.0f};                   // the sky's average light
     uint32_t budget = 0;
     bool classic = false; // trace every smooth pixel at once, no screen-space march (classic ray tracing)
+    bool built = false;   // the scene's top level is built for this frame already (refraction built it first)
 };
 
 // What smooth surfaces reflect, found in screen space (ENG-F02): after the

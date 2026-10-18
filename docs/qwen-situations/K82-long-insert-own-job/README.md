@@ -9,3 +9,6 @@ Seen again in the same task on `f02k-reflection3` (a 57-line block in record(), 
 excerpt lacked the code and put the block before the wrong line. Claude applied the blocks.
 And on `f02k-sphereimpo1x` (a 28-line block among two small ones): both repair answers were cut off at the job's token limit.
 Claude applied the blocks.
+And on `f02c-renderer4` (a 42-line function, a job of its own under the rule): attempt 1 left lines out and copied others; the
+repairs asked for the file. Twice (before and after K87's excerpt fix). Claude applied the block. A new function this long is
+still too much for one Coder answer: next, split long new functions into their halves.

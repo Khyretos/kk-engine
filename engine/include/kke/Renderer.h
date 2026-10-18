@@ -46,6 +46,10 @@ struct OverlayTarget {
 //       // ... bind pipelines, push constants, draw calls here
 //       renderer.endFrame();                   // ends render pass, submits, presents
 //   }
+class SmaaPass;
+class TaaPass;
+class BloomPass;
+
 class Renderer {
 public:
     explicit Renderer(Window& window);
@@ -61,7 +65,8 @@ public:
 
     // Begins the swapchain's render pass (color+depth clear) and sets a
     // full-viewport/scissor. Call after beginFrame(), before any draws.
-    void beginRenderPass();
+    // `split`: the pass keeps its colour and depth, for pauseScenePass().
+    void beginRenderPass(bool split = false);
 
     // Switches to full-resolution drawing for what goes on top of the 3D
     // image (UI, debug overlay): ends the HDR scene pass and opens the
@@ -85,6 +90,12 @@ public:
     // depth (when readable) in DEPTH_STENCIL_READ_ONLY, both written and
     // visible to compute and fragment shaders.
     void endScenePass();
+    // Refraction (ENG-F02 part 4), after beginRenderPass(true): ends the 3D
+    // pass as endScenePass() does, so a pass can read what is drawn so far,
+    // then resumeScenePass() opens one that goes on drawing over the same
+    // colour and depth (its pipelines are the scene pass's).
+    void pauseScenePass();
+    void resumeScenePass();
     struct SceneImages {
         VkImageView color = VK_NULL_HANDLE; // single-sample HDR (kSceneColorFormat)
         VkImageView depth = VK_NULL_HANDLE; // depth aspect only; null unless sceneDepthReadable()
@@ -97,6 +108,22 @@ public:
     // 3D resolution relative to the window (resource governor, 1.6).
     // Clamped to 0.5..1. Takes effect on the next frame.
     void setRenderScale(float scale);
+    // Morphological anti-aliasing over the scene before the tone map (ENG-F05,
+    // kke/Smaa.h): edges MSAA can't reach (shading, alpha tests, a render
+    // scale below 1). One frame, no history. Off by default.
+    void setSmaa(bool on) { m_smaaOn = on; }
+    bool smaa() const { return m_smaaOn; }
+    // Temporal anti-aliasing, an option over the clean image (ENG-F05 part 2,
+    // kke/Taa.h): needs the scene's depth readable (setSceneDepthReadable)
+    // and each frame the (jittered) viewProj it was drawn with
+    // (setTaaCamera). Off by default.
+    void setTaa(bool on) { m_taaOn = on; }
+    bool taa() const { return m_taaOn; }
+    void setTaaCamera(const glm::mat4& viewProj) { m_taaViewProj = viewProj; }
+    // Bloom (ENG-F10, kke/Bloom.h): bright light bleeding into what is around
+    // it, mixed in before the tone map. On by default (graphics setting "bloom").
+    void setBloom(bool on) { m_bloomOn = on; }
+    bool bloom() const { return m_bloomOn; }
     float renderScale() const { return m_renderScale; }
     // Size of the 3D image: extent() times the render scale.
     VkExtent2D renderExtent() const;
@@ -128,7 +155,10 @@ public:
     // count, resolve and subpass dependency), so every scene pipeline works
     // in it; its single-sample colour ends in colorFinalLayout. For
     // offscreen views of the scene (thumbnails). Caller destroys it.
-    VkRenderPass createSceneCompatiblePass(VkImageLayout colorFinalLayout);
+    // `kind`: Split keeps the colour and depth (stored) for a Resume pass,
+    // which loads them instead of clearing.
+    enum class PassKind { Whole, Split, Resume };
+    VkRenderPass createSceneCompatiblePass(VkImageLayout colorFinalLayout, PassKind kind = PassKind::Whole);
     VkExtent2D extent() const { return m_swapChain->extent(); }
     bool hasStencil() const { return m_swapChain->hasStencil(); }
     // The scene pass's attachment formats: an offscreen pass with the same
@@ -223,6 +253,16 @@ private:
 
     Window& m_window;
     std::unique_ptr<VulkanDevice> m_device;
+    std::unique_ptr<SmaaPass> m_smaa; // made the first time SMAA is on
+    bool m_smaaOn = false;
+    std::unique_ptr<BloomPass> m_bloom; // made the first time bloom is on
+    bool m_bloomOn = true;
+    VkImageView m_bloomSource = VK_NULL_HANDLE; // this frame's bloom (GENERAL), or none
+    std::unique_ptr<TaaPass> m_taa; // made the first time TAA is on
+    bool m_taaOn = false, m_taaHavePrev = false;
+    glm::mat4 m_taaViewProj{1.0f}, m_taaPrevViewProj{1.0f};
+    VkImageView m_postSource = VK_NULL_HANDLE; // what the tone map reads this frame (the scene, or SMAA's or TAA's result)
+    VkImageLayout m_postSourceLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     std::unique_ptr<SwapChain> m_swapChain;
 
     std::vector<VkCommandBuffer> m_commandBuffers;
@@ -264,6 +304,7 @@ private:
     bool m_depthReadable = false;
     bool m_overlayOpen = false; // beginOverlayPass() opened the swapchain's pass this frame
     VkRenderPass m_scenePass = VK_NULL_HANDLE;
+    VkRenderPass m_scenePassSplit = VK_NULL_HANDLE, m_scenePassResume = VK_NULL_HANDLE; // pauseScenePass()
     VkFormat m_scenePassFormats[2] = {};
     uint32_t m_scenePassSamples = 0;
     bool m_scenePassDepthStored = false;

@@ -85,6 +85,13 @@ struct RenderContext {
     // last view's data would be what every view draws.
     uint32_t viewIndex = 0;
     uint32_t viewCount = 1;
+    // In renderTranslucent(): this frame's scene drawn so far is readable
+    // (kke::LightingBuffer binding 6), so see-through surfaces refract it
+    // (DynamicMeshRenderer::drawTranslucent; ENG-F02 part 4).
+    bool refraction = false;
+    // With refraction and `reflections = kke / classic`: set 3 of the
+    // refracting pass, the frame's ray scene (Application::refractionRayLayout()).
+    VkDescriptorSet refractionRays = VK_NULL_HANDLE;
 };
 
 // Passed to Module::renderShadow() — a real, separate, depth-only pass

@@ -28,6 +28,11 @@ void SettingsModule::apply() {
     m_app->lighting().shadowsEnabled = g.shadows;
     m_app->setScreenGi(g.globalIllumination);
     m_app->setReflections(reflectionsFromName(g.reflections, Reflections::Off));
+    m_app->setVolumetricFog(g.volumetricFog);
+    m_app->setSmaa(g.smaa);
+    m_app->setTaa(g.taa);
+    m_app->setBloom(g.bloom);
+    m_app->setShadowRays(shadowRaysFromName(g.shadowRays, ShadowRays::Off));
     m_app->shadowMap().setBaseTileResolution(static_cast<uint32_t>(g.shadowResolution));
     m_app->lighting().ambientColor = m_baseAmbient * g.brightness;
     m_app->debugUi().setVisible(g.showDebugOverlay);

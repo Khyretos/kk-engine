@@ -180,6 +180,7 @@ vec3 srgbToLinear(vec3 c) {
 // Spatial and per-frame: no temporal accumulation, no dithering, no blur
 // of the image (docs/RENDERING_PRINCIPLES.md). Returns the extra alpha^2.
 // Derivatives: call it before any discard.
+#ifndef KKE_COMPUTE // derivatives: fragment shaders only (compute includes this for the shadow lookups)
 float specularAAKernel(vec3 normalWorld) {
     vec3 n = normalize(normalWorld);
     vec3 du = dFdx(n);
@@ -187,8 +188,11 @@ float specularAAKernel(vec3 normalWorld) {
     float variance = 0.15 * (dot(du, du) + dot(dv, dv));
     return min(2.0 * variance, 0.2);
 }
+#endif
 
+#ifndef KKE_COMPUTE
 vec3 shadeSurfaceAA(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 posWorld, vec4 posLightSpace, float specAAKernel);
+#endif
 
 // What a lit opaque surface writes as its alpha (ENG-F02): 2 + smoothness.
 // Translucent shaders, particles and the sky write 1 or less, so the
@@ -200,10 +204,13 @@ float reflectionMark(float roughness) { return 2.0 + clamp(1.0 - roughness, 0.0,
 // shadow on light 0, ambient from the sky, fog; returns scene light. Shared by every
 // lit mesh shader (cube.frag, model.frag) so they can't drift apart.
 // Shaders that discard call shadeSurfaceAA with a kernel taken first.
+#ifndef KKE_COMPUTE
 vec3 shadeSurface(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 posWorld, vec4 posLightSpace) {
     return shadeSurfaceAA(albedo, metallicRoughness, normalWorld, posWorld, posLightSpace, specularAAKernel(normalWorld));
 }
+#endif
 
+#ifndef KKE_COMPUTE
 vec3 shadeSurfaceAA(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 posWorld, vec4 posLightSpace, float specAAKernel) {
     vec2 fragMetallicRoughness = metallicRoughness;
     vec3 fragNormalWorld = normalWorld;
@@ -237,6 +244,9 @@ vec3 shadeSurfaceAA(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 
     vec3 F0 = mix(vec3(0.04), albedo, metallic);
 
     float shadow = lighting.ambient.a > 0.5 ? computeShadow(fragPosLightSpace) : 1.0;
+    // Ray-traced sun shadows (ENG-F07): last frame's ray where there is one.
+    float rayShadow = lighting.ambient.a > 0.5 ? shadowRayAt(fragPosWorld) : -1.0;
+    if (rayShadow >= 0.0) shadow = rayShadow;
     vec3 Lo = vec3(0.0);
 
     for (int i = 0; i < MAX_LIGHTS; ++i) {
@@ -283,6 +293,38 @@ vec3 shadeSurfaceAA(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 
         Lo += (kD * albedo / PI + specular) * radiance * NdotL * thisLightShadow;
     }
 
+    // Many lights (ENG-F08): only the ones this pixel's cell lists (kke::clusterIndex).
+    uint manyCount = uint(lighting.clusterParams.x + 0.5);
+    if (manyCount > 0u) {
+        float viewDepth = (lighting.viewProj * vec4(fragPosWorld, 1.0)).w;
+        uint first = 0u, count = 0u;
+        bool all = lighting.clusterParams.w > 0.5; // KKE_CLUSTERS=0: every light, for comparison
+        if (all) {
+            count = manyCount;
+        } else if (viewDepth >= lighting.clusterParams.y && viewDepth < lighting.clusterParams.z) {
+            uvec3 g = uvec3(lighting.clusterGrid.xyz);
+            uint cz = min(uint(lighting.clusterGrid.z * log(viewDepth / lighting.clusterParams.y) / log(lighting.clusterParams.z / lighting.clusterParams.y)), g.z - 1u);
+            uvec2 cxy = min(uvec2(gl_FragCoord.xy / lighting.clusterScreen.xy * vec2(g.xy)), g.xy - 1u);
+            uint cell = (cz * g.y + cxy.y) * g.x + cxy.x;
+            first = cell * uint(lighting.clusterGrid.w);
+            count = clusterCounts[cell];
+        }
+        for (uint k = 0u; k < count; ++k) {
+            ManyLight m = manyLights[all ? k : clusterIndices[first + k]];
+            vec3 toLight = m.positionRange.xyz - fragPosWorld;
+            float t = length(toLight) / m.positionRange.w;
+            float w = clamp(1.0 - t * t * t * t, 0.0, 1.0); // kke::Light::falloffAt
+            if (w <= 0.0) continue;
+            vec3 L = toLight / max(length(toLight), 1e-4);
+            vec3 H = normalize(V + L);
+            vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
+            vec3 specular = distributionGGX(N, H, roughness) * geometrySmith(N, V, L, roughness) * F /
+                            (4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001);
+            vec3 kD = (vec3(1.0) - F) * (1.0 - metallic);
+            Lo += (kD * albedo / PI + specular) * m.colorIntensity.rgb * m.colorIntensity.a * w * w * max(dot(N, L), 0.0);
+        }
+    }
+
     // Ambient: light from the sky (kke::Sky::lightsScene). Diffuse from its
     // spherical harmonics (kke::SkySH), so a surface facing up takes the sky's
     // blue and one facing down the ground's bounce; with no sky it is the flat
@@ -310,3 +352,4 @@ vec3 shadeSurfaceAA(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 
     vec3 color = ambient + Lo;
     return applyFog(color, fragPosWorld);
 }
+#endif

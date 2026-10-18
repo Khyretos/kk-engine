@@ -104,6 +104,13 @@ add_executable(kke_tests
     test_particle_motion.cpp
     test_screen_gi.cpp
     test_reflection_march.cpp
+    test_refraction.cpp
+    test_smaa.cpp
+    test_bloom.cpp
+    test_clustered_lights.cpp
+    test_shadow_rays.cpp
+    test_taa.cpp
+    test_volumetric_fog.cpp
     test_sky.cpp
     test_envmap.cpp
     test_gpu_skin.cpp

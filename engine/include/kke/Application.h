@@ -14,6 +14,9 @@
 #include "kke/UiProfile.h"
 #include "kke/RayScene.h"
 #include "kke/Reflections.h"
+#include "kke/VolumetricFog.h"
+#include "kke/Taa.h"
+#include "kke/ShadowRays.h"
 #include "kke/ScreenGi.h"
 #include "kke/ShadowMap.h"
 #include "kke/Texture.h"
@@ -39,6 +42,13 @@ struct BenchOptions;
 class SkyRenderer;
 class ScreenGiPass;
 class ReflectionPass;
+class BehindPass;
+class ClusterLightPass;
+class ShadowRayPass;
+class VolumetricFogPass;
+class RefractionRays;
+struct ReflectionRays;
+struct SkyEnvironment;
 class DynamicMeshRenderer;
 struct Mood;
 
@@ -105,6 +115,15 @@ std::optional<ToneMapper> parseToneMapper(const std::string& name);
 struct Lighting {
     static constexpr int kMaxLights = 16;
     std::array<Light, kMaxLights> lights;
+    // Many lights (ENG-F08, kke/ClusteredLights.h): point lights past the 16
+    // key ones, without shadows, each lit pixel touched only by those near it
+    // (clustered on the GPU). Up to kMaxManyLights; a light with range 0 gets
+    // kDefaultManyRange. Script lights spill over here when the key slots are full.
+    static constexpr size_t kMaxManyLights = 1024;
+    static constexpr float kDefaultManyRange = 10.0f;
+    std::vector<Light> manyLights;
+    // A light by slot: 0..15 the key lights, 16 and up the many lights (ScriptLights hands out both).
+    Light& at(int slot) { return slot < kMaxLights ? lights[static_cast<size_t>(slot)] : manyLights[static_cast<size_t>(slot - kMaxLights)]; }
     // Point shadow slots: -1 means no slot, otherwise the index (0..3) of the point-shadow map this light draws into.
     // Slots are assigned in light order to the first ShadowMap::kMaxPointShadows lights that cast shadows and have shadows enabled.
     std::array<int, kMaxLights> pointShadowSlots() const {
@@ -286,6 +305,32 @@ public:
     void recordRayDraw(DynamicMeshRenderer* mesh, const glm::mat4& model) { m_rayDraws.push_back({ mesh, model }); }
     void forgetRayDraws(DynamicMeshRenderer* mesh);
     Reflections reflections() const { return m_reflections; }
+    // Volumetric fog (ENG-F03, kke/VolumetricFog.h): the height fog (Lighting::fog)
+    // lit with the sun's shadow and the point lights, in a grid over the view.
+    // Off by default; the graphics setting "volumetricFog" or KKE_VOLUMETRIC_FOG=1
+    // turn it on. One view only, and only while the fog is on.
+    void setVolumetricFog(bool on) { m_volumetricFogOn = on || m_volumetricFogEnv; }
+    // Morphological anti-aliasing (ENG-F05, Renderer::setSmaa): the graphics
+    // setting "smaa"; KKE_SMAA=1 or 0 wins over it.
+    void setSmaa(bool on);
+    // Temporal anti-aliasing (ENG-F05 part 2, kke/Taa.h), an option over the
+    // clean image: the graphics setting "taa"; KKE_TAA=1 or 0 wins over it.
+    // One view only (split screen draws without it).
+    void setTaa(bool on);
+    // Bloom (ENG-F10, Renderer::setBloom): the graphics setting "bloom"; KKE_BLOOM=1 or 0 wins over it.
+    void setBloom(bool on);
+    // Ray-traced sun shadows (ENG-F07, kke/ShadowRays.h): Kke traces only
+    // past the shadow map's reach, Classic every pixel; ray-query devices,
+    // one view. The graphics setting "shadowRays" or KKE_SHADOW_RAYS.
+    void setShadowRays(ShadowRays mode);
+    ShadowRays shadowRays() const { return m_shadowRays; }
+    ShadowRaySettings& shadowRaySettings() { return m_shadowRaySettings; }
+    TaaSettings& taaSettings() { return m_taaSettings; }
+    bool volumetricFog() const { return m_volumetricFogOn; }
+    VolumetricFogSettings& volumetricFogSettings() { return m_volumetricFogSettings; }
+    // Set 3's layout for see-through surfaces that trace refracted rays
+    // (RenderContext::refractionRays); made on first use, ray-query devices only.
+    VkDescriptorSetLayout refractionRayLayout();
     ReflectionSettings& reflectionSettings() { return m_reflectionSettings; }
     // The shadow map sampler's descriptor SET LAYOUT (not the set
     // itself -- that's bound automatically via RenderContext, see
@@ -469,6 +514,29 @@ private:
     std::unique_ptr<ReflectionPass> m_reflectionPass; // made the first time reflections are on
     Reflections m_reflections = Reflections::Off;
     std::optional<Reflections> m_reflectionsEnv; // KKE_REFLECTIONS
+    // Refraction (ENG-F02 part 4): on with reflections (one view), unless
+    // KKE_REFRACTIONS=0. The scene before the see-through surfaces.
+    std::unique_ptr<BehindPass> m_behindPass;
+    std::unique_ptr<VolumetricFogPass> m_volumetricFog; // made the first time volumetric fog is on
+    VolumetricFogSettings m_volumetricFogSettings;
+    bool m_volumetricFogOn = false, m_volumetricFogEnv = false; // KKE_VOLUMETRIC_FOG=1 keeps it on
+    std::optional<bool> m_smaaEnv;                              // KKE_SMAA
+    std::optional<bool> m_taaEnv;                               // KKE_TAA
+    std::optional<bool> m_bloomEnv;                             // KKE_BLOOM
+    std::unique_ptr<ShadowRayPass> m_shadowRayPass; // made the first time shadow rays are on
+    std::unique_ptr<ClusterLightPass> m_clusterLights; // made the first time there are many lights (ENG-F08)
+    bool m_clustersOff = false;                         // KKE_CLUSTERS=0
+    ShadowRays m_shadowRays = ShadowRays::Off;
+    std::optional<ShadowRays> m_shadowRaysEnv; // KKE_SHADOW_RAYS
+    ShadowRaySettings m_shadowRaySettings;
+    bool m_taaOn = false;
+    TaaSettings m_taaSettings;
+    uint32_t m_taaFrame = 0; // which sub-pixel offset this frame draws with
+    void updateSceneDepthReadable(); // kept when GI, reflections or TAA read it
+    std::unique_ptr<RefractionRays> m_refractionRays; // made the first time refraction traces rays
+    // This frame's kke::RayScene from what is drawn (KKE and classic ray tracing), into rays; once a frame.
+    void buildRayScene(VkCommandBuffer cmd, const glm::mat4& view, const SkyEnvironment* sky, ReflectionRays& rays);
+    bool m_refractionsOff = false;
     ReflectionSettings m_reflectionSettings;
     std::unique_ptr<RayScene> m_rayScene;    // KKE ray tracing's stand-ins, made the first time they're traced
     std::vector<RayMaterial> m_rayMaterials; // how each instance looks to a ray, this frame
