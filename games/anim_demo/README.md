@@ -49,6 +49,7 @@ KKE_ANIM_MOVE=0,1 KKE_ANIM_CIRCLE=8 ./anim_demo   # walk in circles by itself
 | `KKE_ANIM_REST=1` | start with "Show the rest pose" on |
 | `KKE_ANIM_MIRROR=1` | start with the polished floor (with `KKE_REFLECTIONS=screen`, `kke` or `classic` it reflects the scene) |
 | `KKE_ANIM_GLASS=1` | start with the glass block in front of the tentacles (with reflections on it bends what is behind it; `KKE_REFRACTIONS=0` to compare) |
+| `KKE_ANIM_LIGHTS=n` | start with n small coloured lamps over the floor, the many lights past the 16 key ones (clustered; `KKE_CLUSTERS=0` walks them all, to compare; try `KKE_MOOD=night`) |
 | `KKE_ANIM_VIEW=d,p,y` | start the camera `d` metres away at pitch `p` and yaw `y` (radians) |
 | `KKE_ANIMATIONS_DIR=<folder>` | where to look for `UAL1_Standard.fbx` and `UAL2.fbx` |
 | `KKE_SKIP_INTRO=1` | skip the logo intro (engine-wide) |

@@ -1,6 +1,7 @@
 #include "kke/Application.h"
 #include "kke/SkyRenderer.h"
 #include "BehindPass.h"
+#include "ClusterLightPass.h"
 #include "ShadowRayPass.h"
 #include "VolumetricFogPass.h"
 #include "RefractionRays.h"
@@ -160,6 +161,8 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
     // KKE_REFLECT_ROUGHNESS=1: every surface up to that roughness reflects (benchmarks: the most work).
     if (const char* env = dev::env("KKE_REFLECT_ROUGHNESS"); env && *env)
         m_reflectionSettings.maxRoughness = std::clamp(static_cast<float>(std::atof(env)), 0.01f, 1.0f);
+    // KKE_CLUSTERS=0: every lit pixel walks all the many lights (benchmarks: what clustering saves).
+    if (const char* env = dev::env("KKE_CLUSTERS"); env && *env) m_clustersOff = env[0] == '0';
     // KKE_SHADOW_RAYS=off|kke|classic: that, whatever the settings say.
     if (const char* env = dev::env("KKE_SHADOW_RAYS"); env && *env) {
         m_shadowRaysEnv = shadowRaysFromName(env, ShadowRays::Off);
@@ -1087,6 +1090,16 @@ void Application::run() {
                 m_shadowRayPass->prepare(sceneExtent);
             }
             const bool shadowRaysReady = shadowRaysOn && m_shadowRayPass->ready();
+            // Many lights (ENG-F08): this frame's, listed per cell after the shadow pass (one view; split screen walks them all).
+            std::vector<ClusterLightPass::GpuLight> manyLights;
+            for (const Light& l : m_lighting.manyLights)
+                if (l.enabled && !l.isDirectional && l.intensity > 0.0f)
+                    manyLights.push_back({ glm::vec4(l.position, l.range > 0.0f ? l.range : Lighting::kDefaultManyRange), glm::vec4(l.color, l.intensity) });
+            if (!manyLights.empty()) {
+                if (!m_clusterLights) m_clusterLights = std::make_unique<ClusterLightPass>(m_renderer->device());
+                m_clusterLights->upload(m_renderer->currentFrameIndex(), manyLights);
+            }
+            const bool manyOn = !manyLights.empty();
             m_recordRays = shadowRaysOn || (reflOn && (m_reflections == Reflections::Kke || m_reflections == Reflections::Classic) &&
                                             m_renderer->device().rayQuery());
             for (uint32_t i = 0; i < viewCount; ++i) {
@@ -1097,6 +1110,15 @@ void Application::run() {
                     drawViews[i].lighting->setScreenGi(VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE, glm::mat4(1.0f), glm::vec2(0.0f));
                 if (i == 0 && fogVolumeOn) drawViews[i].lighting->setFogVolume(m_volumetricFog->volume(), m_volumetricFog->sampler(), m_volumetricFog->settings());
                 else drawViews[i].lighting->setFogVolume(VK_NULL_HANDLE, VK_NULL_HANDLE, m_volumetricFogSettings);
+                if (manyOn) {
+                    const uint32_t f = m_renderer->currentFrameIndex();
+                    drawViews[i].lighting->setManyLights(m_clusterLights->lights(f), m_clusterLights->counts(f), m_clusterLights->indices(f),
+                                                         m_clusterLights->count(f), m_clusterLights->grid(),
+                                                         glm::vec2(static_cast<float>(sceneExtent.width), static_cast<float>(sceneExtent.height)),
+                                                         viewCount > 1 || m_clustersOff);
+                } else {
+                    drawViews[i].lighting->setManyLights(VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE, 0, ClusterGrid{}, glm::vec2(1.0f), false);
+                }
                 if (i == 0 && shadowRaysReady)
                     drawViews[i].lighting->setShadowRays(m_shadowRayPass->image(), m_shadowRayPass->sampler(), m_shadowRayPass->viewProj(),
                                                          m_shadowRayPass->size(), m_shadowRaySettings.reprojectSlack);
@@ -1208,6 +1230,7 @@ void Application::run() {
                 m_pointShadowMap->endRenderPass(cmd);
             }
 
+            if (manyOn && viewCount == 1 && !m_clustersOff) m_clusterLights->record(cmd, m_renderer->currentFrameIndex(), view, proj);
             if (fogVolumeOn) m_volumetricFog->record(cmd, drawViews[0].lighting->descriptorSet(), m_shadowMapDescriptorSet, glm::inverse(proj * view));
             PrepassContext prepassCtx{ cmd, view, proj, drawViews[0].camera.position, sceneExtent, m_lightingBuffer->descriptorSet(),
                                        m_renderer->currentFrameIndex(), m_sceneCovered };
