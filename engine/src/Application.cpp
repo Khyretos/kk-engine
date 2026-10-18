@@ -176,6 +176,10 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
         m_dofEnv = env[0] == '1';
         setDepthOfField(*m_dofEnv);
     }
+    if (const char* env = dev::env("KKE_MOTION_BLUR"); env && *env) {
+        m_motionBlurEnv = env[0] == '1';
+        setMotionBlur(*m_motionBlurEnv);
+    }
     if (const char* env = dev::env("KKE_DOF_FOCUS"); env && *env) depthOfFieldSettings().focusDistance = std::strtof(env, nullptr); // metres
     if (const char* env = dev::env("KKE_TAA"); env && *env) {
         m_taaEnv = env[0] == '1';
@@ -1484,8 +1488,17 @@ void Application::setDepthOfField(bool on) {
 
 DofSettings& Application::depthOfFieldSettings() { return m_renderer->depthOfFieldSettings(); }
 
+void Application::setMotionBlur(bool on) {
+    m_motionBlurOn = m_motionBlurEnv ? *m_motionBlurEnv : on;
+    m_renderer->setMotionBlur(m_motionBlurOn);
+    updateSceneDepthReadable();
+}
+
+MotionBlurSettings& Application::motionBlurSettings() { return m_renderer->motionBlurSettings(); }
+
 void Application::updateSceneDepthReadable() {
-    m_renderer->setSceneDepthReadable(m_screenGiOn || m_reflections != Reflections::Off || m_taaOn || m_shadowRays != ShadowRays::Off || m_dofOn);
+    m_renderer->setSceneDepthReadable(m_screenGiOn || m_reflections != Reflections::Off || m_taaOn || m_shadowRays != ShadowRays::Off || m_dofOn ||
+                                      m_motionBlurOn);
 }
 
 void Application::setReflections(Reflections mode) {

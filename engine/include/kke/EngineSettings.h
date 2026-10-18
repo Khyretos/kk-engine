@@ -44,6 +44,8 @@ struct EngineSettings {
         bool bloom = true;
         // Depth of field (Renderer::setDepthOfField): a lens's blur in front of and behind the focus.
         bool depthOfField = false;
+        // Motion blur (Renderer::setMotionBlur): the camera's movement smears the image.
+        bool motionBlur = false;
         // Ray-traced sun shadows (kke/ShadowRays.h): "off", "kke" (only past
         // the shadow map's reach) or "classic" (every pixel).
         std::string shadowRays = "off";
