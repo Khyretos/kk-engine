@@ -237,8 +237,14 @@ void BloomPass::record(VkCommandBuffer cmd, uint32_t frame, VkImageView scene, V
     std::vector<VkImageMemoryBarrier> before;
     for (std::vector<Image>* list : { &m_downImages, &m_upImages })
         for (Image& i : *list) before.push_back(barrier(i.image, 0, VK_ACCESS_SHADER_WRITE_BIT, m_fresh ? VK_IMAGE_LAYOUT_UNDEFINED : VK_IMAGE_LAYOUT_GENERAL));
-    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0,
-                         nullptr, 0, nullptr, static_cast<uint32_t>(before.size()), before.data());
+    // The source may come straight from a compute pass (SMAA, TAA) whose own barrier only reached the fragment stage.
+    VkMemoryBarrier source{};
+    source.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+    source.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    source.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    vkCmdPipelineBarrier(cmd,
+                         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &source, 0, nullptr, static_cast<uint32_t>(before.size()), before.data());
     m_fresh = false;
     auto written = [&](VkImage image) {
         const VkImageMemoryBarrier b = barrier(image, VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL);
