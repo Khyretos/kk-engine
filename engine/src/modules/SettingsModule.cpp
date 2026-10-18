@@ -26,6 +26,8 @@ void SettingsModule::apply() {
     m_app->setResourceBudget(computeBudget(m_settings, usableCpuCount())); // sets the frame cap too
     m_app->camera().fovDegrees = g.fieldOfView;
     m_app->lighting().shadowsEnabled = g.shadows;
+    m_app->setScreenGi(g.globalIllumination);
+    m_app->setReflections(reflectionsFromName(g.reflections, Reflections::Off));
     m_app->shadowMap().setBaseTileResolution(static_cast<uint32_t>(g.shadowResolution));
     m_app->lighting().ambientColor = m_baseAmbient * g.brightness;
     m_app->debugUi().setVisible(g.showDebugOverlay);

@@ -50,6 +50,9 @@ private:
 class DynamicMeshRenderer {
 public:
     explicit DynamicMeshRenderer(Application& app);
+    ~DynamicMeshRenderer();
+    DynamicMeshRenderer(const DynamicMeshRenderer&) = delete;
+    DynamicMeshRenderer& operator=(const DynamicMeshRenderer&) = delete;
     void upload(const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices);
     void draw(const RenderContext& ctx, const glm::mat4& model = glm::mat4(1.0f), float metallic = 0.0f, float roughness = 0.6f);
     void drawShadow(const ShadowRenderContext& ctx, const glm::mat4& model = glm::mat4(1.0f));
@@ -68,6 +71,21 @@ public:
     // (usually fabric.color), normal, uv = cloth coordinates in metres.
     void drawCloth(const RenderContext& ctx, const Fabric& fabric, const glm::mat4& model = glm::mat4(1.0f));
 
+    // What ray tracing sees of the mesh (ENG-F02): draw() and drawCloth()
+    // add it to the frame's ray scene while ray-traced reflections are on
+    // (Application::recordRayDraw): this frame slot's buffers (their
+    // addresses; kke::Vertex, 44 bytes), or for KKE and a mesh of more than
+    // 20000 triangles a box round the vertices, in their average colour.
+    struct RayView {
+        VkDeviceAddress vertices = 0, indices = 0;
+        const void* vertexBuffer = nullptr; // changes when the buffer is remade (a new geometry then)
+        uint32_t vertexCount = 0, indexCount = 0;
+        uint64_t version = 0;     // changes with every upload()
+        glm::vec3 lo{0.0f}, hi{0.0f}; // the vertices' bounds (model space)
+        glm::vec3 color{1.0f};    // their average colour, linear
+    };
+    RayView rayView(uint32_t frame) const;
+
 private:
     struct FrameBuffers { std::unique_ptr<Buffer> vertices, indices; size_t vCap = 0, iCap = 0; uint64_t version = 0; };
     void ensureUploaded(uint32_t frame);
@@ -81,6 +99,7 @@ private:
     std::vector<Vertex> m_vertices;
     std::vector<uint32_t> m_indices;
     uint64_t m_version = 0;
+    glm::vec3 m_lo{0.0f}, m_hi{0.0f}, m_color{1.0f}; // upload(): for rayView()
 };
 
 } // namespace kke

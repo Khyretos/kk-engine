@@ -16,5 +16,5 @@ layout(location = 0) out vec4 outColor;
 
 void main() {
     vec3 lit = shadeSurface(srgbToLinear(fragColor), fragMetallicRoughness, fragNormalWorld, fragPosWorld, fragPosLightSpace);
-    outColor = vec4(lit + glowColor(fragUV.x), 1.0);
+    outColor = vec4(lit + glowColor(fragUV.x), reflectionMark(fragMetallicRoughness.y));
 }

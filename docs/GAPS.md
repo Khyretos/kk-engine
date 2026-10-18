@@ -79,10 +79,10 @@ by area. The goal is parity with the big engines and more.
 
 | ID | Area | Feature | Status |
 |---|---|---|---|
-| ENG-F01 | Rendering | Real-time global illumination | ⬜ |
-| ENG-F02 | Rendering | Ray-traced reflections and refractions | ⬜ |
+| ENG-F01 | Rendering | Real-time global illumination. Screen-space done: a visibility bitmask, one frame late, off by default (`globalIllumination`, docs/RENDERING_PRINCIPLES.md). Not yet: light from what is off screen (probes, ENG-F15). | 🟡 |
+| ENG-F02 | Rendering | Ray-traced reflections and refractions. Reflections done: `reflections = screen`, `kke` (screen first, then rays through simplified stand-ins within a budget) and `classic` (every triangle, sun shadows), inline ray queries on any vendor (`kke::RayScene`, a GPU self-test in CI). Not yet: refractions. | 🟡 |
 | ENG-F03 | Rendering | Volumetric lighting and fog (height fog only today) | 🟡 |
-| ENG-F04 | Rendering | Screen-space ambient occlusion (GTAO/SSAO) | ⬜ |
+| ENG-F04 | Rendering | Screen-space ambient occlusion (GTAO/SSAO). Done with ENG-F01's screen-space GI: its visibility shades the sky light and reflections. | ✅ |
 | ENG-F05 | Rendering | Temporal anti-aliasing (MSAA only today) | ⬜ |
 | ENG-F06 | Rendering | Foveated rendering | ⬜ |
 | ENG-F07 | Rendering | Ray-traced shadows | ⬜ |
@@ -96,7 +96,7 @@ by area. The goal is parity with the big engines and more.
 | ENG-F15 | Lighting | Light probes with baking | ⬜ |
 | ENG-F16 | Lighting | Contact shadows | ⬜ |
 | ENG-F17 | Lighting | Light portals | ⬜ |
-| ENG-F18 | Lighting | Screen-space reflections | ⬜ |
+| ENG-F18 | Lighting | Screen-space reflections. Done with ENG-F02: `reflections = screen`, a fixed-step march along the ray's line on screen, one frame late. | ✅ |
 | ENG-F19 | 2D | 2D toolkit: tilemaps, sprite animation, 2D lights, 2D physics, parallax | ⬜ |
 | ENG-F20 | XR | OpenXR (VR/AR) on the Vulkan renderer | ⬜ |
 | ENG-F21 | Animation | 2D blend trees (1D and 2D blend spaces; G19) | ✅ |

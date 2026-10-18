@@ -79,4 +79,20 @@ ModelData simplifyModel(const ModelData& model, float ratio, const SimplifyOptio
     return out;
 }
 
+std::vector<uint32_t> simplifyIndices(const ModelMesh& m, float ratio, float maxError) {
+    const size_t triangles = m.indices.size() / 3;
+    if (triangles < 64 || ratio >= 1.0f || m.vertices.empty()) return m.indices;
+    // Indices that treat every corner at one position as one vertex (still pointing at real vertices).
+    std::vector<uint32_t> shadow(m.indices.size());
+    meshopt_generateShadowIndexBuffer(shadow.data(), m.indices.data(), m.indices.size(), &m.vertices[0].position.x, m.vertices.size(),
+                                      sizeof(glm::vec3), sizeof(ModelVertex));
+    const size_t target = std::max<size_t>(3, static_cast<size_t>(static_cast<float>(triangles) * std::clamp(ratio, 0.0f, 1.0f)) * 3);
+    std::vector<uint32_t> out(shadow.size());
+    float error = 0.0f;
+    const size_t count = meshopt_simplify(out.data(), shadow.data(), shadow.size(), &m.vertices[0].position.x, m.vertices.size(),
+                                          sizeof(ModelVertex), target, maxError, meshopt_SimplifyPermissive | meshopt_SimplifyPrune, &error);
+    out.resize(count);
+    return out;
+}
+
 } // namespace kke

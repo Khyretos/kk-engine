@@ -1,0 +1,5 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+// KKE ray tracing: screen space, then stand-ins (shaders/reflect.glsl).
+#define RAY_QUERY
+#include "reflect.glsl"

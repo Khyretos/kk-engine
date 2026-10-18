@@ -1,0 +1,5 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+// Screen-space GI, multisampled depth: sample 0 (shaders/screen_gi.glsl).
+#define DEPTH_MS
+#include "screen_gi.glsl"

@@ -67,3 +67,29 @@ TEST(MeshLod, SmallPartsAreKept) {
 }
 
 } // namespace
+
+// ENG-F02: KKE ray tracing traces a skinned part through a simplified index
+// list over the part's own vertices (its skinned vertex buffer, unchanged).
+TEST(MeshLod, SimplifiedIndicesPointAtTheOwnVertices) {
+    const kke::ModelData model = grid(20);
+    const kke::ModelMesh& mesh = model.meshes[0]; // 800 triangles, one vertex per corner
+    const std::vector<uint32_t> idx = kke::simplifyIndices(mesh, 0.1f);
+    ASSERT_GE(idx.size(), 3u);
+    EXPECT_EQ(idx.size() % 3, 0u);
+    EXPECT_LE(idx.size() / 3, 80u) << "about a tenth, or fewer on a flat grid";
+    glm::vec3 lo(1e9f), hi(-1e9f);
+    for (uint32_t i : idx) {
+        ASSERT_LT(i, mesh.vertices.size());
+        lo = glm::min(lo, mesh.vertices[i].position);
+        hi = glm::max(hi, mesh.vertices[i].position);
+    }
+    // Still the whole grid, corner to corner.
+    EXPECT_NEAR(lo.x, 0.0f, 1e-6f);
+    EXPECT_NEAR(lo.z, 0.0f, 1e-6f);
+    EXPECT_NEAR(hi.x, 1.0f, 1e-6f);
+    EXPECT_NEAR(hi.z, 1.0f, 1e-6f);
+    // Small parts come back whole.
+    const kke::ModelData smallModel = grid(4);
+    const kke::ModelMesh& small = smallModel.meshes[0];
+    EXPECT_EQ(kke::simplifyIndices(small, 0.1f), small.indices);
+}
