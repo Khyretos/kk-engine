@@ -34,3 +34,4 @@
 - runs/2026-10-18T0505Z-85b0609a27: claude/ray-refraction, test job success
 - runs/2026-10-18T0558Z-ccdd85c9ed: claude/volumetric-fog, test job success
 - runs/2026-10-18T0707Z-2843d59e6e: claude/smaa, test job success
+- runs/2026-10-18T0748Z-6e8108be75: claude/taa, test job success
