@@ -39,6 +39,6 @@ void main() {
         c += lighting.sunDisc.rgb * smoothstep(lighting.sunDisc.a - edge, lighting.sunDisc.a, cosSun) * step(-0.02, dir.y);
         c += lighting.sunGlow.rgb * phaseHG(cosSun, 0.76) * smoothstep(-0.1, 0.05, dir.y); // the halo, gone below the horizon
     }
-    c = mix(c, fogInscatter(dir), fogAmount(lighting.cameraPos.xyz, dir, -1.0));
+    c = fogAlong(c, lighting.cameraPos.xyz, dir, -1.0);
     outColor = vec4(c, 1.0);
 }

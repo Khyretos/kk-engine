@@ -1,6 +1,7 @@
 #include "kke/Application.h"
 #include "kke/SkyRenderer.h"
 #include "BehindPass.h"
+#include "VolumetricFogPass.h"
 #include "RefractionRays.h"
 #include "ReflectionPass.h"
 #include "ScreenGiPass.h"
@@ -158,6 +159,10 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
     // KKE_REFLECT_ROUGHNESS=1: every surface up to that roughness reflects (benchmarks: the most work).
     if (const char* env = dev::env("KKE_REFLECT_ROUGHNESS"); env && *env)
         m_reflectionSettings.maxRoughness = std::clamp(static_cast<float>(std::atof(env)), 0.01f, 1.0f);
+    if (const char* env = dev::env("KKE_VOLUMETRIC_FOG"); env && env[0] == '1') {
+        m_volumetricFogEnv = true;
+        setVolumetricFog(true);
+    }
     if (const char* env = dev::env("KKE_GI"); env && env[0] == '1') {
         m_screenGiEnv = true;
         setScreenGi(true);
@@ -192,7 +197,7 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
         for (int i = 0; i < 2; ++i) {
             bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
             bindings[i].descriptorCount = 1;
-            bindings[i].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+            bindings[i].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT; // compute: volumetric fog's shafts
         }
 
         VkDescriptorSetLayoutCreateInfo layoutInfo{};
@@ -1042,6 +1047,12 @@ void Application::run() {
             const bool reflReady = reflOn && m_reflectionPass->ready();
             // Refraction: this frame's scene before the see-through surfaces, copied mid-pass (ENG-F02 part 4).
             const bool refractOn = reflOn && !m_refractionsOff && !m_sceneCovered;
+            // Volumetric fog (ENG-F03): this frame's grid, lit after the shadow pass, read by this frame's shading.
+            const bool fogVolumeOn = m_volumetricFogOn && viewCount == 1 && m_lighting.fog.enabled && !m_sceneCovered;
+            if (fogVolumeOn && !m_volumetricFog)
+                m_volumetricFog = std::make_unique<VolumetricFogPass>(m_renderer->device(), m_lightingBuffer->descriptorSetLayout(),
+                                                                      m_shadowMapSetLayout);
+            if (fogVolumeOn) m_volumetricFog->prepare(m_volumetricFogSettings);
             if (refractOn) {
                 if (!m_behindPass) m_behindPass = std::make_unique<BehindPass>(m_renderer->device());
                 m_behindPass->prepare(sceneExtent);
@@ -1056,6 +1067,8 @@ void Application::run() {
                                                        m_screenGi->size());
                 else
                     drawViews[i].lighting->setScreenGi(VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE, glm::mat4(1.0f), glm::vec2(0.0f));
+                if (i == 0 && fogVolumeOn) drawViews[i].lighting->setFogVolume(m_volumetricFog->volume(), m_volumetricFog->sampler(), m_volumetricFog->settings());
+                else drawViews[i].lighting->setFogVolume(VK_NULL_HANDLE, VK_NULL_HANDLE, m_volumetricFogSettings);
                 if (i == 0 && refractOn) drawViews[i].lighting->setBehind(m_behindPass->image(), m_behindPass->sampler(), m_behindPass->size());
                 else drawViews[i].lighting->setBehind(VK_NULL_HANDLE, VK_NULL_HANDLE, glm::vec2(0.0f));
                 if (i == 0 && reflReady)
@@ -1162,6 +1175,7 @@ void Application::run() {
                 m_pointShadowMap->endRenderPass(cmd);
             }
 
+            if (fogVolumeOn) m_volumetricFog->record(cmd, drawViews[0].lighting->descriptorSet(), m_shadowMapDescriptorSet, glm::inverse(proj * view));
             PrepassContext prepassCtx{ cmd, view, proj, drawViews[0].camera.position, sceneExtent, m_lightingBuffer->descriptorSet(),
                                        m_renderer->currentFrameIndex(), m_sceneCovered };
             for (Module* m : m_initOrder) {

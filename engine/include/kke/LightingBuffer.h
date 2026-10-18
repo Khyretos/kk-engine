@@ -1,6 +1,7 @@
 #pragma once
 
 #include "kke/Buffer.h"
+#include "kke/VolumetricFog.h"
 
 #include <volk.h>
 #include <glm/glm.hpp>
@@ -79,6 +80,14 @@ public:
     // Refraction (ENG-F02 part 4, set 0 binding 6): this frame's scene drawn
     // before the see-through surfaces (kke::BehindPass, GENERAL layout),
     // `size` pixels. Null: none (translucents absorb what is behind them).
+    // Volumetric fog (ENG-F03, set 0 binding 7): this frame's integrated grid
+    // (kke::VolumetricFogPass, GENERAL layout) made with `settings`. Null:
+    // none (the analytic height fog alone).
+    void setFogVolume(VkImageView volume, VkSampler sampler, const VolumetricFogSettings& settings) {
+        m_fogVolume = volume;
+        m_fogVolumeSampler = sampler;
+        m_fogVolumeSettings = settings;
+    }
     void setBehind(VkImageView image, VkSampler sampler, const glm::vec2& size) {
         m_behind = image;
         m_behindSampler = sampler;
@@ -113,7 +122,8 @@ private:
     std::unique_ptr<Buffer> m_buffers[kSlotCount];
     uint32_t m_slot = 0;
 
-    void writeEnvironment(uint32_t slot); // bindings 1-6 of that slot: m_envMap, the GI, reflection and behind images, or m_placeholder
+    void writeEnvironment(uint32_t slot); // bindings 1-7 of that slot: m_envMap, the GI, reflection, behind and fog images, or placeholders
+    void createVolumePlaceholder();
     std::unique_ptr<Texture> m_placeholder; // 1x1 black, bound while there is no map
     const Texture* m_envMap = nullptr;
     uint32_t m_envLevels = 0;
@@ -129,6 +139,14 @@ private:
     VkImageView m_behind = VK_NULL_HANDLE;
     VkSampler m_behindSampler = VK_NULL_HANDLE;
     glm::vec2 m_behindSize{0.0f};
+    VkImageView m_fogVolume = VK_NULL_HANDLE;
+    VkSampler m_fogVolumeSampler = VK_NULL_HANDLE;
+    VolumetricFogSettings m_fogVolumeSettings;
+    // 1x1x1, bound while there is no fog volume.
+    VkImage m_volumeImage = VK_NULL_HANDLE;
+    VmaAllocation m_volumeAlloc = VK_NULL_HANDLE;
+    VkImageView m_volumeView = VK_NULL_HANDLE;
+    VkSampler m_volumeSampler = VK_NULL_HANDLE;
 };
 
 } // namespace kke
