@@ -1,0 +1,6 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+// KKE ray tracing, multisampled depth: sample 0 (shaders/reflect.glsl).
+#define RAY_QUERY
+#define DEPTH_MS
+#include "reflect.glsl"

@@ -1,5 +1,10 @@
 #include "kke/Application.h"
 #include "kke/SkyRenderer.h"
+#include "ReflectionPass.h"
+#include "ScreenGiPass.h"
+#include "kke/Capabilities.h"
+#include "kke/RayScene.h"
+#include "kke/SphereImpostors.h"
 #include "kke/Mood.h"
 #include "kke/EngineSettings.h"
 #include "kke/LogoIntro.h"
@@ -16,6 +21,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <stb_image_write.h>
 #include <algorithm>
+#include <cstddef>
 #include <atomic>
 #include <cstdio>
 #include <cctype>
@@ -140,6 +146,25 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
         if (!m_toneMapperOverride) log::get("Application")->warn("KKE_TONEMAP={} is not agx, aces, reinhard or none; ignored", env);
     }
     m_lightingBuffer = std::make_unique<LightingBuffer>(m_renderer->device());
+    // KKE_REFLECTIONS=off|screen|kke|classic: that, whatever the settings say.
+    if (const char* env = dev::env("KKE_REFLECTIONS"); env && *env) {
+        m_reflectionsEnv = reflectionsFromName(env, Reflections::Off);
+        setReflections(*m_reflectionsEnv);
+    }
+    // KKE_REFLECT_ROUGHNESS=1: every surface up to that roughness reflects (benchmarks: the most work).
+    if (const char* env = dev::env("KKE_REFLECT_ROUGHNESS"); env && *env)
+        m_reflectionSettings.maxRoughness = std::clamp(static_cast<float>(std::atof(env)), 0.01f, 1.0f);
+    if (const char* env = dev::env("KKE_GI"); env && env[0] == '1') {
+        m_screenGiEnv = true;
+        setScreenGi(true);
+    }
+    // KKE_RAY_SELFTEST=1: trace a few rays through a small scene on the GPU and
+    // check them (ENG-F02), so a driver's ray tracing is known good or not.
+    if (const char* env = dev::env("KKE_RAY_SELFTEST"); env && env[0] == '1') {
+        std::string report;
+        if (rayQuerySelfTest(m_renderer->device(), &report)) log::get("Application")->info("ray query self-test passed: {}", report);
+        else log::get("Application")->error("ray query self-test failed: {}", report);
+    }
     m_mood = std::make_unique<Mood>();
     if (const char* env = dev::env("KKE_MOOD"); env && *env) m_moodOverride = env;
 
@@ -996,7 +1021,37 @@ void Application::run() {
         if (frameBegun) {
             // After beginFrame's fence wait: this frame slot's buffers are
             // free, while the other slot may still be drawing on the GPU.
+            // Screen-space GI: last frame's result for the first view's shading
+            // (one view only), its images sized for this frame first.
+            const bool giOn = m_screenGiOn && viewCount == 1;
+            if (giOn) {
+                if (!m_screenGi) m_screenGi = std::make_unique<ScreenGiPass>(m_renderer->device());
+                m_screenGi->prepare(sceneExtent);
+            }
+            const bool giReady = giOn && m_screenGi->ready();
+            // Reflections the same way (ENG-F02).
+            const bool reflOn = m_reflections != Reflections::Off && viewCount == 1;
+            if (reflOn) {
+                if (!m_reflectionPass) m_reflectionPass = std::make_unique<ReflectionPass>(m_renderer->device());
+                m_reflectionPass->prepare(sceneExtent);
+            }
+            const bool reflReady = reflOn && m_reflectionPass->ready();
+            // Meshes record themselves for rays while they draw (recordRayDraw).
+            m_rayDraws.clear();
+            m_recordRays = reflOn && (m_reflections == Reflections::Kke || m_reflections == Reflections::Classic) &&
+                           m_renderer->device().rayQuery();
             for (uint32_t i = 0; i < viewCount; ++i) {
+                if (i == 0 && giReady)
+                    drawViews[i].lighting->setScreenGi(m_screenGi->light(), m_screenGi->depth(), m_screenGi->sampler(), m_screenGi->viewProj(),
+                                                       m_screenGi->size());
+                else
+                    drawViews[i].lighting->setScreenGi(VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE, glm::mat4(1.0f), glm::vec2(0.0f));
+                if (i == 0 && reflReady)
+                    drawViews[i].lighting->setReflections(m_reflectionPass->light(), m_reflectionPass->depth(), m_reflectionPass->sampler(),
+                                                          m_reflectionPass->viewProj(), m_reflectionPass->size(), m_reflectionSettings.maxRoughness);
+                else
+                    drawViews[i].lighting->setReflections(VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE, glm::mat4(1.0f), glm::vec2(0.0f),
+                                                          m_reflectionSettings.maxRoughness);
                 drawViews[i].lighting->setFrame(m_renderer->currentFrameIndex());
                 drawViews[i].lighting->setEnvironmentMap(m_skyRenderer ? m_skyRenderer->reflections() : nullptr,
                                                          m_skyRenderer ? m_skyRenderer->reflectionLevels() : 0);
@@ -1123,6 +1178,42 @@ void Application::run() {
                     safeInvoke(m, "renderTranslucent", [&] { m->renderTranslucent(renderCtx); });
                 }
             }
+            // GI from this frame's scene, for the next frame's shading.
+            if (giOn && drawScene) {
+                m_renderer->endScenePass();
+                m_screenGi->record(cmd, m_renderer->currentFrameIndex(), m_renderer->sceneImages(), view, proj, m_screenGiSettings);
+            } else if (m_screenGi) {
+                m_screenGi->invalidate();
+            }
+            if (reflOn && drawScene) {
+                m_renderer->endScenePass();
+                // KKE ray tracing: this frame's stand-ins from every module that has them.
+                ReflectionRays rays;
+                const bool traced = (m_reflections == Reflections::Kke || m_reflections == Reflections::Classic) && m_renderer->device().rayQuery();
+                if (traced) {
+                    if (!m_rayScene) m_rayScene = std::make_unique<RayScene>(m_renderer->device());
+                    m_rayScene->clear();
+                    m_rayMaterials.clear();
+                    RaySceneContext context{ m_reflections == Reflections::Classic, cmd, m_renderer->currentFrameIndex() };
+                    for (IRayContributor* c : findCapability<IRayContributor>()) c->addToRayScene(*m_rayScene, m_rayMaterials, context);
+                    addMeshesToRayScene(context.classic, cmd, context.frame);
+                    rays.scene = m_rayScene.get();
+                    rays.materials = &m_rayMaterials;
+                    rays.viewToWorld = glm::inverse(view);
+                    const Light& sun = m_lighting.lights[0];
+                    if (sun.enabled && sun.isDirectional) {
+                        rays.sunDirection = -sun.direction;
+                        rays.sunColor = sun.color * sun.intensity;
+                    }
+                    rays.ambient = skyEnv ? skyEnv->ambientAverage : m_lighting.ambientColor;
+                    rays.classic = context.classic;
+                    rays.budget = context.classic ? ~0u : m_reflectionSettings.rayBudget; // classic: every smooth pixel
+                }
+                m_reflectionPass->record(cmd, m_renderer->currentFrameIndex(), m_renderer->sceneImages(), view, proj, m_reflectionSettings,
+                                         traced ? &rays : nullptr);
+            } else if (m_reflectionPass) {
+                m_reflectionPass->invalidate();
+            }
             // The overlay covers the whole window with the first camera.
             renderCtx.view = view;
             renderCtx.proj = proj;
@@ -1166,6 +1257,93 @@ void Application::run() {
     }
     if (m_bench) writeBenchmarkReport();
     startQuitWatchdog();
+}
+
+void Application::setScreenGi(bool on) {
+    m_screenGiOn = on || m_screenGiEnv;
+    // The scene's depth is kept only while something reads it.
+    m_renderer->setSceneDepthReadable(m_screenGiOn || m_reflections != Reflections::Off);
+    if (!m_screenGiOn && m_screenGi) m_screenGi->invalidate();
+}
+
+void Application::forgetRayDraws(DynamicMeshRenderer* mesh) {
+    m_rayDraws.erase(std::remove_if(m_rayDraws.begin(), m_rayDraws.end(), [mesh](const RayDraw& d) { return d.mesh == mesh; }), m_rayDraws.end());
+    auto drop = [&](std::unordered_map<const DynamicMeshRenderer*, MeshRay>& map) {
+        if (auto it = map.find(mesh); it != map.end()) {
+            if (m_rayScene) m_rayScene->remove(it->second.geometry);
+            map.erase(it);
+        }
+    };
+    drop(m_meshBoxes);
+    for (auto& slot : m_meshTriangles) drop(slot);
+}
+
+namespace {
+constexpr uint32_t kKkeMeshTriangles = 20000; // KKE ray tracing: meshes up to this many triangles are traced as they are
+} // namespace
+
+void Application::addMeshesToRayScene(bool classic, VkCommandBuffer cmd, uint32_t frame) {
+    RayScene& scene = *m_rayScene;
+    for (const RayDraw& d : m_rayDraws) {
+        const DynamicMeshRenderer::RayView v = d.mesh->rayView(frame);
+        if (v.indexCount < 3) continue;
+        // KKE takes small meshes as they are (a floor, a prop, a tentacle: a box round
+        // those would cover the floor it stands on) and stands a box in for big ones.
+        if (!classic && v.indexCount / 3 > kKkeMeshTriangles) {
+            // A box round the vertices in their average colour, remade when they change.
+            MeshRay& r = m_meshBoxes[d.mesh];
+            if (r.version != v.version || r.vertexCount == 0) {
+                if (r.vertexCount != 0) scene.remove(r.geometry);
+                r.geometry = scene.addBox(glm::max((v.hi - v.lo) * 0.5f, glm::vec3(0.01f)));
+                r.version = v.version;
+                r.vertexCount = v.vertexCount;
+            }
+            RayMaterial m;
+            m.color = glm::vec4(v.color, 1.0f);
+            m_rayMaterials.push_back(m);
+            scene.add(r.geometry, d.model * glm::translate(glm::mat4(1.0f), (v.hi + v.lo) * 0.5f), static_cast<uint32_t>(m_rayMaterials.size() - 1));
+            continue;
+        }
+        // Their triangles: this frame slot's buffers, refitted when the vertices change, rebuilt when their number or buffer does.
+        if (!v.vertices) continue;
+        MeshRay& r = m_meshTriangles[frame % 2][d.mesh];
+        if (r.buffer != v.vertexBuffer || r.vertexCount != v.vertexCount || r.indexCount != v.indexCount) {
+            if (r.buffer) scene.remove(r.geometry);
+            r.geometry = scene.addDynamic(v.vertices, sizeof(Vertex), v.vertexCount, v.indices, v.indexCount);
+            r.buffer = v.vertexBuffer;
+            r.vertexCount = v.vertexCount;
+            r.indexCount = v.indexCount;
+            r.version = v.version;
+        } else if (r.version != v.version) {
+            scene.refit(cmd, r.geometry, v.vertices);
+            r.version = v.version;
+        }
+        RayMaterial m;
+        m.color = glm::vec4(1.0f); // the vertex colours carry it
+        m.vertices = v.vertices;
+        m.indices = v.indices;
+        m.stride = sizeof(Vertex);
+        m.normalOffset = offsetof(Vertex, normal);
+        m.colorOffset = offsetof(Vertex, color);
+        m_rayMaterials.push_back(m);
+        scene.add(r.geometry, d.model, static_cast<uint32_t>(m_rayMaterials.size() - 1));
+    }
+    m_rayDraws.clear();
+}
+
+void Application::setReflections(Reflections mode) {
+    m_reflections = m_reflectionsEnv ? *m_reflectionsEnv : mode;
+    // Kke and classic trace rays only where the device can; screen space works everywhere.
+    m_renderer->setSceneDepthReadable(m_screenGiOn || m_reflections != Reflections::Off);
+    if (m_reflections == Reflections::Off && m_reflectionPass) m_reflectionPass->invalidate();
+}
+
+Reflections reflectionsFromName(const std::string& name, Reflections fallback) {
+    if (name == "off") return Reflections::Off;
+    if (name == "screen") return Reflections::Screen;
+    if (name == "kke") return Reflections::Kke;
+    if (name == "classic") return Reflections::Classic;
+    return fallback;
 }
 
 void Application::setResourceBudget(const ResourceBudget& budget) {

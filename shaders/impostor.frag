@@ -26,5 +26,5 @@ void main() {
     gl_FragDepth = clip.z / clip.w;
     vec3 albedo = srgbToLinear(fragColor);
     vec3 lit = shadeSurfaceAA(albedo, vec2(0.0, fragParams.z), N, P, lighting.lightViewProj * vec4(P, 1.0), specAA);
-    outColor = vec4(lit + glowColor(fragParams.y), 1.0);
+    outColor = vec4(lit + glowColor(fragParams.y), reflectionMark(fragParams.z));
 }

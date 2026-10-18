@@ -220,6 +220,56 @@ ambient) and [#21](https://github.com/Khyretos/kk-engine/issues/21)
 applies to both. Any future ray tracing uses Vulkan's vendor-neutral
 `VK_KHR_ray_query`/compute, with a raster fallback.
 
+**Screen-space GI (ENG-F01, 2026-10-17).** An optional setting
+(`globalIllumination`, off by default; `KKE_GI=1`) for light bounced
+between nearby surfaces and shadow in corners and under things, kept to
+this rule: a visibility bitmask (Therrien et al. 2023) over 4 fixed
+directions and 8 fixed distances per pixel, the same for every pixel and
+every frame, so there is no noise to hide and nothing is blended over
+frames. It reads the finished frame and is used by the next one (light
+arrives one frame late, reprojected; where that frame didn't see a
+surface, the sky alone lights it, as without GI): the one temporal
+dependency, accepted for it (Kees, 2026-10-17). Half resolution, read
+back with depth-aware weights so it never bleeds across edges. Cost on
+the RX 9070 XT at 844 x 1384 with 4x MSAA: 0.29 ms (synty_demo, 722 to
+611 fps); on lavapipe it halves the frame rate, which is why it is off by
+default. `KKE_GI_VIEW=1` shows what it sees: lit surfaces turn grey by how
+much sky they see.
+
+**Reflections (ENG-F02, 2026-10-17).** The setting `reflections` (off by
+default; `KKE_REFLECTIONS`) is `screen`, `kke` or `classic`. Screen: lit
+opaque surfaces write 2 + smoothness in the scene's alpha (translucents,
+particles and the sky write 1 or less, so no extra target or G-buffer is
+needed); after the scene a half-resolution pass marches each smooth
+surface's reflected ray along its line on screen in 48 equal steps, then
+four halvings, and keeps the light where it meets something; the next
+frame's lit shaders mix it over the prefiltered sky by smoothness, one
+frame late like the GI. One ray, fixed steps: nothing noisy, nothing
+blended over frames. Cost on the RX 9070 XT at 844 x 1384 with 4x MSAA:
+0.10 ms (anim_demo's polished floor, 420 to 407 fps); lavapipe 13.6 to
+12.3 fps. `kke` adds rays through simple stand-ins for what is off
+screen, within a budget, and `classic` rays through the full geometry
+(both on GPUs with VK_KHR_ray_query; screen elsewhere).
+
+**KKE and classic ray tracing (ENG-F02).** Both trace inline ray queries
+(any vendor, lavapipe too) through a `kke::RayScene` that what is drawn
+adds itself to each frame: models (ModelModule) and meshes
+(DynamicMeshRenderer), skinned parts refitted from their skinned
+vertices every frame, so a reflection moves as the character does. A hit
+is shaded with its interpolated normal and vertex colour under the sky
+and the sun. `classic`: every triangle, every smooth pixel traced
+directly, the sun's shadow traced too. `kke` (Kees's ask: keep the look,
+cut the cost): screen first, rays only for reflections that leave the
+screen, through stand-ins with about a tenth of the triangles over the
+same vertices (meshoptimizer), within a ray budget per frame, no shadow
+ray. Measured on the RX 9070 XT at 844 x 1384 with 4x MSAA: anim_demo's
+polished floor 0.26 ms off, 0.34 screen, 0.58 kke, 0.64 classic; the Synty
+demo with every surface reflecting (`KKE_REFLECT_ROUGHNESS=1`) 0.33 off,
+0.44 screen, 0.68 kke, 0.72 classic; lavapipe there 33.5 fps off, 22.6
+kke, 21.8 classic. On this GPU classic is only a little dearer: KKE's
+gains are the budget (a frame never pays more than it allows) and that it
+falls back to screen space where there is no ray tracing.
+
 ### 7. Tone mapping, exposure and colour management
 
 **Argument.** (Fox Engine videos, 33 "tone mapping & exposure

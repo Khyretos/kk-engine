@@ -75,6 +75,7 @@ private:
     bool m_forced = false;     // KKE_ANIM_MOVE: a fixed stick, for checks
     float m_circle = 0.0f;     // KKE_ANIM_CIRCLE: that stick turns round once in this many seconds
     bool m_showRest = false;   // the rest pose instead of the clips (KKE_ANIM_REST=1)
+    bool m_mirrorFloor = false; // a polished floor, to see reflections (KKE_ANIM_MIRROR=1)
     float m_runSpeed = 3.5f;
     float m_walkSpeed = 1.5f;
 

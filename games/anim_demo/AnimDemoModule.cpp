@@ -117,6 +117,13 @@ void AnimDemoModule::init(kke::Application& app) {
     }
     if (const char* circle = std::getenv("KKE_ANIM_CIRCLE")) m_circle = std::max(0.0f, static_cast<float>(std::atof(circle)));
     if (const char* rest = std::getenv("KKE_ANIM_REST")) m_showRest = rest[0] == '1';
+    if (const char* mirror = std::getenv("KKE_ANIM_MIRROR")) m_mirrorFloor = mirror[0] == '1';
+    // KKE_ANIM_VIEW=distance,pitch,yaw (metres, radians): where the camera starts, for pictures.
+    if (const char* view = std::getenv("KKE_ANIM_VIEW")) {
+        float d = 0.0f, pitch = 0.0f, yaw = 0.0f;
+        if (std::sscanf(view, "%f,%f,%f", &d, &pitch, &yaw) == 3)
+            if (auto* orbit = app.getModule<kke::OrbitCameraModule>()) orbit->setView(glm::vec3(0.0f, 1.0f, 0.0f), d, pitch, yaw);
+    }
     if (auto* in = app.getModule<kke::InputModule>()) {
         kke::InputModule::defineCharacterActions(in->map(0));
         in->commitDefaults();
@@ -352,7 +359,7 @@ void AnimDemoModule::buildTentacles() {
 }
 
 void AnimDemoModule::render(const kke::RenderContext& ctx) {
-    m_ground->draw(ctx, glm::mat4(1.0f), 0.0f, 0.9f);
+    m_ground->draw(ctx, glm::mat4(1.0f), m_mirrorFloor ? 0.6f : 0.0f, m_mirrorFloor ? 0.04f : 0.9f); // polished: brushed metal
     m_arms->draw(ctx, glm::mat4(1.0f), 0.0f, 0.5f);
 }
 
@@ -419,6 +426,9 @@ void AnimDemoModule::buildPanel() {
     });
     reachSection.note("Joints bent past the limit turn red. FABRIK has no limits; CCD keeps every joint inside its own, and "
                       "damping spreads the bend along the tentacle instead of folding it at the tip.");
+
+    auto& look = panel->section("Floor");
+    look.toggle("Polished floor (shows reflections: settings, Graphics, Reflections)", &m_mirrorFloor);
 }
 
 } // namespace kke_anim

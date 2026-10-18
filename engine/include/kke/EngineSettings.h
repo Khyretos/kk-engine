@@ -24,6 +24,12 @@ struct EngineSettings {
         // Read at startup (takes effect on restart); software rasterisers
         // (the min-spec reference) always run at 1.
         int msaa = 4;
+        // Screen-space global illumination (Application::setScreenGi): light
+        // bounced between nearby surfaces and soft shadow in corners.
+        bool globalIllumination = false;
+        // Reflections on smooth surfaces (kke/Reflections.h): "off", "screen",
+        // "kke" (screen, then rays through stand-ins) or "classic" (full rays).
+        std::string reflections = "off";
         float brightness = 1.0f;       // multiplies ambient light
         float uiScale = 1.0f;          // see UiModule::setUiScale()
         bool showDebugOverlay = false; // the ImGui developer panels (F1 in the showcase)
