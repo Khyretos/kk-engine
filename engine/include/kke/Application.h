@@ -317,6 +317,8 @@ public:
     // clean image: the graphics setting "taa"; KKE_TAA=1 or 0 wins over it.
     // One view only (split screen draws without it).
     void setTaa(bool on);
+    // Bloom (ENG-F10, Renderer::setBloom): the graphics setting "bloom"; KKE_BLOOM=1 or 0 wins over it.
+    void setBloom(bool on);
     // Ray-traced sun shadows (ENG-F07, kke/ShadowRays.h): Kke traces only
     // past the shadow map's reach, Classic every pixel; ray-query devices,
     // one view. The graphics setting "shadowRays" or KKE_SHADOW_RAYS.
@@ -520,6 +522,7 @@ private:
     bool m_volumetricFogOn = false, m_volumetricFogEnv = false; // KKE_VOLUMETRIC_FOG=1 keeps it on
     std::optional<bool> m_smaaEnv;                              // KKE_SMAA
     std::optional<bool> m_taaEnv;                               // KKE_TAA
+    std::optional<bool> m_bloomEnv;                             // KKE_BLOOM
     std::unique_ptr<ShadowRayPass> m_shadowRayPass; // made the first time shadow rays are on
     std::unique_ptr<ClusterLightPass> m_clusterLights; // made the first time there are many lights (ENG-F08)
     bool m_clustersOff = false;                         // KKE_CLUSTERS=0
