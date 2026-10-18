@@ -146,7 +146,7 @@ void DynamicMeshRenderer::draw(const RenderContext& ctx, const glm::mat4& model,
     if (m_app.recordingRays() && ctx.viewIndex == 0) m_app.recordRayDraw(this, model);
 }
 
-void DynamicMeshRenderer::drawTranslucent(const RenderContext& ctx, const glm::mat4& model, float roughness) {
+void DynamicMeshRenderer::drawTranslucent(const RenderContext& ctx, const glm::mat4& model, float roughness, float ior) {
     if (m_indices.empty()) return;
     if (!m_absorbPipeline) {
         // Front faces only (CCW seen from outside, like every closed mesh
@@ -176,8 +176,15 @@ void DynamicMeshRenderer::drawTranslucent(const RenderContext& ctx, const glm::m
             return std::make_shared<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/cube.vert.spv", "shaders/translucent_light.frag.spv",
                                               config(VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE));
         });
+        m_refractPipeline = sharedPipeline(app, app.renderer().renderPass(), "mesh refract", [&] {
+            // behind = the scene where the refracted ray leads x transmittance
+            return std::make_shared<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/cube.vert.spv", "shaders/translucent_refract.frag.spv",
+                                              config(VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ZERO));
+        });
     }
-    bindAndDraw(ctx, *m_absorbPipeline, model, 0.0f, roughness);
+    // The refracting pass gets the index of refraction where the others get metallic.
+    if (ctx.refraction) bindAndDraw(ctx, *m_refractPipeline, model, ior, roughness);
+    else bindAndDraw(ctx, *m_absorbPipeline, model, 0.0f, roughness);
     bindAndDraw(ctx, *m_lightPipeline, model, 0.0f, roughness);
 }
 

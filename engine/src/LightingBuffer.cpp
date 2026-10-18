@@ -59,8 +59,9 @@ struct LightingUBOData {
     glm::vec4 gi;         // x = 1 when they hold a frame's result, yz = their size in pixels, w = KKE_GI_VIEW
     glm::mat4 reflViewProj; // the camera the reflection images were made with (ENG-F02)
     glm::vec4 refl;         // x = 1 when they hold a frame's result, yz = their size, w = the roughest surface they're for
+    glm::vec4 behind;       // x = 1 when this frame's behind image is there (refraction, ENG-F02 part 4), yz = its size
 };
-static_assert(sizeof(LightingUBOData) == Lighting::kMaxLights * 3 * 16 + 2 * 16 + 2 * 64 + 7 * 16 + 9 * 16 + 2 * ShadowMap::kCascades * 16 + ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces * (64 + 16) + 16 + 64 + 16 + 64 + 16, "must match shaders/lighting_ubo.glsl");
+static_assert(sizeof(LightingUBOData) == Lighting::kMaxLights * 3 * 16 + 2 * 16 + 2 * 64 + 7 * 16 + 9 * 16 + 2 * ShadowMap::kCascades * 16 + ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces * (64 + 16) + 16 + 64 + 16 + 64 + 16 + 16, "must match shaders/lighting_ubo.glsl");
 static_assert(ShadowMap::kMaxPointShadows <= Lighting::kMaxLights, "every point-shadow slot needs a light");
 
 } // namespace
@@ -70,7 +71,7 @@ LightingBuffer::LightingBuffer(VulkanDevice& device) : m_device(device) {
     // vertex and fragment stages (vertex doesn't currently need it, but
     // costs nothing to allow now rather than needing a second layout
     // later for e.g. per-vertex light-space transforms for shadows).
-    std::array<VkDescriptorSetLayoutBinding, 6> bindings{};
+    std::array<VkDescriptorSetLayoutBinding, 7> bindings{};
     bindings[0].binding = 0;
     bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     bindings[0].descriptorCount = 1;
@@ -90,6 +91,9 @@ LightingBuffer::LightingBuffer(VulkanDevice& device) : m_device(device) {
     bindings[4].binding = 4;
     bindings[5] = bindings[1];
     bindings[5].binding = 5;
+    // Binding 6: what see-through surfaces show behind them (setBehind).
+    bindings[6] = bindings[1];
+    bindings[6].binding = 6;
 
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -101,7 +105,7 @@ LightingBuffer::LightingBuffer(VulkanDevice& device) : m_device(device) {
     // module shares these, there's no per-object growth the way
     // RmlVulkanRenderInterface's texture pool needs.
     const std::array<VkDescriptorPoolSize, 2> poolSizes{ { { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kSlotCount },
-                                                          { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 5 * kSlotCount } } };
+                                                          { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 6 * kSlotCount } } };
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     poolInfo.maxSets = kSlotCount;
@@ -151,7 +155,7 @@ void LightingBuffer::writeEnvironment(uint32_t slot) {
     const Texture& map = m_envMap ? *m_envMap : *m_placeholder;
     // Without GI the placeholder (0, 0, 0, 1) reads as no bounce, all visible.
     const bool gi = m_giLight && m_giDepth && m_giSampler;
-    std::array<VkDescriptorImageInfo, 5> info{};
+    std::array<VkDescriptorImageInfo, 6> info{};
     info[0] = { map.sampler(), map.imageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
     info[1] = gi ? VkDescriptorImageInfo{ m_giSampler, m_giLight, VK_IMAGE_LAYOUT_GENERAL }
                  : VkDescriptorImageInfo{ m_placeholder->sampler(), m_placeholder->imageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
@@ -161,8 +165,9 @@ void LightingBuffer::writeEnvironment(uint32_t slot) {
     const VkDescriptorImageInfo none{ m_placeholder->sampler(), m_placeholder->imageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
     info[3] = refl ? VkDescriptorImageInfo{ m_reflSampler, m_reflLight, VK_IMAGE_LAYOUT_GENERAL } : none;
     info[4] = refl ? VkDescriptorImageInfo{ m_reflSampler, m_reflDepth, VK_IMAGE_LAYOUT_GENERAL } : none;
-    std::array<VkWriteDescriptorSet, 5> write{};
-    for (uint32_t i = 0; i < 5; ++i) {
+    info[5] = m_behind && m_behindSampler ? VkDescriptorImageInfo{ m_behindSampler, m_behind, VK_IMAGE_LAYOUT_GENERAL } : none;
+    std::array<VkWriteDescriptorSet, 6> write{};
+    for (uint32_t i = 0; i < 6; ++i) {
         write[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         write[i].dstSet = m_descriptorSets[slot];
         write[i].dstBinding = 1 + i;
@@ -238,6 +243,7 @@ void LightingBuffer::update(const Lighting& lighting, const glm::vec3& cameraPos
     data.gi = glm::vec4(m_giLight ? 1.0f : 0.0f, m_giSize.x, m_giSize.y, m_giLight ? view : 0.0f);
     data.reflViewProj = m_reflViewProj;
     data.refl = glm::vec4(m_reflLight ? 1.0f : 0.0f, m_reflSize.x, m_reflSize.y, m_reflMaxRoughness);
+    data.behind = glm::vec4(m_behind ? 1.0f : 0.0f, m_behindSize.x, m_behindSize.y, 0.0f);
 
     m_buffers[m_slot]->upload(&data, sizeof(data));
     // This slot's set is free now (setFrame came after the frame's fence wait).
