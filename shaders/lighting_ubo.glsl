@@ -49,6 +49,8 @@ layout(set = 0, binding = 0) uniform LightingUBO {
     vec4 clusterParams;     // x = how many many-lights (ENG-F08; 0 = none), y = near, z = far distance, w = 1: walk them all (no cells)
     vec4 clusterGrid;       // xyz = cells across, down and deep, w = lights a cell lists at most
     vec4 clusterScreen;     // xy = the scene's size in pixels
+    vec4 decalParams;       // x = how many decals (ENG-F12; 0 = none), y = near, z = far distance of their cells
+    vec4 decalScreen;       // xy = the scene's size in pixels (their cells')
 } lighting;
 
 // The sky prefiltered for reflections (kke::EnvMap, kke::LightingBuffer::setEnvironmentMap):
@@ -86,6 +88,19 @@ struct ManyLight {
 layout(std430, set = 0, binding = 9) readonly buffer ManyLights { ManyLight manyLights[]; };
 layout(std430, set = 0, binding = 10) readonly buffer ClusterCounts { uint clusterCounts[]; };
 layout(std430, set = 0, binding = 11) readonly buffer ClusterIndices { uint clusterIndices[]; };
+
+// Decals (ENG-F12, kke/Decals.h): their records, and per cell of the view the
+// ones whose box may touch it (the cells of the many lights, kke::ClusterLightPass).
+struct DecalData {
+    mat4 worldToDecal; // the box to -1..1 on each axis, z along its normal
+    vec4 colorOpacity; // linear tint, opacity
+    vec4 params;       // x = texture layer, y = roughness (< 0: keep the surface's)
+    vec4 normal;       // xyz
+};
+layout(std430, set = 0, binding = 12) readonly buffer Decals { DecalData decals[]; };
+layout(std430, set = 0, binding = 13) readonly buffer DecalCounts { uint decalCounts[]; };
+layout(std430, set = 0, binding = 14) readonly buffer DecalIndices { uint decalIndices[]; };
+layout(set = 0, binding = 15) uniform sampler2DArray decalTextures;
 
 // Ray-traced sun shadows (ENG-F07, kke::ShadowRayPass): last frame's rays,
 // r = how lit, g = the view depth they were cast from (0 = not traced).
