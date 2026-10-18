@@ -12,6 +12,9 @@
 namespace kke {
 
 class VulkanDevice;
+namespace rhi {
+class CommandList;
+}
 
 struct Vertex {
     glm::vec3 position;
@@ -46,6 +49,10 @@ public:
 
     void bind(VkCommandBuffer cmd) const;
     void draw(VkCommandBuffer cmd) const;
+    // The same through the RHI (docs/plans/rhi.md).
+    void bind(rhi::CommandList& list) const;
+    void draw(rhi::CommandList& list) const;
+    void drawInstanced(rhi::CommandList& list, uint32_t instances, uint32_t firstInstance = 0) const;
     // `instances` copies in one call (per-instance data bound by the
     // caller at binding 1, see ModelModule's instanced pipeline).
     void drawInstanced(VkCommandBuffer cmd, uint32_t instances, uint32_t firstInstance = 0) const;

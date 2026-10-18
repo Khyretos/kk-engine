@@ -85,17 +85,16 @@ void DebugDrawModule::render(const RenderContext& ctx) {
     }
     buffer->upload(m_scratch.data(), m_scratch.size() * sizeof(Vertex));
     glm::mat4 viewProj = ctx.proj * ctx.view;
-    VkBuffer vb = buffer->handle();
-    VkDeviceSize off = 0;
+    const rhi::BufferRef vb = rhi::VulkanCommandList::buffer(buffer->handle());
     uint32_t first = 0;
     for (int layer = 0; layer < 2; ++layer) {
         uint32_t count = static_cast<uint32_t>(m_lines[layer].size() * 6);
         if (count) {
             Pipeline& p = layer == 0 ? *m_pipeline : *m_pipelineOnTop;
-            p.bind(ctx.cmd);
-            vkCmdPushConstants(ctx.cmd, p.layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &viewProj);
-            vkCmdBindVertexBuffers(ctx.cmd, 0, 1, &vb, &off);
-            vkCmdDraw(ctx.cmd, count, 1, first, 0);
+            p.bind(*ctx.list);
+            ctx.list->pushConstants(p, rhi::kVertex, 0, sizeof(glm::mat4), &viewProj);
+            ctx.list->bindVertexBuffer(0, vb, 0);
+            ctx.list->draw(count, 1, first, 0);
         }
         first += count;
     }
