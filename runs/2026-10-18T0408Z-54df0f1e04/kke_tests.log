@@ -1,0 +1,102 @@
+Running main() from /workspace/khyretos/kk-engine/build/_deps/googletest-src/googletest/src/gtest_main.cc
+1000 boxes, 1 thread: avg 1.05 ms, worst 4.35 ms per step
+/workspace/khyretos/kk-engine/tests/test_locomotion.cpp:446: Skipped
+Synty packs not in assets/synty/
+
+/workspace/khyretos/kk-engine/tests/test_locomotion.cpp:456: Skipped
+Synty packs not in assets/synty/
+
+/workspace/khyretos/kk-engine/tests/test_locomotion.cpp:465: Skipped
+Synty packs not in assets/synty/
+
+[2026-10-18 05:54:32.087][engine][Data][?][warning]: pack.yml and pack.json in C:\Users\runner\AppData\Local\Temp\kke_datafile_14330398241632627289 differ: using pack.yml, the most recently changed. Delete the other one to silence this.
+[2026-10-18 05:54:32.088][engine][Data][?][warning]: pack.json and pack.yml in C:\Users\runner\AppData\Local\Temp\kke_datafile_14330398241632627289 differ: using pack.json, the most recently changed. Delete the other one to silence this.
+[2026-10-18 05:54:32.851][engine][Data][?][warning]: info.yml and info.json in C:\Users\runner\AppData\Local\Temp\kke_datafile_3172677736535036801 differ: using info.yml, the most recently changed. Delete the other one to silence this.
+[2026-10-18 05:54:32.852][engine][Data][?][warning]: info.json and info.yml in C:\Users\runner\AppData\Local\Temp\kke_datafile_3172677736535036801 differ: using info.json, the most recently changed. Delete the other one to silence this.
+edges through the other sheets (sampled): 8846 with the pass after each step, 0 between sub-steps
+/workspace/khyretos/kk-engine/tests/test_content_packs.cpp:447: Skipped
+can't make symlinks here: Function not implemented
+
+[2026-10-18 05:54:34.289][engine][Sky][?][warning]: can't read sky image 'no/such/sky.hdr' (can't fopen); showing the gradient sky instead
+red wall: 15 cm away visibility 0.766 bounce (0.234 0.000 0.000); 70 cm away 0.969 (0.031 0.000 0.000)
+thin pole: visibility with the bitmask 0.891, horizon-based 0.828
+/workspace/khyretos/kk-engine/tests/test_sidekick.cpp:86: Skipped
+KKE_ASSETS_DIR not set
+
+/workspace/khyretos/kk-engine/tests/test_anim_rig.cpp:295: Skipped
+POLYGON Dogs not installed
+
+/workspace/khyretos/kk-engine/tests/test_anim_rig.cpp:512: Skipped
+UAL or the Synty packs not installed
+
+/workspace/khyretos/kk-engine/tests/test_anim_rig.cpp:636: Skipped
+UAL or POLYGON Town not installed
+
+[2026-10-18 05:54:55.199][engine][Assets][?][warning]: can't read 'C:\Users\runner\AppData\Local\Temp\kke_catalog_user\POLYGON_Town\Textures': listing the folder: Input/output error (after 3 attempts)
+[2026-10-18 05:54:55.214][engine][Assets][?][warning]: can't read 'C:\Users\runner\AppData\Local\Temp\kke_catalog_user\POLYGON_Prototype\OBJ': listing the folder: Permission denied
+[2026-10-18 05:54:55.215][engine][Assets][?][warning]: can't read 'C:\Users\runner\AppData\Local\Temp\kke_catalog_user\POLYGON_Town\OBJ': listing the folder: Permission denied
+/workspace/khyretos/kk-engine/tests/test_asset_catalog.cpp:347: Skipped
+no packs in assets/synty
+
+/workspace/khyretos/kk-engine/tests/test_ragdoll.cpp:167: Skipped
+Synty Prototype pack not installed in assets/synty
+
+/workspace/khyretos/kk-engine/tests/test_ragdoll.cpp:387: Skipped
+Quaternius Farm Animals not installed (KKE_ASSETS_DIR)
+
+/workspace/khyretos/kk-engine/tests/test_model_asset.cpp:234: Skipped
+Synty Prototype pack not installed in assets/synty
+
+[2026-10-18 05:54:55.254][engine][Marketplace][?][info]: imported 'com.test.one' (Alpha (first import))
+[2026-10-18 05:54:55.254][engine][Marketplace][?][info]: re-imported existing game 'com.test.one' (was at C:\Users\runner\AppData\Local\Temp\kke_marketplace_index_test\alpha, now at C:\Users\runner\AppData\Local\Temp\kke_marketplace_index_test\alpha_copy)
+[2026-10-18 05:54:55.257][engine][Marketplace][?][info]: imported 'com.test.one' (Alpha)
+[2026-10-18 05:54:55.257][engine][Marketplace][?][info]: re-imported existing game 'com.test.one' (was at C:\Users\runner\AppData\Local\Temp\kke_marketplace_index_test\alpha, now at C:\Users\runner\AppData\Local\Temp\kke_marketplace_index_test\alpha)
+[2026-10-18 05:54:55.260][engine][Marketplace][?][info]: imported 'com.test.one' (Alpha)
+[2026-10-18 05:54:55.260][engine][Marketplace][?][info]: imported 'com.test.two' (Beta)
+[2026-10-18 05:54:55.261][engine][Marketplace][?][warning]: skipping C:\Users\runner\AppData\Local\Temp\kke_marketplace_index_test\broken: C:\Users\runner\AppData\Local\Temp\kke_marketplace_index_test\broken\game.json: invalid JSON: [json.exception.parse_error.101] parse error at line 1, column 4: syntax error while parsing object key - invalid literal; last read: '{ no'; expected string literal
+[2026-10-18 05:54:55.264][engine][Marketplace][?][info]: imported 'com.test.one' (Alpha)
+[2026-10-18 05:54:55.265][engine][Marketplace][?][info]: re-imported existing game 'com.test.one' (was at C:\Users\runner\AppData\Local\Temp\kke_marketplace_index_test\alpha, now at C:\Users\runner\AppData\Local\Temp\kke_marketplace_index_test\alpha_copy)
+[2026-10-18 05:54:55.265][engine][Marketplace][?][info]: imported 'com.test.two' (Beta)
+[2026-10-18 05:54:55.267][engine][Marketplace][?][warning]: not a directory, skipping scan: C:\Users\runner\AppData\Local\Temp\kke_marketplace_index_test\does_not_exist
+[2026-10-18 05:54:55.268][engine][Marketplace][?][warning]: skipping C:\Users\runner\AppData\Local\Temp\kke_marketplace_index_test\no_manifest: no game.json (or game.yml) found in: C:\Users\runner\AppData\Local\Temp\kke_marketplace_index_test\no_manifest
+[2026-10-18 05:54:55.269][engine][Marketplace][?][info]: imported 'com.test.one' (Alpha)
+[2026-10-18 05:54:55.270][engine][Marketplace][?][info]: imported 'com.test.two' (Beta)
+/workspace/khyretos/kk-engine/tests/test_storage.cpp:37: Skipped
+set KKE_TEST_VALKEY to a server to test it
+
+/workspace/khyretos/kk-engine/tests/test_storage.cpp:37: Skipped
+set KKE_TEST_POSTGRES to a server to test it
+
+/workspace/khyretos/kk-engine/tests/test_storage.cpp:37: Skipped
+set KKE_TEST_VALKEY to a server to test it
+
+/workspace/khyretos/kk-engine/tests/test_storage.cpp:37: Skipped
+set KKE_TEST_POSTGRES to a server to test it
+
+/workspace/khyretos/kk-engine/tests/test_storage.cpp:37: Skipped
+set KKE_TEST_VALKEY to a server to test it
+
+/workspace/khyretos/kk-engine/tests/test_storage.cpp:37: Skipped
+set KKE_TEST_POSTGRES to a server to test it
+
+/workspace/khyretos/kk-engine/tests/test_storage.cpp:37: Skipped
+set KKE_TEST_VALKEY to a server to test it
+
+/workspace/khyretos/kk-engine/tests/test_storage.cpp:37: Skipped
+set KKE_TEST_POSTGRES to a server to test it
+
+/workspace/khyretos/kk-engine/tests/test_storage.cpp:37: Skipped
+set KKE_TEST_VALKEY to a server to test it
+
+/workspace/khyretos/kk-engine/tests/test_storage.cpp:37: Skipped
+set KKE_TEST_POSTGRES to a server to test it
+
+/workspace/khyretos/kk-engine/tests/test_storage.cpp:37: Skipped
+set KKE_TEST_VALKEY to a server to test it
+
+/workspace/khyretos/kk-engine/tests/test_storage.cpp:37: Skipped
+set KKE_TEST_POSTGRES to a server to test it
+
+[==========] 1168 tests from 209 test suites ran. (45825 ms total)
+[  PASSED  ] 1144 tests.
+[  SKIPPED ] 24 tests.
