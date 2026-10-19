@@ -11,11 +11,11 @@ struct GridPushConstants {
 void GridModule::init(Application& app) {
     PipelineConfig config;
     config.useVertexInput = false; // shader synthesizes the quad from gl_VertexIndex
-    config.cullMode = VK_CULL_MODE_NONE; // visible from above or below
+    config.cullMode = rhi::CullMode::None; // visible from above or below
     config.depthTestEnable = true;
     config.depthWriteEnable = false; // transparent — don't occlude things behind it
     config.blendEnable = true;
-    config.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GridPushConstants) };
+    config.pushConstantRange = { rhi::kVertex | rhi::kFragment, 0, sizeof(GridPushConstants) };
 
     m_pipeline = std::make_unique<Pipeline>(
         app.device(), app.renderer().renderPass(),

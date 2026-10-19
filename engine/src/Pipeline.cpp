@@ -1,5 +1,6 @@
 #include "kke/Pipeline.h"
 #include "kke/rhi/CommandList.h"
+#include "kke/rhi/VulkanCommandList.h"
 #include "kke/VulkanDevice.h"
 #include "kke/Mesh.h"
 #include "kke/ShaderUtils.h"
@@ -10,6 +11,58 @@
 #include <vector>
 
 namespace kke {
+
+namespace {
+
+// The RHI's pipeline state (kke/rhi/PipelineState.h) in Vulkan's words.
+VkPrimitiveTopology vk(rhi::Topology t) {
+    switch (t) {
+    case rhi::Topology::TriangleStrip: return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+    case rhi::Topology::LineList: return VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+    case rhi::Topology::PointList: return VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
+    case rhi::Topology::TriangleList: break;
+    }
+    return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+}
+
+VkCullModeFlags vk(rhi::CullMode c) {
+    return c == rhi::CullMode::None ? VK_CULL_MODE_NONE : c == rhi::CullMode::Front ? VK_CULL_MODE_FRONT_BIT : VK_CULL_MODE_BACK_BIT;
+}
+
+VkFrontFace vk(rhi::FrontFace f) { return f == rhi::FrontFace::CounterClockwise ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE; }
+
+VkBlendFactor vk(rhi::BlendFactor b) {
+    switch (b) {
+    case rhi::BlendFactor::Zero: return VK_BLEND_FACTOR_ZERO;
+    case rhi::BlendFactor::SrcAlpha: return VK_BLEND_FACTOR_SRC_ALPHA;
+    case rhi::BlendFactor::OneMinusSrcAlpha: return VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    case rhi::BlendFactor::SrcColor: return VK_BLEND_FACTOR_SRC_COLOR;
+    case rhi::BlendFactor::OneMinusSrcColor: return VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
+    case rhi::BlendFactor::DstColor: return VK_BLEND_FACTOR_DST_COLOR;
+    case rhi::BlendFactor::OneMinusDstColor: return VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
+    case rhi::BlendFactor::One: break;
+    }
+    return VK_BLEND_FACTOR_ONE;
+}
+
+static_assert(static_cast<int>(rhi::CompareOp::Always) == VK_COMPARE_OP_ALWAYS && static_cast<int>(rhi::CompareOp::Equal) == VK_COMPARE_OP_EQUAL);
+VkCompareOp vk(rhi::CompareOp c) { return static_cast<VkCompareOp>(c); } // same order as VkCompareOp
+
+static_assert(static_cast<int>(rhi::StencilOp::DecrementAndClamp) == VK_STENCIL_OP_DECREMENT_AND_CLAMP);
+VkStencilOp vk(rhi::StencilOp s) { return static_cast<VkStencilOp>(s); } // the first five of VkStencilOp, in its order
+
+VkFormat vk(rhi::VertexFormat f) {
+    switch (f) {
+    case rhi::VertexFormat::Float: return VK_FORMAT_R32_SFLOAT;
+    case rhi::VertexFormat::Float2: return VK_FORMAT_R32G32_SFLOAT;
+    case rhi::VertexFormat::Float4: return VK_FORMAT_R32G32B32A32_SFLOAT;
+    case rhi::VertexFormat::UByte4Norm: return VK_FORMAT_R8G8B8A8_UNORM;
+    case rhi::VertexFormat::Float3: break;
+    }
+    return VK_FORMAT_R32G32B32_SFLOAT;
+}
+
+} // namespace
 
 Pipeline::Pipeline(VulkanDevice& device, VkRenderPass renderPass,
                     const std::string& vertPath, const std::string& fragPath,
@@ -43,31 +96,30 @@ Pipeline::Pipeline(VulkanDevice& device, VkRenderPass renderPass,
 
     VkPipelineShaderStageCreateInfo stages[] = { vertStage, fragStage };
 
-    VkVertexInputBindingDescription binding{};
-    std::array<VkVertexInputAttributeDescription, 4> defaultAttributes{};
+    std::vector<VkVertexInputBindingDescription> bindings;
+    std::vector<VkVertexInputAttributeDescription> attributes;
     VkPipelineVertexInputStateCreateInfo vertexInput{};
     vertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
     if (config.useVertexInput) {
-        if (!config.customVertexBindings.empty()) {
-            vertexInput.vertexBindingDescriptionCount = static_cast<uint32_t>(config.customVertexBindings.size());
-            vertexInput.pVertexBindingDescriptions = config.customVertexBindings.data();
-            vertexInput.vertexAttributeDescriptionCount = static_cast<uint32_t>(config.customVertexAttributes.size());
-            vertexInput.pVertexAttributeDescriptions = config.customVertexAttributes.data();
-        } else {
-            binding = Vertex::bindingDescription();
-            defaultAttributes = Vertex::attributeDescriptions();
-            vertexInput.vertexBindingDescriptionCount = 1;
-            vertexInput.pVertexBindingDescriptions = &binding;
-            vertexInput.vertexAttributeDescriptionCount = static_cast<uint32_t>(defaultAttributes.size());
-            vertexInput.pVertexAttributeDescriptions = defaultAttributes.data();
-        }
+        const bool custom = !config.customVertexBindings.empty();
+        const auto defaultAttributes = Vertex::attributeDescriptions();
+        const std::vector<rhi::VertexBinding> rb = custom ? config.customVertexBindings : std::vector<rhi::VertexBinding>{ Vertex::bindingDescription() };
+        const std::vector<rhi::VertexAttribute> ra =
+            custom ? config.customVertexAttributes : std::vector<rhi::VertexAttribute>(defaultAttributes.begin(), defaultAttributes.end());
+        for (const rhi::VertexBinding& b : rb)
+            bindings.push_back({ b.binding, b.stride, b.perInstance ? VK_VERTEX_INPUT_RATE_INSTANCE : VK_VERTEX_INPUT_RATE_VERTEX });
+        for (const rhi::VertexAttribute& a : ra) attributes.push_back({ a.location, a.binding, vk(a.format), a.offset });
+        vertexInput.vertexBindingDescriptionCount = static_cast<uint32_t>(bindings.size());
+        vertexInput.pVertexBindingDescriptions = bindings.data();
+        vertexInput.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributes.size());
+        vertexInput.pVertexAttributeDescriptions = attributes.data();
     }
     // else: leave vertexInput zeroed — the vertex shader synthesizes its own
     // vertices (fullscreen triangle, gl_VertexIndex into an SSBO, etc).
 
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
     inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    inputAssembly.topology = config.topology;
+    inputAssembly.topology = vk(config.topology);
 
     VkPipelineViewportStateCreateInfo viewportState{};
     viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -77,8 +129,8 @@ Pipeline::Pipeline(VulkanDevice& device, VkRenderPass renderPass,
     VkPipelineRasterizationStateCreateInfo rasterizer{};
     rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-    rasterizer.cullMode = config.cullMode;
-    rasterizer.frontFace = config.frontFace;
+    rasterizer.cullMode = vk(config.cullMode);
+    rasterizer.frontFace = vk(config.frontFace);
     rasterizer.lineWidth = 1.0f;
     if (config.depthBiasConstant != 0.0f || config.depthBiasSlope != 0.0f) {
         rasterizer.depthBiasEnable = VK_TRUE;
@@ -103,8 +155,8 @@ Pipeline::Pipeline(VulkanDevice& device, VkRenderPass renderPass,
         colorBlendAttachment.dstAlphaBlendFactor = config.premultipliedAlpha ? VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA : VK_BLEND_FACTOR_ZERO;
         colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
         if (config.customColorBlend) {
-            colorBlendAttachment.srcColorBlendFactor = config.srcColorBlendFactor;
-            colorBlendAttachment.dstColorBlendFactor = config.dstColorBlendFactor;
+            colorBlendAttachment.srcColorBlendFactor = vk(config.srcColorBlendFactor);
+            colorBlendAttachment.dstColorBlendFactor = vk(config.dstColorBlendFactor);
         }
     }
 
@@ -126,9 +178,11 @@ Pipeline::Pipeline(VulkanDevice& device, VkRenderPass renderPass,
 
     VkPipelineLayoutCreateInfo layoutInfo{};
     layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    if (config.pushConstantRange.size > 0) {
+    const VkPushConstantRange push{ rhi::VulkanCommandList::stagesOf(config.pushConstantRange.stages), config.pushConstantRange.offset,
+                                    config.pushConstantRange.size };
+    if (push.size > 0) {
         layoutInfo.pushConstantRangeCount = 1;
-        layoutInfo.pPushConstantRanges = &config.pushConstantRange;
+        layoutInfo.pPushConstantRanges = &push;
     }
     layoutInfo.setLayoutCount = static_cast<uint32_t>(config.descriptorSetLayouts.size());
     layoutInfo.pSetLayouts = config.descriptorSetLayouts.empty() ? nullptr : config.descriptorSetLayouts.data();
@@ -145,8 +199,8 @@ Pipeline::Pipeline(VulkanDevice& device, VkRenderPass renderPass,
         VkStencilOpState op{};
         op.failOp = VK_STENCIL_OP_KEEP;
         op.depthFailOp = VK_STENCIL_OP_KEEP;
-        op.passOp = config.stencilPassOp;
-        op.compareOp = config.stencilCompareOp;
+        op.passOp = vk(config.stencilPassOp);
+        op.compareOp = vk(config.stencilCompareOp);
         op.compareMask = op.writeMask = 0xFF; // dynamic; placeholders
         depthStencil.front = op;
         depthStencil.back = op;

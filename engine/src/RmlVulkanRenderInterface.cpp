@@ -94,20 +94,16 @@ RmlVulkanRenderInterface::RmlVulkanRenderInterface(VulkanDevice& device, VkRende
     m_defaultTexture = createTextureFromPixels(whitePixel, 1, 1);
 
     // --- Pipeline ---
-    VkVertexInputBindingDescription vBinding{};
-    vBinding.binding = 0;
-    vBinding.stride = sizeof(Rml::Vertex);
-    vBinding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-
-    std::vector<VkVertexInputAttributeDescription> attributes(3);
-    attributes[0] = { 0, 0, VK_FORMAT_R32G32_SFLOAT, static_cast<uint32_t>(offsetof(Rml::Vertex, position)) };
-    attributes[1] = { 1, 0, VK_FORMAT_R8G8B8A8_UNORM, static_cast<uint32_t>(offsetof(Rml::Vertex, colour)) };
-    attributes[2] = { 2, 0, VK_FORMAT_R32G32_SFLOAT, static_cast<uint32_t>(offsetof(Rml::Vertex, tex_coord)) };
+    const rhi::VertexBinding vBinding{ 0, sizeof(Rml::Vertex), false };
+    const std::vector<rhi::VertexAttribute> attributes{
+        { 0, 0, rhi::VertexFormat::Float2, static_cast<uint32_t>(offsetof(Rml::Vertex, position)) },
+        { 1, 0, rhi::VertexFormat::UByte4Norm, static_cast<uint32_t>(offsetof(Rml::Vertex, colour)) },
+        { 2, 0, rhi::VertexFormat::Float2, static_cast<uint32_t>(offsetof(Rml::Vertex, tex_coord)) } };
 
     PipelineConfig config;
     config.customVertexBindings = { vBinding };
     config.customVertexAttributes = attributes;
-    config.cullMode = VK_CULL_MODE_NONE;
+    config.cullMode = rhi::CullMode::None;
     config.depthTestEnable = false;
     config.depthWriteEnable = false;
     config.blendEnable = true;
@@ -116,10 +112,10 @@ RmlVulkanRenderInterface::RmlVulkanRenderInterface(VulkanDevice& device, VkRende
         // Every draw tests stencil == reference; with the compare mask at 0
         // (clip mask disabled) that test always passes. See applyStencilState().
         config.stencilTestEnable = true;
-        config.stencilCompareOp = VK_COMPARE_OP_EQUAL;
-        config.stencilPassOp = VK_STENCIL_OP_KEEP;
+        config.stencilCompareOp = rhi::CompareOp::Equal;
+        config.stencilPassOp = rhi::StencilOp::Keep;
     }
-    config.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(RmlPushConstants) };
+    config.pushConstantRange = { rhi::kVertex, 0, sizeof(RmlPushConstants) };
     config.descriptorSetLayouts = { m_textureSetLayout };
     // Every UI fragment shader's kTargetEncoded (constant_id 0).
     config.fragmentConstants = { targetEncoded ? 1u : 0u };
@@ -129,13 +125,13 @@ RmlVulkanRenderInterface::RmlVulkanRenderInterface(VulkanDevice& device, VkRende
 
     // Same vertex stage and state; the fragment stage reads the gradient
     // parameters from push constants placed after the vertex ones.
-    config.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
+    config.pushConstantRange = { rhi::kVertex | rhi::kFragment, 0,
                                  sizeof(RmlPushConstants) + sizeof(GradientPushConstants) };
     m_gradientPipeline = std::make_unique<Pipeline>(
         device, renderPass, "shaders/rml_ui.vert.spv", "shaders/rml_gradient.frag.spv", config);
 
     // Textures saved from a layer (box-shadows) hold linear colour already.
-    config.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(RmlPushConstants) };
+    config.pushConstantRange = { rhi::kVertex, 0, sizeof(RmlPushConstants) };
     m_layerTexturePipeline = std::make_unique<Pipeline>(
         device, renderPass, "shaders/rml_ui.vert.spv", "shaders/rml_layer.frag.spv", config);
 
@@ -143,10 +139,10 @@ RmlVulkanRenderInterface::RmlVulkanRenderInterface(VulkanDevice& device, VkRende
     // fragment push constants, the source layer in set 0 and a mask in set 1.
     PipelineConfig layer;
     layer.useVertexInput = false;
-    layer.cullMode = VK_CULL_MODE_NONE;
+    layer.cullMode = rhi::CullMode::None;
     layer.depthTestEnable = false;
     layer.depthWriteEnable = false;
-    layer.pushConstantRange = { VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(RmlFilterPush) };
+    layer.pushConstantRange = { rhi::kFragment, 0, sizeof(RmlFilterPush) };
     layer.descriptorSetLayouts = { m_textureSetLayout, m_textureSetLayout };
     layer.fragmentConstants = config.fragmentConstants;
     m_filterReplace = std::make_unique<Pipeline>(
@@ -158,8 +154,8 @@ RmlVulkanRenderInterface::RmlVulkanRenderInterface(VulkanDevice& device, VkRende
     // Compositing onto a layer keeps to the clip mask, like every other draw.
     if (m_stencilAvailable) {
         layer.stencilTestEnable = true;
-        layer.stencilCompareOp = VK_COMPARE_OP_EQUAL;
-        layer.stencilPassOp = VK_STENCIL_OP_KEEP;
+        layer.stencilCompareOp = rhi::CompareOp::Equal;
+        layer.stencilPassOp = rhi::StencilOp::Keep;
     }
     m_compositeBlend = std::make_unique<Pipeline>(
         device, renderPass, "shaders/rml_fullscreen.vert.spv", "shaders/rml_filter.frag.spv", layer);
@@ -169,13 +165,13 @@ RmlVulkanRenderInterface::RmlVulkanRenderInterface(VulkanDevice& device, VkRende
 
     if (m_stencilAvailable) {
         // Mask writers: same vertex stage, no color output, stencil only.
-        config.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(RmlPushConstants) };
+        config.pushConstantRange = { rhi::kVertex, 0, sizeof(RmlPushConstants) };
         config.colorWriteEnable = false;
-        config.stencilCompareOp = VK_COMPARE_OP_ALWAYS;
-        config.stencilPassOp = VK_STENCIL_OP_REPLACE;
+        config.stencilCompareOp = rhi::CompareOp::Always;
+        config.stencilPassOp = rhi::StencilOp::Replace;
         m_maskReplacePipeline = std::make_unique<Pipeline>(
             device, renderPass, "shaders/rml_ui.vert.spv", "shaders/rml_ui.frag.spv", config);
-        config.stencilPassOp = VK_STENCIL_OP_INCREMENT_AND_CLAMP;
+        config.stencilPassOp = rhi::StencilOp::IncrementAndClamp;
         m_maskIncrementPipeline = std::make_unique<Pipeline>(
             device, renderPass, "shaders/rml_ui.vert.spv", "shaders/rml_ui.frag.spv", config);
     }

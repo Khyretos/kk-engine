@@ -1,6 +1,7 @@
 #pragma once
 
 #include "kke/rhi/Device.h"
+#include "kke/rhi/PipelineState.h"
 
 #include <volk.h>
 #include <glm/glm.hpp>
@@ -31,8 +32,8 @@ struct Vertex {
     // UV value genuinely doesn't matter.
     glm::vec2 uv{0.0f, 0.0f};
 
-    static VkVertexInputBindingDescription bindingDescription();
-    static std::array<VkVertexInputAttributeDescription, 4> attributeDescriptions();
+    static rhi::VertexBinding bindingDescription();
+    static std::array<rhi::VertexAttribute, 4> attributeDescriptions();
 };
 
 // A GPU-resident mesh: vertex + index buffer, ready to bind and draw.

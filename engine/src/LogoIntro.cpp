@@ -95,7 +95,7 @@ LogoIntro::LogoIntro(Application& app) : m_app(app), m_device(app.device().devic
 
     PipelineConfig backdrop;
     backdrop.useVertexInput = false;
-    backdrop.cullMode = VK_CULL_MODE_NONE;
+    backdrop.cullMode = rhi::CullMode::None;
     backdrop.depthTestEnable = false;
     backdrop.depthWriteEnable = false;
     backdrop.pushConstantRange = { stages, 0, sizeof(BackdropPush) };
@@ -107,7 +107,7 @@ LogoIntro::LogoIntro(Application& app) : m_app(app), m_device(app.device().devic
     PipelineConfig logoConfig;
     // Counter-clockwise model triangles stay counter-clockwise on screen
     // (the projection's Y flip and framebuffer Y cancel; see BUG-040).
-    logoConfig.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+    logoConfig.frontFace = rhi::FrontFace::CounterClockwise;
     logoConfig.pushConstantRange = { stages, 0, sizeof(LogoPush) };
     m_logo = std::make_unique<Pipeline>(app.device(), pass, "shaders/logo.vert.spv", "shaders/logo.frag.spv", logoConfig);
 

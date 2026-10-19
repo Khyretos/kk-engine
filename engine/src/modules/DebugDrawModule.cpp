@@ -10,8 +10,8 @@ namespace kke {
 void DebugDrawModule::init(Application& app) {
     m_app = &app;
     PipelineConfig config;
-    config.cullMode = VK_CULL_MODE_NONE;
-    config.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4) };
+    config.cullMode = rhi::CullMode::None;
+    config.pushConstantRange = { rhi::kVertex, 0, sizeof(glm::mat4) };
     config.depthWriteEnable = false;
     m_pipeline = std::make_unique<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/debug.vert.spv", "shaders/debug.frag.spv", config);
     config.depthTestEnable = false;

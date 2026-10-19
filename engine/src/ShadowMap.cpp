@@ -225,7 +225,7 @@ void ShadowMap::beginTile(VkCommandBuffer cmd, uint32_t tile) {
 
 PipelineConfig ShadowMap::casterConfig() {
     PipelineConfig config;
-    config.cullMode = VK_CULL_MODE_NONE;
+    config.cullMode = rhi::CullMode::None;
     // Slope factor does the work: bias grows with how steeply the
     // surface faces away from the light. The constant is tiny for D32
     // (it's scaled by the depth's exponent) and only covers flat floors.

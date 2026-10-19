@@ -75,13 +75,13 @@ struct HairRenderer::Shared {
         VK_CHECK(r);
         PipelineConfig c;
         c.useVertexInput = false;       // hair.vert builds every vertex from the buffers
-        c.cullMode = VK_CULL_MODE_NONE; // ribbons face the camera, either winding
+        c.cullMode = rhi::CullMode::None; // ribbons face the camera, either winding
         c.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), app.shadowMapSetLayout(), setLayout };
         pipeline = std::make_unique<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/hair.vert.spv", "shaders/hair.frag.spv", c);
         PipelineConfig s = ShadowMap::casterConfig();
         s.useVertexInput = false;
-        s.cullMode = VK_CULL_MODE_NONE;
-        s.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ShadowPush) };
+        s.cullMode = rhi::CullMode::None;
+        s.pushConstantRange = { rhi::kVertex, 0, sizeof(ShadowPush) };
         s.descriptorSetLayouts = { setLayout };
         shadowPipeline = std::make_unique<Pipeline>(app.device(), app.shadowMap().renderPass(), "shaders/hair_shadow.vert.spv", "shaders/shadow.frag.spv", s);
     }

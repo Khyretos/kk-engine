@@ -446,9 +446,9 @@ void PhysicsModule::init(Application& app) {
         // framebuffer's Y-down cancel). Culling was off since an old
         // "TEMPORARY DIAGNOSTIC", so every face was shaded twice and
         // the inside of a piece showed through its cracks.
-        config.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-        config.cullMode = VK_CULL_MODE_BACK_BIT;
-        config.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PhysicsPushConstants) };
+        config.frontFace = rhi::FrontFace::CounterClockwise;
+        config.cullMode = rhi::CullMode::Back;
+        config.pushConstantRange = { rhi::kVertex, 0, sizeof(PhysicsPushConstants) };
         config.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), app.shadowMapSetLayout(), app.materialTextureSetLayout() };
         m_pipeline = std::make_unique<Pipeline>(
             app.device(), app.renderer().renderPass(),
@@ -461,7 +461,7 @@ void PhysicsModule::init(Application& app) {
     // deliberately excluded from this).
     {
         PipelineConfig shadowConfig = ShadowMap::casterConfig();
-        shadowConfig.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ShadowPushConstants) };
+        shadowConfig.pushConstantRange = { rhi::kVertex, 0, sizeof(ShadowPushConstants) };
         m_shadowPipeline = std::make_unique<Pipeline>(
             app.device(), app.shadowMap().renderPass(),
             "shaders/shadow.vert.spv", "shaders/shadow.frag.spv", shadowConfig);
