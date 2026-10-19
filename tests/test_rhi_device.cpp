@@ -149,3 +149,15 @@ TEST(RhiDevice, ATextureKeepsEveryLevel) {
     EXPECT_EQ(made.desc.levels, 3u);
     EXPECT_NE(texture->ref().view, 0u);
 }
+
+TEST(RhiDevice, ATextureBindingSaysWhenComputeWritesIt) {
+    MemoryDevice device;
+    rhi::Device& d = device;
+    const rhi::BindingLayout binding{ 0, rhi::BindingType::Texture, rhi::kFragment | rhi::kCompute };
+    auto layout = d.createBindGroupLayout({ &binding, 1 });
+    const rhi::BindGroup g = d.createBindGroup(*layout);
+    const rhi::BindingWrite write{ .binding = 0, .texture = { 3, 4, true } };
+    d.writeBindGroup(g, *layout, { &write, 1 });
+    EXPECT_TRUE(device.groups[g.handle][0].texture.computeWritten);
+    EXPECT_FALSE(rhi::TextureRef{}.computeWritten);
+}

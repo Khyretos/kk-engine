@@ -122,7 +122,7 @@ void VulkanGpuDevice::writeBindGroup(BindGroup group, const BindGroupLayout& lay
         vk[i].descriptorType = descriptorType(type);
         if (type == BindingType::Texture) {
             images[i] = { VulkanCommandList::fromHandle<VkSampler>(w.texture.sampler), VulkanCommandList::fromHandle<VkImageView>(w.texture.view),
-                          VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+                          w.texture.computeWritten ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
             vk[i].pImageInfo = &images[i];
         } else {
             buffers[i] = { VulkanCommandList::fromHandle<VkBuffer>(w.buffer.handle), w.offset, w.range ? w.range : VK_WHOLE_SIZE };
