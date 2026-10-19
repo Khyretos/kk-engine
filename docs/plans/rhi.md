@@ -46,11 +46,18 @@ That halves the RHI: the ~20 compute passes stay as they are, behind a
   surfaces, physics materials, GPU particles, hair and particle systems
   make their sets this way instead of sizing pools of their own: Vulkan's
   pools now grow, so the 1024-texture cache limit is gone.
-- **R1e, the other resources.** Texture (2D, array, cube, 3D), Sampler,
-  ShaderModule (SPIR-V in, the backend converts) and GraphicsPipeline
-  made by the device; the lighting and shadow sets (set 0 and 1) move
-  onto bind groups with them. Vulkan implements each by wrapping today's
-  code; output must not change (benchmarks within 2%, pictures identical).
+- **R1e, textures (done).** The device makes sampled 2D textures from
+  their pixels (every mip level, 8-bit sRGB or linear, or half-float),
+  with the sampler a description asks for (repeat, or around the horizon
+  only; trilinear or nearest level; anisotropic). `kke::Texture` keeps
+  decoding and building mips on the CPU and hands the levels over;
+  bind groups name a texture by `ref()`. The decal array, shadow maps
+  and post-process targets stay Vulkan for now.
+- **R1f, shaders and pipelines.** ShaderModule (SPIR-V in, the backend
+  converts) and GraphicsPipeline made by the device; the lighting and
+  shadow sets (set 0 and 1) move onto bind groups with them. Vulkan
+  implements each by wrapping today's code; output must not change
+  (benchmarks within 2%, pictures identical).
 - **R1b, the modules moved (done).** Models (scene and shadow), physics
   objects and rubble, particle effects (CPU batches and GPU-stepped),
   particle systems, ocean, hair, sphere impostors and cloth record their
@@ -59,7 +66,7 @@ That halves the RHI: the ~20 compute passes stay as they are, behind a
   until the device makes them. Still on a VkCommandBuffer: the fluid
   surface (its own render pass), thumbnails, the RmlUi and ImGui
   renderers, the sky and the Renderer's own passes.
-- **R1f, the rest of the graphics path.** Renderer's scene, shadow and overlay
+- **R1g, the rest of the graphics path.** Renderer's scene, shadow and overlay
   passes, Pipeline, Mesh, Texture, ShadowMap, LightingBuffer's uniform
   part, SkyRenderer, and every module's render(): ModelModule,
   PhysicsModule, ParticleEffects' instanced path, DebugDraw, Grid, Ocean,

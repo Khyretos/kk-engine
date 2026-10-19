@@ -1,10 +1,11 @@
 #pragma once
 
+#include "kke/rhi/Device.h"
+
 #include <volk.h>
-#include <vk_mem_alloc.h>
 #include <string>
 #include <cstdint>
-#include <vector>
+#include <memory>
 
 namespace kke {
 
@@ -55,20 +56,17 @@ public:
     Texture(const Texture&) = delete;
     Texture& operator=(const Texture&) = delete;
 
-    VkImageView imageView() const { return m_imageView; }
-    VkSampler sampler() const { return m_sampler; }
+    // What a bind group names (docs/plans/rhi.md, R1e).
+    rhi::TextureRef ref() const { return m_gpu->ref(); }
+    VkImageView imageView() const;
+    VkSampler sampler() const;
 
 private:
     void loadFile(const std::string& filePath, bool srgb);
     void createFromPixels(const uint8_t* rgbaPixels, uint32_t width, uint32_t height, bool srgb = true);
-    void createImage(const void* data, size_t dataSize, VkFormat format, uint32_t width, uint32_t height, uint32_t mipLevels,
-                     const std::vector<VkBufferImageCopy>& regions);
 
     VulkanDevice& m_device;
-    VkImage m_image = VK_NULL_HANDLE;
-    VmaAllocation m_allocation = VK_NULL_HANDLE;
-    VkImageView m_imageView = VK_NULL_HANDLE;
-    VkSampler m_sampler = VK_NULL_HANDLE;
+    std::unique_ptr<rhi::Texture> m_gpu; // made by the RHI device: the image, its view and its sampler
 };
 
 } // namespace kke
