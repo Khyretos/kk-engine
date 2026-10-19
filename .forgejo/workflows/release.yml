@@ -1,5 +1,5 @@
 # Forgejo port of .github/workflows/release.yml, run by git.kreative-kompas.com
-# on soucouyant inside the CI toolchain image (docker/ci.Dockerfile; see the
+# on any free worker inside the CI toolchain image (docker/ci.Dockerfile; see the
 # header of ci.yml). GitHub ignores the .forgejo folder, and Forgejo ignores
 # .github/workflows while this folder exists.
 #
@@ -105,9 +105,9 @@ env:
 
 jobs:
   linux:
-    runs-on: windows-wsl
+    runs-on: ubuntu-latest
     env:
-      KKE_JOBS: "3" # windows-wsl's WSL VM has 3 CPUs and 6 GB; two 8-job builds side by side ran it out of memory
+      KKE_JOBS: "3" # a worker may have only 3 CPUs and 6 GB (a WSL VM); 8 parallel compiles ran one out of memory
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
@@ -180,9 +180,9 @@ jobs:
           if-no-files-found: error
 
   windows:
-    runs-on: windows-wsl
+    runs-on: ubuntu-latest
     env:
-      KKE_JOBS: "3" # windows-wsl's WSL VM has 3 CPUs and 6 GB; two 8-job builds side by side ran it out of memory
+      KKE_JOBS: "3" # a worker may have only 3 CPUs and 6 GB (a WSL VM); 8 parallel compiles ran one out of memory
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
@@ -228,9 +228,9 @@ jobs:
   # (docs/ANDROID.md), signed with the
   # project key when the repository has it (ANDROID_KEYSTORE_* secrets).
   android:
-    runs-on: windows-wsl
+    runs-on: ubuntu-latest
     env:
-      KKE_JOBS: "3" # windows-wsl's WSL VM has 3 CPUs and 6 GB; two 8-job builds side by side ran it out of memory
+      KKE_JOBS: "3" # a worker may have only 3 CPUs and 6 GB (a WSL VM); 8 parallel compiles ran one out of memory
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
