@@ -87,7 +87,9 @@ env:
 
 jobs:
   build:
-    runs-on: soucouyant
+    runs-on: windows-wsl
+    env:
+      KKE_JOBS: "3" # windows-wsl's WSL VM has 3 CPUs and 6 GB; two 8-job builds side by side ran it out of memory
     timeout-minutes: 120
     container:
       image: git.kreative-kompas.com/khyretos/kke-vm:1

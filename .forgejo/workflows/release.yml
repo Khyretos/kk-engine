@@ -105,7 +105,9 @@ env:
 
 jobs:
   linux:
-    runs-on: soucouyant
+    runs-on: windows-wsl
+    env:
+      KKE_JOBS: "3" # windows-wsl's WSL VM has 3 CPUs and 6 GB; two 8-job builds side by side ran it out of memory
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
@@ -178,7 +180,9 @@ jobs:
           if-no-files-found: error
 
   windows:
-    runs-on: soucouyant
+    runs-on: windows-wsl
+    env:
+      KKE_JOBS: "3" # windows-wsl's WSL VM has 3 CPUs and 6 GB; two 8-job builds side by side ran it out of memory
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
@@ -224,7 +228,9 @@ jobs:
   # (docs/ANDROID.md), signed with the
   # project key when the repository has it (ANDROID_KEYSTORE_* secrets).
   android:
-    runs-on: soucouyant
+    runs-on: windows-wsl
+    env:
+      KKE_JOBS: "3" # windows-wsl's WSL VM has 3 CPUs and 6 GB; two 8-job builds side by side ran it out of memory
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
