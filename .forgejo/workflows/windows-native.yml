@@ -1,5 +1,5 @@
 # Windows (native) tests on Kees's PC (runner label 'windows', host has Node.js, Python, git, lavapipe Vulkan).
-# soucouyant cross-builds the package (MinGW-w64, in the kke-vm image); the PC (Windows 10) then runs the
+# A free worker cross-builds the package (MinGW-w64, in the kke-vm image); the PC (Windows 10) then runs the
 # unit tests and every demo on it natively, in minutes instead of the VM's hours.
 # The VM job (vm-tests.yml) stays as the fallback for when the PC is off.
 # The text reports (summary, test results, benchmark JSON; no screenshots)
@@ -87,9 +87,9 @@ env:
 
 jobs:
   build:
-    runs-on: windows-wsl
+    runs-on: ubuntu-latest
     env:
-      KKE_JOBS: "3" # windows-wsl's WSL VM has 3 CPUs and 6 GB; two 8-job builds side by side ran it out of memory
+      KKE_JOBS: "3" # a worker may have only 3 CPUs and 6 GB (a WSL VM); 8 parallel compiles ran one out of memory
     timeout-minutes: 120
     container:
       image: git.kreative-kompas.com/khyretos/kke-vm:1
@@ -164,7 +164,7 @@ jobs:
   publish:
     needs: test
     if: always() && needs.test.result != 'skipped' && github.event_name != 'pull_request'
-    runs-on: soucouyant
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1

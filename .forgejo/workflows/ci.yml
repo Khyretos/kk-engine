@@ -4,13 +4,13 @@
 #
 # Differences from the GitHub version:
 # - Runs nightly on main and by hand.
-# - Every job runs on soucouyant (never on kireserver) inside the CI
+# - Jobs run on any free worker (ubuntu-latest) inside the CI
 #   toolchain image built from docker/ci.Dockerfile, which already has the
 #   compilers, Vulkan, Xvfb, lcov and the Android SDK with NDK r28c, so no job
 #   installs packages. Changing the toolchain = edit that file, push a new
 #   image tag, then bump the `image:` lines here and in release.yml.
-# - KKE_JOBS caps parallel compiles: soucouyant has 32 GB of RAM and also
-#   runs other repositories' CI and ComfyUI.
+# - KKE_JOBS caps parallel compiles. The heavy builds set it to 3, so they
+#   fit the smallest worker (a WSL VM with 3 CPUs and 6 GB).
 # - Artifact actions are Forgejo's own v4 ports.
 name: CI
 
@@ -108,10 +108,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Runners (2026-10-19, Kees): no job here needs soucouyant's GPU (the tests draw on
-  # lavapipe), so the heavy builds run on windows-wsl and the quick checks on any free
-  # Linux runner (ubuntu-latest). soucouyant keeps the main build and tests, the
-  # benchmarks (one machine, comparable numbers) and the VM tests (its KVM).
+  # Runners (2026-10-19, Kees): every job here goes to any free worker
+  # (ubuntu-latest); the tests draw on lavapipe, so none needs a GPU. Kees picks
+  # which PCs take shared jobs on the CI queue page. Only the benchmarks (one
+  # machine, comparable numbers) and the VM tests (KVM) stay on soucouyant.
   #
   # Every third-party library, tool, image, font and action must be listed,
   # with its licence, in docs/DEPENDENCIES.md: this fails when one is added
@@ -144,9 +144,9 @@ jobs:
   # warnings and its tests passing (DevTools.* checks the debug switches
   # really are ignored).
   shipping-build:
-    runs-on: windows-wsl
+    runs-on: ubuntu-latest
     env:
-      KKE_JOBS: "3" # windows-wsl's WSL VM has 3 CPUs and 6 GB; two 8-job builds side by side ran it out of memory
+      KKE_JOBS: "3" # a worker may have only 3 CPUs and 6 GB (a WSL VM); 8 parallel compiles ran one out of memory
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
@@ -162,7 +162,9 @@ jobs:
         run: ./build-ship/bin/kke_tests
 
   build-test-and-coverage:
-    runs-on: soucouyant
+    runs-on: ubuntu-latest
+    env:
+      KKE_JOBS: "3" # a worker may have only 3 CPUs and 6 GB (a WSL VM); 8 parallel compiles ran one out of memory
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
@@ -330,9 +332,9 @@ jobs:
   # configure or build log, whoever's code it is in. The Release workflow
   # (release.yml) packages this same configuration.
   release-build:
-    runs-on: windows-wsl
+    runs-on: ubuntu-latest
     env:
-      KKE_JOBS: "3" # windows-wsl's WSL VM has 3 CPUs and 6 GB; two 8-job builds side by side ran it out of memory
+      KKE_JOBS: "3" # a worker may have only 3 CPUs and 6 GB (a WSL VM); 8 parallel compiles ran one out of memory
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
@@ -359,9 +361,9 @@ jobs:
   # GCC in places) and packed into the demos APK, with zero warnings. The
   # APK is kept as a run artifact for trying on a phone (docs/ANDROID.md).
   android:
-    runs-on: windows-wsl
+    runs-on: ubuntu-latest
     env:
-      KKE_JOBS: "3" # windows-wsl's WSL VM has 3 CPUs and 6 GB; two 8-job builds side by side ran it out of memory
+      KKE_JOBS: "3" # a worker may have only 3 CPUs and 6 GB (a WSL VM); 8 parallel compiles ran one out of memory
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
