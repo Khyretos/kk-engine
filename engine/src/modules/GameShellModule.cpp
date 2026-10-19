@@ -369,8 +369,7 @@ void GameShellModule::init(Application& app) {
         m_doc->AddEventListener("click", m_listener.get());
         m_doc->AddEventListener("mousedown", m_listener.get());
         m_rowsEl = m_doc->GetElementById("rows");
-        showDocument(m_doc, false);
-        m_doc->Show(Rml::ModalFlag::None, Rml::FocusFlag::None);
+        showClosed(m_doc);
         // Above the game's own documents (the HUD, the lobby).
         m_doc->PullToFront();
     }
@@ -385,6 +384,12 @@ void GameShellModule::init(Application& app) {
         m_openPage = envIs("settings") ? Page::Settings : Page::Controls;
     }
     if (!skip && m_openPage == Page::None) setPage(Page::Title);
+}
+
+void GameShellModule::showClosed(Rml::ElementDocument* doc) {
+    if (!doc) return;
+    doc->Show(Rml::ModalFlag::None, Rml::FocusFlag::None);
+    showDocument(doc, false);
 }
 
 void GameShellModule::shutdown() {
