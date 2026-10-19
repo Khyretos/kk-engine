@@ -15,7 +15,7 @@ on:
 
 jobs:
   fix:
-    runs-on: soucouyant
+    runs-on: windows-wsl
     container:
       image: oxsecurity/megalinter-c_cpp:v9
     env:
