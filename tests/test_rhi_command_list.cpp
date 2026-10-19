@@ -87,7 +87,8 @@ TEST(RhiCommandList, DescriptorSetsBecomeBindGroupsInOrder) {
 TEST(RhiCommandList, AtMostEightGroups) {
     VkDescriptorSet sets[10];
     for (uint64_t i = 0; i < 10; ++i) sets[i] = rhi::VulkanCommandList::fromHandle<VkDescriptorSet>(i + 1);
-    const std::span<const rhi::BindGroup> span = rhi::VulkanCommandList::groups(sets, 10);
+    const auto g = rhi::VulkanCommandList::groups(sets, 10); // the span points into g: keep it alive
+    const std::span<const rhi::BindGroup> span = g;
     EXPECT_EQ(span.size(), 8u);
     EXPECT_EQ(span.back().handle, 8u);
 }

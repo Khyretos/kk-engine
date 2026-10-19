@@ -28,7 +28,7 @@ env:
 
 jobs:
   site:
-    runs-on: soucouyant
+    runs-on: ubuntu-latest
     container:
       image: python:3.12-bookworm
     steps:
