@@ -91,7 +91,7 @@ LogoIntro::LogoIntro(Application& app) : m_app(app), m_device(app.device().devic
     }
 
     const VkRenderPass pass = app.renderer().renderPass();
-    const VkShaderStageFlags stages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+    const uint32_t stages = rhi::kVertex | rhi::kFragment;
 
     PipelineConfig backdrop;
     backdrop.useVertexInput = false;
