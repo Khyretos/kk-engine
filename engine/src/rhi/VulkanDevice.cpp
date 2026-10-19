@@ -4,9 +4,11 @@
 #include "kke/VulkanCheck.h"
 #include "kke/VulkanDevice.h"
 
+#include <algorithm>
 #include <array>
 #include <memory>
 #include <utility>
+#include <vector>
 
 namespace kke::rhi {
 
@@ -138,8 +140,136 @@ void VulkanGpuDevice::releaseBindGroup(BindGroup group) {
     m_poolOf.erase(it);
 }
 
-TextureRef VulkanGpuDevice::texture(const kke::Texture& texture) {
-    return { VulkanCommandList::toHandle(texture.imageView()), VulkanCommandList::toHandle(texture.sampler()) };
+TextureRef VulkanGpuDevice::texture(const kke::Texture& texture) { return texture.ref(); }
+
+std::unique_ptr<Texture> VulkanGpuDevice::createTexture(const TextureDesc& desc, const void* pixels) {
+    return std::make_unique<VulkanTexture>(m_device, desc, pixels);
+}
+
+namespace {
+
+VkFormat formatOf(TextureFormat format) {
+    switch (format) {
+    case TextureFormat::RGBA8: return VK_FORMAT_R8G8B8A8_UNORM;
+    case TextureFormat::RGBA16F: return VK_FORMAT_R16G16B16A16_SFLOAT;
+    case TextureFormat::RGBA8Srgb: break;
+    }
+    return VK_FORMAT_R8G8B8A8_SRGB;
+}
+
+} // namespace
+
+size_t VulkanTexture::byteSize(const TextureDesc& desc) {
+    const size_t texel = desc.format == TextureFormat::RGBA16F ? 8 : 4;
+    size_t bytes = 0;
+    for (uint32_t level = 0; level < desc.levels; ++level)
+        bytes += static_cast<size_t>(std::max(1u, desc.width >> level)) * std::max(1u, desc.height >> level) * texel;
+    return bytes;
+}
+
+VulkanTexture::VulkanTexture(kke::VulkanDevice& device, const TextureDesc& desc, const void* pixels) : m_device(device) {
+    const VkFormat format = formatOf(desc.format);
+    const size_t texel = desc.format == TextureFormat::RGBA16F ? 8 : 4;
+    // Every level in one staging buffer, one copy region per level.
+    std::vector<VkBufferImageCopy> regions;
+    size_t offset = 0;
+    for (uint32_t level = 0; level < desc.levels; ++level) {
+        const uint32_t w = std::max(1u, desc.width >> level), h = std::max(1u, desc.height >> level);
+        VkBufferImageCopy r{};
+        r.bufferOffset = offset;
+        r.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, level, 0, 1 };
+        r.imageExtent = { w, h, 1 };
+        regions.push_back(r);
+        offset += static_cast<size_t>(w) * h * texel;
+    }
+    kke::Buffer staging(m_device, offset, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+    staging.upload(pixels, offset);
+
+    VkImageCreateInfo imageInfo{};
+    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageInfo.imageType = VK_IMAGE_TYPE_2D;
+    imageInfo.extent = { desc.width, desc.height, 1 };
+    imageInfo.mipLevels = desc.levels;
+    imageInfo.arrayLayers = 1;
+    imageInfo.format = format;
+    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    imageInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    VmaAllocationCreateInfo allocInfo{};
+    allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    VK_CHECK(vmaCreateImage(m_device.allocator(), &imageInfo, &allocInfo, &m_image, &m_allocation, nullptr));
+
+    // Staging buffer to image: transfer-dst, copy, shader-read, waiting for the queue (load time).
+    VkCommandBufferAllocateInfo cmdAllocInfo{};
+    cmdAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    cmdAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    cmdAllocInfo.commandPool = m_device.commandPool();
+    cmdAllocInfo.commandBufferCount = 1;
+    VkCommandBuffer cmd;
+    VK_CHECK(vkAllocateCommandBuffers(m_device.device(), &cmdAllocInfo, &cmd));
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    VK_CHECK(vkBeginCommandBuffer(cmd, &beginInfo));
+    VkImageMemoryBarrier toTransferDst{};
+    toTransferDst.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    toTransferDst.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    toTransferDst.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    toTransferDst.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    toTransferDst.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    toTransferDst.image = m_image;
+    toTransferDst.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, desc.levels, 0, 1 };
+    toTransferDst.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &toTransferDst);
+    vkCmdCopyBufferToImage(cmd, staging.handle(), m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, static_cast<uint32_t>(regions.size()),
+                           regions.data());
+    VkImageMemoryBarrier toShaderRead = toTransferDst;
+    toShaderRead.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    toShaderRead.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    toShaderRead.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    toShaderRead.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, &toShaderRead);
+    VK_CHECK(vkEndCommandBuffer(cmd));
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &cmd;
+    VK_CHECK(vkQueueSubmit(m_device.graphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE));
+    VK_CHECK(vkQueueWaitIdle(m_device.graphicsQueue()));
+    vkFreeCommandBuffers(m_device.device(), m_device.commandPool(), 1, &cmd);
+
+    VkImageViewCreateInfo viewInfo{};
+    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    viewInfo.image = m_image;
+    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.format = format;
+    viewInfo.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, desc.levels, 0, 1 };
+    VK_CHECK(vkCreateImageView(m_device.device(), &viewInfo, nullptr, &m_view));
+
+    VkSamplerCreateInfo samplerInfo{};
+    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samplerInfo.magFilter = VK_FILTER_LINEAR;
+    samplerInfo.minFilter = VK_FILTER_LINEAR;
+    samplerInfo.mipmapMode = desc.blendLevels ? VK_SAMPLER_MIPMAP_MODE_LINEAR : VK_SAMPLER_MIPMAP_MODE_NEAREST;
+    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeV = samplerInfo.addressModeW =
+        desc.wrap == Wrap::Repeat ? VK_SAMPLER_ADDRESS_MODE_REPEAT : VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    // 8x anisotropy is near free on any GPU with the feature; 16x adds little more.
+    if (desc.anisotropic && m_device.maxSamplerAnisotropy() > 1.0f) {
+        samplerInfo.anisotropyEnable = VK_TRUE;
+        samplerInfo.maxAnisotropy = std::min(8.0f, m_device.maxSamplerAnisotropy());
+    }
+    samplerInfo.maxLod = static_cast<float>(desc.levels - 1);
+    VK_CHECK(vkCreateSampler(m_device.device(), &samplerInfo, nullptr, &m_sampler));
+}
+
+VulkanTexture::~VulkanTexture() {
+    VkDevice dev = m_device.device();
+    if (m_sampler) vkDestroySampler(dev, m_sampler, nullptr);
+    if (m_view) vkDestroyImageView(dev, m_view, nullptr);
+    if (m_image) vmaDestroyImage(m_device.allocator(), m_image, m_allocation);
 }
 
 } // namespace kke::rhi
