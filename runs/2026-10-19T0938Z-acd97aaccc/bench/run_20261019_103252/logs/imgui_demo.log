@@ -1,0 +1,14 @@
+[2026-10-19 10:37:03.289][engine][Application][Kreative Kompas Engine - ImGui Demo][info]: Hardware target: desktop (no specific device recognised); platform backend: desktop
+[2026-10-19 10:37:03.289][engine][Application][Kreative Kompas Engine - ImGui Demo][info]: UI profile: desktop
+[2026-10-19 10:37:03.289][engine][Governor][Kreative Kompas Engine - ImGui Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 1.00
+[2026-10-19 10:37:03.293][engine][VulkanDevice][Kreative Kompas Engine - ImGui Demo][info]: using device: llvmpipe (LLVM 22.1.8, 256 bits)
+[2026-10-19 10:37:03.293][engine][VulkanDevice][Kreative Kompas Engine - ImGui Demo][info]: inline ray tracing (VK_KHR_ray_query): on
+[2026-10-19 10:37:04.224][engine][SwapChain][Kreative Kompas Engine - ImGui Demo][info]: colour output: format 50 (8-bit sRGB)
+[2026-10-19 10:37:04.225][engine][Application][Kreative Kompas Engine - ImGui Demo][info]: Hardware target: software-gpu (the only Vulkan device is a CPU: llvmpipe (LLVM 22.1.8, 256 bits))
+[2026-10-19 10:37:04.225][engine][Governor][Kreative Kompas Engine - ImGui Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+[2026-10-19 10:37:04.226][engine][Application][Kreative Kompas Engine - ImGui Demo][info]: MSAA 1x (software rasteriser)
+[2026-10-19 10:37:04.229][engine][Application][Kreative Kompas Engine - ImGui Demo][info]: mood 'studio' (assets/moods/studio.yaml)
+[2026-10-19 10:37:04.229][engine][Benchmark][Kreative Kompas Engine - ImGui Demo][info]: benchmark: 3 s warm-up, then 20 s measured, uncapped (no vsync, no frame cap)
+[2026-10-19 10:37:04.231][engine][Governor][Kreative Kompas Engine - ImGui Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 0, render scale 0.75
+[2026-10-19 10:37:27.414][engine][Benchmark][Kreative Kompas Engine - ImGui Demo][info]: benchmark: 6 screenshot(s) in C:/forgejo-runner/work/07cd443056a0d3cf/hostexecutor/results/bench/run_20261019_103252/reports/shots
+[2026-10-19 10:37:27.415][engine][Benchmark][Kreative Kompas Engine - ImGui Demo][info]: benchmark: 404 frames, 21.0 fps avg, 17.3 fps 1% low, 0 hitch(es), verdict struggles; report C:\forgejo-runner\work\07cd443056a0d3cf\hostexecutor\results\bench\run_20261019_103252\reports\imgui_demo.json
