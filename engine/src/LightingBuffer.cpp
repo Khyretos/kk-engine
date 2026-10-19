@@ -75,69 +75,19 @@ static_assert(ShadowMap::kMaxPointShadows <= Lighting::kMaxLights, "every point-
 } // namespace
 
 LightingBuffer::LightingBuffer(VulkanDevice& device) : m_device(device) {
-    // --- Descriptor set layout: one uniform buffer, readable from both
-    // vertex and fragment stages (vertex doesn't currently need it, but
-    // costs nothing to allow now rather than needing a second layout
-    // later for e.g. per-vertex light-space transforms for shadows).
-    std::array<VkDescriptorSetLayoutBinding, 16> bindings{};
-    bindings[0].binding = 0;
-    bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    bindings[0].descriptorCount = 1;
-    // Compute too: volumetric fog lights its cells from it (kke::VolumetricFogPass).
-    bindings[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
-    // Binding 1: the sky prefiltered for reflections (setEnvironmentMap).
-    bindings[1].binding = 1;
-    bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    bindings[1].descriptorCount = 1;
-    bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-    // Bindings 2 and 3: screen-space GI's light and depth (setScreenGi).
-    bindings[2] = bindings[1];
-    bindings[2].binding = 2;
-    bindings[3] = bindings[1];
-    bindings[3].binding = 3;
-    // Bindings 4 and 5: reflections' light and depth (setReflections).
-    bindings[4] = bindings[1];
-    bindings[4].binding = 4;
-    bindings[5] = bindings[1];
-    bindings[5].binding = 5;
-    // Binding 6: what see-through surfaces show behind them (setBehind).
-    bindings[6] = bindings[1];
-    bindings[6].binding = 6;
-    // Binding 7: volumetric fog's integrated grid, a 3D image (setFogVolume).
-    bindings[7] = bindings[1];
-    bindings[7].binding = 7;
-    // Binding 8: last frame's ray-traced sun shadows (setShadowRays).
-    bindings[8] = bindings[1];
-    bindings[8].binding = 8;
-    // Bindings 9-11: the many lights and their per-cell lists (setManyLights); 12-14 the decals and theirs (setDecals).
-    for (uint32_t i = 9; i < 15; ++i) {
-        bindings[i].binding = i;
-        bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        bindings[i].descriptorCount = 1;
-        bindings[i].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-    }
-    // Binding 15: the decals' textures (setDecals).
-    bindings[15] = bindings[1];
-    bindings[15].binding = 15;
-
-    VkDescriptorSetLayoutCreateInfo layoutInfo{};
-    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
-    layoutInfo.pBindings = bindings.data();
-    VK_CHECK(vkCreateDescriptorSetLayout(device.device(), &layoutInfo, nullptr, &m_setLayout));
-
-    // --- Descriptor pool: one set per frame in flight -- every lit
-    // module shares these, there's no per-object growth the way
-    // RmlVulkanRenderInterface's texture pool needs.
-    const std::array<VkDescriptorPoolSize, 3> poolSizes{ { { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 6 * kSlotCount },
-                                                          { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kSlotCount },
-                                                          { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 9 * kSlotCount } } };
-    VkDescriptorPoolCreateInfo poolInfo{};
-    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    poolInfo.maxSets = kSlotCount;
-    poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
-    poolInfo.pPoolSizes = poolSizes.data();
-    VK_CHECK(vkCreateDescriptorPool(device.device(), &poolInfo, nullptr, &m_descriptorPool));
+    // --- Set 0's layout, made by the RHI device. Binding 0: the uniform buffer, read by the
+    // vertex and fragment stages and by compute (volumetric fog lights its cells from it).
+    // 1: the sky prefiltered for reflections (setEnvironmentMap); 2-3: screen-space GI's light
+    // and depth (setScreenGi); 4-5: reflections' light and depth (setReflections); 6: what
+    // see-through surfaces show behind them (setBehind); 7: volumetric fog's grid, a 3D image
+    // (setFogVolume); 8: last frame's ray-traced sun shadows (setShadowRays); 9-11: the many
+    // lights and their per-cell lists (setManyLights); 12-14: the decals and theirs, 15 their
+    // textures (setDecals).
+    std::array<rhi::BindingLayout, 16> bindings;
+    bindings[0] = { 0, rhi::BindingType::UniformBuffer, rhi::kVertex | rhi::kFragment | rhi::kCompute };
+    for (uint32_t i = 1; i < 16; ++i)
+        bindings[i] = { i, i >= 9 && i < 15 ? rhi::BindingType::StorageBuffer : rhi::BindingType::Texture, rhi::kFragment };
+    m_layout = m_gpu.createBindGroupLayout(bindings);
 
     const std::array<uint16_t, 4> black{ glm::packHalf1x16(0.0f), glm::packHalf1x16(0.0f), glm::packHalf1x16(0.0f), glm::packHalf1x16(1.0f) };
     m_placeholder = std::make_unique<Texture>(device, black.data(), 1, 1, Texture::HalfFloatSky{});
@@ -146,31 +96,16 @@ LightingBuffer::LightingBuffer(VulkanDevice& device) : m_device(device) {
     createVolumePlaceholder();
 
     for (uint32_t i = 0; i < kSlotCount; ++i) {
-        VkDescriptorSetAllocateInfo allocInfo{};
-        allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        allocInfo.descriptorPool = m_descriptorPool;
-        allocInfo.descriptorSetCount = 1;
-        allocInfo.pSetLayouts = &m_setLayout;
-        VK_CHECK(vkAllocateDescriptorSets(device.device(), &allocInfo, &m_descriptorSets[i]));
+        m_descriptorSets[i] = rhi::VulkanGpuDevice::set(m_gpu.createBindGroup(*m_layout));
 
         // Host-visible, updated directly every frame -- this buffer is
         // tiny, so a staging-buffer round trip would be pure overhead.
         m_buffers[i] = std::make_unique<Buffer>(device, sizeof(LightingUBOData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                                                 VMA_MEMORY_USAGE_CPU_TO_GPU);
 
-        VkDescriptorBufferInfo bufferInfo{};
-        bufferInfo.buffer = m_buffers[i]->handle();
-        bufferInfo.offset = 0;
-        bufferInfo.range = sizeof(LightingUBOData);
-
-        VkWriteDescriptorSet write{};
-        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        write.dstSet = m_descriptorSets[i];
-        write.dstBinding = 0;
-        write.descriptorCount = 1;
-        write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        write.pBufferInfo = &bufferInfo;
-        vkUpdateDescriptorSets(device.device(), 1, &write, 0, nullptr);
+        const rhi::BindingWrite write{ .binding = 0, .buffer = rhi::VulkanCommandList::buffer(m_buffers[i]->handle()),
+                                       .range = sizeof(LightingUBOData) };
+        m_gpu.writeBindGroup(rhi::VulkanCommandList::group(m_descriptorSets[i]), *m_layout, { &write, 1 });
         writeEnvironment(i);
     }
 }
@@ -182,8 +117,6 @@ LightingBuffer::~LightingBuffer() {
     if (m_volumeSampler) vkDestroySampler(m_device.device(), m_volumeSampler, nullptr);
     if (m_volumeView) vkDestroyImageView(m_device.device(), m_volumeView, nullptr);
     if (m_volumeImage) vmaDestroyImage(m_device.allocator(), m_volumeImage, m_volumeAlloc);
-    if (m_descriptorPool) vkDestroyDescriptorPool(m_device.device(), m_descriptorPool, nullptr);
-    if (m_setLayout) vkDestroyDescriptorSetLayout(m_device.device(), m_setLayout, nullptr);
 }
 
 void LightingBuffer::createVolumePlaceholder() {
@@ -279,58 +212,37 @@ void LightingBuffer::writeEnvironment(uint32_t slot) {
     const Texture& map = m_envMap ? *m_envMap : *m_placeholder;
     // Without GI the placeholder (0, 0, 0, 1) reads as no bounce, all visible.
     const bool gi = m_giLight && m_giDepth && m_giSampler;
-    std::array<VkDescriptorImageInfo, 8> info{};
-    info[0] = { map.sampler(), map.imageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
-    info[1] = gi ? VkDescriptorImageInfo{ m_giSampler, m_giLight, VK_IMAGE_LAYOUT_GENERAL }
-                 : VkDescriptorImageInfo{ m_placeholder->sampler(), m_placeholder->imageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
-    info[2] = gi ? VkDescriptorImageInfo{ m_giSampler, m_giDepth, VK_IMAGE_LAYOUT_GENERAL } : info[1];
+    // A texture as a binding sees it; `written`: a compute pass writes it (read in the GENERAL layout).
+    const auto tex = [](VkSampler sampler, VkImageView view, bool written) {
+        return rhi::TextureRef{ rhi::VulkanCommandList::toHandle(view), rhi::VulkanCommandList::toHandle(sampler), written };
+    };
+    std::array<rhi::BindingWrite, 15> w;
+    w[0].texture = map.ref();
+    w[1].texture = gi ? tex(m_giSampler, m_giLight, true) : m_placeholder->ref();
+    w[2].texture = gi ? tex(m_giSampler, m_giDepth, true) : w[1].texture;
     // Without reflections the placeholder's a = 1 is ignored: refl.x = 0 skips the lookup.
     const bool refl = m_reflLight && m_reflDepth && m_reflSampler;
-    const VkDescriptorImageInfo none{ m_placeholder->sampler(), m_placeholder->imageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
-    info[3] = refl ? VkDescriptorImageInfo{ m_reflSampler, m_reflLight, VK_IMAGE_LAYOUT_GENERAL } : none;
-    info[4] = refl ? VkDescriptorImageInfo{ m_reflSampler, m_reflDepth, VK_IMAGE_LAYOUT_GENERAL } : none;
-    info[5] = m_behind && m_behindSampler ? VkDescriptorImageInfo{ m_behindSampler, m_behind, VK_IMAGE_LAYOUT_GENERAL } : none;
-    info[6] = m_fogVolume && m_fogVolumeSampler ? VkDescriptorImageInfo{ m_fogVolumeSampler, m_fogVolume, VK_IMAGE_LAYOUT_GENERAL }
-                                                : VkDescriptorImageInfo{ m_volumeSampler, m_volumeView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
-    info[7] = m_shadowRays && m_shadowRaySampler ? VkDescriptorImageInfo{ m_shadowRaySampler, m_shadowRays, VK_IMAGE_LAYOUT_GENERAL } : none;
-    std::array<VkWriteDescriptorSet, 8> write{};
-    for (uint32_t i = 0; i < 8; ++i) {
-        write[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        write[i].dstSet = m_descriptorSets[slot];
-        write[i].dstBinding = 1 + i;
-        write[i].descriptorCount = 1;
-        write[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        write[i].pImageInfo = &info[i];
-    }
-    vkUpdateDescriptorSets(m_device.device(), static_cast<uint32_t>(write.size()), write.data(), 0, nullptr);
+    const rhi::TextureRef none = m_placeholder->ref();
+    w[3].texture = refl ? tex(m_reflSampler, m_reflLight, true) : none;
+    w[4].texture = refl ? tex(m_reflSampler, m_reflDepth, true) : none;
+    w[5].texture = m_behind && m_behindSampler ? tex(m_behindSampler, m_behind, true) : none;
+    w[6].texture = m_fogVolume && m_fogVolumeSampler ? tex(m_fogVolumeSampler, m_fogVolume, true) : tex(m_volumeSampler, m_volumeView, false);
+    w[7].texture = m_shadowRays && m_shadowRaySampler ? tex(m_shadowRaySampler, m_shadowRays, true) : none;
+    for (uint32_t i = 0; i < 8; ++i) w[i].binding = 1 + i;
     const bool many = m_manyLights && m_clusterCounts && m_clusterIndices;
     const bool decals = m_decals && m_decalCounts && m_decalIndices && m_decalTextures;
     const VkBuffer placeholder = m_placeholderBuffer->handle();
-    const std::array<VkDescriptorBufferInfo, 6> buffers{ { { many ? m_manyLights : placeholder, 0, VK_WHOLE_SIZE },
-                                                           { many ? m_clusterCounts : placeholder, 0, VK_WHOLE_SIZE },
-                                                           { many ? m_clusterIndices : placeholder, 0, VK_WHOLE_SIZE },
-                                                           { decals ? m_decals : placeholder, 0, VK_WHOLE_SIZE },
-                                                           { decals ? m_decalCounts : placeholder, 0, VK_WHOLE_SIZE },
-                                                           { decals ? m_decalIndices : placeholder, 0, VK_WHOLE_SIZE } } };
-    std::array<VkWriteDescriptorSet, 7> bw{};
+    const std::array<VkBuffer, 6> buffers{ many ? m_manyLights : placeholder,   many ? m_clusterCounts : placeholder,
+                                           many ? m_clusterIndices : placeholder, decals ? m_decals : placeholder,
+                                           decals ? m_decalCounts : placeholder,  decals ? m_decalIndices : placeholder };
     for (uint32_t i = 0; i < 6; ++i) {
-        bw[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        bw[i].dstSet = m_descriptorSets[slot];
-        bw[i].dstBinding = 9 + i;
-        bw[i].descriptorCount = 1;
-        bw[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        bw[i].pBufferInfo = &buffers[i];
+        w[8 + i].binding = 9 + i;
+        w[8 + i].buffer = rhi::VulkanCommandList::buffer(buffers[i]);
     }
     // Without decals the black placeholder stands in for their textures (never read: decalParams.x = 0).
-    const VkDescriptorImageInfo decalImage = decals ? VkDescriptorImageInfo{ m_decalSampler, m_decalTextures, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }
-                                                    : VkDescriptorImageInfo{ m_decalArraySampler, m_decalArrayView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
-    bw[6].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    bw[6].dstSet = m_descriptorSets[slot];
-    bw[6].dstBinding = 15;
-    bw[6].descriptorCount = 1;
-    bw[6].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    bw[6].pImageInfo = &decalImage;
-    vkUpdateDescriptorSets(m_device.device(), static_cast<uint32_t>(bw.size()), bw.data(), 0, nullptr);
+    w[14].binding = 15;
+    w[14].texture = decals ? tex(m_decalSampler, m_decalTextures, false) : tex(m_decalArraySampler, m_decalArrayView, false);
+    m_gpu.writeBindGroup(rhi::VulkanCommandList::group(m_descriptorSets[slot]), *m_layout, w);
 }
 
 void LightingBuffer::update(const Lighting& lighting, const glm::vec3& cameraPos, const glm::mat4& lightViewProj, const glm::mat4& viewProj,

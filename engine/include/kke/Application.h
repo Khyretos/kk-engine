@@ -376,7 +376,7 @@ public:
     // pipeline-creation time, since that pipeline's layout must
     // declare a compatible set 1 whether or not that module's own
     // geometry casts a shadow.
-    VkDescriptorSetLayout shadowMapSetLayout() const { return m_shadowMapSetLayout; }
+    VkDescriptorSetLayout shadowMapSetLayout() const { return rhi::VulkanBindGroupLayout::vk(*m_shadowMapLayout); }
     // The ShadowMap instance itself — needed by real shadow-casting
     // modules (see CubeModule) at pipeline-creation time, to get its
     // render pass (shadowMap().renderPass()) for their own shadow
@@ -626,8 +626,7 @@ private:
     std::unique_ptr<ShadowMap> m_shadowMap;
     // Point-light shadows: six faces per shadow-casting point light (ShadowMap::pointFaceViewProj).
     std::unique_ptr<ShadowMap> m_pointShadowMap;
-    VkDescriptorSetLayout m_shadowMapSetLayout = VK_NULL_HANDLE;
-    VkDescriptorPool m_shadowMapDescriptorPool = VK_NULL_HANDLE;
+    std::unique_ptr<rhi::BindGroupLayout> m_shadowMapLayout; // set 1, made by m_gpu (R1g)
     VkDescriptorSet m_shadowMapDescriptorSet = VK_NULL_HANDLE;
 
     // The material albedo texture's own descriptor infrastructure (set

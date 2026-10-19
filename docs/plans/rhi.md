@@ -58,11 +58,15 @@ That halves the RHI: the ~20 compute passes stay as they are, behind a
   stencil, push constants and vertex layouts with `kke/rhi/PipelineState.h`
   types instead of Vulkan's; `Pipeline` translates them. The 51 pipelines
   read the same; only their spelling changed.
-- **R1g, shaders and pipelines from the device.** ShaderModule (SPIR-V in,
+- **R1g, the lighting and shadow sets (done).** Set 0 (the lighting
+  uniforms, the environment, GI, reflections, fog, shadow rays, many
+  lights, decals) and set 1 (the shadow maps) are bind groups the device
+  makes and writes; a texture a compute pass also writes says so
+  (`TextureRef::computeWritten`, Vulkan's GENERAL layout).
+- **R1h, shaders and pipelines from the device.** ShaderModule (SPIR-V in,
   the backend converts) and GraphicsPipeline made by the device, the
-  render pass named by the RHI; the lighting and shadow sets (set 0 and
-  1) move onto bind groups with them. Output must not change (benchmarks
-  within 2%, pictures identical).
+  render pass named by the RHI, pipelines taking bind group layouts.
+  Output must not change (benchmarks within 2%, pictures identical).
 - **R1b, the modules moved (done).** Models (scene and shadow), physics
   objects and rubble, particle effects (CPU batches and GPU-stepped),
   particle systems, ocean, hair, sphere impostors and cloth record their
@@ -71,7 +75,7 @@ That halves the RHI: the ~20 compute passes stay as they are, behind a
   until the device makes them. Still on a VkCommandBuffer: the fluid
   surface (its own render pass), thumbnails, the RmlUi and ImGui
   renderers, the sky and the Renderer's own passes.
-- **R1h, the rest of the graphics path.** Renderer's scene, shadow and overlay
+- **R1i, the rest of the graphics path.** Renderer's scene, shadow and overlay
   passes, Pipeline, Mesh, Texture, ShadowMap, LightingBuffer's uniform
   part, SkyRenderer, and every module's render(): ModelModule,
   PhysicsModule, ParticleEffects' instanced path, DebugDraw, Grid, Ocean,

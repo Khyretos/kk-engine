@@ -227,35 +227,11 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
     // only (the vertex stage only needs the light-space matrix, which
     // already travels through LightingBuffer's own UBO, not this).
     {
-        VkDescriptorSetLayoutBinding bindings[2]{};
-        bindings[0].binding = 0;
-        bindings[1].binding = 1;
-        for (int i = 0; i < 2; ++i) {
-            bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            bindings[i].descriptorCount = 1;
-            bindings[i].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT; // compute: volumetric fog's shafts
-        }
-
-        VkDescriptorSetLayoutCreateInfo layoutInfo{};
-        layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        layoutInfo.bindingCount = 2;
-        layoutInfo.pBindings = bindings;
-        VK_CHECK(vkCreateDescriptorSetLayout(m_renderer->device().device(), &layoutInfo, nullptr, &m_shadowMapSetLayout));
-
-        VkDescriptorPoolSize poolSize{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2 };
-        VkDescriptorPoolCreateInfo poolInfo{};
-        poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        poolInfo.maxSets = 1;
-        poolInfo.poolSizeCount = 1;
-        poolInfo.pPoolSizes = &poolSize;
-        VK_CHECK(vkCreateDescriptorPool(m_renderer->device().device(), &poolInfo, nullptr, &m_shadowMapDescriptorPool));
-
-        VkDescriptorSetAllocateInfo allocInfo{};
-        allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        allocInfo.descriptorPool = m_shadowMapDescriptorPool;
-        allocInfo.descriptorSetCount = 1;
-        allocInfo.pSetLayouts = &m_shadowMapSetLayout;
-        VK_CHECK(vkAllocateDescriptorSets(m_renderer->device().device(), &allocInfo, &m_shadowMapDescriptorSet));
+        // Made by the RHI device (R1g); compute reads them too: volumetric fog's shafts.
+        const rhi::BindingLayout bindings[2] = { { 0, rhi::BindingType::Texture, rhi::kFragment | rhi::kCompute },
+                                                 { 1, rhi::BindingType::Texture, rhi::kFragment | rhi::kCompute } };
+        m_shadowMapLayout = m_gpu->createBindGroupLayout(bindings);
+        m_shadowMapDescriptorSet = rhi::VulkanGpuDevice::set(m_gpu->createBindGroup(*m_shadowMapLayout));
 
         writeShadowMapDescriptor();
     }
@@ -362,9 +338,7 @@ Application::~Application() {
     // vkDeviceWaitIdle() at the top of this destructor already
     // guarantees nothing is still using it on the GPU by this point.
     if (m_renderer) {
-        VkDevice dev = m_renderer->device().device();
-        if (m_shadowMapDescriptorPool) vkDestroyDescriptorPool(dev, m_shadowMapDescriptorPool, nullptr);
-        if (m_shadowMapSetLayout) vkDestroyDescriptorSetLayout(dev, m_shadowMapSetLayout, nullptr);
+        m_shadowMapLayout.reset();
         m_textureCache.clear();
         m_materialTextureLayout.reset();
     }
@@ -452,32 +426,12 @@ void Application::safeInvoke(Module* m, const char* stage, const std::function<v
 }
 
 void Application::writeShadowMapDescriptor() {
-    VkDescriptorImageInfo shadowMapInfo{};
-    shadowMapInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    shadowMapInfo.imageView = m_shadowMap->imageView();
-    shadowMapInfo.sampler = m_shadowMap->sampler();
-
-    VkDescriptorImageInfo pointShadowMapInfo{};
-    pointShadowMapInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    pointShadowMapInfo.imageView = m_pointShadowMap->imageView();
-    pointShadowMapInfo.sampler = m_pointShadowMap->sampler();
-
-    VkWriteDescriptorSet writes[2]{};
-    writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    writes[0].dstSet = m_shadowMapDescriptorSet;
-    writes[0].dstBinding = 0;
-    writes[0].descriptorCount = 1;
-    writes[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    writes[0].pImageInfo = &shadowMapInfo;
-
-    writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    writes[1].dstSet = m_shadowMapDescriptorSet;
-    writes[1].dstBinding = 1;
-    writes[1].descriptorCount = 1;
-    writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    writes[1].pImageInfo = &pointShadowMapInfo;
-
-    vkUpdateDescriptorSets(m_renderer->device().device(), 2, writes, 0, nullptr);
+    const auto tex = [](VkImageView view, VkSampler sampler) {
+        return rhi::TextureRef{ rhi::VulkanCommandList::toHandle(view), rhi::VulkanCommandList::toHandle(sampler) };
+    };
+    const rhi::BindingWrite writes[2] = { { .binding = 0, .texture = tex(m_shadowMap->imageView(), m_shadowMap->sampler()) },
+                                          { .binding = 1, .texture = tex(m_pointShadowMap->imageView(), m_pointShadowMap->sampler()) } };
+    m_gpu->writeBindGroup(rhi::VulkanCommandList::group(m_shadowMapDescriptorSet), *m_shadowMapLayout, writes);
 }
 
 void Application::resolveInitOrder() {
@@ -1057,7 +1011,7 @@ void Application::run() {
             const bool fogVolumeOn = m_volumetricFogOn && viewCount == 1 && m_lighting.fog.enabled && !m_sceneCovered;
             if (fogVolumeOn && !m_volumetricFog)
                 m_volumetricFog = std::make_unique<VolumetricFogPass>(m_renderer->device(), m_lightingBuffer->descriptorSetLayout(),
-                                                                      m_shadowMapSetLayout);
+                                                                      shadowMapSetLayout());
             if (fogVolumeOn) m_volumetricFog->prepare(m_volumetricFogSettings);
             if (refractOn) {
                 if (!m_behindPass) m_behindPass = std::make_unique<BehindPass>(m_renderer->device());
