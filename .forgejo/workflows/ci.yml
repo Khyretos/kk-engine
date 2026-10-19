@@ -146,7 +146,7 @@ jobs:
   shipping-build:
     runs-on: windows-wsl
     env:
-      KKE_JOBS: "4" # windows-wsl is a 4-core i5 with 16 GB; 8 jobs side by side ran it out of memory
+      KKE_JOBS: "3" # windows-wsl's WSL VM has 3 CPUs and 6 GB; two 8-job builds side by side ran it out of memory
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
@@ -332,7 +332,7 @@ jobs:
   release-build:
     runs-on: windows-wsl
     env:
-      KKE_JOBS: "4" # windows-wsl is a 4-core i5 with 16 GB; 8 jobs side by side ran it out of memory
+      KKE_JOBS: "3" # windows-wsl's WSL VM has 3 CPUs and 6 GB; two 8-job builds side by side ran it out of memory
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
@@ -361,7 +361,7 @@ jobs:
   android:
     runs-on: windows-wsl
     env:
-      KKE_JOBS: "4" # windows-wsl is a 4-core i5 with 16 GB; 8 jobs side by side ran it out of memory
+      KKE_JOBS: "3" # windows-wsl's WSL VM has 3 CPUs and 6 GB; two 8-job builds side by side ran it out of memory
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
