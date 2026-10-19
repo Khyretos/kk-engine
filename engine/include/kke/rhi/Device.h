@@ -62,6 +62,27 @@ struct BindingWrite {
     TextureRef texture{};
 };
 
+// A sampled 2D texture's pixels (R1e): 8-bit colour (sRGB or linear data) or half-float light.
+enum class TextureFormat : uint8_t { RGBA8Srgb, RGBA8, RGBA16F };
+// How it repeats: Repeat both ways (a material), or around the horizon only (an equirectangular sky).
+enum class Wrap : uint8_t { Repeat, RepeatAroundOnly };
+
+struct TextureDesc {
+    uint32_t width = 0, height = 0;
+    uint32_t levels = 1; // mips, stored one after another, each half as wide and tall
+    TextureFormat format = TextureFormat::RGBA8Srgb;
+    Wrap wrap = Wrap::Repeat;
+    bool blendLevels = true; // trilinear between mips (else the nearest one)
+    bool anisotropic = false; // sharp at glancing angles, where the GPU can
+};
+
+// A texture made by the Device, with its sampler; a bind group names it by ref().
+class Texture {
+public:
+    virtual ~Texture() = default;
+    virtual TextureRef ref() const = 0;
+};
+
 // Makes the GPU resources a backend draws with.
 class Device {
 public:
@@ -76,6 +97,8 @@ public:
     virtual void writeBindGroup(BindGroup group, const BindGroupLayout& layout, std::span<const BindingWrite> writes) = 0;
     // Gives a group back, once the GPU is done with it (its owner going away).
     virtual void releaseBindGroup(BindGroup group) = 0;
+    // `pixels`: every level of desc, level 0 first.
+    virtual std::unique_ptr<Texture> createTexture(const TextureDesc& desc, const void* pixels) = 0;
 };
 
 } // namespace kke::rhi

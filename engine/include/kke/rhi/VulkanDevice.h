@@ -5,6 +5,7 @@
 #include "kke/rhi/VulkanCommandList.h"
 
 #include <volk.h>
+#include <vk_mem_alloc.h>
 
 #include <unordered_map>
 #include <utility>
@@ -53,6 +54,27 @@ private:
     std::vector<BindingLayout> m_bindings;
 };
 
+// A Device texture on Vulkan: an image with its view and sampler.
+class VulkanTexture final : public Texture {
+public:
+    VulkanTexture(kke::VulkanDevice& device, const TextureDesc& desc, const void* pixels);
+    ~VulkanTexture() override;
+    VulkanTexture(const VulkanTexture&) = delete;
+    VulkanTexture& operator=(const VulkanTexture&) = delete;
+    TextureRef ref() const override { return { VulkanCommandList::toHandle(m_view), VulkanCommandList::toHandle(m_sampler) }; }
+    VkImageView view() const { return m_view; }
+    VkSampler sampler() const { return m_sampler; }
+    // Bytes of all of desc's levels.
+    static size_t byteSize(const TextureDesc& desc);
+
+private:
+    kke::VulkanDevice& m_device;
+    VkImage m_image = VK_NULL_HANDLE;
+    VmaAllocation m_allocation = VK_NULL_HANDLE;
+    VkImageView m_view = VK_NULL_HANDLE;
+    VkSampler m_sampler = VK_NULL_HANDLE;
+};
+
 // The Device on Vulkan.
 class VulkanGpuDevice final : public Device {
 public:
@@ -67,6 +89,7 @@ public:
     BindGroup createBindGroup(const BindGroupLayout& layout) override;
     void writeBindGroup(BindGroup group, const BindGroupLayout& layout, std::span<const BindingWrite> writes) override;
     void releaseBindGroup(BindGroup group) override;
+    std::unique_ptr<Texture> createTexture(const TextureDesc& desc, const void* pixels) override;
     // A texture as a binding sees it.
     static TextureRef texture(const kke::Texture& texture);
     static VkDescriptorSet set(BindGroup group) { return VulkanCommandList::fromHandle<VkDescriptorSet>(group.handle); }
