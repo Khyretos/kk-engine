@@ -105,7 +105,7 @@ env:
 
 jobs:
   linux:
-    runs-on: soucouyant
+    runs-on: windows-wsl
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
@@ -178,7 +178,7 @@ jobs:
           if-no-files-found: error
 
   windows:
-    runs-on: soucouyant
+    runs-on: windows-wsl
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
@@ -224,7 +224,7 @@ jobs:
   # (docs/ANDROID.md), signed with the
   # project key when the repository has it (ANDROID_KEYSTORE_* secrets).
   android:
-    runs-on: soucouyant
+    runs-on: windows-wsl
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
