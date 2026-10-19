@@ -36,6 +36,18 @@ public:
     std::vector<rhi::BindingLayout> bindings;
 };
 
+class MemoryTexture final : public rhi::Texture {
+public:
+    MemoryTexture(uint64_t id, const rhi::TextureDesc& d, const void* pixels, size_t bytes)
+        : desc(d), data(static_cast<const unsigned char*>(pixels), static_cast<const unsigned char*>(pixels) + bytes), m_id(id) {}
+    rhi::TextureRef ref() const override { return { m_id, m_id }; }
+    rhi::TextureDesc desc;
+    std::vector<unsigned char> data;
+
+private:
+    uint64_t m_id;
+};
+
 class MemoryDevice final : public rhi::Device {
 public:
     std::unique_ptr<rhi::Buffer> createBuffer(const rhi::BufferDesc& desc, const void* initial = nullptr) override {
@@ -55,6 +67,9 @@ public:
         for (const rhi::BindingWrite& w : writes) groups[group.handle][w.binding] = w;
     }
     void releaseBindGroup(rhi::BindGroup group) override { groups.erase(group.handle); }
+    std::unique_ptr<rhi::Texture> createTexture(const rhi::TextureDesc& desc, const void* pixels) override {
+        return std::make_unique<MemoryTexture>(++m_next, desc, pixels, rhi::VulkanTexture::byteSize(desc));
+    }
     std::map<uint64_t, std::map<uint32_t, rhi::BindingWrite>> groups; // what each live group's bindings point at
 
 private:
@@ -113,4 +128,24 @@ TEST(RhiDevice, StagesBecomeVulkanBits) {
     EXPECT_EQ(rhi::VulkanCommandList::stagesOf(rhi::kVertex | rhi::kCompute),
               VkShaderStageFlags(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_COMPUTE_BIT));
     EXPECT_EQ(rhi::VulkanCommandList::stagesOf(rhi::kFragment), VkShaderStageFlags(VK_SHADER_STAGE_FRAGMENT_BIT));
+}
+
+TEST(RhiDevice, ATextureKeepsEveryLevel) {
+    // 4x2 RGBA8 with its mips: 4x2, 2x1 and 1x1 texels, 4 bytes each.
+    rhi::TextureDesc desc;
+    desc.width = 4;
+    desc.height = 2;
+    desc.levels = 3;
+    EXPECT_EQ(rhi::VulkanTexture::byteSize(desc), (8u + 2u + 1u) * 4u);
+    desc.format = rhi::TextureFormat::RGBA16F;
+    EXPECT_EQ(rhi::VulkanTexture::byteSize(desc), (8u + 2u + 1u) * 8u);
+    desc.format = rhi::TextureFormat::RGBA8;
+    std::vector<unsigned char> pixels(rhi::VulkanTexture::byteSize(desc));
+    for (size_t i = 0; i < pixels.size(); ++i) pixels[i] = static_cast<unsigned char>(i);
+    MemoryDevice device;
+    auto texture = static_cast<rhi::Device&>(device).createTexture(desc, pixels.data());
+    const auto& made = static_cast<MemoryTexture&>(*texture);
+    EXPECT_EQ(made.data, pixels);
+    EXPECT_EQ(made.desc.levels, 3u);
+    EXPECT_NE(texture->ref().view, 0u);
 }
