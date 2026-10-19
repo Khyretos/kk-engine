@@ -747,7 +747,6 @@ private:
         VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
     };
     std::vector<MaterialTexture> m_materialTextures;
-    VkDescriptorPool m_materialTexturePool = VK_NULL_HANDLE;
     VkDevice m_vkDevice = VK_NULL_HANDLE; // stashed for shutdown(), which takes no Application& — see CubeModule's own identical comment
     Material m_selectedMaterial; // see selectedMaterial()'s own doc comment above
     float m_renderScale; // see the constructor's doc comment
