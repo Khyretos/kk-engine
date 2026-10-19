@@ -17,6 +17,8 @@ on:
 jobs:
   megalinter:
     runs-on: windows-wsl
+    env:
+      KKE_JOBS: "4" # windows-wsl is a 4-core i5 with 16 GB; 8 jobs side by side ran it out of memory
     container:
       image: oxsecurity/megalinter-c_cpp:v9
     steps:

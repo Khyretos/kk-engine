@@ -145,6 +145,8 @@ jobs:
   # really are ignored).
   shipping-build:
     runs-on: windows-wsl
+    env:
+      KKE_JOBS: "4" # windows-wsl is a 4-core i5 with 16 GB; 8 jobs side by side ran it out of memory
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
@@ -329,6 +331,8 @@ jobs:
   # (release.yml) packages this same configuration.
   release-build:
     runs-on: windows-wsl
+    env:
+      KKE_JOBS: "4" # windows-wsl is a 4-core i5 with 16 GB; 8 jobs side by side ran it out of memory
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
@@ -356,6 +360,8 @@ jobs:
   # APK is kept as a run artifact for trying on a phone (docs/ANDROID.md).
   android:
     runs-on: windows-wsl
+    env:
+      KKE_JOBS: "4" # windows-wsl is a 4-core i5 with 16 GB; 8 jobs side by side ran it out of memory
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
