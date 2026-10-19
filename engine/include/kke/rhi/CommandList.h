@@ -26,8 +26,8 @@ struct BufferRef {
 
 enum class IndexType : uint8_t { U16, U32 };
 
-// Shader stages a push constant reaches (combine with |).
-enum Stage : uint32_t { kVertex = 1, kFragment = 2 };
+// Shader stages a push constant or a binding reaches (combine with |).
+enum Stage : uint32_t { kVertex = 1, kFragment = 2, kCompute = 4 };
 
 // The draws of one pass, recorded in order. Vulkan records them into a
 // command buffer; GL plays them at once.

@@ -311,8 +311,7 @@ private:
     InstanceId m_nextInstance = 1;
     bool m_showBones = false, m_showMeshes = true;
     VkDescriptorSet m_overlaySet = VK_NULL_HANDLE;
-    VkDescriptorSetLayout m_surfaceLayout = VK_NULL_HANDLE;
-    VkDescriptorPool m_surfacePool = VK_NULL_HANDLE;
+    std::unique_ptr<rhi::BindGroupLayout> m_surfaceLayout; // set 2: albedo, normal, roughness, metallic (made by the RHI device)
     std::unique_ptr<Texture> m_flatNormal; // (128, 128, 255, 0): alpha 0 tells model.frag "no normal map"
     std::unordered_map<std::string, VkDescriptorSet> m_surfaceSets;
     VkDescriptorSet m_defaultSurface = VK_NULL_HANDLE;

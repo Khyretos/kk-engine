@@ -64,8 +64,9 @@ ParticleEffects::~ParticleEffects() {
     if (m_wantDepth) m_app.wantSceneDepth(this, false);
     VkDevice dev = m_app.device().device();
     if (m_stepLayout) vkDeviceWaitIdle(dev); // the step's image and pipelines may still be in use
-    if (m_gpuPool) vkDestroyDescriptorPool(dev, m_gpuPool, nullptr);
-    if (m_gpuSetLayout) vkDestroyDescriptorSetLayout(dev, m_gpuSetLayout, nullptr);
+    for (const GpuKind& g : m_gpu)
+        for (VkDescriptorSet set : g.sets)
+            if (set) m_app.gpu().releaseBindGroup(rhi::VulkanCommandList::group(set));
     for (VkPipeline p : m_stepPipelines)
         if (p) vkDestroyPipeline(dev, p, nullptr);
     if (m_stepPool) vkDestroyDescriptorPool(dev, m_stepPool, nullptr);
@@ -124,23 +125,11 @@ void ParticleEffects::takeBorn() {
 Pipeline& ParticleEffects::gpuPipeline(Kind kind) {
     std::unique_ptr<Pipeline>& made = m_gpuPipelines[static_cast<int>(kind)];
     if (made) return *made;
-    VkDevice dev = m_app.device().device();
     if (!m_gpuSetLayout) {
         // The records, and the stepped particles' state (ENG-F11).
-        std::array<VkDescriptorSetLayoutBinding, 2> b{};
-        for (uint32_t i = 0; i < 2; ++i) b[i] = { i, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr };
-        VkDescriptorSetLayoutCreateInfo li{};
-        li.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        li.bindingCount = static_cast<uint32_t>(b.size());
-        li.pBindings = b.data();
-        VK_CHECK(vkCreateDescriptorSetLayout(dev, &li, nullptr, &m_gpuSetLayout));
-        VkDescriptorPoolSize size{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2 * kKindCount * Renderer::kMaxFramesInFlight };
-        VkDescriptorPoolCreateInfo pi{};
-        pi.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        pi.maxSets = kKindCount * Renderer::kMaxFramesInFlight;
-        pi.poolSizeCount = 1;
-        pi.pPoolSizes = &size;
-        VK_CHECK(vkCreateDescriptorPool(dev, &pi, nullptr, &m_gpuPool));
+        const rhi::BindingLayout b[2] = { { 0, rhi::BindingType::StorageBuffer, rhi::kVertex },
+                                          { 1, rhi::BindingType::StorageBuffer, rhi::kVertex } };
+        m_gpuSetLayout = m_app.gpu().createBindGroupLayout(b);
     }
     // The CPU pipeline's state and fragment shader, with the GPU's vertex stage.
     PipelineConfig config;
@@ -148,7 +137,8 @@ Pipeline& ParticleEffects::gpuPipeline(Kind kind) {
     config.cullMode = VK_CULL_MODE_NONE;
     config.depthWriteEnable = false;
     config.blendEnable = true;
-    config.descriptorSetLayouts = { m_app.lightingBuffer().descriptorSetLayout(), m_app.shadowMapSetLayout(), m_gpuSetLayout };
+    config.descriptorSetLayouts = { m_app.lightingBuffer().descriptorSetLayout(), m_app.shadowMapSetLayout(),
+                                    rhi::VulkanBindGroupLayout::vk(*m_gpuSetLayout) };
     config.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, 2 * sizeof(glm::vec4) };
     if (kind == Kind::Spark || kind == Kind::Glow || kind == Kind::Ring) {
         config.customColorBlend = true;
@@ -199,29 +189,17 @@ void ParticleEffects::drawGpu(const RenderContext& ctx, Kind kind) {
     Pipeline& pipe = gpuPipeline(kind);
     if (!m_noState) m_noState = std::make_unique<Buffer>(m_app.device(), sizeof(GpuStepped), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
     if (!g.sets[f]) {
-        VkDescriptorSetAllocateInfo ai{};
-        ai.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-        ai.descriptorPool = m_gpuPool;
-        ai.descriptorSetCount = 1;
-        ai.pSetLayouts = &m_gpuSetLayout;
-        VK_CHECK(vkAllocateDescriptorSets(m_app.device().device(), &ai, &g.sets[f]));
+        g.sets[f] = rhi::VulkanGpuDevice::set(m_app.gpu().createBindGroup(*m_gpuSetLayout));
+        if (!g.sets[f]) return;
     }
     // This frame's records and the state. Rewritten only when one of them is a new buffer: this frame's last
     // use of the set has finished (its fence), and no view of this frame has bound it yet (a new buffer is
     // made before the first view draws).
     const VkBuffer records = g.buffers[f]->handle(), state = (g.state ? g.state : m_noState)->handle();
     if (g.setBuffers[f][0] != records || g.setBuffers[f][1] != state) {
-        const std::array<VkDescriptorBufferInfo, 2> info{ { { records, 0, VK_WHOLE_SIZE }, { state, 0, VK_WHOLE_SIZE } } };
-        std::array<VkWriteDescriptorSet, 2> w{};
-        for (uint32_t i = 0; i < 2; ++i) {
-            w[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            w[i].dstSet = g.sets[f];
-            w[i].dstBinding = i;
-            w[i].descriptorCount = 1;
-            w[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-            w[i].pBufferInfo = &info[i];
-        }
-        vkUpdateDescriptorSets(m_app.device().device(), static_cast<uint32_t>(w.size()), w.data(), 0, nullptr);
+        const rhi::BindingWrite w[2] = { { .binding = 0, .buffer = rhi::VulkanCommandList::buffer(records) },
+                                         { .binding = 1, .buffer = rhi::VulkanCommandList::buffer(state) } };
+        m_app.gpu().writeBindGroup(rhi::VulkanCommandList::group(g.sets[f]), *m_gpuSetLayout, w);
         g.setBuffers[f][0] = records;
         g.setBuffers[f][1] = state;
     }

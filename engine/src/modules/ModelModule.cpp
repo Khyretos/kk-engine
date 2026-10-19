@@ -129,21 +129,9 @@ void ModelModule::init(Application& app) {
     m_app = &app;
     m_device = app.device().device();
     // ENG-G03: set 2 = albedo, normal, roughness and metallic maps (model.frag).
-    VkDescriptorSetLayoutBinding bindings[4]{};
-    for (uint32_t i = 0; i < 4; ++i) bindings[i] = { i, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr };
-    VkDescriptorSetLayoutCreateInfo layoutInfo{};
-    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layoutInfo.bindingCount = 4;
-    layoutInfo.pBindings = bindings;
-    VK_CHECK(vkCreateDescriptorSetLayout(m_device, &layoutInfo, nullptr, &m_surfaceLayout));
-    constexpr uint32_t kMaxSurfaceSets = 1024;
-    VkDescriptorPoolSize size{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4 * kMaxSurfaceSets };
-    VkDescriptorPoolCreateInfo poolInfo{};
-    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    poolInfo.maxSets = kMaxSurfaceSets;
-    poolInfo.poolSizeCount = 1;
-    poolInfo.pPoolSizes = &size;
-    VK_CHECK(vkCreateDescriptorPool(m_device, &poolInfo, nullptr, &m_surfacePool));
+    rhi::BindingLayout bindings[4];
+    for (uint32_t i = 0; i < 4; ++i) bindings[i] = { i, rhi::BindingType::Texture, rhi::kFragment };
+    m_surfaceLayout = app.gpu().createBindGroupLayout(bindings);
     const uint8_t flat[4] = { 128, 128, 255, 0 };
     m_flatNormal = std::make_unique<Texture>(app.device(), flat, 1, 1, Texture::LinearData{});
     m_defaultSurface = surfaceSetFor("", "", "", "");
@@ -173,7 +161,7 @@ void ModelModule::init(Application& app) {
     config.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     config.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants) };
     // Set 2 = the material's maps (surfaceSetFor), set 3 = world overlay texture.
-    config.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), app.shadowMapSetLayout(), m_surfaceLayout,
+    config.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), app.shadowMapSetLayout(), rhi::VulkanBindGroupLayout::vk(*m_surfaceLayout),
                                     app.materialTextureSetLayout() };
     m_pipeline = std::make_unique<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/model.vert.spv", "shaders/model.frag.spv", config);
 
@@ -202,7 +190,7 @@ void ModelModule::init(Application& app) {
         inst.customVertexBindings = { binding0, binding1 };
         inst.customVertexAttributes = attrs;
         inst.pushConstantRange = config.pushConstantRange;
-        inst.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), app.shadowMapSetLayout(), m_surfaceLayout,
+        inst.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), app.shadowMapSetLayout(), rhi::VulkanBindGroupLayout::vk(*m_surfaceLayout),
                                       app.materialTextureSetLayout() };
         m_instancedPipeline = std::make_unique<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/model_instanced.vert.spv",
                                                          "shaders/model.frag.spv", inst);
@@ -249,30 +237,15 @@ VkDescriptorSet ModelModule::surfaceSetFor(const std::string& albedo, const std:
         }
     }
 
-    VkDescriptorSetAllocateInfo alloc{};
-    alloc.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    alloc.descriptorPool = m_surfacePool;
-    alloc.descriptorSetCount = 1;
-    alloc.pSetLayouts = &m_surfaceLayout;
-
-    VkDescriptorSet set = VK_NULL_HANDLE;
-    if (vkAllocateDescriptorSets(m_device, &alloc, &set) != VK_SUCCESS) {
-        log::get(name())->warn("material set pool full; '{}' drawn with default maps", albedo);
+    const rhi::BindGroup group = m_app->gpu().createBindGroup(*m_surfaceLayout);
+    if (!group.handle) {
+        log::get(name())->warn("no room for another material set; '{}' drawn with default maps", albedo);
         return m_defaultSurface;
     }
-
-    VkDescriptorImageInfo images[4];
-    VkWriteDescriptorSet writes[4]{};
-    for (uint32_t i = 0; i < 4; ++i) {
-        images[i] = { maps[i]->sampler(), maps[i]->imageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
-        writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writes[i].dstSet = set;
-        writes[i].dstBinding = i;
-        writes[i].descriptorCount = 1;
-        writes[i].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        writes[i].pImageInfo = &images[i];
-    }
-    vkUpdateDescriptorSets(m_device, 4, writes, 0, nullptr);
+    rhi::BindingWrite writes[4];
+    for (uint32_t i = 0; i < 4; ++i) writes[i] = { .binding = i, .texture = rhi::VulkanGpuDevice::texture(*maps[i]) };
+    m_app->gpu().writeBindGroup(group, *m_surfaceLayout, writes);
+    const VkDescriptorSet set = rhi::VulkanGpuDevice::set(group);
 
     m_surfaceSets[key] = set;
     return set;
@@ -1191,12 +1164,10 @@ void ModelModule::shutdown() {
     m_skinLayout = VK_NULL_HANDLE;
     m_skinSetLayout = VK_NULL_HANDLE;
     m_models.clear();
+    for (const auto& [key, set] : m_surfaceSets) m_app->gpu().releaseBindGroup(rhi::VulkanCommandList::group(set));
     m_surfaceSets.clear();
     m_defaultSurface = VK_NULL_HANDLE;
-    if (m_surfacePool) vkDestroyDescriptorPool(m_device, m_surfacePool, nullptr);
-    if (m_surfaceLayout) vkDestroyDescriptorSetLayout(m_device, m_surfaceLayout, nullptr);
-    m_surfacePool = VK_NULL_HANDLE;
-    m_surfaceLayout = VK_NULL_HANDLE;
+    m_surfaceLayout.reset();
     m_flatNormal.reset();
 }
 

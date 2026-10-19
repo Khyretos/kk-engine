@@ -39,10 +39,17 @@ That halves the RHI: the ~20 compute passes stay as they are, behind a
   and models' instance, skinned and deformed buffers are made by it.
   `VulkanGpuDevice` wraps `kke::Buffer`; buffers that ray tracing or
   compute skinning also read get their extra Vulkan bits there.
-- **R1d, the other resources.** Texture (2D, array, cube, 3D), Sampler,
-  ShaderModule (SPIR-V in, the backend converts), GraphicsPipeline,
-  BindGroupLayout and BindGroup made by the device instead of each
-  module's descriptor-set code. Vulkan implements each by wrapping today's
+- **R1d, bind groups (done).** The device makes bind group layouts
+  (bindings: uniform buffer, storage buffer or texture, and the stages
+  that read them) and bind groups, writes what each binding points at and
+  takes groups back. Material textures (Application's cache), model
+  surfaces, physics materials, GPU particles, hair and particle systems
+  make their sets this way instead of sizing pools of their own: Vulkan's
+  pools now grow, so the 1024-texture cache limit is gone.
+- **R1e, the other resources.** Texture (2D, array, cube, 3D), Sampler,
+  ShaderModule (SPIR-V in, the backend converts) and GraphicsPipeline
+  made by the device; the lighting and shadow sets (set 0 and 1) move
+  onto bind groups with them. Vulkan implements each by wrapping today's
   code; output must not change (benchmarks within 2%, pictures identical).
 - **R1b, the modules moved (done).** Models (scene and shadow), physics
   objects and rubble, particle effects (CPU batches and GPU-stepped),
@@ -52,7 +59,7 @@ That halves the RHI: the ~20 compute passes stay as they are, behind a
   until the device makes them. Still on a VkCommandBuffer: the fluid
   surface (its own render pass), thumbnails, the RmlUi and ImGui
   renderers, the sky and the Renderer's own passes.
-- **R1e, the rest of the graphics path.** Renderer's scene, shadow and overlay
+- **R1f, the rest of the graphics path.** Renderer's scene, shadow and overlay
   passes, Pipeline, Mesh, Texture, ShadowMap, LightingBuffer's uniform
   part, SkyRenderer, and every module's render(): ModelModule,
   PhysicsModule, ParticleEffects' instanced path, DebugDraw, Grid, Ocean,

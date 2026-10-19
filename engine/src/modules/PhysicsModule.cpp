@@ -550,36 +550,12 @@ void PhysicsModule::init(Application& app) {
             return glm::vec3(0.9f, 0.25f + heat * 0.55f, heat * 0.15f);
         });
 
-        VkDescriptorPoolSize poolSize{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, static_cast<uint32_t>(m_materialTextures.size()) };
-        VkDescriptorPoolCreateInfo poolInfo{};
-        poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        poolInfo.maxSets = static_cast<uint32_t>(m_materialTextures.size());
-        poolInfo.poolSizeCount = 1;
-        poolInfo.pPoolSizes = &poolSize;
-        VK_CHECK(vkCreateDescriptorPool(m_vkDevice, &poolInfo, nullptr, &m_materialTexturePool));
-
-        VkDescriptorSetLayout textureLayout = app.materialTextureSetLayout();
+        // One set-2 bind group per material texture, made by the RHI device (R1d).
         for (auto& mt : m_materialTextures) {
-            VkDescriptorSetAllocateInfo allocInfo{};
-            allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-            allocInfo.descriptorPool = m_materialTexturePool;
-            allocInfo.descriptorSetCount = 1;
-            allocInfo.pSetLayouts = &textureLayout;
-            VK_CHECK(vkAllocateDescriptorSets(m_vkDevice, &allocInfo, &mt.descriptorSet));
-
-            VkDescriptorImageInfo imageInfo{};
-            imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            imageInfo.imageView = mt.texture->imageView();
-            imageInfo.sampler = mt.texture->sampler();
-
-            VkWriteDescriptorSet write{};
-            write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            write.dstSet = mt.descriptorSet;
-            write.dstBinding = 0;
-            write.descriptorCount = 1;
-            write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            write.pImageInfo = &imageInfo;
-            vkUpdateDescriptorSets(m_vkDevice, 1, &write, 0, nullptr);
+            const rhi::BindGroup group = app.gpu().createBindGroup(app.materialTextureLayout());
+            const rhi::BindingWrite write{ .binding = 0, .texture = rhi::VulkanGpuDevice::texture(*mt.texture) };
+            app.gpu().writeBindGroup(group, app.materialTextureLayout(), { &write, 1 });
+            mt.descriptorSet = rhi::VulkanGpuDevice::set(group);
         }
     }
 
@@ -2624,14 +2600,11 @@ void PhysicsModule::shutdown() {
     // The material texture library — real GPU resources (see init()'s
     // own comment on what this owns). m_materialTextures itself (a
     // vector of unique_ptr<Texture>) cleans up each texture's own
-    // image/view/sampler automatically once cleared; the pool that
-    // allocated their descriptor sets needs an explicit destroy call,
-    // same as every other bare Vulkan handle in this codebase.
+    // image/view/sampler automatically once cleared; their bind groups
+    // go back to the RHI device.
+    for (const auto& mt : m_materialTextures)
+        if (mt.descriptorSet && m_app) m_app->gpu().releaseBindGroup(rhi::VulkanCommandList::group(mt.descriptorSet));
     m_materialTextures.clear();
-    if (m_materialTexturePool) {
-        vkDestroyDescriptorPool(m_vkDevice, m_materialTexturePool, nullptr);
-        m_materialTexturePool = VK_NULL_HANDLE;
-    }
 
     // Copy handles first — same reasoning as clearAll().
     std::vector<ObjectHandle> handles;

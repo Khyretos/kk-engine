@@ -385,7 +385,8 @@ public:
     // Set 2's own layout -- needed by any module drawing through
     // cube.frag at pipeline-creation time, same reasoning as
     // shadowMapSetLayout() above.
-    VkDescriptorSetLayout materialTextureSetLayout() const { return m_materialTextureSetLayout; }
+    VkDescriptorSetLayout materialTextureSetLayout() const { return rhi::VulkanBindGroupLayout::vk(*m_materialTextureLayout); }
+    const rhi::BindGroupLayout& materialTextureLayout() const { return *m_materialTextureLayout; }
     // The default (1x1 white) texture's own descriptor set -- what
     // every object without a real texture of its own binds. Modules
     // with a real texture (see CubeModule) create and bind their own
@@ -636,12 +637,10 @@ private:
     // real texture of its own (see kke::Texture's own class comment,
     // and CubeModule for the first real, non-default consumer).
     std::unique_ptr<Texture> m_defaultWhiteTexture;
-    VkDescriptorSetLayout m_materialTextureSetLayout = VK_NULL_HANDLE;
-    VkDescriptorPool m_materialTextureDescriptorPool = VK_NULL_HANDLE;
+    std::unique_ptr<rhi::BindGroupLayout> m_materialTextureLayout; // made by m_gpu (R1d)
     VkDescriptorSet m_defaultTextureDescriptorSet = VK_NULL_HANDLE;
     struct CachedTexture { std::unique_ptr<Texture> texture; VkDescriptorSet set = VK_NULL_HANDLE; };
     std::unordered_map<std::string, CachedTexture> m_textureCache;
-    VkDescriptorPool m_textureCachePool = VK_NULL_HANDLE;
     float m_fixedDt;
     uint32_t m_maxFixedStepsPerFrame = 2;
     uint32_t m_fixedStepsLastFrame = 0;

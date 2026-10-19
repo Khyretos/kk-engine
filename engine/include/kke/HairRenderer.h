@@ -90,7 +90,6 @@ private:
     uint32_t m_stride = 1;         // level of detail: every m_stride-th hair is drawn
     FrameData m_frames[Renderer::kMaxFramesInFlight];
     std::shared_ptr<Shared> m_shared;
-    VkDescriptorPool m_pool = VK_NULL_HANDLE;
 };
 
 } // namespace kke
