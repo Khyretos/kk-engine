@@ -33,6 +33,9 @@ on:
   schedule:
     - cron: "0 1 * * *"
   workflow_dispatch:
+  # Every PR builds too: main's branch protection requires these jobs, so a PR
+  # merges only after the full suite passed on it (Kees, 2026-10-18).
+  pull_request:
 
 # On main a running build is never cancelled: threads push every few
 # minutes, and cancelling left main with no finished CI run for hours.
