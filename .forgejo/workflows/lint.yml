@@ -16,9 +16,7 @@ on:
 
 jobs:
   megalinter:
-    runs-on: windows-wsl
-    env:
-      KKE_JOBS: "3" # windows-wsl's WSL VM has 3 CPUs and 6 GB; two 8-job builds side by side ran it out of memory
+    runs-on: kireserver # MegaLinter's images are 7-11 GB: kireserver only, as in the other repos
     container:
       image: oxsecurity/megalinter-c_cpp:v9
     steps:

@@ -15,7 +15,7 @@ on:
 
 jobs:
   fix:
-    runs-on: windows-wsl
+    runs-on: kireserver # MegaLinter's images are 7-11 GB: kireserver only, as in the other repos
     container:
       image: oxsecurity/megalinter-c_cpp:v9
     env:
