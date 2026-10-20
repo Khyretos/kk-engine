@@ -96,7 +96,6 @@ public:
     static rhi::GraphicsPipelineDesc describe(const PipelineConfig& config, std::span<const rhi::BindGroupLayout* const> layouts);
 
 private:
-    VulkanDevice& m_device;
     std::unique_ptr<rhi::GraphicsPipeline> m_pipeline;
 };
 

@@ -13,7 +13,7 @@
 
 namespace kke {
 
-Pipeline::Pipeline(VulkanDevice& device, VkRenderPass renderPass, const std::string& vertPath, const std::string& fragPath, const PipelineConfig& config) : m_device(device) {
+Pipeline::Pipeline(VulkanDevice& device, VkRenderPass renderPass, const std::string& vertPath, const std::string& fragPath, const PipelineConfig& config) {
     rhi::VulkanGpuDevice gpu(device);
     auto vert = gpu.createShaderModule(loadSpirv(vertPath));
     auto frag = gpu.createShaderModule(loadSpirv(fragPath));
