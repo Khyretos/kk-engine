@@ -1,16 +1,16 @@
 [
- {
-  "name": "g08-mcevery",
-  "role": "worker/cpp-games",
-  "mode": "patch",
-  "out": "engine/src/modules/ModelModule.cpp",
-  "prompt": "ENG-G08: skinned meshes are skinned on the GPU. A compute shader (shaders/skin.comp) reads each model mesh's bind vertices and each instance's skin matrices and jiggle zones from storage buffers and writes kke::Vertex (11 floats: position, overlay position = bind position, normal, uv) into the vertex buffer the draw passes already read. kke/GpuSkin.h packs those buffers on the CPU and holds a CPU copy of the shader's maths for the tests. C++20, glm, Vulkan, GLSL 450 std430. Add ModelModule::computeEveryFrame (declared in the header) directly before skinInstance. Declare nothing else. Your SEARCH block is exactly these lines:\n```\nvoid ModelModule::skinInstance(Instance& inst, uint32_t frameIndex) {\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n// GPU skinning, every drawn frame (paused too, so both frame slots hold\n// the pose being drawn): the bone matrices of every visible skinned\n// instance on the skinning threads, then one dispatch per part. No frustum\n// test: the views' frustums aren't known yet and the GPU's share is small.\nvoid ModelModule::computeEveryFrame(VkCommandBuffer cmd) {\n    if (!m_gpuSkinning || !m_showMeshes) return;\n    const uint32_t slot = m_app->renderer().currentFrameIndex();\n    m_toSkin.clear();\n    for (auto& [id, inst] : m_instances)\n        if (inst.visible && inst.gpuSkin && inst.deformed.empty()) m_toSkin.push_back(&inst);\n    if (m_toSkin.empty()) return;\n    if (!m_skinWorkers || m_toSkin.size() < 4) {\n        for (Instance* inst : m_toSkin) packSkin(*inst, slot);\n    } else {\n        const std::function<void(size_t)> job = [this, slot](size_t i) { packSkin(*m_toSkin[i], slot); };\n        m_skinWorkers->run(m_toSkin.size(), job);\n    }\n    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_skinPipeline);\n    for (Instance* inst : m_toSkin) recordSkin(cmd, *inst, slot);\n    // The shadow, main and pick passes read the vertices as vertex input.\n    VkMemoryBarrier barrier{};\n    barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;\n    barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;\n    barrier.dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;\n    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, 0, 1, &barrier, 0, nullptr, 0, nullptr);\n}\n\nvoid ModelModule::skinInstance(Instance& inst, uint32_t frameIndex) {\n```\nChange nothing else; do not copy or move any other line.\n",
-  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g08.py mcevery",
-  "precheck": false,
-  "context": [],
-  "max_tokens": 2500,
-  "focus": [
-   "^void ModelModule::skinInstance\\(Instance& inst, uint32_t frameIndex\\) \\{"
-  ]
- }
+  {
+    "name": "g08-mcevery",
+    "role": "worker/cpp-games",
+    "mode": "patch",
+    "out": "engine/src/modules/ModelModule.cpp",
+    "prompt": "ENG-G08: skinned meshes are skinned on the GPU. A compute shader (shaders/skin.comp) reads each model mesh's bind vertices and each instance's skin matrices and jiggle zones from storage buffers and writes kke::Vertex (11 floats: position, overlay position = bind position, normal, uv) into the vertex buffer the draw passes already read. kke/GpuSkin.h packs those buffers on the CPU and holds a CPU copy of the shader's maths for the tests. C++20, glm, Vulkan, GLSL 450 std430. Add ModelModule::computeEveryFrame (declared in the header) directly before skinInstance. Declare nothing else. Your SEARCH block is exactly these lines:\n```\nvoid ModelModule::skinInstance(Instance& inst, uint32_t frameIndex) {\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n// GPU skinning, every drawn frame (paused too, so both frame slots hold\n// the pose being drawn): the bone matrices of every visible skinned\n// instance on the skinning threads, then one dispatch per part. No frustum\n// test: the views' frustums aren't known yet and the GPU's share is small.\nvoid ModelModule::computeEveryFrame(VkCommandBuffer cmd) {\n    if (!m_gpuSkinning || !m_showMeshes) return;\n    const uint32_t slot = m_app->renderer().currentFrameIndex();\n    m_toSkin.clear();\n    for (auto& [id, inst] : m_instances)\n        if (inst.visible && inst.gpuSkin && inst.deformed.empty()) m_toSkin.push_back(&inst);\n    if (m_toSkin.empty()) return;\n    if (!m_skinWorkers || m_toSkin.size() < 4) {\n        for (Instance* inst : m_toSkin) packSkin(*inst, slot);\n    } else {\n        const std::function<void(size_t)> job = [this, slot](size_t i) { packSkin(*m_toSkin[i], slot); };\n        m_skinWorkers->run(m_toSkin.size(), job);\n    }\n    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_skinPipeline);\n    for (Instance* inst : m_toSkin) recordSkin(cmd, *inst, slot);\n    // The shadow, main and pick passes read the vertices as vertex input.\n    VkMemoryBarrier barrier{};\n    barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;\n    barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;\n    barrier.dstAccessMask = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;\n    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, 0, 1, &barrier, 0, nullptr, 0, nullptr);\n}\n\nvoid ModelModule::skinInstance(Instance& inst, uint32_t frameIndex) {\n```\nChange nothing else; do not copy or move any other line.\n",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g08.py mcevery",
+    "precheck": false,
+    "context": [],
+    "max_tokens": 2500,
+    "focus": [
+      "^void ModelModule::skinInstance\\(Instance& inst, uint32_t frameIndex\\) \\{"
+    ]
+  }
 ]

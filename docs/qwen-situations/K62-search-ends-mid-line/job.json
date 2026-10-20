@@ -1,18 +1,18 @@
 [
- {
-  "name": "g09-cgeom",
-  "role": "worker/cpp-games",
-  "mode": "patch",
-  "out": "engine/src/RmlVulkanRenderInterface.cpp",
-  "prompt": "ENG-G09: the RmlUi Vulkan backend (kke::RmlVulkanRenderInterface) gets RmlUi 6's layer API, so CSS `filter`, `backdrop-filter`, `box-shadow` and `mask-image` draw. Each layer is a full-frame image in the swapchain format; filters run as full-screen passes (shaders/rml_fullscreen.vert + shaders/rml_filter.frag); kke/RmlFilters.h holds the CPU half. C++20, glm, Vulkan, GLSL 450. RenderGeometry draws textures saved from a layer with their own pipeline. Make these 3 edits, each its own SEARCH/REPLACE block.\nEdit 1. Your SEARCH block is exactly these lines:\n```\n    if (textureHandle != 0) {\n        auto texIt = m_textures.find(textureHandle);\n        if (texIt != m_textures.end()) {\n            descriptorSet = texIt->second.descriptorSet;\n        }\n    }\n    vkCmdBindDescriptorSets(m_currentCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->layout(),\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n    const Pipeline* pipeline = m_pipeline.get();\n    if (textureHandle != 0) {\n        auto texIt = m_textures.find(textureHandle);\n        if (texIt != m_textures.end()) {\n            descriptorSet = texIt->second.descriptorSet;\n            if (texIt->second.linear) pipeline = m_layerTexturePipeline.get();\n        }\n    }\n    if (pipeline != m_pipeline.get()) {\n        pipeline->bind(m_currentCmd);\n        applyStencilState();\n    }\n    vkCmdBindDescriptorSets(m_currentCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->layout(),\n```\nEdit 2. Your SEARCH block is exactly these lines:\n```\n    vkCmdPushConstants(m_currentCmd, m_pipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);\n\n    VkBuffer vertexBuffers[] = { geometry.vertexBuffer->handle() };\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n    vkCmdPushConstants(m_currentCmd, pipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);\n\n    VkBuffer vertexBuffers[] = { geometry.vertexBuffer->handle() };\n```\nEdit 3. Your SEARCH block is exactly these lines:\n```\n    vkCmdDrawIndexed(m_currentCmd, geometry.indexCount, 1, 0, 0, 0);\n}\n\nvoid RmlVulkanRenderInterface::ReleaseGeometry(\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n    vkCmdDrawIndexed(m_currentCmd, geometry.indexCount, 1, 0, 0, 0);\n    // The rest of the UI expects the regular pipeline.\n    if (pipeline != m_pipeline.get()) {\n        m_pipeline->bind(m_currentCmd);\n        applyStencilState();\n    }\n}\n\nvoid RmlVulkanRenderInterface::ReleaseGeometry(\n```\nChange nothing else; do not copy or move any other line.\n",
-  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g09.py cgeom",
-  "precheck": false,
-  "context": [],
-  "max_tokens": 2000,
-  "focus": [
-   "^\\ \\ \\ \\ VkDescriptorSet\\ descriptorSet\\ =\\ m_defaultTexture\\.descriptorSet;$",
-   "^\\ \\ \\ \\ CompiledGeometry\\&\\ geometry\\ =\\ \\*it\\->second;$",
-   "^void\\ RmlVulkanRenderInterface::ReleaseGeometry\\(Rml::CompiledGeometryHandle\\ geometryHandle\\)\\ \\{$"
-  ]
- }
+  {
+    "name": "g09-cgeom",
+    "role": "worker/cpp-games",
+    "mode": "patch",
+    "out": "engine/src/RmlVulkanRenderInterface.cpp",
+    "prompt": "ENG-G09: the RmlUi Vulkan backend (kke::RmlVulkanRenderInterface) gets RmlUi 6's layer API, so CSS `filter`, `backdrop-filter`, `box-shadow` and `mask-image` draw. Each layer is a full-frame image in the swapchain format; filters run as full-screen passes (shaders/rml_fullscreen.vert + shaders/rml_filter.frag); kke/RmlFilters.h holds the CPU half. C++20, glm, Vulkan, GLSL 450. RenderGeometry draws textures saved from a layer with their own pipeline. Make these 3 edits, each its own SEARCH/REPLACE block.\nEdit 1. Your SEARCH block is exactly these lines:\n```\n    if (textureHandle != 0) {\n        auto texIt = m_textures.find(textureHandle);\n        if (texIt != m_textures.end()) {\n            descriptorSet = texIt->second.descriptorSet;\n        }\n    }\n    vkCmdBindDescriptorSets(m_currentCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline->layout(),\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n    const Pipeline* pipeline = m_pipeline.get();\n    if (textureHandle != 0) {\n        auto texIt = m_textures.find(textureHandle);\n        if (texIt != m_textures.end()) {\n            descriptorSet = texIt->second.descriptorSet;\n            if (texIt->second.linear) pipeline = m_layerTexturePipeline.get();\n        }\n    }\n    if (pipeline != m_pipeline.get()) {\n        pipeline->bind(m_currentCmd);\n        applyStencilState();\n    }\n    vkCmdBindDescriptorSets(m_currentCmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->layout(),\n```\nEdit 2. Your SEARCH block is exactly these lines:\n```\n    vkCmdPushConstants(m_currentCmd, m_pipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);\n\n    VkBuffer vertexBuffers[] = { geometry.vertexBuffer->handle() };\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n    vkCmdPushConstants(m_currentCmd, pipeline->layout(), VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);\n\n    VkBuffer vertexBuffers[] = { geometry.vertexBuffer->handle() };\n```\nEdit 3. Your SEARCH block is exactly these lines:\n```\n    vkCmdDrawIndexed(m_currentCmd, geometry.indexCount, 1, 0, 0, 0);\n}\n\nvoid RmlVulkanRenderInterface::ReleaseGeometry(\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n    vkCmdDrawIndexed(m_currentCmd, geometry.indexCount, 1, 0, 0, 0);\n    // The rest of the UI expects the regular pipeline.\n    if (pipeline != m_pipeline.get()) {\n        m_pipeline->bind(m_currentCmd);\n        applyStencilState();\n    }\n}\n\nvoid RmlVulkanRenderInterface::ReleaseGeometry(\n```\nChange nothing else; do not copy or move any other line.\n",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g09.py cgeom",
+    "precheck": false,
+    "context": [],
+    "max_tokens": 2000,
+    "focus": [
+      "^\\ \\ \\ \\ VkDescriptorSet\\ descriptorSet\\ =\\ m_defaultTexture\\.descriptorSet;$",
+      "^\\ \\ \\ \\ CompiledGeometry\\&\\ geometry\\ =\\ \\*it\\->second;$",
+      "^void\\ RmlVulkanRenderInterface::ReleaseGeometry\\(Rml::CompiledGeometryHandle\\ geometryHandle\\)\\ \\{$"
+    ]
+  }
 ]
