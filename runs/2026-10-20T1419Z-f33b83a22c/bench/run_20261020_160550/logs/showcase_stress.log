@@ -1,0 +1,117 @@
+[2026-10-20 16:06:17.399][engine][Application][Kreative Kompas Engine - Showcase][info]: Hardware target: desktop (no specific device recognised); platform backend: desktop
+[2026-10-20 16:06:17.399][engine][Application][Kreative Kompas Engine - Showcase][info]: UI profile: desktop
+[2026-10-20 16:06:17.399][engine][Governor][Kreative Kompas Engine - Showcase][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 1.00
+[2026-10-20 16:06:17.403][engine][VulkanDevice][Kreative Kompas Engine - Showcase][info]: using device: llvmpipe (LLVM 22.1.8, 256 bits)
+[2026-10-20 16:06:17.403][engine][VulkanDevice][Kreative Kompas Engine - Showcase][info]: inline ray tracing (VK_KHR_ray_query): on
+[2026-10-20 16:06:17.465][engine][SwapChain][Kreative Kompas Engine - Showcase][info]: colour output: format 50 (8-bit sRGB)
+[2026-10-20 16:06:17.466][engine][Application][Kreative Kompas Engine - Showcase][info]: Hardware target: software-gpu (the only Vulkan device is a CPU: llvmpipe (LLVM 22.1.8, 256 bits))
+[2026-10-20 16:06:17.466][engine][Governor][Kreative Kompas Engine - Showcase][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+[2026-10-20 16:06:17.466][engine][Application][Kreative Kompas Engine - Showcase][info]: MSAA 1x (software rasteriser)
+[2026-10-20 16:06:17.553][engine][Application][Kreative Kompas Engine - Showcase][info]: mood 'clear_day' (assets/moods/clear_day.yaml)
+[2026-10-20 16:06:17.554][engine][Benchmark][Kreative Kompas Engine - Showcase][info]: benchmark: 2 s warm-up, then 40 s measured, uncapped (no vsync, no frame cap)
+[2026-10-20 16:06:17.554][engine][Settings][Kreative Kompas Engine - Showcase][info]: no settings file at 'settings.json' (using defaults)
+[2026-10-20 16:06:17.554][engine][Governor][Kreative Kompas Engine - Showcase][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+[2026-10-20 16:06:17.585][engine][ClothGpu][Kreative Kompas Engine - Showcase][info]: no compute queue of its own on this GPU: cloth pairs are searched on the CPU (KKE_CLOTH_GPU=shared to try the graphics queue)
+[2026-10-20 16:06:17.585][engine][RigidBodies][Kreative Kompas Engine - Showcase][info]: Jolt rigid-body world ready (65536 max bodies)
+[rmlui] Loaded font face 'Noto Sans' [regular] from 'assets/fonts/NotoSans-Regular.ttf'.
+[rmlui] Loaded font face 'Noto Sans' [bold] from 'assets/fonts/NotoSans-Bold.ttf'.
+[rmlui] Loaded font face 'Noto Sans' [italic] from 'assets/fonts/NotoSans-Italic.ttf'.
+[rmlui] Loaded font face 'Noto Color Emoji' [regular] from 'assets/fonts/NotoColorEmoji.ttf'.
+[ui] RmlUi initialised with real Vulkan rendering (text via glyph textures, <img>/background-image via stb_image, both real now -- see RmlVulkanRenderInterface.h)
+[2026-10-20 16:06:17.795][engine][Audio][Kreative Kompas Engine - Showcase][info]: Audio ready: 48000 Hz, 32 voices, output: Speakers (Realtek High Definition Audio) (WASAPI)
+[2026-10-20 16:06:17.795][engine][Physics][Kreative Kompas Engine - Showcase][info]: Task system: 2 worker(s) (4 usable cores)
+[2026-10-20 16:06:17.795][engine][Physics][Kreative Kompas Engine - Showcase][info]: FEMFX constraint solver memory: 67.2 MB
+[2026-10-20 16:06:17.834][engine][Physics][Kreative Kompas Engine - Showcase][info]: FEMFX scene created (ground + 0 object(s), cap=512)
+[2026-10-20 16:06:17.856][engine][Voice][Kreative Kompas Engine - Showcase][info]: Voice chat ready: Opus 24 kbit/s, microphone: NULL Capture Device, noise suppression, echo cancellation
+[2026-10-20 16:06:17.856][engine][Governor][Kreative Kompas Engine - Showcase][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+[2026-10-20 16:06:18.156][engine][Showcase][Kreative Kompas Engine - Showcase][info]: world: 1400 x 1400 m of terrain, 158350 triangles, 6 roads, 7 zones
+[2026-10-20 16:06:18.224][engine][Showcase][Kreative Kompas Engine - Showcase][info]: course art: SM_Terrain_Mountain_01 isn't installed (needs POLYGON_Nature, POLYGON_Town), so the course stays plain
+[2026-10-20 16:06:18.229][engine][Physics][Kreative Kompas Engine - Showcase][info]: patterned box 3: 576 tets, 31 pieces (Radial (glass)), seed 3468198433
+[2026-10-20 16:06:18.231][engine][Physics][Kreative Kompas Engine - Showcase][info]: patterned box 7: 192 tets, 4 pieces (Splinters), seed 3777939224
+[2026-10-20 16:06:18.237][engine][Physics][Kreative Kompas Engine - Showcase][info]: patterned box 9: 576 tets, 13 pieces (Voronoi chunks), seed 3958183298
+[2026-10-20 16:06:18.542][engine][Models][Kreative Kompas Engine - Showcase][info]: loaded 'C:\forgejo-runner\work\3266c5c733d49853\tmp\kke-run\pkg\assets\animations\UAL1_Standard.fbx': 2 mesh part(s), 13744 triangles, 2 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-10-20 16:06:18.542][engine][Showcase][Kreative Kompas Engine - Showcase][info]: UAL2.fbx not in C:\forgejo-runner\work\3266c5c733d49853\tmp\kke-run\pkg\assets\animations: vault and climb use stand-in poses
+[2026-10-20 16:06:18.568][engine][Showcase][Kreative Kompas Engine - Showcase][info]: character: 66 bones, 43 clips
+[2026-10-20 16:06:18.582][engine][Physics][Kreative Kompas Engine - Showcase][info]: patterned box 11: 1152 tets, 35 pieces (Radial (glass)), seed 1167999970
+[2026-10-20 16:06:18.584][engine][Physics][Kreative Kompas Engine - Showcase][info]: patterned box 15: 192 tets, 5 pieces (Splinters), seed 1739422117
+[2026-10-20 16:06:18.589][engine][Physics][Kreative Kompas Engine - Showcase][info]: patterned box 17: 576 tets, 13 pieces (Voronoi chunks), seed 3399433298
+[2026-10-20 16:06:18.599][engine][Physics][Kreative Kompas Engine - Showcase][info]: patterned box 19: 960 tets, 25 pieces (Voronoi chunks), seed 2012368794
+[2026-10-20 16:06:18.599][engine][Showcase][Kreative Kompas Engine - Showcase][info]: range: 10 plates, 23 things, 6 FEMFX objects
+[2026-10-20 16:06:18.599][engine][Showcase][Kreative Kompas Engine - Showcase][info]: vehicles: 3 cars at the race track, the plane at 196 40
+[2026-10-20 16:06:18.624][engine][Showcase][Kreative Kompas Engine - Showcase][info]: nature: POLYGON Nature isn't installed: trees built from shapes
+[2026-10-20 16:06:18.627][engine][Showcase][Kreative Kompas Engine - Showcase][info]: nature: 85 trees, 0 plants, 48 flowers; snow 464 x 464 cells
+[2026-10-20 16:06:18.632][engine][Governor][Kreative Kompas Engine - Showcase][info]: budget: 2 worker thread(s), frame cap 0, background cap 0, render scale 0.75
+[2026-10-20 16:06:18.632][engine][Showcase][Kreative Kompas Engine - Showcase][info]: stress test: started (36 s)
+[2026-10-20 16:06:18.642][engine][Scripts][Kreative Kompas Engine - Showcase][info]: targets.lua: press T (d-pad right on a controller) to play break-the-targets
+[2026-10-20 16:06:18.642][engine][Scripts][Kreative Kompas Engine - Showcase][info]: toys.lua: toys.lua loaded: H tower, B ball, N clear
+[2026-10-20 16:06:18.642][engine][Scripts][Kreative Kompas Engine - Showcase][info]: 2 script(s) from 'scripts'
+[2026-10-20 16:06:18.642][engine][Governor][Kreative Kompas Engine - Showcase][info]: budget: 2 worker thread(s), frame cap 0, background cap 0, render scale 0.75
+[2026-10-20 16:06:18.642][engine][Input][Kreative Kompas Engine - Showcase][info]: touch controls: stick left, look look.rate, button jump, button spawn.pick, button inv.pick, button map.go, button pickup, button inv.equip, pause
+[2026-10-20 16:06:19.028][engine][Physics][Kreative Kompas Engine - Showcase][info]: perf: 0.8 fps, 0.0 ticks/s, step avg 0.00 ms max 0.00 ms, render prep 0.60 ms, 13 object(s) / 13 piece(s), 13 awake piece(s), 2768 faces drawn
+[2026-10-20 16:06:22.731][engine][Physics][Kreative Kompas Engine - Showcase][info]: perf: 0.3 fps, 0.3 ticks/s, step avg 16.03 ms max 16.03 ms, render prep 0.29 ms, 13 object(s) / 13 piece(s), 13 awake piece(s), 2768 faces drawn
+[2026-10-20 16:06:23.964][engine][Physics][Kreative Kompas Engine - Showcase][info]: perf: 4.1 fps, 4.1 ticks/s, step avg 22.77 ms max 23.57 ms, render prep 0.18 ms, 13 object(s) / 13 piece(s), 13 awake piece(s), 2768 faces drawn
+[2026-10-20 16:06:25.031][engine][Physics][Kreative Kompas Engine - Showcase][info]: perf: 3.7 fps, 3.7 ticks/s, step avg 22.29 ms max 22.53 ms, render prep 0.18 ms, 13 object(s) / 13 piece(s), 13 awake piece(s), 2768 faces drawn
+[2026-10-20 16:06:26.102][engine][Physics][Kreative Kompas Engine - Showcase][info]: perf: 3.7 fps, 3.7 ticks/s, step avg 21.30 ms max 21.97 ms, render prep 0.18 ms, 13 object(s) / 13 piece(s), 13 awake piece(s), 2768 faces drawn
+[2026-10-20 16:06:27.168][engine][Physics][Kreative Kompas Engine - Showcase][info]: perf: 3.8 fps, 3.8 ticks/s, step avg 20.20 ms max 20.79 ms, render prep 0.18 ms, 13 object(s) / 13 piece(s), 13 awake piece(s), 2768 faces drawn
+[2026-10-20 16:06:28.237][engine][Physics][Kreative Kompas Engine - Showcase][info]: perf: 3.7 fps, 4.7 ticks/s, step avg 16.84 ms max 22.09 ms, render prep 0.15 ms, 13 object(s) / 13 piece(s), 7 awake piece(s), 2768 faces drawn
+[2026-10-20 16:06:29.306][engine][Physics][Kreative Kompas Engine - Showcase][info]: perf: 3.7 fps, 7.5 ticks/s, step avg 11.59 ms max 11.79 ms, render prep 0.08 ms, 13 object(s) / 13 piece(s), 7 awake piece(s), 2768 faces drawn
+[2026-10-20 16:06:30.380][engine][Physics][Kreative Kompas Engine - Showcase][info]: perf: 3.7 fps, 7.4 ticks/s, step avg 11.52 ms max 11.86 ms, render prep 0.08 ms, 13 object(s) / 13 piece(s), 7 awake piece(s), 2768 faces drawn
+[2026-10-20 16:06:31.161][engine][Physics][Kreative Kompas Engine - Showcase][info]: breakable 19 armed after 45 ticks: border resting stress median 86250, p90 254502, max 345934; base threshold 100000
+[2026-10-20 16:06:31.161][engine][Physics][Kreative Kompas Engine - Showcase][info]: breakable 17 armed after 45 ticks: border resting stress median 98006, p90 236756, max 575063; base threshold 100000
+[2026-10-20 16:06:31.161][engine][Physics][Kreative Kompas Engine - Showcase][info]: breakable 15 armed after 45 ticks: border resting stress median 30075, p90 44962, max 70731; base threshold 150000
+[2026-10-20 16:06:31.161][engine][Physics][Kreative Kompas Engine - Showcase][info]: breakable 11 armed after 45 ticks: border resting stress median 178217, p90 586960, max 755866; base threshold 100000
+[2026-10-20 16:06:31.594][engine][Physics][Kreative Kompas Engine - Showcase][info]: perf: 3.3 fps, 6.6 ticks/s, step avg 11.50 ms max 12.21 ms, render prep 0.08 ms, 13 object(s) / 13 piece(s), 7 awake piece(s), 2768 faces drawn
+[2026-10-20 16:06:32.385][engine][Physics][Kreative Kompas Engine - Showcase][info]: breakable 7 armed after 53 ticks: border resting stress median 31745, p90 46495, max 124958; base threshold 150000
+[2026-10-20 16:06:32.660][engine][Physics][Kreative Kompas Engine - Showcase][info]: perf: 3.8 fps, 7.5 ticks/s, step avg 11.55 ms max 11.77 ms, render prep 0.08 ms, 13 object(s) / 13 piece(s), 7 awake piece(s), 2768 faces drawn
+[2026-10-20 16:06:33.710][engine][Physics][Kreative Kompas Engine - Showcase][info]: breakable 3 armed after 63 ticks: border resting stress median 85995, p90 191677, max 477870; base threshold 100000
+[2026-10-20 16:06:33.721][engine][Physics][Kreative Kompas Engine - Showcase][info]: perf: 3.8 fps, 7.5 ticks/s, step avg 11.64 ms max 12.05 ms, render prep 0.07 ms, 13 object(s) / 13 piece(s), 4 awake piece(s), 2768 faces drawn
+[2026-10-20 16:06:34.789][engine][Physics][Kreative Kompas Engine - Showcase][info]: breakable 9 armed after 70 ticks: border resting stress median 95410, p90 340035, max 741842; base threshold 100000
+[2026-10-20 16:06:34.824][engine][Physics][Kreative Kompas Engine - Showcase][info]: perf: 3.6 fps, 7.3 ticks/s, step avg 11.35 ms max 12.13 ms, render prep 0.08 ms, 13 object(s) / 13 piece(s), 7 awake piece(s), 2768 faces drawn
+[2026-10-20 16:06:35.936][engine][Physics][Kreative Kompas Engine - Showcase][info]: perf: 3.6 fps, 7.2 ticks/s, step avg 11.55 ms max 11.90 ms, render prep 0.08 ms, 13 object(s) / 13 piece(s), 7 awake piece(s), 2768 faces drawn
+[2026-10-20 16:06:37.064][engine][Physics][Kreative Kompas Engine - Showcase][info]: perf: 3.5 fps, 7.1 ticks/s, step avg 11.52 ms max 12.30 ms, render prep 0.08 ms, 13 object(s) / 13 piece(s), 7 awake piece(s), 2768 faces drawn
+[2026-10-20 16:06:37.332][engine][Physics][Kreative Kompas Engine - Showcase][info]: breakable 9 split: 6 broken borders, now 2 pieces
+[2026-10-20 16:06:38.259][engine][Physics][Kreative Kompas Engine - Showcase][info]: perf: 2.5 fps, 5.0 ticks/s, step avg 13.11 ms max 16.07 ms, render prep 0.11 ms, 14 object(s) / 14 piece(s), 8 awake piece(s), 2814 faces drawn
+[2026-10-20 16:06:39.359][engine][Physics][Kreative Kompas Engine - Showcase][info]: perf: 3.6 fps, 7.3 ticks/s, step avg 12.03 ms max 12.82 ms, render prep 0.09 ms, 13 object(s) / 13 piece(s), 7 awake piece(s), 2772 faces drawn
+[2026-10-20 16:06:40.475][engine][Physics][Kreative Kompas Engine - Showcase][info]: perf: 3.6 fps, 7.2 ticks/s, step avg 11.47 ms max 12.05 ms, render prep 0.08 ms, 13 object(s) / 13 piece(s), 7 awake piece(s), 2772 faces drawn
+[2026-10-20 16:06:41.578][engine][Scripts][Kreative Kompas Engine - Showcase][info]: toys.lua: 10 hard hits so far
+[2026-10-20 16:06:41.578][engine][Physics][Kreative Kompas Engine - Showcase][info]: perf: 3.6 fps, 7.2 ticks/s, step avg 11.44 ms max 12.02 ms, render prep 0.09 ms, 13 object(s) / 13 piece(s), 7 awake piece(s), 2772 faces drawn
+[2026-10-20 16:06:42.132][engine][Scripts][Kreative Kompas Engine - Showcase][info]: toys.lua: 20 hard hits so far
+[2026-10-20 16:06:42.407][engine][Scripts][Kreative Kompas Engine - Showcase][info]: toys.lua: 30 hard hits so far
+[2026-10-20 16:06:42.681][engine][Scripts][Kreative Kompas Engine - Showcase][info]: toys.lua: 40 hard hits so far
+[2026-10-20 16:06:42.681][engine][Physics][Kreative Kompas Engine - Showcase][info]: perf: 3.6 fps, 7.3 ticks/s, step avg 11.59 ms max 11.72 ms, render prep 0.09 ms, 13 object(s) / 13 piece(s), 7 awake piece(s), 2772 faces drawn
+[2026-10-20 16:06:42.940][engine][Scripts][Kreative Kompas Engine - Showcase][info]: toys.lua: 50 hard hits so far
+[2026-10-20 16:06:43.456][engine][Scripts][Kreative Kompas Engine - Showcase][info]: toys.lua: 60 hard hits so far
+[2026-10-20 16:06:43.710][engine][Scripts][Kreative Kompas Engine - Showcase][info]: toys.lua: 70 hard hits so far
+[2026-10-20 16:06:43.714][engine][Physics][Kreative Kompas Engine - Showcase][info]: perf: 3.9 fps, 7.7 ticks/s, step avg 12.65 ms max 13.98 ms, render prep 0.11 ms, 17 object(s) / 17 piece(s), 11 awake piece(s), 3204 faces drawn
+[2026-10-20 16:06:43.955][engine][Scripts][Kreative Kompas Engine - Showcase][info]: toys.lua: 80 hard hits so far
+[2026-10-20 16:06:44.431][engine][Scripts][Kreative Kompas Engine - Showcase][info]: toys.lua: 90 hard hits so far
+[2026-10-20 16:06:44.903][engine][Physics][Kreative Kompas Engine - Showcase][info]: perf: 4.2 fps, 5.0 ticks/s, step avg 16.07 ms max 17.36 ms, render prep 0.16 ms, 21 object(s) / 21 piece(s), 15 awake piece(s), 3636 faces drawn
+[2026-10-20 16:06:45.141][engine][Scripts][Kreative Kompas Engine - Showcase][info]: toys.lua: 100 hard hits so far
+[2026-10-20 16:06:45.392][engine][Scripts][Kreative Kompas Engine - Showcase][info]: toys.lua: 110 hard hits so far
+[2026-10-20 16:06:46.109][engine][Physics][Kreative Kompas Engine - Showcase][info]: breakable 7 split: 4 broken borders, now 4 pieces
+[2026-10-20 16:06:46.125][engine][Physics][Kreative Kompas Engine - Showcase][info]: perf: 4.1 fps, 4.1 ticks/s, step avg 20.46 ms max 23.33 ms, render prep 0.20 ms, 29 object(s) / 29 piece(s), 23 awake piece(s), 4222 faces drawn
+[2026-10-20 16:06:46.855][engine][Scripts][Kreative Kompas Engine - Showcase][info]: toys.lua: 120 hard hits so far
+[2026-10-20 16:06:47.352][engine][Physics][Kreative Kompas Engine - Showcase][info]: perf: 4.1 fps, 4.1 ticks/s, step avg 24.78 ms max 26.33 ms, render prep 0.23 ms, 34 object(s) / 34 piece(s), 28 awake piece(s), 4762 faces drawn
+[2026-10-20 16:06:47.590][engine][Scripts][Kreative Kompas Engine - Showcase][info]: toys.lua: 130 hard hits so far
+[2026-10-20 16:06:48.086][engine][Physics][Kreative Kompas Engine - Showcase][info]: breakable 3 split: 71 broken borders, now 31 pieces
+[2026-10-20 16:06:48.103][engine][Scripts][Kreative Kompas Engine - Showcase][info]: toys.lua: 140 hard hits so far
+[2026-10-20 16:06:48.370][engine][Physics][Kreative Kompas Engine - Showcase][info]: perf: 3.9 fps, 3.9 ticks/s, step avg 33.32 ms max 43.11 ms, render prep 0.36 ms, 65 object(s) / 65 piece(s), 59 awake piece(s), 5436 faces drawn
+[2026-10-20 16:06:48.901][engine][Scripts][Kreative Kompas Engine - Showcase][info]: toys.lua: 150 hard hits so far
+[2026-10-20 16:06:49.453][engine][Physics][Kreative Kompas Engine - Showcase][info]: perf: 3.7 fps, 3.7 ticks/s, step avg 42.25 ms max 44.56 ms, render prep 0.38 ms, 70 object(s) / 70 piece(s), 64 awake piece(s), 5976 faces drawn
+[2026-10-20 16:06:49.719][engine][Scripts][Kreative Kompas Engine - Showcase][info]: toys.lua: 160 hard hits so far
+[2026-10-20 16:06:50.548][engine][Physics][Kreative Kompas Engine - Showcase][info]: perf: 3.7 fps, 3.7 ticks/s, step avg 48.36 ms max 49.30 ms, render prep 0.40 ms, 62 object(s) / 62 piece(s), 56 awake piece(s), 6208 faces drawn
+[2026-10-20 16:06:51.617][engine][Physics][Kreative Kompas Engine - Showcase][info]: breakable 9 split: 26 broken borders, now 12 pieces
+[2026-10-20 16:06:51.631][engine][Scripts][Kreative Kompas Engine - Showcase][info]: toys.lua: 170 hard hits so far
+[2026-10-20 16:06:51.632][engine][Physics][Kreative Kompas Engine - Showcase][info]: perf: 3.7 fps, 3.7 ticks/s, step avg 45.00 ms max 46.61 ms, render prep 0.38 ms, 59 object(s) / 59 piece(s), 53 awake piece(s), 6368 faces drawn
+[2026-10-20 16:06:52.711][engine][Physics][Kreative Kompas Engine - Showcase][info]: perf: 3.7 fps, 3.7 ticks/s, step avg 52.55 ms max 54.41 ms, render prep 0.42 ms, 64 object(s) / 64 piece(s), 58 awake piece(s), 6908 faces drawn
+[2026-10-20 16:06:53.831][engine][Physics][Kreative Kompas Engine - Showcase][info]: perf: 3.6 fps, 3.6 ticks/s, step avg 57.59 ms max 58.96 ms, render prep 0.44 ms, 62 object(s) / 62 piece(s), 55 awake piece(s), 7000 faces drawn
+[2026-10-20 16:06:54.101][engine][Scripts][Kreative Kompas Engine - Showcase][info]: toys.lua: 180 hard hits so far
+[2026-10-20 16:06:54.935][engine][Governor][Kreative Kompas Engine - Showcase][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+[2026-10-20 16:06:54.943][engine][Showcase][Kreative Kompas Engine - Showcase][info]: STRESS RESULT: too slow - 3.3 fps avg, 0.3 fps 1% low, worst frame 3982.2 ms
+[2026-10-20 16:06:54.943][engine][Showcase][Kreative Kompas Engine - Showcase][info]: STRESS REPORT: C:\forgejo-runner\work\3266c5c733d49853\hostexecutor\results\bench\run_20261020_160550\reports\stress_20261020_160654_DESKTOP-387PPHP.txt and .json
+[2026-10-20 16:06:54.949][engine][Physics][Kreative Kompas Engine - Showcase][info]: perf: 3.6 fps, 3.6 ticks/s, step avg 55.06 ms max 56.55 ms, render prep 0.40 ms, 59 object(s) / 59 piece(s), 53 awake piece(s), 7026 faces drawn
+[2026-10-20 16:06:55.258][engine][Benchmark][Kreative Kompas Engine - Showcase][info]: benchmark: 5 screenshot(s) in C:/forgejo-runner/work/3266c5c733d49853/hostexecutor/results/bench/run_20261020_160550/reports/shots
+[2026-10-20 16:06:55.260][engine][Benchmark][Kreative Kompas Engine - Showcase][info]: benchmark: 99 frames, 3.7 fps avg, 1.6 fps 1% low, 1 hitch(es), verdict too slow; report C:\forgejo-runner\work\3266c5c733d49853\hostexecutor\results\bench\run_20261020_160550\reports\showcase_stress.json
+[2026-10-20 16:06:55.260][engine][Voice][Kreative Kompas Engine - Showcase][info]: Voice chat: sent 0 frames, played 0, concealed 0; late 0, skipped 0, playback underruns 0
+[2026-10-20 16:06:55.268][engine][Physics][Kreative Kompas Engine - Showcase][info]: FEMFX scene destroyed
+[2026-10-20 16:06:55.268][engine][Audio][Kreative Kompas Engine - Showcase][info]: Audio: 886 impacts played, 1368 skipped (cooldown/cap), 4 breaks, 15 footsteps, voices dropped 55 stolen 158; room RT60 0.64 s wet 0.01
