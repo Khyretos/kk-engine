@@ -113,16 +113,16 @@ FluidSurfaceRenderer::FluidSurfaceRenderer(Application& app) : m_app(app), m_dev
     VK_CHECK(vkCreateRenderPass(m_device, &rp, nullptr, &m_pass));
 
     PipelineConfig pc;
-    pc.cullMode = VK_CULL_MODE_NONE;
+    pc.cullMode = rhi::CullMode::None;
     pc.colorAttachmentCount = 2;
-    pc.pushConstantRange = { VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(glm::vec4) };
+    pc.pushConstantRange = { rhi::kFragment, 0, sizeof(glm::vec4) };
     pc.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout() };
     m_particlePipeline = std::make_unique<Pipeline>(app.device(), m_pass, "shaders/impostor.vert.spv", "shaders/fluid_depth.frag.spv", pc);
 
     PipelineConfig cc;
     cc.useVertexInput = false;
-    cc.cullMode = VK_CULL_MODE_NONE;
-    cc.pushConstantRange = { VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(CompositePush) };
+    cc.cullMode = rhi::CullMode::None;
+    cc.pushConstantRange = { rhi::kFragment, 0, sizeof(CompositePush) };
     cc.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), m_sampleLayout };
     m_compositePipeline = std::make_unique<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/sky.vert.spv",
                                                      "shaders/fluid_composite.frag.spv", cc);

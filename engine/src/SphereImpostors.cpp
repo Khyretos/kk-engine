@@ -32,7 +32,7 @@ std::shared_ptr<Pipeline> sharedPipeline(Application& app, VkRenderPass pass, co
 
 SphereImpostorRenderer::SphereImpostorRenderer(Application& app) : m_app(app) {
     PipelineConfig config;
-    config.cullMode = VK_CULL_MODE_NONE;
+    config.cullMode = rhi::CullMode::None;
     config.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), app.shadowMapSetLayout() };
     m_pipeline = std::make_unique<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/impostor.vert.spv", "shaders/impostor.frag.spv", config);
 }
@@ -68,14 +68,14 @@ struct ShadowPush { glm::mat4 lightViewProj; glm::mat4 model; };
 DynamicMeshRenderer::DynamicMeshRenderer(Application& app) : m_app(app) {
     m_pipeline = sharedPipeline(app, app.renderer().renderPass(), "mesh", [&app] {
         PipelineConfig config;
-        config.cullMode = VK_CULL_MODE_NONE; // generated surfaces: winding not guaranteed consistent
-        config.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPush) };
+        config.cullMode = rhi::CullMode::None; // generated surfaces: winding not guaranteed consistent
+        config.pushConstantRange = { rhi::kVertex, 0, sizeof(MeshPush) };
         config.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), app.shadowMapSetLayout(), app.materialTextureSetLayout() };
         return std::make_shared<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/cube.vert.spv", "shaders/glow.frag.spv", config);
     });
     m_shadowPipeline = sharedPipeline(app, app.shadowMap().renderPass(), "mesh shadow", [&app] {
         PipelineConfig shadow = ShadowMap::casterConfig();
-        shadow.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ShadowPush) };
+        shadow.pushConstantRange = { rhi::kVertex, 0, sizeof(ShadowPush) };
         return std::make_shared<Pipeline>(app.device(), app.shadowMap().renderPass(), "shaders/shadow.vert.spv", "shaders/shadow.frag.spv", shadow);
     });
 }
@@ -149,14 +149,14 @@ void DynamicMeshRenderer::drawTranslucent(const RenderContext& ctx, const glm::m
         // here), depth tested against the opaque scene but not written,
         // so it never hides what's behind it from itself.
         Application& app = m_app;
-        auto config = [&app](VkBlendFactor src, VkBlendFactor dst) {
+        auto config = [&app](rhi::BlendFactor src, rhi::BlendFactor dst) {
             PipelineConfig c;
-            c.cullMode = VK_CULL_MODE_BACK_BIT;
-            c.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+            c.cullMode = rhi::CullMode::Back;
+            c.frontFace = rhi::FrontFace::CounterClockwise;
             c.depthWriteEnable = false;
             c.blendEnable = true;
             c.customColorBlend = true;
-            c.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPush) };
+            c.pushConstantRange = { rhi::kVertex, 0, sizeof(MeshPush) };
             c.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), app.shadowMapSetLayout(), app.materialTextureSetLayout() };
             c.srcColorBlendFactor = src;
             c.dstColorBlendFactor = dst;
@@ -165,33 +165,33 @@ void DynamicMeshRenderer::drawTranslucent(const RenderContext& ctx, const glm::m
         m_absorbPipeline = sharedPipeline(app, app.renderer().renderPass(), "mesh absorb", [&] {
             // behind *= transmittance
             return std::make_shared<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/cube.vert.spv", "shaders/translucent_absorb.frag.spv",
-                                              config(VK_BLEND_FACTOR_ZERO, VK_BLEND_FACTOR_SRC_COLOR));
+                                              config(rhi::BlendFactor::Zero, rhi::BlendFactor::SrcColor));
         });
         m_lightPipeline = sharedPipeline(app, app.renderer().renderPass(), "mesh light", [&] {
             // behind += light from the surface
             return std::make_shared<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/cube.vert.spv", "shaders/translucent_light.frag.spv",
-                                              config(VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE));
+                                              config(rhi::BlendFactor::One, rhi::BlendFactor::One));
         });
         m_refractPipeline = sharedPipeline(app, app.renderer().renderPass(), "mesh refract", [&] {
             // behind = the scene where the refracted ray leads x transmittance
             return std::make_shared<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/cube.vert.spv", "shaders/translucent_refract.frag.spv",
-                                              config(VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ZERO));
+                                              config(rhi::BlendFactor::One, rhi::BlendFactor::Zero));
         });
     }
     if (ctx.refractionRays && !m_refractRaysPipeline) {
         Application& app = m_app;
         m_refractRaysPipeline = sharedPipeline(app, app.renderer().renderPass(), "mesh refract rays", [&app] {
             PipelineConfig c;
-            c.cullMode = VK_CULL_MODE_BACK_BIT;
-            c.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+            c.cullMode = rhi::CullMode::Back;
+            c.frontFace = rhi::FrontFace::CounterClockwise;
             c.depthWriteEnable = false;
             c.blendEnable = true;
             c.customColorBlend = true;
-            c.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MeshPush) };
+            c.pushConstantRange = { rhi::kVertex, 0, sizeof(MeshPush) };
             c.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), app.shadowMapSetLayout(), app.materialTextureSetLayout(),
                                        app.refractionRayLayout() };
-            c.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
-            c.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+            c.srcColorBlendFactor = rhi::BlendFactor::One;
+            c.dstColorBlendFactor = rhi::BlendFactor::Zero;
             return std::make_shared<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/cube.vert.spv",
                                               "shaders/translucent_refract_rays.frag.spv", c);
         });
@@ -209,8 +209,8 @@ void DynamicMeshRenderer::drawCloth(const RenderContext& ctx, const Fabric& fabr
         Application& app = m_app;
         m_clothPipeline = sharedPipeline(app, app.renderer().renderPass(), "mesh cloth", [&app] {
             PipelineConfig c;
-            c.cullMode = VK_CULL_MODE_NONE; // both sides of a sheet are seen
-            c.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ClothPush) };
+            c.cullMode = rhi::CullMode::None; // both sides of a sheet are seen
+            c.pushConstantRange = { rhi::kVertex | rhi::kFragment, 0, sizeof(ClothPush) };
             c.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), app.shadowMapSetLayout(), app.materialTextureSetLayout() };
             return std::make_shared<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/cube.vert.spv", "shaders/cloth.frag.spv", c);
         });

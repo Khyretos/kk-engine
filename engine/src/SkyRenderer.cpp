@@ -51,10 +51,10 @@ SkyRenderer::SkyRenderer(Application& app) : m_app(app) {
 
     PipelineConfig pc;
     pc.useVertexInput = false;
-    pc.cullMode = VK_CULL_MODE_NONE;
+    pc.cullMode = rhi::CullMode::None;
     pc.depthTestEnable = true;  // at the far plane (LESS_OR_EQUAL): only where nothing was drawn
     pc.depthWriteEnable = false;
-    pc.pushConstantRange = { VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(SkyPush) };
+    pc.pushConstantRange = { rhi::kFragment, 0, sizeof(SkyPush) };
     pc.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), m_setLayout };
     m_pipeline = std::make_unique<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/sky.vert.spv", "shaders/sky.frag.spv", pc);
 }

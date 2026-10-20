@@ -151,28 +151,28 @@ void ModelModule::init(Application& app) {
     }
 
     PipelineConfig config;
-    config.cullMode = VK_CULL_MODE_BACK_BIT;
+    config.cullMode = rhi::CullMode::Back;
     // ModelAsset outputs counter-clockwise front faces (glTF/OpenGL
     // convention). The projection flips Y (proj[1][1] *= -1), but Vulkan
     // also measures winding in framebuffer space, whose Y points down —
     // the two flips cancel, so front faces stay counter-clockwise. This
     // said CLOCKWISE until BUG-040: every model was drawn inside-out
     // (outer faces culled, the inside of the far faces visible).
-    config.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-    config.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants) };
+    config.frontFace = rhi::FrontFace::CounterClockwise;
+    config.pushConstantRange = { rhi::kVertex | rhi::kFragment, 0, sizeof(PushConstants) };
     // Set 2 = the material's maps (surfaceSetFor), set 3 = world overlay texture.
     config.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), app.shadowMapSetLayout(), rhi::VulkanBindGroupLayout::vk(*m_surfaceLayout),
                                     app.materialTextureSetLayout() };
     m_pipeline = std::make_unique<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/model.vert.spv", "shaders/model.frag.spv", config);
 
     // Skeleton overlay: same shader, drawn on top of everything.
-    config.cullMode = VK_CULL_MODE_NONE;
+    config.cullMode = rhi::CullMode::None;
     config.depthTestEnable = false;
     config.depthWriteEnable = false;
     m_bonePipeline = std::make_unique<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/model.vert.spv", "shaders/model.frag.spv", config);
 
     PipelineConfig shadowConfig = ShadowMap::casterConfig();
-    shadowConfig.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ShadowPushConstants) };
+    shadowConfig.pushConstantRange = { rhi::kVertex, 0, sizeof(ShadowPushConstants) };
     m_shadowPipeline = std::make_unique<Pipeline>(app.device(), app.shadowMap().renderPass(), "shaders/shadow.vert.spv", "shaders/shadow.frag.spv", shadowConfig);
 
     // Instanced variants (docs/OPTIMIZATION.md #25): kke::Vertex at binding 0,
@@ -180,13 +180,13 @@ void ModelModule::init(Application& app) {
     {
         auto binding0 = Vertex::bindingDescription();
         auto attrs0 = Vertex::attributeDescriptions();
-        VkVertexInputBindingDescription binding1{ 1, sizeof(InstanceGpu), VK_VERTEX_INPUT_RATE_INSTANCE };
-        std::vector<VkVertexInputAttributeDescription> attrs(attrs0.begin(), attrs0.end());
-        for (uint32_t c = 0; c < 4; ++c) attrs.push_back({ 8 + c, 1, VK_FORMAT_R32G32B32A32_SFLOAT, static_cast<uint32_t>(sizeof(glm::vec4) * c) });
-        attrs.push_back({ 12, 1, VK_FORMAT_R32G32B32A32_SFLOAT, static_cast<uint32_t>(offsetof(InstanceGpu, tint)) });
+        const rhi::VertexBinding binding1{ 1, sizeof(InstanceGpu), true };
+        std::vector<rhi::VertexAttribute> attrs(attrs0.begin(), attrs0.end());
+        for (uint32_t c = 0; c < 4; ++c) attrs.push_back({ 8 + c, 1, rhi::VertexFormat::Float4, static_cast<uint32_t>(sizeof(glm::vec4) * c) });
+        attrs.push_back({ 12, 1, rhi::VertexFormat::Float4, static_cast<uint32_t>(offsetof(InstanceGpu, tint)) });
         PipelineConfig inst;
-        inst.cullMode = VK_CULL_MODE_BACK_BIT;
-        inst.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+        inst.cullMode = rhi::CullMode::Back;
+        inst.frontFace = rhi::FrontFace::CounterClockwise;
         inst.customVertexBindings = { binding0, binding1 };
         inst.customVertexAttributes = attrs;
         inst.pushConstantRange = config.pushConstantRange;

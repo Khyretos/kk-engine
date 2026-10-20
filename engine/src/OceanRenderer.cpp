@@ -46,8 +46,8 @@ OceanRenderer::OceanRenderer(Application& app, int cells, float extent, float fa
     m_grid = std::make_unique<Mesh>(app.device(), verts, idx);
 
     PipelineConfig oc;
-    oc.cullMode = VK_CULL_MODE_NONE;
-    oc.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(OceanPush) };
+    oc.cullMode = rhi::CullMode::None;
+    oc.pushConstantRange = { rhi::kVertex, 0, sizeof(OceanPush) };
     oc.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout() };
     m_ocean = std::make_unique<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/ocean.vert.spv", "shaders/ocean.frag.spv", oc);
 }

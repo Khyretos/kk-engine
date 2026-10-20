@@ -41,7 +41,7 @@ TEST(ShadowProjection, UnsnappedKeepsExactCentre) {
 TEST(ShadowProjection, CasterConfigHasSlopeBias) {
     const kke::PipelineConfig c = kke::ShadowMap::casterConfig();
     EXPECT_GT(c.depthBiasSlope, 0.0f);
-    EXPECT_EQ(c.cullMode, static_cast<VkCullModeFlags>(VK_CULL_MODE_NONE));
+    EXPECT_EQ(c.cullMode, kke::rhi::CullMode::None);
 }
 
 namespace {

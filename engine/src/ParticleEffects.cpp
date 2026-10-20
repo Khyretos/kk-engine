@@ -29,23 +29,23 @@ Pipeline& ParticleEffects::pipeline(Kind kind) {
     std::unique_ptr<Pipeline>& made = m_pipelines[static_cast<int>(kind)];
     if (made) return *made;
     PipelineConfig config;
-    config.cullMode = VK_CULL_MODE_NONE;
+    config.cullMode = rhi::CullMode::None;
     config.depthWriteEnable = false; // see-through: tested against the scene, never hides what's behind
     config.blendEnable = true;
-    config.customVertexBindings = { { 0, sizeof(GpuInstance), VK_VERTEX_INPUT_RATE_INSTANCE } };
+    config.customVertexBindings = { { 0, sizeof(GpuInstance), true } };
     config.customVertexAttributes = {
-        { 0, 0, VK_FORMAT_R32G32B32_SFLOAT, static_cast<uint32_t>(offsetof(GpuInstance, center)) },
-        { 1, 0, VK_FORMAT_R32G32B32_SFLOAT, static_cast<uint32_t>(offsetof(GpuInstance, color)) },
-        { 2, 0, VK_FORMAT_R32G32B32A32_SFLOAT, static_cast<uint32_t>(offsetof(GpuInstance, params)) },
-        { 3, 0, VK_FORMAT_R32G32B32_SFLOAT, static_cast<uint32_t>(offsetof(GpuInstance, velocity)) },
-        { 5, 0, VK_FORMAT_R32G32_SFLOAT, static_cast<uint32_t>(offsetof(GpuInstance, extra)) },
+        { 0, 0, rhi::VertexFormat::Float3, static_cast<uint32_t>(offsetof(GpuInstance, center)) },
+        { 1, 0, rhi::VertexFormat::Float3, static_cast<uint32_t>(offsetof(GpuInstance, color)) },
+        { 2, 0, rhi::VertexFormat::Float4, static_cast<uint32_t>(offsetof(GpuInstance, params)) },
+        { 3, 0, rhi::VertexFormat::Float3, static_cast<uint32_t>(offsetof(GpuInstance, velocity)) },
+        { 5, 0, rhi::VertexFormat::Float2, static_cast<uint32_t>(offsetof(GpuInstance, extra)) },
     };
     config.descriptorSetLayouts = { m_app.lightingBuffer().descriptorSetLayout(), m_app.shadowMapSetLayout() };
     const bool light = kind == Kind::Spark || kind == Kind::Glow || kind == Kind::Ring;
     if (light) {
         config.customColorBlend = true; // light added onto the image
-        config.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
-        config.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+        config.srcColorBlendFactor = rhi::BlendFactor::One;
+        config.dstColorBlendFactor = rhi::BlendFactor::One;
     } else {
         config.premultipliedAlpha = true;
     }
@@ -134,16 +134,16 @@ Pipeline& ParticleEffects::gpuPipeline(Kind kind) {
     // The CPU pipeline's state and fragment shader, with the GPU's vertex stage.
     PipelineConfig config;
     config.useVertexInput = false;
-    config.cullMode = VK_CULL_MODE_NONE;
+    config.cullMode = rhi::CullMode::None;
     config.depthWriteEnable = false;
     config.blendEnable = true;
     config.descriptorSetLayouts = { m_app.lightingBuffer().descriptorSetLayout(), m_app.shadowMapSetLayout(),
                                     rhi::VulkanBindGroupLayout::vk(*m_gpuSetLayout) };
-    config.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, 2 * sizeof(glm::vec4) };
+    config.pushConstantRange = { rhi::kVertex, 0, 2 * sizeof(glm::vec4) };
     if (kind == Kind::Spark || kind == Kind::Glow || kind == Kind::Ring) {
         config.customColorBlend = true;
-        config.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
-        config.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+        config.srcColorBlendFactor = rhi::BlendFactor::One;
+        config.dstColorBlendFactor = rhi::BlendFactor::One;
     } else {
         config.premultipliedAlpha = true;
     }

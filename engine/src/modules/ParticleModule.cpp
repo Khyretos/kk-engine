@@ -43,12 +43,12 @@ void ParticleModule::init(Application& app) {
 
     PipelineConfig renderConfig;
     renderConfig.useVertexInput = false; // vertex shader indexes the SSBO directly via gl_VertexIndex
-    renderConfig.topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
-    renderConfig.cullMode = VK_CULL_MODE_NONE;
+    renderConfig.topology = rhi::Topology::PointList;
+    renderConfig.cullMode = rhi::CullMode::None;
     renderConfig.depthTestEnable = true;
     renderConfig.depthWriteEnable = false; // additive-looking transparent sprites shouldn't occlude each other
     renderConfig.blendEnable = true;
-    renderConfig.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(RenderPushConstants) };
+    renderConfig.pushConstantRange = { rhi::kVertex, 0, sizeof(RenderPushConstants) };
     renderConfig.descriptorSetLayouts = { m_descriptorSetLayout };
 
     m_renderPipeline = std::make_unique<Pipeline>(

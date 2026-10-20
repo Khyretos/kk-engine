@@ -4,10 +4,13 @@
 
 #include <algorithm>
 #include <array>
+#include <cassert>
 
 namespace kke::rhi {
 
 VkShaderStageFlags VulkanCommandList::stagesOf(uint32_t stages) {
+    // Stage bits only: a VkShaderStageFlags value here (VERTEX|FRAGMENT = 0x11) would lose its fragment bit.
+    assert((stages & ~uint32_t{ kVertex | kFragment | kCompute }) == 0 && "rhi::Stage bits, not VkShaderStageFlags");
     VkShaderStageFlags out = 0;
     if (stages & kVertex) out |= VK_SHADER_STAGE_VERTEX_BIT;
     if (stages & kFragment) out |= VK_SHADER_STAGE_FRAGMENT_BIT;

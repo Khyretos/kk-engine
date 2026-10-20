@@ -1,5 +1,7 @@
 #pragma once
 
+#include "kke/rhi/PipelineState.h"
+
 #include <volk.h>
 #include <glm/glm.hpp>
 #include <cstdint>
@@ -25,11 +27,11 @@ struct PipelineConfig {
     // when binding a *different* vertex format (e.g. RmlUi's own Vertex
     // struct in RmlVulkanRenderInterface) — they must describe the same
     // buffer layout the caller will actually bind.
-    std::vector<VkVertexInputBindingDescription> customVertexBindings;
-    std::vector<VkVertexInputAttributeDescription> customVertexAttributes;
-    VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT;
-    VkFrontFace frontFace = VK_FRONT_FACE_CLOCKWISE;
+    std::vector<rhi::VertexBinding> customVertexBindings;
+    std::vector<rhi::VertexAttribute> customVertexAttributes;
+    rhi::Topology topology = rhi::Topology::TriangleList;
+    rhi::CullMode cullMode = rhi::CullMode::Back;
+    rhi::FrontFace frontFace = rhi::FrontFace::Clockwise;
     bool depthTestEnable = true;
     bool depthWriteEnable = true;
     bool blendEnable = false;
@@ -42,14 +44,14 @@ struct PipelineConfig {
     // defaults above): e.g. ZERO/SRC_COLOR multiplies what's behind by the
     // output (coloured glass, jelly), ONE/ONE adds light.
     bool customColorBlend = false;
-    VkBlendFactor srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
-    VkBlendFactor dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+    rhi::BlendFactor srcColorBlendFactor = rhi::BlendFactor::One;
+    rhi::BlendFactor dstColorBlendFactor = rhi::BlendFactor::Zero;
     // Stencil, for RmlUi clip masks (see RmlVulkanRenderInterface). When
     // enabled, reference/compare mask/write mask are dynamic state set
     // with vkCmdSetStencil*; the ops below are fixed per pipeline.
     bool stencilTestEnable = false;
-    VkCompareOp stencilCompareOp = VK_COMPARE_OP_ALWAYS;
-    VkStencilOp stencilPassOp = VK_STENCIL_OP_KEEP;
+    rhi::CompareOp stencilCompareOp = rhi::CompareOp::Always;
+    rhi::StencilOp stencilPassOp = rhi::StencilOp::Keep;
     bool colorWriteEnable = true;
     // Rasterizer depth bias (both 0 = off). Shadow casters get theirs from
     // ShadowMap::casterConfig(): slope-scaled, so steep surfaces are pushed
@@ -59,7 +61,7 @@ struct PipelineConfig {
     // Color attachments in the target render pass (same blend state for
     // all). 2+ for multiple render targets, 0 for depth-only passes.
     uint32_t colorAttachmentCount = 1;
-    VkPushConstantRange pushConstantRange{}; // size == 0 => pipeline has no push constants
+    rhi::PushRange pushConstantRange{}; // size == 0 => pipeline has no push constants
     std::vector<VkDescriptorSetLayout> descriptorSetLayouts; // empty => no descriptor sets
     // The fragment shader's specialization constants (constant_id 0, 1, ...,
     // 32-bit each; a bool is 0 or 1): e.g. the UI shaders' "the target is

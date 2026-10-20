@@ -33,13 +33,13 @@ std::unique_ptr<kke::Mesh> BackdropModule::makeBox(kke::Application& app, glm::v
 
 void BackdropModule::init(kke::Application& app) {
     kke::PipelineConfig config;
-    config.cullMode = VK_CULL_MODE_NONE;
-    config.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants) };
+    config.cullMode = kke::rhi::CullMode::None;
+    config.pushConstantRange = { kke::rhi::kVertex, 0, sizeof(PushConstants) };
     config.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), app.shadowMapSetLayout(), app.materialTextureSetLayout() };
     m_pipeline = std::make_unique<kke::Pipeline>(app.device(), app.renderer().renderPass(),
                                                  "shaders/cube.vert.spv", "shaders/cube.frag.spv", config);
     kke::PipelineConfig shadowConfig = kke::ShadowMap::casterConfig();
-    shadowConfig.pushConstantRange = { VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(ShadowPushConstants) };
+    shadowConfig.pushConstantRange = { kke::rhi::kVertex, 0, sizeof(ShadowPushConstants) };
     m_shadowPipeline = std::make_unique<kke::Pipeline>(app.device(), app.shadowMap().renderPass(),
                                                        "shaders/shadow.vert.spv", "shaders/shadow.frag.spv", shadowConfig);
 

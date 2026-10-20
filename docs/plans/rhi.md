@@ -53,11 +53,16 @@ That halves the RHI: the ~20 compute passes stay as they are, behind a
   decoding and building mips on the CPU and hands the levels over;
   bind groups name a texture by `ref()`. The decal array, shadow maps
   and post-process targets stay Vulkan for now.
-- **R1f, shaders and pipelines.** ShaderModule (SPIR-V in, the backend
-  converts) and GraphicsPipeline made by the device; the lighting and
-  shadow sets (set 0 and 1) move onto bind groups with them. Vulkan
-  implements each by wrapping today's code; output must not change
-  (benchmarks within 2%, pictures identical).
+- **R1f, the pipeline state in the RHI's words (done).** `PipelineConfig`
+  and the engine's `Vertex` say topology, culling, winding, blending,
+  stencil, push constants and vertex layouts with `kke/rhi/PipelineState.h`
+  types instead of Vulkan's; `Pipeline` translates them. The 51 pipelines
+  read the same; only their spelling changed.
+- **R1g, shaders and pipelines from the device.** ShaderModule (SPIR-V in,
+  the backend converts) and GraphicsPipeline made by the device, the
+  render pass named by the RHI; the lighting and shadow sets (set 0 and
+  1) move onto bind groups with them. Output must not change (benchmarks
+  within 2%, pictures identical).
 - **R1b, the modules moved (done).** Models (scene and shadow), physics
   objects and rubble, particle effects (CPU batches and GPU-stepped),
   particle systems, ocean, hair, sphere impostors and cloth record their
@@ -66,7 +71,7 @@ That halves the RHI: the ~20 compute passes stay as they are, behind a
   until the device makes them. Still on a VkCommandBuffer: the fluid
   surface (its own render pass), thumbnails, the RmlUi and ImGui
   renderers, the sky and the Renderer's own passes.
-- **R1g, the rest of the graphics path.** Renderer's scene, shadow and overlay
+- **R1h, the rest of the graphics path.** Renderer's scene, shadow and overlay
   passes, Pipeline, Mesh, Texture, ShadowMap, LightingBuffer's uniform
   part, SkyRenderer, and every module's render(): ModelModule,
   PhysicsModule, ParticleEffects' instanced path, DebugDraw, Grid, Ocean,

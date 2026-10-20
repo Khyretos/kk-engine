@@ -817,10 +817,10 @@ void Renderer::drawPostPass(VkCommandBuffer cmd) {
         if (m_postPipeline) retire(std::move(m_postPipeline));
         PipelineConfig config;
         config.useVertexInput = false;
-        config.cullMode = VK_CULL_MODE_NONE;
+        config.cullMode = rhi::CullMode::None;
         config.depthTestEnable = false;
         config.depthWriteEnable = false;
-        config.pushConstantRange = { VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PostParams) };
+        config.pushConstantRange = { rhi::kFragment, 0, sizeof(PostParams) };
         config.descriptorSetLayouts = { m_postSetLayout };
         m_postPipeline = std::make_unique<Pipeline>(*m_device, m_swapChain->renderPass(), "shaders/rml_fullscreen.vert.spv",
                                                     "shaders/tonemap_post.frag.spv", config);

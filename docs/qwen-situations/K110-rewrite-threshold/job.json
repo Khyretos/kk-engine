@@ -1,0 +1,17 @@
+[
+ {
+  "mode": "patch",
+  "focus": [
+   "^namespace\\ kke\\ \\{$"
+  ],
+  "name": "r1f-mesh1x",
+  "role": "worker/cpp-games",
+  "out": "engine/src/Mesh.cpp",
+  "prompt": "Kreative Kompas Engine (C++20, Vulkan, forward renderer): R1f says a graphics pipeline's fixed state in the render hardware interface's own types (kke/rhi/PipelineState.h, docs/plans/rhi.md): rhi::Topology, rhi::CullMode, rhi::FrontFace, rhi::BlendFactor, rhi::CompareOp, rhi::StencilOp, rhi::PushRange (stages rhi::kVertex, kFragment, kCompute), rhi::VertexBinding and rhi::VertexAttribute (rhi::VertexFormat) replace Vulkan's in kke::PipelineConfig and its users; kke::Pipeline translates them to Vulkan.  Make these 1 edits in engine/src/Mesh.cpp, each its own SEARCH/REPLACE block.\nEdit 1. Your SEARCH block is exactly these lines:\n```\nnamespace kke {\n\nVkVertexInputBindingDescription Vertex::bindingDescription() {\n    VkVertexInputBindingDescription desc{};\n    desc.binding = 0;\n    desc.stride = sizeof(Vertex);\n    desc.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;\n    return desc;\n}\n\nstd::array<VkVertexInputAttributeDescription, 4> Vertex::attributeDescriptions() {\n    std::array<VkVertexInputAttributeDescription, 4> attrs{};\n    attrs[0].binding = 0;\n    attrs[0].location = 0;\n    attrs[0].format = VK_FORMAT_R32G32B32_SFLOAT;\n    attrs[0].offset = offsetof(Vertex, position);\n\n    attrs[1].binding = 0;\n    attrs[1].location = 1;\n    attrs[1].format = VK_FORMAT_R32G32B32_SFLOAT;\n    attrs[1].offset = offsetof(Vertex, color);\n\n    attrs[2].binding = 0;\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\nnamespace kke {\n\nrhi::VertexBinding Vertex::bindingDescription() { return { 0, sizeof(Vertex), false }; }\n\n```\nChange nothing else; do not copy or move any other line.\n",
+  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g09.py r1fmesh1x",
+  "precheck": false,
+  "context": [],
+  "max_tokens": 1015,
+  "hand": false
+ }
+]
