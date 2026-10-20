@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <memory>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -55,6 +56,10 @@ VulkanBindGroupLayout::VulkanBindGroupLayout(VkDevice device, std::span<const Bi
     info.pBindings = vk.data();
     VK_CHECK(vkCreateDescriptorSetLayout(m_device, &info, nullptr, &m_layout));
 }
+
+// R1h stub: the Coder's run replaces it.
+std::unique_ptr<VulkanBindGroupLayout> VulkanBindGroupLayout::borrowed(VkDescriptorSetLayout) { throw std::logic_error("R1h: borrowed"); }
+VulkanBindGroupLayout::VulkanBindGroupLayout(VkDescriptorSetLayout) {}
 
 VulkanBindGroupLayout::~VulkanBindGroupLayout() { vkDestroyDescriptorSetLayout(m_device, m_layout, nullptr); }
 

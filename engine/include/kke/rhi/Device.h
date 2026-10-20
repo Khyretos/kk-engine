@@ -1,6 +1,7 @@
 #pragma once
 
 #include "kke/rhi/CommandList.h"
+#include "kke/rhi/GraphicsPipeline.h"
 
 #include <cstdint>
 #include <memory>
@@ -100,6 +101,10 @@ public:
     virtual void releaseBindGroup(BindGroup group) = 0;
     // `pixels`: every level of desc, level 0 first.
     virtual std::unique_ptr<Texture> createTexture(const TextureDesc& desc, const void* pixels) = 0;
+    // `spirv`: the shader's 32-bit words (R1h).
+    virtual std::unique_ptr<ShaderModule> createShaderModule(std::span<const uint32_t> spirv) = 0;
+    // A pipeline of the two shaders, the state and the bind group layouts in `desc`; null when none can be made.
+    virtual std::unique_ptr<GraphicsPipeline> createGraphicsPipeline(const GraphicsPipelineDesc& desc) = 0;
 };
 
 } // namespace kke::rhi

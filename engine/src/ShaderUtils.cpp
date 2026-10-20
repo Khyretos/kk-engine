@@ -30,4 +30,7 @@ VkShaderModule loadShaderModule(VulkanDevice& device, const std::string& path) {
     return module;
 }
 
+// R1h stub: the Coder's run replaces it.
+std::vector<uint32_t> loadSpirv(const std::string&) { throw std::logic_error("R1h: loadSpirv"); }
+
 } // namespace kke

@@ -228,6 +228,8 @@ Pipeline::Pipeline(VulkanDevice& device, VkRenderPass renderPass,
     vkDestroyShaderModule(m_device.device(), fragModule, nullptr);
 }
 
+rhi::GraphicsPipelineDesc Pipeline::describe(const PipelineConfig&, std::span<const rhi::BindGroupLayout* const>) { throw std::logic_error("R1h: describe"); }
+
 Pipeline::~Pipeline() {
     if (m_pipeline) vkDestroyPipeline(m_device.device(), m_pipeline, nullptr);
     if (m_layout) vkDestroyPipelineLayout(m_device.device(), m_layout, nullptr);

@@ -1,10 +1,13 @@
 #pragma once
 
+#include "kke/rhi/GraphicsPipeline.h"
 #include "kke/rhi/PipelineState.h"
 
 #include <volk.h>
 #include <glm/glm.hpp>
 #include <cstdint>
+#include <memory>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -86,6 +89,11 @@ public:
     void bind(VkCommandBuffer cmd) const;
     void bind(rhi::CommandList& list) const; // the RHI's way (docs/plans/rhi.md)
     VkPipelineLayout layout() const { return m_layout; }
+
+    // `config` as the Device takes it (R1h): the fixed state, the vertex layout (kke::Vertex's when the
+    // config names none and uses vertex input) and `layouts` as the bind group layouts. The shaders and
+    // the pass are left for the caller; the spans point into `config` and `layouts`.
+    static rhi::GraphicsPipelineDesc describe(const PipelineConfig& config, std::span<const rhi::BindGroupLayout* const> layouts);
 
 private:
     VulkanDevice& m_device;

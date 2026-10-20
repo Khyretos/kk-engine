@@ -116,6 +116,7 @@ add_executable(kke_tests
     test_occlusion.cpp
     test_rhi_command_list.cpp
     test_rhi_device.cpp
+    test_rhi_graphics_pipeline.cpp
     test_rhi_pipeline_state.cpp
     test_shadow_rays.cpp
     test_taa.cpp

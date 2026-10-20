@@ -48,6 +48,26 @@ private:
     uint64_t m_id;
 };
 
+class MemoryShader final : public rhi::ShaderModule {
+public:
+    explicit MemoryShader(std::span<const uint32_t> w) : words(w.begin(), w.end()) {}
+    std::vector<uint32_t> words;
+};
+
+// Keeps what the pipeline was made from, as a backend that reads the state later would.
+class MemoryPipeline final : public rhi::GraphicsPipeline {
+public:
+    explicit MemoryPipeline(const rhi::GraphicsPipelineDesc& d)
+        : desc(d), vertex(static_cast<const MemoryShader*>(d.vertex)), fragment(static_cast<const MemoryShader*>(d.fragment)),
+          layouts(d.bindGroupLayouts.begin(), d.bindGroupLayouts.end()) {
+        desc.bindGroupLayouts = layouts;
+    }
+    rhi::GraphicsPipelineDesc desc;
+    const MemoryShader* vertex;
+    const MemoryShader* fragment;
+    std::vector<const rhi::BindGroupLayout*> layouts;
+};
+
 class MemoryDevice final : public rhi::Device {
 public:
     std::unique_ptr<rhi::Buffer> createBuffer(const rhi::BufferDesc& desc, const void* initial = nullptr) override {
@@ -69,6 +89,12 @@ public:
     void releaseBindGroup(rhi::BindGroup group) override { groups.erase(group.handle); }
     std::unique_ptr<rhi::Texture> createTexture(const rhi::TextureDesc& desc, const void* pixels) override {
         return std::make_unique<MemoryTexture>(++m_next, desc, pixels, rhi::VulkanTexture::byteSize(desc));
+    }
+    std::unique_ptr<rhi::ShaderModule> createShaderModule(std::span<const uint32_t> spirv) override {
+        return std::make_unique<MemoryShader>(spirv);
+    }
+    std::unique_ptr<rhi::GraphicsPipeline> createGraphicsPipeline(const rhi::GraphicsPipelineDesc& desc) override {
+        return std::make_unique<MemoryPipeline>(desc);
     }
     std::map<uint64_t, std::map<uint32_t, rhi::BindingWrite>> groups; // what each live group's bindings point at
 
@@ -160,4 +186,33 @@ TEST(RhiDevice, ATextureBindingSaysWhenComputeWritesIt) {
     d.writeBindGroup(g, *layout, { &write, 1 });
     EXPECT_TRUE(device.groups[g.handle][0].texture.computeWritten);
     EXPECT_FALSE(rhi::TextureRef{}.computeWritten);
+}
+
+TEST(RhiDevice, ABackendMakesShadersFromSpirvAndPipelinesFromTheDesc) {
+    MemoryDevice device;
+    rhi::Device& d = device;
+    const std::vector<uint32_t> vertWords{ 0x07230203u, 1u, 2u };
+    const std::vector<uint32_t> fragWords{ 0x07230203u, 3u };
+    auto vert = d.createShaderModule(vertWords);
+    auto frag = d.createShaderModule(fragWords);
+    const rhi::BindingLayout binding{ 0, rhi::BindingType::UniformBuffer, rhi::kVertex };
+    auto layout = d.createBindGroupLayout({ &binding, 1 });
+    const rhi::BindGroupLayout* layouts[] = { layout.get() };
+    const uint32_t constants[] = { 1u, 0u };
+    rhi::GraphicsPipelineDesc desc;
+    desc.vertex = vert.get();
+    desc.fragment = frag.get();
+    desc.pass = { 77 };
+    desc.samples = 4;
+    desc.bindGroupLayouts = layouts;
+    desc.fragmentConstants = constants;
+    auto pipeline = d.createGraphicsPipeline(desc);
+    ASSERT_NE(pipeline, nullptr);
+    const auto& made = static_cast<const MemoryPipeline&>(*pipeline);
+    EXPECT_EQ(made.vertex->words, vertWords);
+    EXPECT_EQ(made.fragment->words, fragWords);
+    EXPECT_EQ(made.desc.pass.handle, 77u);
+    EXPECT_EQ(made.desc.samples, 4u);
+    ASSERT_EQ(made.desc.bindGroupLayouts.size(), 1u);
+    EXPECT_EQ(made.desc.bindGroupLayouts[0], layout.get());
 }
