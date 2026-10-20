@@ -63,10 +63,16 @@ That halves the RHI: the ~20 compute passes stay as they are, behind a
   lights, decals) and set 1 (the shadow maps) are bind groups the device
   makes and writes; a texture a compute pass also writes says so
   (`TextureRef::computeWritten`, Vulkan's GENERAL layout).
-- **R1h, shaders and pipelines from the device.** ShaderModule (SPIR-V in,
-  the backend converts) and GraphicsPipeline made by the device, the
-  render pass named by the RHI, pipelines taking bind group layouts.
-  Output must not change (benchmarks within 2%, pictures identical).
+- **R1h, shaders and pipelines from the device (done).** `ShaderModule`
+  (SPIR-V words in; Vulkan keeps a VkShaderModule, the GL backend will turn
+  them into GLSL ES) and `GraphicsPipeline` are made by `rhi::Device`
+  (`createShaderModule`, `createGraphicsPipeline` from a
+  `GraphicsPipelineDesc`: both shaders, the pass as a `RenderPassRef`, the
+  state in the RHI's words, bind group layouts). `kke::Pipeline` reads its
+  .spv files, describes itself (`Pipeline::describe`) and asks the device;
+  layouts a module still makes itself stand in as borrowed bind group
+  layouts. The command list still takes `kke::Pipeline`; render passes move
+  in R1i. Output must not change (benchmarks within 2%, pictures identical).
 - **R1b, the modules moved (done).** Models (scene and shadow), physics
   objects and rubble, particle effects (CPU batches and GPU-stepped),
   particle systems, ocean, hair, sphere impostors and cloth record their

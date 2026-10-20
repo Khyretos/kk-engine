@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <memory>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -56,7 +57,16 @@ VulkanBindGroupLayout::VulkanBindGroupLayout(VkDevice device, std::span<const Bi
     VK_CHECK(vkCreateDescriptorSetLayout(m_device, &info, nullptr, &m_layout));
 }
 
-VulkanBindGroupLayout::~VulkanBindGroupLayout() { vkDestroyDescriptorSetLayout(m_device, m_layout, nullptr); }
+std::unique_ptr<VulkanBindGroupLayout> VulkanBindGroupLayout::borrowed(VkDescriptorSetLayout layout) {
+    return std::unique_ptr<VulkanBindGroupLayout>(new VulkanBindGroupLayout(layout));
+}
+
+VulkanBindGroupLayout::VulkanBindGroupLayout(VkDescriptorSetLayout borrowed)
+    : m_layout(borrowed), m_owned(false) {}
+
+VulkanBindGroupLayout::~VulkanBindGroupLayout() {
+    if (m_owned) vkDestroyDescriptorSetLayout(m_device, m_layout, nullptr);
+}
 
 BindingType VulkanBindGroupLayout::type(uint32_t binding) const {
     for (const BindingLayout& b : m_bindings)

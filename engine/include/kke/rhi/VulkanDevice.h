@@ -47,11 +47,47 @@ public:
     static VkDescriptorSetLayout vk(const BindGroupLayout& layout) { return static_cast<const VulkanBindGroupLayout&>(layout).m_layout; }
     // The binding's type (Texture when the layout has no such binding).
     BindingType type(uint32_t binding) const;
+    // A layout that stands for a VkDescriptorSetLayout some module made itself (until it moves to the device):
+    // the VkDescriptorSetLayout is not destroyed with it.
+    static std::unique_ptr<VulkanBindGroupLayout> borrowed(VkDescriptorSetLayout layout);
+
+private:
+    explicit VulkanBindGroupLayout(VkDescriptorSetLayout borrowed);
+    VkDevice m_device = VK_NULL_HANDLE;
+    VkDescriptorSetLayout m_layout = VK_NULL_HANDLE;
+    bool m_owned = true;
+    std::vector<BindingLayout> m_bindings;
+};
+
+// A shader on Vulkan: a VkShaderModule.
+class VulkanShaderModule final : public ShaderModule {
+public:
+    VulkanShaderModule(VkDevice device, std::span<const uint32_t> spirv);
+    ~VulkanShaderModule() override;
+    VulkanShaderModule(const VulkanShaderModule&) = delete;
+    VulkanShaderModule& operator=(const VulkanShaderModule&) = delete;
+    VkShaderModule vk() const { return m_module; }
+    static VkShaderModule vk(const ShaderModule& module) { return static_cast<const VulkanShaderModule&>(module).m_module; }
 
 private:
     VkDevice m_device;
-    VkDescriptorSetLayout m_layout = VK_NULL_HANDLE;
-    std::vector<BindingLayout> m_bindings;
+    VkShaderModule m_module = VK_NULL_HANDLE;
+};
+
+// A graphics pipeline on Vulkan: a VkPipeline with its VkPipelineLayout.
+class VulkanGraphicsPipeline final : public GraphicsPipeline {
+public:
+    VulkanGraphicsPipeline(VkDevice device, VkPipeline pipeline, VkPipelineLayout layout) : m_device(device), m_pipeline(pipeline), m_layout(layout) {}
+    ~VulkanGraphicsPipeline() override;
+    VulkanGraphicsPipeline(const VulkanGraphicsPipeline&) = delete;
+    VulkanGraphicsPipeline& operator=(const VulkanGraphicsPipeline&) = delete;
+    VkPipeline pipeline() const { return m_pipeline; }
+    VkPipelineLayout layout() const { return m_layout; }
+
+private:
+    VkDevice m_device;
+    VkPipeline m_pipeline;
+    VkPipelineLayout m_layout;
 };
 
 // A Device texture on Vulkan: an image with its view and sampler.
@@ -90,6 +126,8 @@ public:
     void writeBindGroup(BindGroup group, const BindGroupLayout& layout, std::span<const BindingWrite> writes) override;
     void releaseBindGroup(BindGroup group) override;
     std::unique_ptr<Texture> createTexture(const TextureDesc& desc, const void* pixels) override;
+    std::unique_ptr<ShaderModule> createShaderModule(std::span<const uint32_t> spirv) override;
+    std::unique_ptr<GraphicsPipeline> createGraphicsPipeline(const GraphicsPipelineDesc& desc) override;
     // A texture as a binding sees it.
     static TextureRef texture(const kke::Texture& texture);
     static VkDescriptorSet set(BindGroup group) { return VulkanCommandList::fromHandle<VkDescriptorSet>(group.handle); }

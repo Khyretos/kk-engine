@@ -6,6 +6,9 @@ set(ENGINE_SOURCES
     src/Pipeline.cpp
     src/rhi/VulkanCommandList.cpp
     src/rhi/VulkanDevice.cpp
+    src/rhi/VulkanPipelineState.cpp
+    src/rhi/VulkanPipeline.cpp
+    src/rhi/VulkanGraphicsPipeline.cpp
     src/Buffer.cpp
     src/Mesh.cpp
     src/Renderer.cpp
