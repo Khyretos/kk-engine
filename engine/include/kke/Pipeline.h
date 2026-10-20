@@ -88,7 +88,7 @@ public:
 
     void bind(VkCommandBuffer cmd) const;
     void bind(rhi::CommandList& list) const; // the RHI's way (docs/plans/rhi.md)
-    VkPipelineLayout layout() const { return m_layout; }
+    VkPipelineLayout layout() const;
 
     // `config` as the Device takes it (R1h): the fixed state, the vertex layout (kke::Vertex's when the
     // config names none and uses vertex input) and `layouts` as the bind group layouts. The shaders and
@@ -97,8 +97,7 @@ public:
 
 private:
     VulkanDevice& m_device;
-    VkPipeline m_pipeline = VK_NULL_HANDLE;
-    VkPipelineLayout m_layout = VK_NULL_HANDLE;
+    std::unique_ptr<rhi::GraphicsPipeline> m_pipeline;
 };
 
 } // namespace kke
