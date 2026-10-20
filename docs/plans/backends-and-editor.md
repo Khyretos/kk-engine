@@ -73,8 +73,10 @@ Order:
 
 - **R1:** the RHI interfaces, with Vulkan moved under them and no change in
   output. Benchmarks before and after, within 2%.
-- **R2:** an OpenGL 4.3 backend at the classic tier, run headless in CI.
-- **R3:** GLES 3.1 for Android.
+- **R2:** one OpenGL ES 3 backend: desktop GL 3.3 core, GLES 3.0 and
+  WebGL2 (decided 2026-10-18), run headless in CI on Mesa llvmpipe.
+- **R3:** the web export: an Emscripten build with the GL backend as
+  WebGL2 (`index.html`, `.wasm` and a data file), one demo playing in the browser.
 - **R4:** the run-time fallback, plus the tier table in the docs.
 
 ## 3. The editor (after alpha)
