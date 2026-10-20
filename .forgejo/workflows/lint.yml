@@ -16,7 +16,7 @@ on:
 
 jobs:
   megalinter:
-    runs-on: soucouyant
+    runs-on: kireserver # MegaLinter's images are 7-11 GB: kireserver only, as in the other repos
     container:
       image: oxsecurity/megalinter-c_cpp:v9
     steps:
