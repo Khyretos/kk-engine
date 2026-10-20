@@ -3,6 +3,7 @@
 #include "kke/Buffer.h"
 #include "kke/VolumetricFog.h"
 #include "kke/ClusteredLights.h"
+#include "kke/rhi/VulkanDevice.h"
 
 #include <volk.h>
 #include <glm/glm.hpp>
@@ -152,13 +153,13 @@ public:
     static constexpr uint32_t kSlotCount = 2; // Renderer::kMaxFramesInFlight (checked in LightingBuffer.cpp)
     void setFrame(uint32_t frame) { m_slot = frame % kSlotCount; }
 
-    VkDescriptorSetLayout descriptorSetLayout() const { return m_setLayout; }
+    VkDescriptorSetLayout descriptorSetLayout() const { return rhi::VulkanBindGroupLayout::vk(*m_layout); }
     VkDescriptorSet descriptorSet() const { return m_descriptorSets[m_slot]; }
 
 private:
     VulkanDevice& m_device;
-    VkDescriptorSetLayout m_setLayout = VK_NULL_HANDLE;
-    VkDescriptorPool m_descriptorPool = VK_NULL_HANDLE;
+    rhi::VulkanGpuDevice m_gpu{ m_device }; // set 0's bind groups (docs/plans/rhi.md, R1g)
+    std::unique_ptr<rhi::BindGroupLayout> m_layout;
     VkDescriptorSet m_descriptorSets[kSlotCount] = {};
     std::unique_ptr<Buffer> m_buffers[kSlotCount];
     uint32_t m_slot = 0;

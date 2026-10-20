@@ -51,6 +51,7 @@ public:
 struct TextureRef {
     uint64_t view = 0;
     uint64_t sampler = 0;
+    bool computeWritten = false; // a compute pass writes it too (Vulkan reads it in the GENERAL layout)
 };
 
 // What to put at one binding: a buffer range or a texture.
