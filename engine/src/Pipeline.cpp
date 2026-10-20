@@ -228,7 +228,47 @@ Pipeline::Pipeline(VulkanDevice& device, VkRenderPass renderPass,
     vkDestroyShaderModule(m_device.device(), fragModule, nullptr);
 }
 
-rhi::GraphicsPipelineDesc Pipeline::describe(const PipelineConfig&, std::span<const rhi::BindGroupLayout* const>) { throw std::logic_error("R1h: describe"); }
+rhi::GraphicsPipelineDesc Pipeline::describe(const PipelineConfig& config, std::span<const rhi::BindGroupLayout* const> layouts) {
+    static const rhi::VertexBinding kBinding = Vertex::bindingDescription();
+    static const std::array<rhi::VertexAttribute, 4> kAttributes = Vertex::attributeDescriptions();
+    const bool custom = !config.customVertexBindings.empty();
+    std::span<const rhi::VertexBinding> bindings;
+    std::span<const rhi::VertexAttribute> attributes;
+    if (config.useVertexInput) {
+        bindings = custom ? std::span<const rhi::VertexBinding>(config.customVertexBindings) : std::span<const rhi::VertexBinding>(&kBinding, 1);
+        attributes = custom ? std::span<const rhi::VertexAttribute>(config.customVertexAttributes) : std::span<const rhi::VertexAttribute>(kAttributes);
+    }
+
+    return rhi::GraphicsPipelineDesc{
+        .vertex = nullptr,
+        .fragment = nullptr,
+        .pass = {},
+        .samples = 1,
+        .useVertexInput = config.useVertexInput,
+        .vertexBindings = bindings,
+        .vertexAttributes = attributes,
+        .topology = config.topology,
+        .cullMode = config.cullMode,
+        .frontFace = config.frontFace,
+        .depthTestEnable = config.depthTestEnable,
+        .depthWriteEnable = config.depthWriteEnable,
+        .blendEnable = config.blendEnable,
+        .premultipliedAlpha = config.premultipliedAlpha,
+        .customColorBlend = config.customColorBlend,
+        .srcColorBlendFactor = config.srcColorBlendFactor,
+        .dstColorBlendFactor = config.dstColorBlendFactor,
+        .stencilTestEnable = config.stencilTestEnable,
+        .stencilCompareOp = config.stencilCompareOp,
+        .stencilPassOp = config.stencilPassOp,
+        .colorWriteEnable = config.colorWriteEnable,
+        .depthBiasConstant = config.depthBiasConstant,
+        .depthBiasSlope = config.depthBiasSlope,
+        .colorAttachmentCount = config.colorAttachmentCount,
+        .pushConstantRange = config.pushConstantRange,
+        .bindGroupLayouts = layouts,
+        .fragmentConstants = config.fragmentConstants,
+    };
+}
 
 Pipeline::~Pipeline() {
     if (m_pipeline) vkDestroyPipeline(m_device.device(), m_pipeline, nullptr);

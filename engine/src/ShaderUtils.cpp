@@ -30,7 +30,22 @@ VkShaderModule loadShaderModule(VulkanDevice& device, const std::string& path) {
     return module;
 }
 
-// R1h stub: the Coder's run replaces it.
-std::vector<uint32_t> loadSpirv(const std::string&) { throw std::logic_error("R1h: loadSpirv"); }
+// Loads a compiled .spv file into 32-bit words.
+std::vector<uint32_t> loadSpirv(const std::string& path) {
+    std::ifstream file(path, std::ios::ate | std::ios::binary);
+    if (!file.is_open()) {
+        throw std::runtime_error("failed to open shader file: " + path);
+    }
+
+    size_t fileSize = static_cast<size_t>(file.tellg());
+    if (fileSize % 4 != 0) {
+        throw std::runtime_error("shader file is not whole 32-bit words: " + path);
+    }
+
+    std::vector<uint32_t> words(fileSize / 4);
+    file.seekg(0);
+    file.read(reinterpret_cast<char*>(words.data()), fileSize);
+    return words;
+}
 
 } // namespace kke
