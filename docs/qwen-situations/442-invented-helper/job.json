@@ -1,20 +1,20 @@
 [
- {
-  "name": "r1h-pipeline-r1",
-  "role": "worker/cpp-games",
-  "mode": "file",
-  "out": "engine/src/rhi/VulkanGraphicsPipeline.cpp",
-  "prompt": "Kreative Kompas Engine (C++20, Vulkan): R1h moves shader and pipeline creation behind the render hardware interface (docs/plans/rhi.md). rhi::Device has createShaderModule(SPIR-V words) and createGraphicsPipeline(rhi::GraphicsPipelineDesc) (kke/rhi/GraphicsPipeline.h, kke/rhi/Device.h); VulkanGpuDevice (kke/rhi/VulkanDevice.h) implements them on Vulkan. The pipelines must come out exactly as kke::Pipeline's constructor in engine/src/Pipeline.cpp made them before: that code is the reference. Write engine/src/rhi/VulkanGraphicsPipeline.cpp. It starts with exactly these lines: #include \"kke/rhi/VulkanDevice.h\", #include \"kke/rhi/VulkanPipelineState.h\", #include \"kke/VulkanCheck.h\", #include \"kke/VulkanDevice.h\", then #include <vector>, then namespace kke::rhi {. It defines VulkanGpuDevice::createGraphicsPipeline(desc) and VulkanGraphicsPipeline's destructor (vkDestroyPipeline and vkDestroyPipelineLayout for the non-null ones, on m_device). createGraphicsPipeline is the body of kke::Pipeline's constructor in engine/src/Pipeline.cpp with these changes: shader modules come from desc.vertex and desc.fragment (VulkanShaderModule::vk(*desc.vertex)) and are not destroyed here; the render pass is VulkanCommandList::fromHandle<VkRenderPass>(desc.pass.handle); rasterizationSamples is static_cast<VkSampleCountFlagBits>(desc.samples); the vertex input comes from desc.useVertexInput, desc.vertexBindings and desc.vertexAttributes (binding rate INSTANCE when perInstance; the attribute format is rhi::vulkan::vertexFormat); topology, cull mode, front face, blend, dynamic states, compare and stencil ops come from the rhi::vulkan:: functions of kke/rhi/VulkanPipelineState.h (colorBlendAttachment is repeated desc.colorAttachmentCount times; dynamicStates gives the dynamic state list); the push constant range uses VulkanCommandList::stagesOf(desc.pushConstantRange.stages); the set layouts are VulkanBindGroupLayout::vk(*layout) for each of desc.bindGroupLayouts; specialization entries come from desc.fragmentConstants; depth bias from desc.depthBiasConstant and desc.depthBiasSlope. Use VK_CHECK from kke/VulkanCheck.h, as the old code did, and the device is m_device.device() (m_device is a kke::VulkanDevice&; include kke/VulkanDevice.h). The result is std::make_unique<VulkanGraphicsPipeline>(m_device.device(), pipeline, layout).\nAnswer with the file's contents only, in one ```cpp fence: no shell commands and no other file.",
-  "check": "sh /home/khyretos/kk-engine-scratch/kchk.sh /home/khyretos/Docker/Personal-projects/kk-wt-r1h 'RhiDevice.*'",
-  "precheck": false,
-  "context": [
-   "engine/include/kke/rhi/VulkanDevice.h",
-   "engine/include/kke/rhi/GraphicsPipeline.h",
-   "engine/include/kke/rhi/VulkanPipelineState.h",
-   "engine/src/Pipeline.cpp",
-   "engine/src/rhi/VulkanGraphicsPipeline.cpp"
-  ],
-  "max_tokens": 4000,
-  "review": false
- }
+  {
+    "name": "r1h-pipeline-r1",
+    "role": "worker/cpp-games",
+    "mode": "file",
+    "out": "engine/src/rhi/VulkanGraphicsPipeline.cpp",
+    "prompt": "Kreative Kompas Engine (C++20, Vulkan): R1h moves shader and pipeline creation behind the render hardware interface (docs/plans/rhi.md). rhi::Device has createShaderModule(SPIR-V words) and createGraphicsPipeline(rhi::GraphicsPipelineDesc) (kke/rhi/GraphicsPipeline.h, kke/rhi/Device.h); VulkanGpuDevice (kke/rhi/VulkanDevice.h) implements them on Vulkan. The pipelines must come out exactly as kke::Pipeline's constructor in engine/src/Pipeline.cpp made them before: that code is the reference. Write engine/src/rhi/VulkanGraphicsPipeline.cpp. It starts with exactly these lines: #include \"kke/rhi/VulkanDevice.h\", #include \"kke/rhi/VulkanPipelineState.h\", #include \"kke/VulkanCheck.h\", #include \"kke/VulkanDevice.h\", then #include <vector>, then namespace kke::rhi {. It defines VulkanGpuDevice::createGraphicsPipeline(desc) and VulkanGraphicsPipeline's destructor (vkDestroyPipeline and vkDestroyPipelineLayout for the non-null ones, on m_device). createGraphicsPipeline is the body of kke::Pipeline's constructor in engine/src/Pipeline.cpp with these changes: shader modules come from desc.vertex and desc.fragment (VulkanShaderModule::vk(*desc.vertex)) and are not destroyed here; the render pass is VulkanCommandList::fromHandle<VkRenderPass>(desc.pass.handle); rasterizationSamples is static_cast<VkSampleCountFlagBits>(desc.samples); the vertex input comes from desc.useVertexInput, desc.vertexBindings and desc.vertexAttributes (binding rate INSTANCE when perInstance; the attribute format is rhi::vulkan::vertexFormat); topology, cull mode, front face, blend, dynamic states, compare and stencil ops come from the rhi::vulkan:: functions of kke/rhi/VulkanPipelineState.h (colorBlendAttachment is repeated desc.colorAttachmentCount times; dynamicStates gives the dynamic state list); the push constant range uses VulkanCommandList::stagesOf(desc.pushConstantRange.stages); the set layouts are VulkanBindGroupLayout::vk(*layout) for each of desc.bindGroupLayouts; specialization entries come from desc.fragmentConstants; depth bias from desc.depthBiasConstant and desc.depthBiasSlope. Use VK_CHECK from kke/VulkanCheck.h, as the old code did, and the device is m_device.device() (m_device is a kke::VulkanDevice&; include kke/VulkanDevice.h). The result is std::make_unique<VulkanGraphicsPipeline>(m_device.device(), pipeline, layout).\nAnswer with the file's contents only, in one ```cpp fence: no shell commands and no other file.",
+    "check": "sh /home/khyretos/kk-engine-scratch/kchk.sh /home/khyretos/Docker/Personal-projects/kk-wt-r1h 'RhiDevice.*'",
+    "precheck": false,
+    "context": [
+      "engine/include/kke/rhi/VulkanDevice.h",
+      "engine/include/kke/rhi/GraphicsPipeline.h",
+      "engine/include/kke/rhi/VulkanPipelineState.h",
+      "engine/src/Pipeline.cpp",
+      "engine/src/rhi/VulkanGraphicsPipeline.cpp"
+    ],
+    "max_tokens": 4000,
+    "review": false
+  }
 ]
