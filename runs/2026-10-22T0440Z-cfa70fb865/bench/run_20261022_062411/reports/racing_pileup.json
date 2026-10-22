@@ -1,0 +1,1597 @@
+{
+ "broken_modules": [],
+ "config": {
+  "fixed_update_hz": "60",
+  "frame_cap": "none",
+  "game": "Racing",
+  "hitch_rule": "frame > 2.00 x median of the last 61 frames and > median + 8 ms",
+  "measure_s": 20.0,
+  "mood": "sunset",
+  "msaa": "1",
+  "render_resolution": "960x540",
+  "render_scale": "0.75",
+  "suite_item": "racing_pileup",
+  "uncapped": true,
+  "vsync": "off",
+  "warmup_s": 3.0,
+  "worker_threads": "2"
+ },
+ "events": [
+  {
+   "t_s": -3.0,
+   "what": "window resized to 1280x720"
+  },
+  {
+   "t_s": -3.0,
+   "what": "window got focus back"
+  }
+ ],
+ "events_not_listed": 0,
+ "format": "kke-benchmark-game/1",
+ "hitches": [
+  {
+   "cause": "present took 275.2 ms (usually 83.3 ms)",
+   "events": [],
+   "fixed_steps": 2,
+   "frame_ms": 297.219,
+   "gpu_ms": 81.915,
+   "median_ms": 115.686,
+   "rss_delta_mb": 6.969,
+   "rss_mb": 341.469,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.018,
+    "gpu_wait": 0.067,
+    "idle": 0.009,
+    "present": 275.225,
+    "record": 13.148,
+    "simulate": 1.029,
+    "update": 7.724
+   },
+   "t_s": 4.901,
+   "time": "2026-10-22 06:35:11.703",
+   "top_calls": [
+    {
+     "call": "renderTranslucent",
+     "module": "Racing",
+     "ms": 12.023
+    },
+    {
+     "call": "update",
+     "module": "Racing",
+     "ms": 7.548
+    },
+    {
+     "call": "fixedUpdate",
+     "module": "RigidBodies",
+     "ms": 0.388
+    }
+   ]
+  },
+  {
+   "cause": "present took 228.6 ms (usually 93.1 ms)",
+   "events": [],
+   "fixed_steps": 2,
+   "frame_ms": 241.454,
+   "gpu_ms": 164.253,
+   "median_ms": 115.704,
+   "rss_delta_mb": 0.0,
+   "rss_mb": 341.867,
+   "severity": "major",
+   "stages_ms": {
+    "events": 0.022,
+    "gpu_wait": 0.064,
+    "idle": 0.009,
+    "present": 228.622,
+    "record": 1.741,
+    "simulate": 1.058,
+    "update": 9.939
+   },
+   "t_s": 6.216,
+   "time": "2026-10-22 06:35:13.018",
+   "top_calls": [
+    {
+     "call": "update",
+     "module": "Racing",
+     "ms": 9.764
+    },
+    {
+     "call": "renderTranslucent",
+     "module": "Racing",
+     "ms": 0.554
+    },
+    {
+     "call": "renderUi",
+     "module": "UI",
+     "ms": 0.395
+    }
+   ]
+  },
+  {
+   "cause": "present took 327.6 ms (usually 96.1 ms)",
+   "events": [],
+   "fixed_steps": 2,
+   "frame_ms": 355.339,
+   "gpu_ms": 227.541,
+   "median_ms": 115.783,
+   "rss_delta_mb": 3.695,
+   "rss_mb": 346.453,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.018,
+    "gpu_wait": 0.032,
+    "idle": 0.008,
+    "present": 327.561,
+    "record": 1.849,
+    "simulate": 8.889,
+    "update": 16.981
+   },
+   "t_s": 6.755,
+   "time": "2026-10-22 06:35:13.557",
+   "top_calls": [
+    {
+     "call": "update",
+     "module": "Racing",
+     "ms": 16.723
+    },
+    {
+     "call": "fixedUpdate",
+     "module": "Physics",
+     "ms": 4.082
+    },
+    {
+     "call": "fixedUpdate",
+     "module": "Physics",
+     "ms": 3.142
+    }
+   ]
+  },
+  {
+   "cause": "present took 381.2 ms (usually 101.2 ms)",
+   "events": [],
+   "fixed_steps": 2,
+   "frame_ms": 429.954,
+   "gpu_ms": 275.357,
+   "median_ms": 115.783,
+   "rss_delta_mb": 1.707,
+   "rss_mb": 348.16,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.024,
+    "gpu_wait": 0.06,
+    "idle": 0.008,
+    "present": 381.237,
+    "record": 2.009,
+    "simulate": 29.314,
+    "update": 17.303
+   },
+   "t_s": 7.11,
+   "time": "2026-10-22 06:35:13.912",
+   "top_calls": [
+    {
+     "call": "update",
+     "module": "Racing",
+     "ms": 16.862
+    },
+    {
+     "call": "fixedUpdate",
+     "module": "Physics",
+     "ms": 14.132
+    },
+    {
+     "call": "fixedUpdate",
+     "module": "Physics",
+     "ms": 11.468
+    }
+   ]
+  },
+  {
+   "cause": "present took 492.1 ms (usually 107.1 ms)",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 536.044,
+   "gpu_ms": 380.038,
+   "median_ms": 115.842,
+   "rss_delta_mb": 0.516,
+   "rss_mb": 345.387,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.021,
+    "gpu_wait": 0.098,
+    "idle": 0.009,
+    "present": 492.067,
+    "record": 2.069,
+    "simulate": 25.525,
+    "update": 16.255
+   },
+   "t_s": 8.021,
+   "time": "2026-10-22 06:35:14.823",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "Physics",
+     "ms": 22.834
+    },
+    {
+     "call": "update",
+     "module": "Racing",
+     "ms": 15.943
+    },
+    {
+     "call": "fixedUpdate",
+     "module": "Racing",
+     "ms": 1.4
+    }
+   ]
+  },
+  {
+   "cause": "present took 512.0 ms (usually 115.1 ms)",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 557.659,
+   "gpu_ms": 490.606,
+   "median_ms": 115.842,
+   "rss_delta_mb": 5.066,
+   "rss_mb": 350.859,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.023,
+    "gpu_wait": 0.091,
+    "idle": 0.009,
+    "present": 512.04,
+    "record": 1.936,
+    "simulate": 27.393,
+    "update": 16.167
+   },
+   "t_s": 9.129,
+   "time": "2026-10-22 06:35:15.931",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "Physics",
+     "ms": 24.466
+    },
+    {
+     "call": "update",
+     "module": "Racing",
+     "ms": 14.941
+    },
+    {
+     "call": "fixedUpdate",
+     "module": "Racing",
+     "ms": 1.462
+    }
+   ]
+  },
+  {
+   "cause": "present took 346.1 ms (usually 123.2 ms)",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 394.047,
+   "gpu_ms": 511.026,
+   "median_ms": 115.947,
+   "rss_delta_mb": -1.227,
+   "rss_mb": 351.508,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.023,
+    "gpu_wait": 0.936,
+    "idle": 0.009,
+    "present": 346.065,
+    "record": 1.99,
+    "simulate": 29.068,
+    "update": 15.958
+   },
+   "t_s": 10.145,
+   "time": "2026-10-22 06:35:16.947",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "Physics",
+     "ms": 26.485
+    },
+    {
+     "call": "update",
+     "module": "Racing",
+     "ms": 15.077
+    },
+    {
+     "call": "fixedUpdate",
+     "module": "Racing",
+     "ms": 1.439
+    }
+   ]
+  },
+  {
+   "cause": "present took 273.6 ms (usually 127.7 ms)",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 318.706,
+   "gpu_ms": 345.045,
+   "median_ms": 115.947,
+   "rss_delta_mb": 0.762,
+   "rss_mb": 352.43,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.01,
+    "gpu_wait": 0.09,
+    "idle": 0.01,
+    "present": 273.557,
+    "record": 1.951,
+    "simulate": 27.092,
+    "update": 15.997
+   },
+   "t_s": 10.884,
+   "time": "2026-10-22 06:35:17.686",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "Physics",
+     "ms": 24.229
+    },
+    {
+     "call": "update",
+     "module": "Racing",
+     "ms": 14.835
+    },
+    {
+     "call": "fixedUpdate",
+     "module": "RigidBodies",
+     "ms": 1.403
+    }
+   ]
+  },
+  {
+   "cause": "present took 253.0 ms (usually 130.6 ms)",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 297.669,
+   "gpu_ms": 272.137,
+   "median_ms": 116.035,
+   "rss_delta_mb": -0.465,
+   "rss_mb": 352.082,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.019,
+    "gpu_wait": 0.178,
+    "idle": 0.008,
+    "present": 252.956,
+    "record": 1.791,
+    "simulate": 27.088,
+    "update": 15.629
+   },
+   "t_s": 11.513,
+   "time": "2026-10-22 06:35:18.315",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "Physics",
+     "ms": 24.284
+    },
+    {
+     "call": "update",
+     "module": "Racing",
+     "ms": 15.229
+    },
+    {
+     "call": "fixedUpdate",
+     "module": "Racing",
+     "ms": 1.607
+    }
+   ]
+  },
+  {
+   "cause": "present took 250.3 ms (usually 132.9 ms)",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 293.643,
+   "gpu_ms": 251.939,
+   "median_ms": 116.035,
+   "rss_delta_mb": 0.762,
+   "rss_mb": 353.848,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.017,
+    "gpu_wait": 0.064,
+    "idle": 0.009,
+    "present": 250.258,
+    "record": 2.02,
+    "simulate": 26.321,
+    "update": 14.955
+   },
+   "t_s": 12.106,
+   "time": "2026-10-22 06:35:18.908",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "Physics",
+     "ms": 23.694
+    },
+    {
+     "call": "update",
+     "module": "Racing",
+     "ms": 14.453
+    },
+    {
+     "call": "fixedUpdate",
+     "module": "Racing",
+     "ms": 1.411
+    }
+   ]
+  },
+  {
+   "cause": "present took 250.3 ms (usually 135.1 ms)",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 292.408,
+   "gpu_ms": 249.186,
+   "median_ms": 116.235,
+   "rss_delta_mb": -0.406,
+   "rss_mb": 356.07,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.017,
+    "gpu_wait": 0.04,
+    "idle": 0.008,
+    "present": 250.277,
+    "record": 1.936,
+    "simulate": 25.779,
+    "update": 14.351
+   },
+   "t_s": 12.696,
+   "time": "2026-10-22 06:35:19.498",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "Physics",
+     "ms": 23.21
+    },
+    {
+     "call": "update",
+     "module": "Racing",
+     "ms": 13.899
+    },
+    {
+     "call": "fixedUpdate",
+     "module": "Racing",
+     "ms": 1.478
+    }
+   ]
+  },
+  {
+   "cause": "present took 244.7 ms (usually 137.3 ms)",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 286.915,
+   "gpu_ms": 249.158,
+   "median_ms": 116.235,
+   "rss_delta_mb": -0.574,
+   "rss_mb": 355.496,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.023,
+    "gpu_wait": 0.076,
+    "idle": 0.009,
+    "present": 244.74,
+    "record": 1.822,
+    "simulate": 25.847,
+    "update": 14.398
+   },
+   "t_s": 12.988,
+   "time": "2026-10-22 06:35:19.790",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "Physics",
+     "ms": 23.415
+    },
+    {
+     "call": "update",
+     "module": "Racing",
+     "ms": 13.779
+    },
+    {
+     "call": "fixedUpdate",
+     "module": "Racing",
+     "ms": 1.434
+    }
+   ]
+  },
+  {
+   "cause": "present took 247.5 ms (usually 139.2 ms)",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 290.656,
+   "gpu_ms": 249.363,
+   "median_ms": 116.584,
+   "rss_delta_mb": -0.055,
+   "rss_mb": 355.441,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.017,
+    "gpu_wait": 0.08,
+    "idle": 0.009,
+    "present": 247.484,
+    "record": 1.862,
+    "simulate": 27.168,
+    "update": 14.036
+   },
+   "t_s": 13.275,
+   "time": "2026-10-22 06:35:20.077",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "Physics",
+     "ms": 24.718
+    },
+    {
+     "call": "update",
+     "module": "Racing",
+     "ms": 13.598
+    },
+    {
+     "call": "fixedUpdate",
+     "module": "Racing",
+     "ms": 1.48
+    }
+   ]
+  },
+  {
+   "cause": "present took 227.6 ms (usually 141.2 ms)",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 270.022,
+   "gpu_ms": 243.225,
+   "median_ms": 116.584,
+   "rss_delta_mb": 0.715,
+   "rss_mb": 356.156,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.017,
+    "gpu_wait": 0.06,
+    "idle": 0.008,
+    "present": 227.606,
+    "record": 1.797,
+    "simulate": 26.677,
+    "update": 13.857
+   },
+   "t_s": 13.566,
+   "time": "2026-10-22 06:35:20.368",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "Physics",
+     "ms": 24.414
+    },
+    {
+     "call": "update",
+     "module": "Racing",
+     "ms": 13.605
+    },
+    {
+     "call": "fixedUpdate",
+     "module": "Racing",
+     "ms": 1.434
+    }
+   ]
+  },
+  {
+   "cause": "present took 227.2 ms (usually 142.7 ms)",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 268.472,
+   "gpu_ms": 246.459,
+   "median_ms": 116.614,
+   "rss_delta_mb": 0.402,
+   "rss_mb": 356.559,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.017,
+    "gpu_wait": 0.046,
+    "idle": 0.008,
+    "present": 227.163,
+    "record": 1.7,
+    "simulate": 26.671,
+    "update": 12.867
+   },
+   "t_s": 13.836,
+   "time": "2026-10-22 06:35:20.638",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "Physics",
+     "ms": 24.44
+    },
+    {
+     "call": "update",
+     "module": "Racing",
+     "ms": 12.635
+    },
+    {
+     "call": "fixedUpdate",
+     "module": "Racing",
+     "ms": 1.436
+    }
+   ]
+  },
+  {
+   "cause": "present took 261.5 ms (usually 144.1 ms)",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 302.394,
+   "gpu_ms": 226.582,
+   "median_ms": 116.614,
+   "rss_delta_mb": -0.48,
+   "rss_mb": 356.078,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.028,
+    "gpu_wait": 0.076,
+    "idle": 0.01,
+    "present": 261.462,
+    "record": 1.809,
+    "simulate": 26.313,
+    "update": 12.696
+   },
+   "t_s": 14.104,
+   "time": "2026-10-22 06:35:20.906",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "Physics",
+     "ms": 24.14
+    },
+    {
+     "call": "update",
+     "module": "Racing",
+     "ms": 12.442
+    },
+    {
+     "call": "fixedUpdate",
+     "module": "Racing",
+     "ms": 1.44
+    }
+   ]
+  },
+  {
+   "cause": "present took 240.6 ms (usually 146.1 ms)",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 282.63,
+   "gpu_ms": 226.09,
+   "median_ms": 116.666,
+   "rss_delta_mb": 0.984,
+   "rss_mb": 357.063,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.017,
+    "gpu_wait": 0.039,
+    "idle": 0.009,
+    "present": 240.649,
+    "record": 1.75,
+    "simulate": 25.983,
+    "update": 14.183
+   },
+   "t_s": 14.407,
+   "time": "2026-10-22 06:35:21.209",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "Physics",
+     "ms": 23.741
+    },
+    {
+     "call": "update",
+     "module": "Racing",
+     "ms": 13.906
+    },
+    {
+     "call": "fixedUpdate",
+     "module": "Racing",
+     "ms": 1.495
+    }
+   ]
+  },
+  {
+   "cause": "present took 215.8 ms (usually 147.7 ms)",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 256.752,
+   "gpu_ms": 260.311,
+   "median_ms": 116.666,
+   "rss_delta_mb": -0.898,
+   "rss_mb": 356.164,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.103,
+    "gpu_wait": 0.064,
+    "idle": 0.008,
+    "present": 215.848,
+    "record": 1.701,
+    "simulate": 25.726,
+    "update": 13.303
+   },
+   "t_s": 14.689,
+   "time": "2026-10-22 06:35:21.491",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "Physics",
+     "ms": 23.609
+    },
+    {
+     "call": "update",
+     "module": "Racing",
+     "ms": 13.078
+    },
+    {
+     "call": "fixedUpdate",
+     "module": "Racing",
+     "ms": 1.42
+    }
+   ]
+  },
+  {
+   "cause": "present took 218.6 ms (usually 148.8 ms)",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 258.587,
+   "gpu_ms": 239.694,
+   "median_ms": 116.666,
+   "rss_delta_mb": -0.008,
+   "rss_mb": 356.156,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.018,
+    "gpu_wait": 0.049,
+    "idle": 0.009,
+    "present": 218.611,
+    "record": 1.692,
+    "simulate": 25.657,
+    "update": 12.551
+   },
+   "t_s": 14.946,
+   "time": "2026-10-22 06:35:21.748",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "Physics",
+     "ms": 23.515
+    },
+    {
+     "call": "update",
+     "module": "Racing",
+     "ms": 11.882
+    },
+    {
+     "call": "fixedUpdate",
+     "module": "Racing",
+     "ms": 1.438
+    }
+   ]
+  },
+  {
+   "cause": "present took 212.1 ms (usually 149.9 ms)",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 250.985,
+   "gpu_ms": 214.835,
+   "median_ms": 116.666,
+   "rss_delta_mb": -0.141,
+   "rss_mb": 356.016,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.018,
+    "gpu_wait": 0.076,
+    "idle": 0.008,
+    "present": 212.073,
+    "record": 1.683,
+    "simulate": 25.337,
+    "update": 11.791
+   },
+   "t_s": 15.205,
+   "time": "2026-10-22 06:35:22.006",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "Physics",
+     "ms": 23.298
+    },
+    {
+     "call": "update",
+     "module": "Racing",
+     "ms": 11.48
+    },
+    {
+     "call": "fixedUpdate",
+     "module": "Racing",
+     "ms": 1.409
+    }
+   ]
+  },
+  {
+   "cause": "present took 210.5 ms (usually 150.9 ms)",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 249.389,
+   "gpu_ms": 217.399,
+   "median_ms": 116.743,
+   "rss_delta_mb": 0.0,
+   "rss_mb": 356.016,
+   "severity": "major",
+   "stages_ms": {
+    "events": 0.017,
+    "gpu_wait": 0.195,
+    "idle": 0.008,
+    "present": 210.548,
+    "record": 1.678,
+    "simulate": 25.386,
+    "update": 11.557
+   },
+   "t_s": 15.455,
+   "time": "2026-10-22 06:35:22.257",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "Physics",
+     "ms": 23.438
+    },
+    {
+     "call": "update",
+     "module": "Racing",
+     "ms": 11.325
+    },
+    {
+     "call": "fixedUpdate",
+     "module": "Racing",
+     "ms": 1.324
+    }
+   ]
+  },
+  {
+   "cause": "present took 213.8 ms (usually 151.9 ms)",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 250.523,
+   "gpu_ms": 211.137,
+   "median_ms": 117.243,
+   "rss_delta_mb": -0.195,
+   "rss_mb": 355.82,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.016,
+    "gpu_wait": 0.057,
+    "idle": 0.008,
+    "present": 213.817,
+    "record": 1.624,
+    "simulate": 23.698,
+    "update": 11.304
+   },
+   "t_s": 15.705,
+   "time": "2026-10-22 06:35:22.507",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "Physics",
+     "ms": 21.879
+    },
+    {
+     "call": "update",
+     "module": "Racing",
+     "ms": 11.046
+    },
+    {
+     "call": "fixedUpdate",
+     "module": "Racing",
+     "ms": 1.193
+    }
+   ]
+  },
+  {
+   "cause": "present took 213.8 ms (usually 152.8 ms)",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 248.745,
+   "gpu_ms": 209.616,
+   "median_ms": 117.944,
+   "rss_delta_mb": 0.0,
+   "rss_mb": 355.82,
+   "severity": "major",
+   "stages_ms": {
+    "events": 0.017,
+    "gpu_wait": 0.048,
+    "idle": 0.009,
+    "present": 213.839,
+    "record": 1.66,
+    "simulate": 21.073,
+    "update": 12.099
+   },
+   "t_s": 15.955,
+   "time": "2026-10-22 06:35:22.757",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "Physics",
+     "ms": 19.379
+    },
+    {
+     "call": "update",
+     "module": "Racing",
+     "ms": 11.863
+    },
+    {
+     "call": "fixedUpdate",
+     "module": "Racing",
+     "ms": 1.084
+    }
+   ]
+  },
+  {
+   "cause": "present took 214.3 ms (usually 153.7 ms)",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 246.375,
+   "gpu_ms": 212.923,
+   "median_ms": 118.166,
+   "rss_delta_mb": 1.02,
+   "rss_mb": 356.84,
+   "severity": "major",
+   "stages_ms": {
+    "events": 0.009,
+    "gpu_wait": 0.058,
+    "idle": 0.009,
+    "present": 214.263,
+    "record": 1.523,
+    "simulate": 19.264,
+    "update": 11.248
+   },
+   "t_s": 16.204,
+   "time": "2026-10-22 06:35:23.006",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "Physics",
+     "ms": 17.74
+    },
+    {
+     "call": "update",
+     "module": "Racing",
+     "ms": 11.026
+    },
+    {
+     "call": "fixedUpdate",
+     "module": "Racing",
+     "ms": 0.931
+    }
+   ]
+  },
+  {
+   "cause": "present took 213.9 ms (usually 154.6 ms)",
+   "events": [],
+   "fixed_steps": 2,
+   "frame_ms": 254.812,
+   "gpu_ms": 212.587,
+   "median_ms": 119.155,
+   "rss_delta_mb": -2.465,
+   "rss_mb": 354.375,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.01,
+    "gpu_wait": 0.048,
+    "idle": 0.009,
+    "present": 213.91,
+    "record": 1.437,
+    "simulate": 27.473,
+    "update": 11.926
+   },
+   "t_s": 16.451,
+   "time": "2026-10-22 06:35:23.253",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "Physics",
+     "ms": 15.118
+    },
+    {
+     "call": "update",
+     "module": "Racing",
+     "ms": 11.715
+    },
+    {
+     "call": "fixedUpdate",
+     "module": "Physics",
+     "ms": 10.016
+    }
+   ]
+  }
+ ],
+ "hitches_not_listed": 0,
+ "load_s": 0.699,
+ "modules": [
+  {
+   "avg_ms_per_frame": 14.428,
+   "init_ms": 58.332,
+   "name": "Physics",
+   "worst_call": "fixedUpdate",
+   "worst_call_ms": 35.957,
+   "worst_frame_ms": 36.017
+  },
+  {
+   "avg_ms_per_frame": 9.373,
+   "init_ms": 250.813,
+   "name": "Racing",
+   "worst_call": "update",
+   "worst_call_ms": 16.862,
+   "worst_frame_ms": 19.744
+  },
+  {
+   "avg_ms_per_frame": 0.704,
+   "init_ms": 1.882,
+   "name": "RigidBodies",
+   "worst_call": "fixedUpdate",
+   "worst_call_ms": 1.405,
+   "worst_frame_ms": 1.698
+  },
+  {
+   "avg_ms_per_frame": 0.429,
+   "init_ms": 28.163,
+   "name": "UI",
+   "worst_call": "renderUi",
+   "worst_call_ms": 0.511,
+   "worst_frame_ms": 0.728
+  },
+  {
+   "avg_ms_per_frame": 0.427,
+   "init_ms": 108.859,
+   "name": "Models",
+   "worst_call": "renderShadow",
+   "worst_call_ms": 0.248,
+   "worst_frame_ms": 0.612
+  },
+  {
+   "avg_ms_per_frame": 0.23,
+   "init_ms": 47.931,
+   "name": "Audio",
+   "worst_call": "update",
+   "worst_call_ms": 1.2,
+   "worst_frame_ms": 1.201
+  },
+  {
+   "avg_ms_per_frame": 0.042,
+   "init_ms": 27.305,
+   "name": "Input",
+   "worst_call": "frameStart",
+   "worst_call_ms": 0.046,
+   "worst_frame_ms": 0.048
+  },
+  {
+   "avg_ms_per_frame": 0.022,
+   "init_ms": 0.068,
+   "name": "Network",
+   "worst_call": "renderUi",
+   "worst_call_ms": 0.035,
+   "worst_frame_ms": 0.038
+  },
+  {
+   "avg_ms_per_frame": 0.007,
+   "init_ms": 12.047,
+   "name": "Lobby",
+   "worst_call": "update",
+   "worst_call_ms": 0.042,
+   "worst_frame_ms": 0.044
+  },
+  {
+   "avg_ms_per_frame": 0.003,
+   "init_ms": 0.38,
+   "name": "Settings",
+   "worst_call": "update",
+   "worst_call_ms": 0.003,
+   "worst_frame_ms": 0.006
+  },
+  {
+   "avg_ms_per_frame": 0.003,
+   "init_ms": 3.767,
+   "name": "GameShell",
+   "worst_call": "frameStart",
+   "worst_call_ms": 0.002,
+   "worst_frame_ms": 0.004
+  },
+  {
+   "avg_ms_per_frame": 0.002,
+   "init_ms": 0.006,
+   "name": "Stats",
+   "worst_call": "update",
+   "worst_call_ms": 0.001,
+   "worst_frame_ms": 0.003
+  }
+ ],
+ "per_second": {
+  "columns": [
+   "t_s",
+   "fps",
+   "frame_avg_ms",
+   "frame_max_ms",
+   "gpu_avg_ms",
+   "events_avg_ms",
+   "simulate_avg_ms",
+   "update_avg_ms",
+   "gpu_wait_avg_ms",
+   "record_avg_ms",
+   "present_avg_ms",
+   "idle_avg_ms",
+   "rss_mb",
+   "hitches"
+  ],
+  "rows": [
+   [
+    0.0,
+    8.58,
+    116.553,
+    119.155,
+    80.133,
+    0.017,
+    28.043,
+    6.413,
+    0.04,
+    1.006,
+    81.026,
+    0.008,
+    318.879,
+    0
+   ],
+   [
+    1.0,
+    8.588,
+    116.447,
+    117.944,
+    79.992,
+    0.013,
+    29.126,
+    5.132,
+    0.052,
+    0.929,
+    81.185,
+    0.008,
+    326.02,
+    0
+   ],
+   [
+    2.0,
+    9.568,
+    104.513,
+    123.305,
+    80.37,
+    0.016,
+    18.178,
+    4.117,
+    0.074,
+    0.8,
+    81.32,
+    0.008,
+    329.195,
+    0
+   ],
+   [
+    3.0,
+    11.22,
+    89.128,
+    92.649,
+    81.288,
+    0.017,
+    1.006,
+    4.009,
+    0.059,
+    0.745,
+    83.282,
+    0.009,
+    332.91,
+    0
+   ],
+   [
+    4.0,
+    8.27,
+    120.922,
+    297.219,
+    87.948,
+    0.018,
+    0.934,
+    4.122,
+    0.07,
+    2.787,
+    112.983,
+    0.008,
+    341.469,
+    1
+   ],
+   [
+    5.0,
+    7.396,
+    135.202,
+    177.253,
+    131.052,
+    0.018,
+    1.031,
+    9.166,
+    0.202,
+    1.52,
+    123.257,
+    0.008,
+    341.594,
+    0
+   ],
+   [
+    6.0,
+    3.351,
+    298.396,
+    355.339,
+    195.897,
+    0.02,
+    4.973,
+    13.46,
+    0.048,
+    1.795,
+    278.092,
+    0.008,
+    346.453,
+    2
+   ],
+   [
+    7.0,
+    2.326,
+    429.954,
+    429.954,
+    275.357,
+    0.023,
+    29.314,
+    17.303,
+    0.06,
+    2.009,
+    381.237,
+    0.008,
+    348.16,
+    1
+   ],
+   [
+    8.0,
+    1.866,
+    536.044,
+    536.044,
+    380.038,
+    0.021,
+    25.525,
+    16.255,
+    0.098,
+    2.069,
+    492.067,
+    0.009,
+    345.387,
+    1
+   ],
+   [
+    9.0,
+    1.793,
+    557.659,
+    557.659,
+    490.606,
+    0.023,
+    27.393,
+    16.167,
+    0.091,
+    1.936,
+    512.04,
+    0.009,
+    350.859,
+    1
+   ],
+   [
+    10.0,
+    2.806,
+    356.376,
+    394.047,
+    428.036,
+    0.016,
+    28.08,
+    15.977,
+    0.513,
+    1.97,
+    309.811,
+    0.009,
+    352.43,
+    2
+   ],
+   [
+    11.0,
+    3.359,
+    297.669,
+    297.669,
+    272.137,
+    0.019,
+    27.088,
+    15.629,
+    0.178,
+    1.791,
+    252.956,
+    0.008,
+    352.082,
+    1
+   ],
+   [
+    12.0,
+    3.437,
+    290.989,
+    293.643,
+    250.094,
+    0.019,
+    25.982,
+    14.568,
+    0.06,
+    1.926,
+    248.425,
+    0.009,
+    355.496,
+    3
+   ],
+   [
+    13.0,
+    3.618,
+    276.383,
+    290.656,
+    246.349,
+    0.017,
+    26.839,
+    13.586,
+    0.062,
+    1.786,
+    234.084,
+    0.008,
+    356.559,
+    3
+   ],
+   [
+    14.0,
+    3.635,
+    275.09,
+    302.394,
+    238.169,
+    0.041,
+    25.92,
+    13.183,
+    0.057,
+    1.738,
+    234.142,
+    0.009,
+    356.156,
+    4
+   ],
+   [
+    15.0,
+    4.001,
+    249.911,
+    250.985,
+    213.246,
+    0.017,
+    23.873,
+    11.688,
+    0.094,
+    1.661,
+    212.569,
+    0.008,
+    355.82,
+    4
+   ],
+   [
+    16.0,
+    4.071,
+    245.664,
+    254.812,
+    212.975,
+    0.015,
+    20.01,
+    11.551,
+    0.052,
+    1.433,
+    212.594,
+    0.009,
+    354.41,
+    2
+   ],
+   [
+    17.0,
+    4.688,
+    213.323,
+    233.883,
+    206.308,
+    0.017,
+    7.071,
+    10.406,
+    0.064,
+    1.324,
+    194.433,
+    0.009,
+    354.535,
+    0
+   ],
+   [
+    18.0,
+    4.65,
+    215.074,
+    230.957,
+    188.668,
+    0.014,
+    9.402,
+    10.004,
+    0.049,
+    1.398,
+    194.198,
+    0.009,
+    359.125,
+    0
+   ],
+   [
+    19.0,
+    4.371,
+    228.795,
+    232.626,
+    204.154,
+    0.017,
+    11.964,
+    10.517,
+    0.067,
+    1.385,
+    204.836,
+    0.008,
+    359.59,
+    0
+   ]
+  ]
+ },
+ "screenshots": [
+  {
+   "file": "shots/racing_pileup_worst-frame_558ms_at-9.1s.jpg",
+   "kind": "worst-frame",
+   "t_s": 9.1,
+   "value": 557.7
+  },
+  {
+   "file": "shots/racing_pileup_slowest-second_1fps_at-10.1s.jpg",
+   "kind": "slowest-second",
+   "t_s": 10.1,
+   "value": 1.0
+  },
+  {
+   "file": "shots/racing_pileup_fastest-second_7fps_at-2.1s.jpg",
+   "kind": "fastest-second",
+   "t_s": 2.1,
+   "value": 6.7
+  },
+  {
+   "file": "shots/racing_pileup_view-1-of-3_at-3.2s.jpg",
+   "kind": "view-1-of-3",
+   "t_s": 3.2,
+   "value": 0.0
+  },
+  {
+   "file": "shots/racing_pileup_view-2-of-3_at-11.5s.jpg",
+   "kind": "view-2-of-3",
+   "t_s": 11.5,
+   "value": 0.0
+  },
+  {
+   "file": "shots/racing_pileup_view-3-of-3_at-18.0s.jpg",
+   "kind": "view-3-of-3",
+   "t_s": 18.0,
+   "value": 0.0
+  }
+ ],
+ "stages_ms": {
+  "events": {
+   "avg": 0.018,
+   "max": 0.103,
+   "p50": 0.017,
+   "p95": 0.023,
+   "p99": 0.103
+  },
+  "gpu_wait": {
+   "avg": 0.085,
+   "max": 0.936,
+   "p50": 0.056,
+   "p95": 0.178,
+   "p99": 0.936
+  },
+  "idle": {
+   "avg": 0.009,
+   "max": 0.01,
+   "p50": 0.008,
+   "p95": 0.01,
+   "p99": 0.01
+  },
+  "present": {
+   "avg": 162.669,
+   "max": 512.04,
+   "p50": 134.243,
+   "p95": 327.561,
+   "p99": 512.04
+  },
+  "record": {
+   "avg": 1.458,
+   "max": 13.148,
+   "p50": 1.35,
+   "p95": 2.009,
+   "p99": 13.148
+  },
+  "simulate": {
+   "avg": 15.649,
+   "max": 36.506,
+   "p50": 17.409,
+   "p95": 29.228,
+   "p99": 36.506
+  },
+  "update": {
+   "avg": 8.664,
+   "max": 17.303,
+   "p50": 8.425,
+   "p95": 15.997,
+   "p99": 17.303
+  }
+ },
+ "summary": {
+  "fps_0_1pct_low": 1.793,
+  "fps_1pct_low": 1.793,
+  "fps_avg": 5.304,
+  "frame_ms": {
+   "avg": 188.551,
+   "max": 557.659,
+   "p50": 143.439,
+   "p95": 355.339,
+   "p99": 557.659
+  },
+  "frames": 81,
+  "gpu_ms": {
+   "avg": 160.57,
+   "max": 511.026,
+   "p50": 111.837,
+   "p95": 275.357,
+   "p99": 511.026
+  },
+  "hitches": {
+   "count": 25,
+   "freeze": 21,
+   "major": 4,
+   "minor": 0,
+   "per_minute": 98.215,
+   "time_lost_ms": 4818.014
+  },
+  "memory_mb": {
+   "end": 359.59,
+   "peak": 359.59,
+   "start": 278.332
+  },
+  "screenshot_frames": 21,
+  "seconds": 20.041,
+  "sim_behind_frames": 81,
+  "verdict": "too slow"
+ },
+ "system": {
+  "build_type": "Release",
+  "compiler": "gcc 13-posix",
+  "cpu": "Intel(R) Core(TM) i5-4590 CPU @ 3.30GHz",
+  "cpu_logical_cores": "4",
+  "cpu_usable_cores": "4",
+  "display": "1920x1080 @ 60 Hz",
+  "engine_commit": "cfa70fb865",
+  "engine_version": "windows-native",
+  "gpu": "llvmpipe (LLVM 22.1.8, 256 bits)",
+  "gpu_driver": "llvmpipe Mesa 26.2.4 (git-9a0169f2a7) (LLVM 22.1.8)",
+  "gpu_driver_version": "109060100",
+  "gpu_memory_mb": "16312",
+  "gpu_pci_id": "10005:0000",
+  "gpu_type": "cpu (software)",
+  "hardware_target": "desktop",
+  "host": "DESKTOP-387PPHP",
+  "os": "Windows",
+  "os_version": "Windows 10.0.19044",
+  "platform_backend": "desktop",
+  "ram_mb": "16312",
+  "vulkan_api_version": "1.4.354"
+ }
+}
