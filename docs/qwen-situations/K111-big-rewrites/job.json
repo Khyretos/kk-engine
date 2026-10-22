@@ -1,17 +1,17 @@
 [
- {
-  "mode": "patch",
-  "focus": [
-   "^\\ \\ \\ \\ bindings\\[1\\]\\.descriptorType\\ =\\ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;$"
-  ],
-  "name": "r1g-lightingbu2",
-  "role": "worker/cpp-games",
-  "out": "engine/src/LightingBuffer.cpp",
-  "prompt": "Kreative Kompas Engine (C++20, Vulkan, forward renderer): R1g makes the lighting set (set 0, kke::LightingBuffer) and the shadow set (set 1, kke::Application) as bind groups through the render hardware interface's device (docs/plans/rhi.md): createBindGroupLayout(rhi::BindingLayout list), createBindGroup, writeBindGroup(rhi::BindingWrite: binding, buffer, range, texture); an rhi::TextureRef a compute pass also writes sets computeWritten (Vulkan's GENERAL layout).  Make these 1 edits in engine/src/LightingBuffer.cpp, each its own SEARCH/REPLACE block.\nEdit 1. Your SEARCH block is exactly these lines:\n```\n    bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;\n    bindings[1].descriptorCount = 1;\n    bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;\n    // Bindings 2 and 3: screen-space GI's light and depth (setScreenGi).\n    bindings[2] = bindings[1];\n    bindings[2].binding = 2;\n    bindings[3] = bindings[1];\n    bindings[3].binding = 3;\n    // Bindings 4 and 5: reflections' light and depth (setReflections).\n    bindings[4] = bindings[1];\n    bindings[4].binding = 4;\n    bindings[5] = bindings[1];\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n\n```\nEdit 1 only deletes lines: the REPLACE block is the SEARCH block without them; put no blank line or anything else where they were.\nChange nothing else; do not copy or move any other line.\n",
-  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g09.py r1glightingbu2",
-  "precheck": false,
-  "context": [],
-  "max_tokens": 864,
-  "hand": false
- }
+  {
+    "mode": "patch",
+    "focus": [
+      "^\\ \\ \\ \\ bindings\\[1\\]\\.descriptorType\\ =\\ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;$"
+    ],
+    "name": "r1g-lightingbu2",
+    "role": "worker/cpp-games",
+    "out": "engine/src/LightingBuffer.cpp",
+    "prompt": "Kreative Kompas Engine (C++20, Vulkan, forward renderer): R1g makes the lighting set (set 0, kke::LightingBuffer) and the shadow set (set 1, kke::Application) as bind groups through the render hardware interface's device (docs/plans/rhi.md): createBindGroupLayout(rhi::BindingLayout list), createBindGroup, writeBindGroup(rhi::BindingWrite: binding, buffer, range, texture); an rhi::TextureRef a compute pass also writes sets computeWritten (Vulkan's GENERAL layout).  Make these 1 edits in engine/src/LightingBuffer.cpp, each its own SEARCH/REPLACE block.\nEdit 1. Your SEARCH block is exactly these lines:\n```\n    bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;\n    bindings[1].descriptorCount = 1;\n    bindings[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;\n    // Bindings 2 and 3: screen-space GI's light and depth (setScreenGi).\n    bindings[2] = bindings[1];\n    bindings[2].binding = 2;\n    bindings[3] = bindings[1];\n    bindings[3].binding = 3;\n    // Bindings 4 and 5: reflections' light and depth (setReflections).\n    bindings[4] = bindings[1];\n    bindings[4].binding = 4;\n    bindings[5] = bindings[1];\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n\n```\nEdit 1 only deletes lines: the REPLACE block is the SEARCH block without them; put no blank line or anything else where they were.\nChange nothing else; do not copy or move any other line.\n",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g09.py r1glightingbu2",
+    "precheck": false,
+    "context": [],
+    "max_tokens": 864,
+    "hand": false
+  }
 ]
