@@ -60,6 +60,18 @@ public:
     // frame slot's descriptor set, which the GPU is done with by then.
     void setEnvironmentMap(const Texture* map, uint32_t levels) { m_envMap = map; m_envLevels = map ? levels : 0; }
 
+    // Screen-space GI (ENG-F01, set 0 bindings 2 and 3): the previous frame's
+    // bounce light and visibility, and its view depth (both in GENERAL
+    // layout), made with camera `viewProj`, `size` pixels. Null `light`: no
+    // GI, the shaders use the sky alone. Written by each update() like the map.
+    void setScreenGi(VkImageView light, VkImageView depth, VkSampler sampler, const glm::mat4& viewProj, const glm::vec2& size) {
+        m_giLight = light;
+        m_giDepth = depth;
+        m_giSampler = sampler;
+        m_giViewProj = viewProj;
+        m_giSize = size;
+    }
+
     // Picks the frame-in-flight slot that update() writes and
     // descriptorSet() returns. Each slot has its own buffer: the GPU may
     // still be drawing the previous frame with its camera and shadow
@@ -81,10 +93,14 @@ private:
     std::unique_ptr<Buffer> m_buffers[kSlotCount];
     uint32_t m_slot = 0;
 
-    void writeEnvironment(uint32_t slot); // binding 1 of that slot: m_envMap, or m_placeholder
+    void writeEnvironment(uint32_t slot); // bindings 1-3 of that slot: m_envMap and the GI images, or m_placeholder
     std::unique_ptr<Texture> m_placeholder; // 1x1 black, bound while there is no map
     const Texture* m_envMap = nullptr;
     uint32_t m_envLevels = 0;
+    VkImageView m_giLight = VK_NULL_HANDLE, m_giDepth = VK_NULL_HANDLE;
+    VkSampler m_giSampler = VK_NULL_HANDLE;
+    glm::mat4 m_giViewProj{1.0f};
+    glm::vec2 m_giSize{0.0f};
 };
 
 } // namespace kke

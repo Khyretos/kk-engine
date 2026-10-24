@@ -79,10 +79,10 @@ by area. The goal is parity with the big engines and more.
 
 | ID | Area | Feature | Status |
 |---|---|---|---|
-| ENG-F01 | Rendering | Real-time global illumination | ⬜ |
+| ENG-F01 | Rendering | Real-time global illumination. Screen-space done: a visibility bitmask, one frame late, off by default (`globalIllumination`, docs/RENDERING_PRINCIPLES.md). Not yet: light from what is off screen (probes, ENG-F15). | 🟡 |
 | ENG-F02 | Rendering | Ray-traced reflections and refractions | ⬜ |
 | ENG-F03 | Rendering | Volumetric lighting and fog (height fog only today) | 🟡 |
-| ENG-F04 | Rendering | Screen-space ambient occlusion (GTAO/SSAO) | ⬜ |
+| ENG-F04 | Rendering | Screen-space ambient occlusion (GTAO/SSAO). Done with ENG-F01's screen-space GI: its visibility shades the sky light and reflections. | ✅ |
 | ENG-F05 | Rendering | Temporal anti-aliasing (MSAA only today) | ⬜ |
 | ENG-F06 | Rendering | Foveated rendering | ⬜ |
 | ENG-F07 | Rendering | Ray-traced shadows | ⬜ |

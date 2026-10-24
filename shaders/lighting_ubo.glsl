@@ -38,11 +38,48 @@ layout(set = 0, binding = 0) uniform LightingUBO {
     mat4 pointShadowViewProj[POINT_SHADOW_FACES]; // index light * 6 + face: that face's view-projection, kke::ShadowMap::pointFaceViewProj
     vec4 pointShadowTiles[POINT_SHADOW_FACES]; // index light * 6 + face: its tile of the point map, xy = top left, zw = size, 0..1
     vec4 envMap; // x = the reflections' top mip (kke::EnvMap levels - 1), 0 = no map: reflect the ambient SH
+    mat4 giViewProj; // the camera the screen-space GI images were made with (last frame's)
+    vec4 gi;         // x = 1 when they hold a frame's result, yz = their size in pixels, w = KKE_GI_VIEW (1: show the visibility alone)
 } lighting;
 
 // The sky prefiltered for reflections (kke::EnvMap, kke::LightingBuffer::setEnvironmentMap):
 // equirectangular, one mip per roughness level. A black 1x1 while there is none.
 layout(set = 0, binding = 1) uniform sampler2D skyReflections;
+
+// Screen-space GI (ENG-F01, kke::ScreenGiPass): last frame's bounce light
+// (rgb) and visibility (a) at half resolution, and its view depth. The
+// placeholder (0, 0, 0, 1) when off.
+layout(set = 0, binding = 2) uniform sampler2D giLight;
+layout(set = 0, binding = 3) uniform sampler2D giDepth;
+
+// The GI at a world position: rgb = bounce light (as ambientIrradiance gives
+// light), a = how much of the sky it sees. Reprojected into last frame's
+// image; where that frame didn't see this surface (it was hidden, or off
+// screen) there is none: (0, 0, 0, 1), the sky alone, as without GI.
+vec4 screenGiAt(vec3 worldPos) {
+    if (lighting.gi.x < 0.5) return vec4(0.0, 0.0, 0.0, 1.0);
+    vec4 clip = lighting.giViewProj * vec4(worldPos, 1.0);
+    if (clip.w <= 0.0) return vec4(0.0, 0.0, 0.0, 1.0);
+    vec2 uv = clip.xy / clip.w * 0.5 + 0.5;
+    if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) return vec4(0.0, 0.0, 0.0, 1.0);
+    // The four nearest texels, each weighted by how close its depth is to
+    // this surface's (none across an edge onto something else).
+    vec2 size = lighting.gi.yz;
+    vec2 t = uv * size - 0.5;
+    vec2 base = floor(t), f = t - base;
+    vec4 sum = vec4(0.0);
+    float total = 0.0;
+    for (int i = 0; i < 4; ++i) {
+        vec2 o = vec2(float(i & 1), float(i >> 1));
+        vec2 at = (clamp(base + o, vec2(0.0), size - 1.0) + 0.5) / size;
+        float d = textureLod(giDepth, at, 0.0).r;
+        float w = (o.x > 0.5 ? f.x : 1.0 - f.x) * (o.y > 0.5 ? f.y : 1.0 - f.y);
+        w *= d > 0.0 ? max(0.0, 1.0 - abs(d - clip.w) / (0.05 * clip.w)) : 0.0;
+        sum += textureLod(giLight, at, 0.0) * w;
+        total += w;
+    }
+    return total > 1e-3 ? sum / total : vec4(0.0, 0.0, 0.0, 1.0);
+}
 
 // Ambient light reaching a surface facing n: kke::SkySH::irradiance.
 vec3 ambientIrradiance(vec3 n) {
