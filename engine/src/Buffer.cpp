@@ -58,6 +58,14 @@ void Buffer::upload(const void* data, VkDeviceSize size) {
     vmaUnmapMemory(m_device.allocator(), m_allocation);
 }
 
+void Buffer::uploadAt(VkDeviceSize offset, const void* data, VkDeviceSize size) {
+    void* mapped = nullptr;
+    VK_CHECK(vmaMapMemory(m_device.allocator(), m_allocation, &mapped));
+    std::memcpy(static_cast<char*>(mapped) + offset, data, static_cast<size_t>(size));
+    VK_CHECK(vmaFlushAllocation(m_device.allocator(), m_allocation, offset, size));
+    vmaUnmapMemory(m_device.allocator(), m_allocation);
+}
+
 void Buffer::download(void* out, VkDeviceSize size) const {
     void* mapped = nullptr;
     VK_CHECK(vmaMapMemory(m_device.allocator(), m_allocation, &mapped));
