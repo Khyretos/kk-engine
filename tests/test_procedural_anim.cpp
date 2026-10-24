@@ -459,3 +459,83 @@ TEST(ProceduralAnim, PoseFromModelUndoesPoseToModel) {
         EXPECT_GT(std::abs(glm::dot(back[b].r, pose[b].r)), 0.9999f) << b;
     }
 }
+
+// ENG-G19: CCD for long chains, with a bend limit per joint and damping.
+namespace {
+std::vector<glm::vec3> straightChain(int joints, float segment) {
+    std::vector<glm::vec3> p;
+    for (int i = 0; i < joints; ++i) p.push_back(glm::vec3(0.0f, 0.0f, -segment * static_cast<float>(i)));
+    return p;
+}
+// The bend at each inner joint (degrees), and at the root against the chain's first direction.
+std::vector<float> bends(const std::vector<glm::vec3>& p, const glm::vec3& rootDir) {
+    std::vector<float> out;
+    glm::vec3 before = rootDir;
+    for (size_t i = 0; i + 1 < p.size(); ++i) {
+        const glm::vec3 seg = glm::normalize(p[i + 1] - p[i]);
+        out.push_back(glm::degrees(std::acos(std::clamp(glm::dot(before, seg), -1.0f, 1.0f))));
+        before = seg;
+    }
+    return out;
+}
+} // namespace
+
+TEST(ProceduralAnim, CcdReachesAndKeepsLengths) {
+    std::vector<glm::vec3> p = straightChain(12, 0.25f); // 11 segments, 2.75 m
+    const glm::vec3 target(1.2f, 0.8f, -1.6f);
+    kke::ccdPoints(p, target);
+    EXPECT_LT(glm::length(p.back() - target), 2e-3f);
+    for (size_t i = 0; i + 1 < p.size(); ++i) EXPECT_NEAR(glm::length(p[i + 1] - p[i]), 0.25f, 1e-4f);
+    EXPECT_EQ(p.front(), glm::vec3(0.0f));
+    // Out of reach: straight toward it.
+    p = straightChain(12, 0.25f);
+    kke::ccdPoints(p, glm::vec3(0.0f, 10.0f, 0.0f));
+    EXPECT_NEAR(p.back().y, 2.75f, 1e-3f);
+}
+
+TEST(ProceduralAnim, CcdKeepsEveryJointWithinItsLimit) {
+    std::vector<glm::vec3> p = straightChain(8, 0.3f);
+    kke::CcdSettings s;
+    s.maxBendDegrees.assign(7, 25.0f);
+    const glm::vec3 target(1.1f, 0.0f, -1.5f); // a gentle curve can get there
+    kke::ccdPoints(p, target, s);
+    for (float b : bends(p, glm::vec3(0, 0, -1))) EXPECT_LE(b, 25.0f + 0.05f);
+    EXPECT_LT(glm::length(p.back() - target), 0.02f);
+    // A target behind it can't be reached within 25 degrees a joint: it stays within them anyway.
+    p = straightChain(8, 0.3f);
+    kke::ccdPoints(p, glm::vec3(0.0f, 0.0f, 1.0f), s);
+    for (float b : bends(p, glm::vec3(0, 0, -1))) EXPECT_LE(b, 25.0f + 0.05f);
+}
+
+// Plain CCD curls the tip (the last joints do all the turning); a step
+// limit per joint and pass spreads the bend along the chain.
+TEST(ProceduralAnim, CcdDampingSpreadsTheBend) {
+    const glm::vec3 target(1.5f, 0.0f, -1.8f);
+    auto spread = [&](float maxStep) {
+        std::vector<glm::vec3> p = straightChain(10, 0.3f);
+        kke::CcdSettings s;
+        s.maxStepDegrees = maxStep;
+        s.iterations = 60;
+        kke::ccdPoints(p, target, s);
+        EXPECT_LT(glm::length(p.back() - target), 0.01f) << maxStep;
+        const std::vector<float> b = bends(p, glm::vec3(0, 0, -1));
+        return *std::max_element(b.begin(), b.end());
+    };
+    EXPECT_LT(spread(4.0f), spread(180.0f) * 0.75f); // measured: 38 against 57 degrees
+}
+
+TEST(ProceduralAnim, CcdOnABoneChain) {
+    kke::ModelData m;
+    m.bones.push_back(bone("Tail1", -1, { 0, 0, 0 }));
+    for (int i = 2; i <= 9; ++i) {
+        const std::string name = "Tail" + std::to_string(i);
+        m.bones.push_back(bone(name.c_str(), i - 2, { 0, 0, -0.2f }));
+    }
+    const kke::IkChain tail = kke::findIkChain(m, "Tail1", "Tail9");
+    kke::Pose pose = rest(m);
+    const glm::vec3 target(0.5f, 0.4f, -1.0f);
+    kke::solveCcd(m, pose, tail, target);
+    EXPECT_LT(glm::length(posOf(m, pose, tail.bones.back()) - target), 0.01f);
+    for (size_t i = 0; i + 1 < tail.bones.size(); ++i)
+        EXPECT_NEAR(glm::length(posOf(m, pose, tail.bones[i + 1]) - posOf(m, pose, tail.bones[i])), 0.2f, 1e-3f);
+}

@@ -302,8 +302,11 @@ void fabrikPoints(std::vector<glm::vec3>& p, const glm::vec3& target, const glm:
     }
 }
 
-void solveFabrik(const ModelData& model, Pose& pose, const IkChain& chain, const glm::vec3& target, const glm::vec3* pole, float weight,
-                 const FabrikSettings& settings) {
+namespace {
+// Solves a chain's joint positions with `solve` (points, target) and turns
+// its bones to match, root first.
+template <class Solve>
+void solveChain(const ModelData& model, Pose& pose, const IkChain& chain, const glm::vec3& target, float weight, Solve solve) {
     if (!chain.valid() || weight <= 0.0f) return;
     for (int b : chain.bones)
         if (b < 0 || b >= static_cast<int>(pose.size())) return;
@@ -311,7 +314,7 @@ void solveFabrik(const ModelData& model, Pose& pose, const IkChain& chain, const
     std::vector<glm::vec3> pts;
     for (int b : chain.bones) pts.push_back(positionOf(world[b]));
     const glm::vec3 t = glm::mix(pts.back(), target, glm::clamp(weight, 0.0f, 1.0f));
-    fabrikPoints(pts, t, pole, settings);
+    solve(pts, t);
     for (size_t i = 0; i + 1 < chain.bones.size(); ++i) {
         const int b = chain.bones[i];
         const glm::vec3 at = positionOf(world[b]);
@@ -319,6 +322,60 @@ void solveFabrik(const ModelData& model, Pose& pose, const IkChain& chain, const
         rotateInModel(pose, b, rotationOf(world[b]), rotationBetween(now, pts[i + 1] - at));
         world = poseToModel(model, pose);
     }
+}
+
+// Turns every point after `pivot` round it by `q`.
+void turnAfter(std::vector<glm::vec3>& p, size_t pivot, const glm::quat& q) {
+    for (size_t j = pivot + 1; j < p.size(); ++j) p[j] = p[pivot] + q * (p[j] - p[pivot]);
+}
+} // namespace
+
+void solveFabrik(const ModelData& model, Pose& pose, const IkChain& chain, const glm::vec3& target, const glm::vec3* pole, float weight,
+                 const FabrikSettings& settings) {
+    solveChain(model, pose, chain, target, weight,
+               [&](std::vector<glm::vec3>& pts, const glm::vec3& t) { fabrikPoints(pts, t, pole, settings); });
+}
+
+void ccdPoints(std::vector<glm::vec3>& p, const glm::vec3& target, const CcdSettings& s) {
+    const size_t n = p.size();
+    if (n < 2) return;
+    std::vector<float> len(n - 1);
+    float total = 0.0f;
+    for (size_t i = 0; i + 1 < n; ++i) total += (len[i] = glm::length(p[i + 1] - p[i]));
+    const glm::vec3 rootDir = unitOr(p[1] - p[0], kUp);
+    if (s.maxBendDegrees.empty() && glm::length(target - p[0]) >= total) {
+        // Out of reach and free to bend: straight toward it.
+        const glm::vec3 dir = unitOr(target - p[0], rootDir);
+        for (size_t i = 0; i + 1 < n; ++i) p[i + 1] = p[i] + dir * len[i];
+        return;
+    }
+    const float maxStep = glm::radians(std::clamp(s.maxStepDegrees, 0.01f, 180.0f));
+    for (int it = 0; it < std::max(1, s.iterations); ++it) {
+        for (size_t i = n - 1; i-- > 0;) {
+            // Point the end at the target from this joint, at most maxStep.
+            glm::quat q = rotationBetween(p[n - 1] - p[i], target - p[i]);
+            const float angle = glm::angle(q);
+            if (angle > maxStep) q = glm::angleAxis(maxStep, glm::axis(q));
+            turnAfter(p, i, q);
+            // Then back inside this joint's bend limit, if it has one.
+            if (i < s.maxBendDegrees.size()) {
+                const glm::vec3 before = i == 0 ? rootDir : unitOr(p[i] - p[i - 1], rootDir);
+                const glm::vec3 seg = unitOr(p[i + 1] - p[i], before);
+                const float bend = std::acos(glm::clamp(glm::dot(before, seg), -1.0f, 1.0f));
+                const float limit = glm::radians(std::max(0.0f, s.maxBendDegrees[i]));
+                if (bend > limit) {
+                    glm::vec3 axis = glm::cross(seg, before);
+                    if (glm::length(axis) < 1e-6f) axis = glm::cross(seg, std::fabs(seg.y) < 0.9f ? kUp : glm::vec3(1, 0, 0));
+                    turnAfter(p, i, glm::angleAxis(bend - limit, glm::normalize(axis)));
+                }
+            }
+        }
+        if (glm::length(p[n - 1] - target) <= s.tolerance) break;
+    }
+}
+
+void solveCcd(const ModelData& model, Pose& pose, const IkChain& chain, const glm::vec3& target, float weight, const CcdSettings& settings) {
+    solveChain(model, pose, chain, target, weight, [&](std::vector<glm::vec3>& pts, const glm::vec3& t) { ccdPoints(pts, t, settings); });
 }
 
 glm::vec3 kneePosition(const glm::vec3& hip, const glm::vec3& foot, float upper, float lower, const glm::vec3& bend) {
