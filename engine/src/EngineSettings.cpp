@@ -58,7 +58,7 @@ bool EngineSettings::operator==(const EngineSettings& o) const {
     return graphics.fullscreen == o.graphics.fullscreen && graphics.vsync == o.graphics.vsync &&
            graphics.frameRateLimit == o.graphics.frameRateLimit && graphics.fieldOfView == o.graphics.fieldOfView &&
            graphics.shadows == o.graphics.shadows && graphics.shadowResolution == o.graphics.shadowResolution && graphics.msaa == o.graphics.msaa &&
-           graphics.globalIllumination == o.graphics.globalIllumination &&
+           graphics.globalIllumination == o.graphics.globalIllumination && graphics.reflections == o.graphics.reflections &&
            graphics.brightness == o.graphics.brightness &&
            graphics.uiScale == o.graphics.uiScale && graphics.showDebugOverlay == o.graphics.showDebugOverlay &&
            audio.master == o.audio.master && audio.music == o.audio.music && audio.effects == o.audio.effects &&
@@ -79,7 +79,7 @@ std::string settingsToJson(const EngineSettings& s) {
     j["graphics"] = {
         {"fullscreen", s.graphics.fullscreen}, {"vsync", s.graphics.vsync},
         {"frameRateLimit", s.graphics.frameRateLimit}, {"fieldOfView", s.graphics.fieldOfView},
-        {"shadows", s.graphics.shadows}, {"shadowResolution", s.graphics.shadowResolution}, {"msaa", s.graphics.msaa}, {"globalIllumination", s.graphics.globalIllumination}, {"brightness", s.graphics.brightness},
+        {"shadows", s.graphics.shadows}, {"shadowResolution", s.graphics.shadowResolution}, {"msaa", s.graphics.msaa}, {"globalIllumination", s.graphics.globalIllumination}, {"reflections", s.graphics.reflections}, {"brightness", s.graphics.brightness},
         {"uiScale", s.graphics.uiScale}, {"showDebugOverlay", s.graphics.showDebugOverlay},
     };
     j["audio"] = {
@@ -118,6 +118,7 @@ EngineSettings settingsFromJson(const std::string& text, const EngineSettings& d
     readIfPresent(g, "shadowResolution", s.graphics.shadowResolution);
     readIfPresent(g, "msaa", s.graphics.msaa);
     readIfPresent(g, "globalIllumination", s.graphics.globalIllumination);
+    readIfPresent(g, "reflections", s.graphics.reflections);
     readIfPresent(g, "brightness", s.graphics.brightness);
     readIfPresent(g, "uiScale", s.graphics.uiScale);
     readIfPresent(g, "showDebugOverlay", s.graphics.showDebugOverlay);

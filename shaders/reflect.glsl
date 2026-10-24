@@ -1,0 +1,109 @@
+// Reflections in screen space (ENG-F02, kke::ReflectionPass): one
+// invocation per pixel of a half-resolution image. Where the finished frame
+// shows a smooth lit surface (alpha >= 2: 2 + smoothness, written by the lit
+// shaders through reflectionMark), the reflected ray is marched through the
+// depth buffer in fixed steps; where it meets a surface, that surface's
+// light is what the pixel reflects (a = 1), else nothing is written (a = 0)
+// and the lit shaders keep the prefiltered sky. One ray, fixed steps: no
+// noise, nothing blended over frames (docs/RENDERING_PRINCIPLES.md). The next
+// frame's lit shaders read the result (screenReflectionAt, lighting_ubo.glsl).
+// reflect.comp and reflect_ms.comp include it (DEPTH_MS: sample 0 of a
+// multisampled depth).
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(set = 0, binding = 0) uniform sampler2D sceneLight; // this frame's scene light, alpha = the reflection mark
+#ifdef DEPTH_MS
+layout(set = 0, binding = 1) uniform sampler2DMS sceneDepth;
+float depthAt(ivec2 p) { return texelFetch(sceneDepth, p, 0).r; }
+#else
+layout(set = 0, binding = 1) uniform sampler2D sceneDepth;
+float depthAt(ivec2 p) { return texelFetch(sceneDepth, p, 0).r; }
+#endif
+layout(set = 0, binding = 2, rgba16f) uniform writeonly image2D reflectOut;   // rgb = reflected light, a = 1 where found
+layout(set = 0, binding = 3, r32f) uniform writeonly image2D reflectDepthOut; // view depth (m), 0 = nothing to reflect
+
+layout(push_constant) uniform Push {
+    mat4 proj;      // the frame's projection (Vulkan's flipped Y)
+    vec4 sizeLimits; // xy = full-resolution size, z = the smoothest-to-trace limit (1 - max roughness), w = max distance (m)
+    vec4 march;      // x = steps, y = thickness (m)
+} pc;
+
+mat4 invProj; // inverse(pc.proj), once per invocation (main)
+
+vec4 viewPos(ivec2 p) {
+    float d = depthAt(p);
+    if (d >= 1.0) return vec4(0.0);
+    vec2 ndc = (vec2(p) + 0.5) / pc.sizeLimits.xy * 2.0 - 1.0;
+    vec4 v = invProj * vec4(ndc, d, 1.0);
+    return vec4(v.xyz / v.w, 1.0);
+}
+
+void main() {
+    ivec2 half_ = ivec2(gl_GlobalInvocationID.xy);
+    if (half_.x >= imageSize(reflectOut).x || half_.y >= imageSize(reflectOut).y) return;
+    invProj = inverse(pc.proj);
+    ivec2 full = ivec2(pc.sizeLimits.xy);
+    ivec2 p = min(half_ * 2, full - 1);
+    vec4 mark = texelFetch(sceneLight, p, 0);
+    vec4 c = viewPos(p);
+    float smoothness = mark.a - 2.0;
+    if (c.w == 0.0 || smoothness < pc.sizeLimits.z) {
+        imageStore(reflectOut, half_, vec4(0.0));
+        imageStore(reflectDepthOut, half_, vec4(0.0));
+        return;
+    }
+    // The normal from the depth around it (as screen_gi.glsl does).
+    vec4 r = viewPos(min(p + ivec2(1, 0), full - 1)), l = viewPos(max(p - ivec2(1, 0), ivec2(0)));
+    vec4 u = viewPos(max(p - ivec2(0, 1), ivec2(0))), dn = viewPos(min(p + ivec2(0, 1), full - 1));
+    vec3 dx = (r.w == 0.0 || (l.w != 0.0 && abs(l.z - c.z) < abs(r.z - c.z))) ? c.xyz - l.xyz : r.xyz - c.xyz;
+    vec3 dy = (dn.w == 0.0 || (u.w != 0.0 && abs(u.z - c.z) < abs(dn.z - c.z))) ? c.xyz - u.xyz : dn.xyz - c.xyz;
+    vec3 N = normalize(cross(dy, dx));
+    vec3 V = normalize(-c.xyz);
+    if (dot(N, V) < 0.0) N = -N;
+    vec3 R = reflect(-V, N);
+    float depth = -c.z;
+
+    // March along the ray's line on screen in equal steps (pixels, not
+    // metres, so nothing between two samples is skipped near or far),
+    // depth interpolated perspective-correctly; then four halvings.
+    int steps = int(pc.march.x);
+    float maxDist = pc.sizeLimits.w, thickness = pc.march.y;
+    vec3 origin = c.xyz + N * (0.01 * depth);
+    float reach = maxDist;
+    if (R.z > 0.0) reach = min(reach, (-0.05 - origin.z) / R.z); // stop short of the camera plane
+    vec3 end = origin + R * max(reach, 0.0);
+    vec4 h0 = pc.proj * vec4(origin, 1.0), h1 = pc.proj * vec4(end, 1.0);
+    vec2 s0 = (h0.xy / h0.w * 0.5 + 0.5) * pc.sizeLimits.xy, s1 = (h1.xy / h1.w * 0.5 + 0.5) * pc.sizeLimits.xy;
+    float k0 = 1.0 / h0.w, k1 = 1.0 / h1.w; // 1 / view depth: linear on screen
+    float prev = 0.0, hitT = -1.0;
+    for (int k = 1; k <= steps; ++k) {
+        float f = float(k) / float(steps);
+        vec2 px = mix(s0, s1, f);
+        if (px.x < 0.0 || px.y < 0.0 || px.x >= pc.sizeLimits.x || px.y >= pc.sizeLimits.y) break; // left the screen
+        float rayZ = -1.0 / mix(k0, k1, f);
+        vec4 sp = viewPos(ivec2(px));
+        if (sp.w == 0.0) { prev = f; continue; } // sky there: keep going
+        float behind = sp.z - rayZ; // > 0: the ray is behind what the screen shows
+        if (behind > 0.0 && behind < thickness) {
+            float lo = prev, hi = f;
+            for (int b = 0; b < 4; ++b) {
+                float mid = 0.5 * (lo + hi);
+                vec4 sm = viewPos(ivec2(mix(s0, s1, mid)));
+                if (sm.w != 0.0 && sm.z - (-1.0 / mix(k0, k1, mid)) > 0.0) hi = mid; else lo = mid;
+            }
+            hitT = hi;
+            break;
+        }
+        prev = f;
+    }
+    if (hitT < 0.0) {
+        imageStore(reflectOut, half_, vec4(0.0));
+        imageStore(reflectDepthOut, half_, vec4(depth));
+        return;
+    }
+    vec2 hp = mix(s0, s1, hitT);
+    vec3 light = texelFetch(sceneLight, ivec2(clamp(hp, vec2(0.0), pc.sizeLimits.xy - 1.0)), 0).rgb;
+    imageStore(reflectOut, half_, vec4(light, 1.0));
+    imageStore(reflectDepthOut, half_, vec4(depth));
+}

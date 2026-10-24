@@ -236,6 +236,21 @@ the RX 9070 XT at 844 x 1384 with 4x MSAA: 0.29 ms (synty_demo, 722 to
 default. `KKE_GI_VIEW=1` shows what it sees: lit surfaces turn grey by how
 much sky they see.
 
+**Reflections (ENG-F02, 2026-10-17).** The setting `reflections` (off by
+default; `KKE_REFLECTIONS`) is `screen`, `kke` or `classic`. Screen: lit
+opaque surfaces write 2 + smoothness in the scene's alpha (translucents,
+particles and the sky write 1 or less, so no extra target or G-buffer is
+needed); after the scene a half-resolution pass marches each smooth
+surface's reflected ray along its line on screen in 48 equal steps, then
+four halvings, and keeps the light where it meets something; the next
+frame's lit shaders mix it over the prefiltered sky by smoothness, one
+frame late like the GI. One ray, fixed steps: nothing noisy, nothing
+blended over frames. Cost on the RX 9070 XT at 844 x 1384 with 4x MSAA:
+0.10 ms (anim_demo's polished floor, 420 to 407 fps); lavapipe 13.6 to
+12.3 fps. `kke` adds rays through simple stand-ins for what is off
+screen, within a budget, and `classic` rays through the full geometry
+(both on GPUs with VK_KHR_ray_query; screen elsewhere).
+
 ### 7. Tone mapping, exposure and colour management
 
 **Argument.** (Fox Engine videos, 33 "tone mapping & exposure

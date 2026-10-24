@@ -73,5 +73,5 @@ void main() {
         vec3 overlay = triplanarOverlay(fragOverlayPos, normalize(fragOverlayNormal), cellSize);
         albedo *= mix(vec3(1.0), overlay, pc.material.w);
     }
-    outColor = vec4(shadeSurfaceAA(albedo, metallicRoughness, N, fragPosWorld, fragPosLightSpace, specAA), 1.0);
+    outColor = vec4(shadeSurfaceAA(albedo, metallicRoughness, N, fragPosWorld, fragPosLightSpace, specAA), reflectionMark(metallicRoughness.y));
 }
