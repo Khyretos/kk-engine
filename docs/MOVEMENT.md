@@ -337,6 +337,20 @@ clip only means something for the skeleton it was made for, so a
 mismatch should be visible, not silent. Try it in kke_demo's Character
 panel, or `KKE_CHARACTER=SK_Character_Father_01 ./kke_demo`.
 
+**2D blend spaces** (ENG-G19) blend clips placed over two parameters,
+usually the velocity in the character's own frame (x right, y forward,
+m/s): `Animator::addBlendState2D` with a `BlendSpace2D`, then
+`setParameter2` every frame. Every clip gets a weight by gradient band
+interpolation (Johansen 2009, the method behind Unity's freeform blend
+trees) instead of a triangulated grid (Unreal), so any layout works and
+the weights change smoothly; in the default polar mode direction is an
+angle and speed a length, so a full-speed diagonal blends forward and
+right only, never idle. All weighted clips run at one shared phase, so
+feet don't slide. goblin_horde's heroes strafe with one: walking round a
+circle the weights change by at most 0.006 per half degree, where the
+old left/right/back thresholds jumped from one clip to the next; it
+costs 3.6 µs an update for a 65-bone hero against 2.3 µs for a 1D space.
+
 **Root motion** is available as data: `AnimationSet::extractRootMotion`
 moves a bone's horizontal travel out of the clips into a track, the clip
 plays in place, and `Animator::rootMotion()` reports the travel each
