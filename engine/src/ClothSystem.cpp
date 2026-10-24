@@ -1941,6 +1941,7 @@ void ClothSystem::OnStep(const JPH::PhysicsStepListenerContext& ctx) {
         JPH::Body* body = locks.TryGetBody(c.body);
         if (!body || !body->IsActive()) continue;
         load(c, *body);
+        ++m_passes;
         if (c.hair)
             airOnStrands(c, ctx.mDeltaTime);
         else
@@ -1952,6 +1953,7 @@ void ClothSystem::OnStep(const JPH::PhysicsStepListenerContext& ctx) {
 
 int ClothSystem::beginStep() {
     m_stepMs = 0.0;
+    m_passes = 0;
     m_undid = false;
     for (auto& [id, c] : m_cloths) {
         c.stats.selfContacts = 0;
@@ -1993,6 +1995,7 @@ void ClothSystem::endStep() {
             if (c.level == ClothProtection::Off || !c.touchedSolid || c.tris.empty()) continue;
             if (JPH::Body* body = locks.TryGetBody(c.body); body && body->IsActive()) m_lifting.push_back({ &c, body });
         }
+        m_passes += uint32_t(m_lifting.size());
         parallel(uint32_t(m_lifting.size()), [&](uint32_t begin, uint32_t end, Worker&) {
             for (uint32_t i = begin; i < end; ++i) solidCorners(*m_lifting[i].first, *m_lifting[i].second, !m_lifting[i].first->liftForSleep);
         }, 1);
@@ -2003,6 +2006,7 @@ void ClothSystem::endStep() {
         m_stepMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
     }
     m_lastMs = m_stepMs;
+    m_lastPasses = m_passes;
 }
 
 void ClothSystem::protectAll(const JPH::BodyLockInterface& locks) {
@@ -2034,6 +2038,7 @@ void ClothSystem::protectAll(const JPH::BodyLockInterface& locks) {
     if (m_active.empty()) return;
     // Nothing awake, nothing moves: no crossing can start.
     if (std::none_of(m_active.begin(), m_active.end(), [](const Cloth* c) { return c->stepBody != nullptr; })) return;
+    m_passes += uint32_t(std::count_if(m_active.begin(), m_active.end(), [](const Cloth* c) { return c->stepBody != nullptr; }));
     protect();
     std::vector<JPH::BodyID> sleep;
     for (Cloth* c : m_active) {
