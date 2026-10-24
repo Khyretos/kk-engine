@@ -358,12 +358,27 @@ update for the game to apply. Locomotion clips don't use it (the
 controller moves the capsule, and the blend space follows the measured
 speed); it's for authored moves such as a real vault clip.
 
+## Retargeting between rest poses
+
+`kke::retargetAnimations` and `kke::PoseRetarget` copy each bone's turn
+away from its rest pose. Two skeletons modelled in different rest poses
+(an A-pose character playing T-pose clips) would keep that difference in
+every frame, so rest matching (on by default, ENG-G19) first turns each
+arm and leg bone of the target to point the way the source's points at
+rest. Hands turn with the forearm, feet stay flat on the floor and the
+spine keeps its curve: those differences are the body's shape, not its
+pose. Pass `matchRest = false` to keep the old copy.
+
+Measured with UAL's walk on one character from each of 26 installed
+Synty packs (`AnimRig.RestMatchingOnInstalledCharacters`): the worst limb
+pointed 5 to 6.2 degrees away from the clip without matching (the
+werewolf's arms rest 30 degrees off UAL's), 0.0 with it, and no foot
+moved. `PoseRetarget::restDifferenceDegrees()` says how much was matched.
+
 ## Not done yet (next)
 
 - Animation layering (upper body over locomotion; *Animation layering
   pipelines*, Fsa2wxyQvzM, blocked below).
-- Rest-pose matching for retargeting between skeletons whose rest poses
-  differ a lot (A-pose vs T-pose arms); UAL and Synty are close enough.
 
 ## Transcripts
 
