@@ -1,0 +1,42 @@
+# Kreative Kompas Engine (KKE)
+
+> An open-source game engine (C++20, Vulkan) where games are made in Lua,
+> with live reload, and where a five-year-old can make a game by playing in it.
+
+AI assistants: read AGENTS.md first; it says which skill file fits the job.
+Everything below in one file: https://khyretos.github.io/kk-engine/llms-full.txt
+
+## Start here
+
+- [AGENTS.md](https://github.com/Khyretos/kk-engine/blob/main/AGENTS.md): how to help someone make a game with KKE
+- [skills/make-a-game](https://github.com/Khyretos/kk-engine/blob/main/skills/make-a-game/SKILL.md): Take someone from nothing to a playable KKE game, then grow it into a whole game (goal, rules, HUD, sound, saving) one checked step at a time.
+- [skills/lua-scripting](https://github.com/Khyretos/kk-engine/blob/main/skills/lua-scripting/SKILL.md): Write or fix Lua scripts for a KKE game - levels, controls, enemies, rules, HUDs, saving. Use for any gameplay code in games/*/scripts.
+- [skills/check-and-debug](https://github.com/Khyretos/kk-engine/blob/main/skills/check-and-debug/SKILL.md): Test a KKE game change and find why something doesn't work - run the game headless with tools/check_game, read the log, take a screenshot, or guide a person through it when you can't run commands.
+- [skills/explain-kke](https://github.com/Khyretos/kk-engine/blob/main/skills/explain-kke/SKILL.md): Explain KKE or teach game making to someone - beginners, children, or programmers - choosing the right level (pictures, node graph, Lua, C++) and answering from the docs, not from guesses.
+- [skills/cpp-module](https://github.com/Khyretos/kk-engine/blob/main/skills/cpp-module/SKILL.md): Write C++ for a KKE game or the engine - a new kke::Module, new Lua functions for scripts, unit tests - with zero warnings. Use when Lua can't do it or the task is engine work.
+
+## Docs
+
+- [Make your own game](https://khyretos.github.io/kk-engine/tutorials/getting-started/): From a fresh clone to your own game running
+- [Cookbook](https://khyretos.github.io/kk-engine/cookbook/): The cookbook: tested recipes from the simplest script to A*, boids and IK
+- [First steps](https://khyretos.github.io/kk-engine/cookbook/first-steps/): First script: variables, if, loops, functions, tables
+- [Input](https://khyretos.github.io/kk-engine/cookbook/input/): Controls: your own actions, holds, toggles, gamepads
+- [Moving things](https://khyretos.github.io/kk-engine/cookbook/moving/): Moving things: steering, followers, patrols, launch pads
+- [Cameras](https://khyretos.github.io/kk-engine/cookbook/cameras/): Eight camera types, camera paths and shake
+- [Gameplay](https://khyretos.github.io/kk-engine/cookbook/gameplay/): Shooting, explosions, a whole round with a HUD, trigger zones
+- [Algorithms](https://khyretos.github.io/kk-engine/cookbook/algorithms/): Mazes, noise terrain, A* path finding, flocking
+- [Animation and IK](https://khyretos.github.io/kk-engine/cookbook/animation/): Procedural animation: blend spaces, foot placement, IK, look-at
+- [Physics](https://khyretos.github.io/kk-engine/cookbook/physics/): Physics settings, breakable objects, physics from C++
+- [Sound](https://khyretos.github.io/kk-engine/cookbook/audio/): Sound materials and impact sounds
+- [Multiplayer](https://khyretos.github.io/kk-engine/cookbook/networking/): Multiplayer: host scripts and player scripts
+- [Play to make](https://khyretos.github.io/kk-engine/cookbook/play-to-make/): One idea at every level: pictures, node graph, Lua
+- [C++](https://khyretos.github.io/kk-engine/cookbook/cpp/): C++: modules, Lua bindings, tests
+- [The demos](https://khyretos.github.io/kk-engine/demos/): Which demo to start from for each kind of game; each demo's page explains how it is built and why
+- [SCRIPTING.md — Lua gameplay scripts](https://khyretos.github.io/kk-engine/SCRIPTING/): The Lua API in full
+- [PLAY_TO_MAKE.md — make the game while playing it](https://khyretos.github.io/kk-engine/PLAY_TO_MAKE/): The design: a five-year-old can make a game
+
+## Optional
+
+- [Lua API reference](https://khyretos.github.io/kk-engine/reference/lua-api/): every binding, generated from the engine
+- [AI_GUIDE.md](https://github.com/Khyretos/kk-engine/blob/main/AI_GUIDE.md): the engine's architecture, for changing the engine itself
+- [All docs](https://github.com/Khyretos/kk-engine/blob/main/docs/README.md): one row per topic

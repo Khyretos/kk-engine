@@ -1,0 +1,14 @@
+[
+  {
+    "mode": "patch",
+    "focus": ["^\\}$"],
+    "name": "f08-scriptligh2",
+    "role": "worker/cpp-games",
+    "out": "engine/src/ScriptLights.cpp",
+    "prompt": "Kreative Kompas Engine (C++20, Vulkan, forward renderer): ENG-F08 adds many lights without a deferred path: lights past the 16 key ones (Lighting::manyLights, up to 1024) go into a storage buffer, a compute pass (kke::ClusterLightPass, shaders/cluster_lights.comp) lists per cell of the view the ones that touch it, and pbr_common.glsl's lit pixels walk only their cell's list (lighting set bindings 9-11).  Make these 1 edits in engine/src/ScriptLights.cpp, each its own SEARCH/REPLACE block.\nEdit 1. Your SEARCH block is exactly these lines:\n```\n    if (slot >= 0 && slot < Lighting::kMaxLights) {\n        lighting.lights[slot].enabled = false;\n        m_entries.erase(std::remove_if(m_entries.begin(), m_entries.end(), [slot](const Entry& e){ return e.slot == slot; }), m_entries.end());\n    }\n}\n\nvoid ScriptLights::releaseAll(Lighting& lighting, const std::string& owner) {\n    for (auto& e : m_entries) {\n        if (e.owner == owner && e.slot >= 0 && e.slot < Lighting::kMaxLights) {\n            lighting.lights[e.slot].enabled = false;\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n    if (slot >= 0 && (slot < Lighting::kMaxLights || static_cast<size_t>(slot - Lighting::kMaxLights) < lighting.manyLights.size())) {\n        lighting.at(slot).enabled = false;\n        m_entries.erase(std::remove_if(m_entries.begin(), m_entries.end(), [slot](const Entry& e){ return e.slot == slot; }), m_entries.end());\n    }\n}\n\nvoid ScriptLights::releaseAll(Lighting& lighting, const std::string& owner) {\n    for (auto& e : m_entries) {\n        if (e.owner == owner && e.slot >= 0 && (e.slot < Lighting::kMaxLights || static_cast<size_t>(e.slot - Lighting::kMaxLights) < lighting.manyLights.size())) {\n            lighting.at(e.slot).enabled = false;\n```\nCareful: `if (e.owner == owner && e.slot >= 0 && (e.slot < Lighting::kMaxLights || static_cast<size_t>(e.slot - Lighting::kMaxLights) < lighting.manyLights.size())) {` and `if (slot >= 0 && (slot < Lighting::kMaxLights || static_cast<size_t>(slot - Lighting::kMaxLights) < lighting.manyLights.size())) {` are two different lines; copy each one exactly where it is.\nCareful: `lighting.at(e.slot).enabled = false;` and `lighting.at(slot).enabled = false;` are two different lines; copy each one exactly where it is.\nChange nothing else; do not copy or move any other line.\n",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g09.py f08scriptligh2",
+    "precheck": false,
+    "context": [],
+    "max_tokens": 1174
+  }
+]

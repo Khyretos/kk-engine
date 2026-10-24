@@ -1,0 +1,19 @@
+[
+  {
+    "name": "r1h-describe-r1",
+    "role": "worker/cpp-games",
+    "mode": "patch",
+    "out": "engine/src/Pipeline.cpp",
+    "prompt": "Kreative Kompas Engine (C++20, Vulkan): R1h moves shader and pipeline creation behind the render hardware interface (docs/plans/rhi.md). rhi::Device has createShaderModule(SPIR-V words) and createGraphicsPipeline(rhi::GraphicsPipelineDesc) (kke/rhi/GraphicsPipeline.h, kke/rhi/Device.h); VulkanGpuDevice (kke/rhi/VulkanDevice.h) implements them on Vulkan. The pipelines must come out exactly as kke::Pipeline's constructor in engine/src/Pipeline.cpp made them before: that code is the reference. In engine/src/Pipeline.cpp replace the R1h stub of Pipeline::describe (the one line that throws std::logic_error) with the real function declared in kke/Pipeline.h: it returns an rhi::GraphicsPipelineDesc holding config's fixed state: useVertexInput, topology, cullMode, frontFace, depthTestEnable, depthWriteEnable, blendEnable, premultipliedAlpha, customColorBlend, srcColorBlendFactor, dstColorBlendFactor, stencilTestEnable, stencilCompareOp, stencilPassOp, colorWriteEnable, depthBiasConstant, depthBiasSlope, colorAttachmentCount, pushConstantRange, bindGroupLayouts = layouts, and fragmentConstants = config.fragmentConstants (a span over the vector). The vertex layout: when config.useVertexInput is false, leave vertexBindings and vertexAttributes empty; when config.customVertexBindings is not empty use customVertexBindings and customVertexAttributes; otherwise use kke::Vertex's: function-local statics `static const rhi::VertexBinding kBinding = Vertex::bindingDescription();` and `static const std::array<rhi::VertexAttribute, 4> kAttributes = Vertex::attributeDescriptions();` and spans over them (one binding: std::span(&kBinding, 1)). Leave vertex, fragment and pass at their defaults. Change nothing else.",
+    "check": "sh /home/khyretos/kk-engine-scratch/kchk.sh /home/khyretos/Docker/Personal-projects/kk-wt-r1h 'RhiPipelineState.*'",
+    "precheck": false,
+    "context": [
+      "engine/include/kke/Pipeline.h",
+      "engine/include/kke/rhi/GraphicsPipeline.h",
+      "engine/include/kke/Mesh.h",
+      "tests/test_rhi_pipeline_state.cpp"
+    ],
+    "max_tokens": 2500,
+    "focus": "rhi::GraphicsPipelineDesc Pipeline::describe(const PipelineConfig&, std::span<const rhi::BindGroupLayout* const>) { throw std::logic_error(\"R1h: describe\"); }"
+  }
+]

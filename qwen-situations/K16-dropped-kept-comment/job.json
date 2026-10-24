@@ -1,0 +1,13 @@
+[
+  {
+    "name": "g05-snap",
+    "role": "worker/cpp-games",
+    "mode": "patch",
+    "out": "engine/src/ShadowMap.cpp",
+    "prompt": "ENG-G05 (cascaded shadow maps for the directional key light). Move the texel snapping out of computeLightViewProj into a helper the cascades can reuse.\n1. Directly after the line `namespace kke {` add an anonymous namespace (`namespace {` ... `} // namespace`) holding two functions:\n   a. `glm::vec3 lightUp(const glm::vec3& dir)`: returns `glm::vec3(0.0f, 0.0f, 1.0f)` when `std::abs(glm::dot(dir, glm::vec3(0.0f, 1.0f, 0.0f))) > 0.999f`, else `glm::vec3(0.0f, 1.0f, 0.0f)`.\n   b. `glm::vec3 snapToTexels(const glm::vec3& lightDirection, const glm::vec3& center, float radius, uint32_t resolution)` with a one-line comment: the centre moved to whole shadow texels across the light (resolution 0 = as is). Body: return `center` when resolution is 0; `const glm::vec3 dir = glm::normalize(lightDirection);`; `const float texel = 2.0f * radius / static_cast<float>(resolution);`; `const glm::mat4 rot = glm::lookAt(glm::vec3(0.0f), dir, lightUp(dir));`; `glm::vec4 c = rot * glm::vec4(center, 1.0f);` round c.x and c.y to whole texels exactly as computeLightViewProj does today; return `glm::vec3(glm::inverse(rot) * c)`.\n2. In computeLightViewProj: replace the `glm::vec3 up = ...` line and its `if (std::abs(glm::dot(dir, up)) > 0.999f) {...}` block with `const glm::vec3 up = lightUp(dir);` (keep the comment above it), and replace the whole `glm::vec3 center = sceneCenter;` line plus the `if (shadowMapResolution > 0) {...}` block with `const glm::vec3 center = snapToTexels(dir, sceneCenter, sceneRadius, shadowMapResolution);` followed by `eye = center - dir * (sceneRadius * 3.0f);`. Keep the comment that explains the snapping above the new line. The rest of the function stays.",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g05.py snap",
+    "precheck": false,
+    "context": ["engine/include/kke/ShadowMap.h"],
+    "max_tokens": 4000
+  }
+]

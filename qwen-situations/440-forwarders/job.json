@@ -1,0 +1,20 @@
+[
+  {
+    "name": "r1h-state-r2",
+    "role": "worker/cpp-games",
+    "mode": "file",
+    "out": "engine/src/rhi/VulkanPipelineState.cpp",
+    "prompt": "Kreative Kompas Engine (C++20, Vulkan): R1h moves shader and pipeline creation behind the render hardware interface (docs/plans/rhi.md). rhi::Device has createShaderModule(SPIR-V words) and createGraphicsPipeline(rhi::GraphicsPipelineDesc) (kke/rhi/GraphicsPipeline.h, kke/rhi/Device.h); VulkanGpuDevice (kke/rhi/VulkanDevice.h) implements them on Vulkan. The pipelines must come out exactly as kke::Pipeline's constructor in engine/src/Pipeline.cpp made them before: that code is the reference. Write engine/src/rhi/VulkanPipelineState.cpp: the definitions of every function declared in kke/rhi/VulkanPipelineState.h (namespace kke::rhi::vulkan). The mapping functions topology, cullMode, frontFace, blendFactor, compareOp, stencilOp and vertexFormat are the anonymous-namespace vk(...) overloads of engine/src/Pipeline.cpp, renamed. colorBlendAttachment(desc) is the colour blend attachment code of Pipeline's constructor (write mask from colorWriteEnable, blend factors for plain alpha, premultiplied alpha and customColorBlend, the alpha factors, blendEnable), reading desc.X where the constructor read config.X. dynamicStates(desc) is its dynamicStates vector: VIEWPORT and SCISSOR, and when desc.stencilTestEnable also STENCIL_COMPARE_MASK, STENCIL_WRITE_MASK and STENCIL_REFERENCE, in that order. Include only kke/rhi/VulkanPipelineState.h. Do not keep the old stub bodies.\nAnswer with the file's contents only, in one ```cpp fence: no shell commands and no other file.",
+    "check": "sh /home/khyretos/kk-engine-scratch/kchk.sh /home/khyretos/Docker/Personal-projects/kk-wt-r1h 'RhiGraphicsPipeline.*-RhiGraphicsPipeline.ASpirv*:RhiGraphicsPipeline.ABorrowed*'",
+    "precheck": false,
+    "context": [
+      "engine/include/kke/rhi/VulkanPipelineState.h",
+      "engine/include/kke/rhi/GraphicsPipeline.h",
+      "engine/include/kke/rhi/PipelineState.h",
+      "engine/src/Pipeline.cpp",
+      "tests/test_rhi_graphics_pipeline.cpp"
+    ],
+    "max_tokens": 3500,
+    "review": false
+  }
+]

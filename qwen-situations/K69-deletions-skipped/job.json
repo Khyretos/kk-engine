@@ -1,0 +1,17 @@
+[
+  {
+    "mode": "patch",
+    "focus": [
+      "^\\ \\ \\ \\ VkRenderPass\\ renderPass\\(\\)\\ const\\ \\{\\ return\\ m_renderPass;\\ \\}$",
+      "^\\ \\ \\ \\ VkRenderPass\\ m_renderPass\\ =\\ VK_NULL_HANDLE;$"
+    ],
+    "name": "g17-swapchain1",
+    "role": "worker/cpp-games",
+    "out": "engine/include/kke/SwapChain.h",
+    "prompt": "Kreative Kompas Engine (C++20, Vulkan, GLSL): ENG-G17 moves tone mapping out of every surface shader into one pass. The 3D scene now draws scene light into an HDR image (RGBA16F); the tone curve, exposure and look run once per pixel in a full-screen draw at the start of the UI pass.  Make these 2 edits in engine/include/kke/SwapChain.h, each its own SEARCH/REPLACE block.\nEdit 1. Your SEARCH block is exactly these lines:\n```\n    VkRenderPass renderPass() const { return m_renderPass; }\n    // Compatible with renderPass(), but loads the colour instead of\n    // clearing it (starts in TRANSFER_DST layout, after a blit).\n    VkRenderPass overlayPass() const { return m_overlayPass; }\n    VkImage image(uint32_t index) const { return m_images[index]; }\n    // Swapchain images accept linear blits (render scale works).\n    bool canBlitTo() const { return m_canBlitTo; }\n    // True when the screen is turned (a phone in landscape) and the system\n    // compositor rotates each frame for us. Presenting then reports\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n    VkRenderPass renderPass() const { return m_renderPass; }\n    // Compatible with renderPass(), but loads the colour instead of\n    // clearing it (starts in COLOR_ATTACHMENT_OPTIMAL): resuming the frame.\n    VkRenderPass overlayPass() const { return m_overlayPass; }\n    VkImage image(uint32_t index) const { return m_images[index]; }\n    // True when the screen is turned (a phone in landscape) and the system\n    // compositor rotates each frame for us. Presenting then reports\n```\nEdit 2. Your SEARCH block is exactly these lines:\n```\n    VkRenderPass m_renderPass = VK_NULL_HANDLE;\n    VkRenderPass m_overlayPass = VK_NULL_HANDLE;\n    bool m_canBlitTo = false;\n    bool m_wantReadable = false, m_readable = false;\n    bool m_compositorRotates = false;\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n    VkRenderPass m_renderPass = VK_NULL_HANDLE;\n    VkRenderPass m_overlayPass = VK_NULL_HANDLE;\n    bool m_wantReadable = false, m_readable = false;\n    bool m_compositorRotates = false;\n```\nCareful: `VkRenderPass m_overlayPass = VK_NULL_HANDLE;` and `VkRenderPass m_renderPass = VK_NULL_HANDLE;` are two different lines; copy each one exactly where it is.\nChange nothing else; do not copy or move any other line.\n",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g09.py g17swapchain1",
+    "precheck": false,
+    "context": [],
+    "max_tokens": 1337
+  }
+]

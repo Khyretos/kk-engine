@@ -1,0 +1,14 @@
+[
+  {
+    "name": "g03-frag",
+    "role": "worker/cpp-games",
+    "mode": "patch",
+    "out": "shaders/model.frag",
+    "focus": [],
+    "prompt": "ENG-G03 (normal and roughness/metallic maps for imported models). model.frag gets the material's normal, roughness and metallic maps in set 2 (bindings 1 to 3; binding 0 is the albedo). 1. Right after `layout(set = 2, binding = 0) uniform sampler2D albedoTexture;` add these three lines:\n```\nlayout(set = 2, binding = 1) uniform sampler2D normalTexture;    // tangent space, OpenGL (+Y up)\nlayout(set = 2, binding = 2) uniform sampler2D roughnessTexture; // red channel\nlayout(set = 2, binding = 3) uniform sampler2D metallicTexture;  // red channel\n```\n2. Before `void main() {` add `vec3 perturbNormal(vec3 N, vec3 pos, vec2 uv, vec3 mapN) {` (a normal map without stored tangents: the frame comes from screen-space derivatives). Its body, in order:\n   a. `vec3 dp1 = dFdx(pos), dp2 = dFdy(pos);` and `vec2 duv1 = dFdx(uv), duv2 = dFdy(uv);`\n   b. `vec3 dp2perp = cross(dp2, N), dp1perp = cross(N, dp1);`\n   c. `vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;` and `vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;`\n   d. `float lenSq = max(dot(T, T), dot(B, B));` and `if (lenSq < 1e-20) return N; // no UVs to take a frame from`\n   e. `float invMax = inversesqrt(lenSq);` and `return normalize(mat3(T * invMax, -B * invMax, N) * mapN);` (minus B: the model loader flips V for Vulkan).\n   Put a short comment above it saying it is Schueler's \"Normal Mapping Without Precomputed Tangents\".\n3. In main(), directly after `vec4 texel = texture(albedoTexture, fragUV);` and before the `discard` line (derivatives must come before it), add:\n```\n    vec3 N = normalize(fragNormalWorld);\n    // Derivatives in uniform control flow: perturb always, then choose.\n    vec4 nTexel = texture(normalTexture, fragUV);\n    vec3 mapped = perturbNormal(N, fragPosWorld, fragUV, nTexel.rgb * 2.0 - 1.0);\n    if (nTexel.a > 0.5) N = mapped;\n    vec2 metallicRoughness = fragMetallicRoughness * vec2(texture(metallicTexture, fragUV).r, texture(roughnessTexture, fragUV).r);\n```\n(The default normal texture has alpha 0, meaning \"no normal map\".)\n4. In the last line of main(), pass `metallicRoughness` instead of `fragMetallicRoughness` and `N` instead of `fragNormalWorld`: `outColor = vec4(shadeSurfaceAA(albedo, metallicRoughness, N, fragPosWorld, fragPosLightSpace, specAA), 1.0);`\nChange nothing else.",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g03frag.py",
+    "precheck": false,
+    "context": [],
+    "max_tokens": 4000
+  }
+]

@@ -1,0 +1,16 @@
+[
+ {
+  "name": "g06-math",
+  "role": "worker/cpp-games",
+  "mode": "new",
+  "out": "engine/src/EnvMap.cpp",
+  "prompt": "ENG-G06: lit surfaces reflect the sky. kke::EnvMap holds the sky prefiltered for reflections: an equirectangular RGB image (u = 0.5 + atan(x, -z) / 2pi, v = acos(y) / pi, kke::equirectUv / kke::equirectDir in kke/Sky.h) in several levels, each half as wide as the one before; level i is the sky seen in a surface of perceptual roughness i / (levels - 1), convolved with GGX by importance sampling with N = V = R (Karis, \"Real Shading in Unreal Engine 4\", 2013, the split sum). The shaders weight it by Karis's analytic environment BRDF (\"Physically Based Shading on Mobile\", 2014). C++20, glm, Vulkan, GLSL 450 std140. Write the new file engine/src/EnvMap.cpp with only these three free functions of kke/EnvMap.h (header in context); the class's member functions come in later jobs, so write none of them. Start with `#include \"kke/EnvMap.h\"`, then `#include <algorithm>` and `#include <cmath>`, then `namespace kke {`, an anonymous namespace holding `constexpr float kPi = 3.14159265358979f;`, the three functions, and `} // namespace kke`. One short `//` line above each function, no other comments.\n1. `glm::vec2 hammersley(uint32_t i, uint32_t count)`: `uint32_t bits = i;` then mirror its bits with exactly these five lines:\n```\n    bits = (bits << 16u) | (bits >> 16u);\n    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);\n    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);\n    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);\n    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);\n```\nand return `glm::vec2(static_cast<float>(i) / static_cast<float>(count), static_cast<float>(bits) * 2.3283064365386963e-10f)`.\n2. `glm::vec3 importanceSampleGGX(const glm::vec2& xi, const glm::vec3& n, float alpha)`: `const float a2 = alpha * alpha;`, `const float phi = 2.0f * kPi * xi.x;`, `const float cosTheta = std::sqrt((1.0f - xi.y) / (1.0f + (a2 - 1.0f) * xi.y));`, `const float sinTheta = std::sqrt(std::max(0.0f, 1.0f - cosTheta * cosTheta));`, `const glm::vec3 h(std::cos(phi) * sinTheta, std::sin(phi) * sinTheta, cosTheta);`. A tangent frame around n: `const glm::vec3 up = std::abs(n.z) < 0.999f ? glm::vec3(0.0f, 0.0f, 1.0f) : glm::vec3(1.0f, 0.0f, 0.0f);`, `const glm::vec3 tx = glm::normalize(glm::cross(up, n));`, `const glm::vec3 ty = glm::cross(n, tx);`; return `glm::normalize(tx * h.x + ty * h.y + n * h.z)`.\n3. `glm::vec3 envBRDFApprox(const glm::vec3& specularColor, float roughness, float NdotV)`: `const glm::vec4 c0(-1.0f, -0.0275f, -0.572f, 0.022f);`, `const glm::vec4 c1(1.0f, 0.0425f, 1.04f, -0.04f);`, `const glm::vec4 r = roughness * c0 + c1;`, `const float a004 = std::min(r.x * r.x, std::exp2(-9.28f * NdotV)) * r.x + r.y;`, `const glm::vec2 ab = glm::vec2(-1.04f, 1.04f) * a004 + glm::vec2(r.z, r.w);`; return `specularColor * ab.x + ab.y`.\nAnswer with the file's contents only, in one ```cpp fence: no shell commands and no other file.",
+  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g06.py math",
+  "precheck": false,
+  "context": [
+   "engine/include/kke/EnvMap.h"
+  ],
+  "max_tokens": 3000,
+  "review": false
+ }
+]

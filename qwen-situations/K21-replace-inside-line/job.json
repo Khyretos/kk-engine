@@ -1,0 +1,20 @@
+[
+  {
+    "name": "g05-lbcpp",
+    "role": "worker/cpp-games",
+    "mode": "patch",
+    "out": "engine/src/LightingBuffer.cpp",
+    "prompt": "ENG-G05 (cascaded shadow maps for the directional key light: 4 cascades per view, each in its own tile of the shadow map). The lighting UBO now ends with two arrays instead of one tile (shaders/lighting_ubo.glsl). Three edits, nothing else:\n1. In struct LightingUBOData replace the line `glm::vec4 shadowTile; // ...` with two lines:\n`    glm::vec4 shadowTiles[ShadowMap::kCascades];        // each cascade's tile of the shadow map: x, y (top left), width, height in 0..1`\n`    glm::vec4 cascadeScaleOffset[ShadowMap::kCascades]; // cascade c's clip xy = the far cascade's xy * (x, y) + (z, w)`\n2. In the static_assert under the struct, replace the final `+ 16` with `+ 2 * ShadowMap::kCascades * 16`.\n3. In LightingBuffer::update: the last parameter `const glm::vec4& shadowTile` becomes `const glm::vec4* shadowTiles, const glm::vec4* cascadeScaleOffsets`; replace the line `data.shadowTile = shadowTile;` with a loop `for (uint32_t c = 0; c < ShadowMap::kCascades; ++c) {` whose body sets `data.shadowTiles[c] = shadowTiles ? shadowTiles[c] : glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);` and `data.cascadeScaleOffset[c] = cascadeScaleOffsets ? cascadeScaleOffsets[c] : glm::vec4(1.0f, 1.0f, 0.0f, 0.0f);`, then `}`. Without arrays every cascade is the whole map, as before.\n4. Add `#include \"kke/ShadowMap.h\"` after the existing `#include \"kke/LightingBuffer.h\"` line.",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g05b.py lbcpp",
+    "precheck": false,
+    "context": ["engine/include/kke/LightingBuffer.h"],
+    "max_tokens": 4000,
+    "focus": [
+      "^#include",
+      "^struct LightingUBOData",
+      "glm::vec4 ambientSH\\[9\\];",
+      "^static_assert\\(sizeof",
+      "^void LightingBuffer::update"
+    ]
+  }
+]

@@ -1,0 +1,16 @@
+[
+ {
+  "name": "g07-apps",
+  "role": "worker/cpp-games",
+  "mode": "patch",
+  "out": "engine/src/Application.cpp",
+  "prompt": "ENG-G07: the engine goes from 4 lights to 16 (kke::Lighting::kMaxLights). Light 0 stays the sun (directional, cascaded shadows). Point lights gain an optional range (Light::range, 0 = reaches everywhere as before) with a smooth falloff; at most ShadowMap::kMaxPointShadows (4) point lights cast shadows, each in a point-shadow slot (Lighting::pointShadowSlots: the first 4 casting lights in order). Lua scripts place lamps with light.*. C++20, glm, Vulkan, GLSL 450 std140. Application::run's shadow pass draws each point light's faces into its slot's tiles. pointSlots is computed earlier in the function. Your SEARCH block is exactly these lines:\n```\n                    for (uint32_t l = 0; l < ShadowMap::kMaxPointShadows; ++l) {\n                        if (!m_lighting.lights[l].castsPointShadow()) continue;\n                        for (uint32_t f = 0; f < ShadowMap::kPointFaces; ++f) {\n                            const uint32_t t = l * ShadowMap::kPointFaces + f;\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n                    for (int l = 0; l < Lighting::kMaxLights; ++l) {\n                        if (pointSlots[l] < 0) continue;\n                        for (uint32_t f = 0; f < ShadowMap::kPointFaces; ++f) {\n                            const uint32_t t = static_cast<uint32_t>(pointSlots[l]) * ShadowMap::kPointFaces + f;\n```\nChange nothing else; do not copy or move any other line.\n",
+  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g07.py apps",
+  "precheck": false,
+  "context": [],
+  "max_tokens": 2500,
+  "focus": [
+   "if \\(!m_lighting\\.lights\\[l\\]\\.castsPointShadow\\(\\)\\) continue;"
+  ]
+ }
+]
