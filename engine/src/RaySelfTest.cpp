@@ -79,16 +79,20 @@ bool rayQuerySelfTest(VulkanDevice& device, std::string* report) {
     }
     // Two boxes (one turned 45 degrees) and a floor, each instance with its own number.
     struct Shape { std::vector<glm::vec3> p; std::vector<uint32_t> idx; };
-    std::vector<Shape> shapes(2);
+    std::vector<Shape> shapes(3);
     for (int i = 0; i < 8; ++i) shapes[0].p.push_back(glm::vec3(i & 1 ? 0.5f : -0.5f, i & 2 ? 0.5f : -0.5f, i & 4 ? 0.5f : -0.5f));
     shapes[0].idx = { 0, 2, 1, 1, 2, 3, 4, 5, 6, 5, 7, 6, 0, 1, 4, 1, 5, 4, 2, 6, 3, 3, 6, 7, 0, 4, 2, 2, 4, 6, 1, 3, 5, 3, 7, 5 };
     shapes[1].p = { { -10, 0, -10 }, { 10, 0, -10 }, { -10, 0, 10 }, { 10, 0, 10 } };
     shapes[1].idx = { 0, 2, 1, 1, 2, 3 };
+    // A triangle whose vertices move after it is built (a skinned part): refit, it must be met where it moved to.
+    shapes[2].p = { { 5, -1, -6 }, { 7, -1, -6 }, { 6, 1, -6 } };
+    shapes[2].idx = { 0, 1, 2 };
     struct Inst { int shape; glm::mat4 t; uint32_t custom; };
     const std::vector<Inst> insts = {
         { 0, glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, -5)), 7 },
         { 0, glm::rotate(glm::translate(glm::mat4(1.0f), glm::vec3(3, 0, -5)), glm::radians(45.0f), glm::vec3(0, 1, 0)), 9 },
         { 1, glm::translate(glm::mat4(1.0f), glm::vec3(0, -1, 0)), 3 },
+        { 2, glm::mat4(1.0f), 11 },
     };
     struct Ray { glm::vec3 o, d; float tMax; };
     const std::vector<Ray> rays = {
@@ -98,11 +102,25 @@ bool rayQuerySelfTest(VulkanDevice& device, std::string* report) {
         { { 0, 5, 0 }, { 0, 1, 0 }, 100.0f },                           // the sky: a miss
         { { 0, 0, 0 }, { 0, 0, -1 }, 2.0f },                            // too short to reach anything
         { { 0, 0, -10 }, { 0, 0, 1 }, 100.0f },                         // box 7 from behind
+        { { 6, 0, 0 }, { 0, 0, -1 }, 100.0f },                          // the moved triangle: at z = -6 now, not -3
     };
     try {
         RayScene scene(device);
         std::vector<RayScene::Geometry> geo;
-        for (const Shape& s : shapes) geo.push_back(scene.addTriangles(s.p, s.idx));
+        for (size_t s = 0; s < 2; ++s) geo.push_back(scene.addTriangles(shapes[s].p, shapes[s].idx));
+        // The moving triangle: vec4 vertices (16-byte stride) in host memory, built at z = -3, then moved.
+        const VkBufferUsageFlags input = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
+        Buffer moving(device, 3 * sizeof(glm::vec4), input, VMA_MEMORY_USAGE_CPU_TO_GPU);
+        Buffer movingIdx(device, 3 * sizeof(uint32_t), input, VMA_MEMORY_USAGE_CPU_TO_GPU);
+        std::vector<glm::vec4> before, after;
+        for (const glm::vec3& p : shapes[2].p) {
+            before.push_back(glm::vec4(p.x, p.y, -3.0f, 1.0f));
+            after.push_back(glm::vec4(p, 1.0f));
+        }
+        moving.upload(before.data(), before.size() * sizeof(glm::vec4));
+        movingIdx.upload(shapes[2].idx.data(), shapes[2].idx.size() * sizeof(uint32_t));
+        geo.push_back(scene.addDynamic(moving.deviceAddress(), sizeof(glm::vec4), 3, movingIdx.deviceAddress(), 3));
+        moving.upload(after.data(), after.size() * sizeof(glm::vec4));
         for (const Inst& i : insts) scene.add(geo[static_cast<size_t>(i.shape)], i.t, i.custom);
 
         std::vector<glm::vec4> rayData;
@@ -161,6 +179,7 @@ bool rayQuerySelfTest(VulkanDevice& device, std::string* report) {
         VK_CHECK(vkAllocateDescriptorSets(dev, &ai, &set));
 
         submitNow(device, [&](VkCommandBuffer cmd) {
+            scene.refit(cmd, geo[2], moving.deviceAddress());
             scene.build(cmd, 0);
             const VkAccelerationStructureKHR tlas = scene.topLevel(0);
             VkWriteDescriptorSetAccelerationStructureKHR asw{};

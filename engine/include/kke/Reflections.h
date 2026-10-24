@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 
 namespace kke {
@@ -18,6 +19,9 @@ struct ReflectionSettings {
     float maxDistance = 25.0f; // metres a reflected ray is followed
     int steps = 48;            // depth samples along its line on screen (then 4 halvings)
     float thickness = 0.5f;    // metres a surface is assumed deep
+    // KKE ray tracing: the most rays a frame may cast through the stand-ins
+    // (one per half-resolution pixel the screen couldn't settle, until then).
+    uint32_t rayBudget = 60000;
 };
 
 } // namespace kke

@@ -82,10 +82,24 @@ void RayScene::destroy(Structure& s) {
     s.buffer.reset();
 }
 
-RayScene::Geometry RayScene::addTriangles(const std::vector<glm::vec3>& positions, const std::vector<uint32_t>& indices) {
+RayScene::Geometry RayScene::addTriangles(const std::vector<glm::vec3>& positions, const std::vector<uint32_t>& indices,
+                                          const std::vector<glm::vec3>* normals) {
     if (positions.empty() || indices.size() < 3) throw std::runtime_error("RayScene::addTriangles: no triangles");
-    Buffer vertices = Buffer::createDeviceLocal(m_device, positions.data(), positions.size() * sizeof(glm::vec3), kInput);
-    Buffer index = Buffer::createDeviceLocal(m_device, indices.data(), indices.size() * sizeof(uint32_t), kInput);
+    const bool shaded = normals && normals->size() == positions.size();
+    std::vector<glm::vec3> data; // positions, or position + normal per vertex
+    if (shaded) {
+        data.reserve(positions.size() * 2);
+        for (size_t i = 0; i < positions.size(); ++i) {
+            data.push_back(positions[i]);
+            data.push_back((*normals)[i]);
+        }
+    }
+    const uint32_t stride = shaded ? 2 * sizeof(glm::vec3) : sizeof(glm::vec3);
+    VkBufferUsageFlags usage = kInput;
+    if (shaded) usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    Buffer vertices = shaded ? Buffer::createDeviceLocal(m_device, data.data(), data.size() * sizeof(glm::vec3), usage)
+                             : Buffer::createDeviceLocal(m_device, positions.data(), positions.size() * sizeof(glm::vec3), usage);
+    Buffer index = Buffer::createDeviceLocal(m_device, indices.data(), indices.size() * sizeof(uint32_t), usage);
 
     VkAccelerationStructureGeometryKHR g{};
     g.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
@@ -94,7 +108,7 @@ RayScene::Geometry RayScene::addTriangles(const std::vector<glm::vec3>& position
     g.geometry.triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
     g.geometry.triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
     g.geometry.triangles.vertexData.deviceAddress = vertices.deviceAddress();
-    g.geometry.triangles.vertexStride = sizeof(glm::vec3);
+    g.geometry.triangles.vertexStride = stride;
     g.geometry.triangles.maxVertex = static_cast<uint32_t>(positions.size() - 1);
     g.geometry.triangles.indexType = VK_INDEX_TYPE_UINT32;
     g.geometry.triangles.indexData.deviceAddress = index.deviceAddress();
@@ -119,12 +133,30 @@ RayScene::Geometry RayScene::addTriangles(const std::vector<glm::vec3>& position
     const VkAccelerationStructureBuildRangeInfoKHR* ranges = &range;
     submitNow(m_device, [&](VkCommandBuffer cmd) { vkCmdBuildAccelerationStructuresKHR(cmd, 1, &build, &ranges); });
 
+    if (shaded) {
+        s.stride = stride;
+        s.vertexData = std::make_unique<Buffer>(std::move(vertices));
+        s.indexData = std::make_unique<Buffer>(std::move(index));
+    }
     VkAccelerationStructureDeviceAddressInfoKHR ai{};
     ai.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR;
     ai.accelerationStructure = s.handle;
     m_geometryAddress.push_back(vkGetAccelerationStructureDeviceAddressKHR(m_device.device(), &ai));
     m_geometries.push_back(std::move(s));
     return static_cast<Geometry>(m_geometries.size() - 1);
+}
+
+RayMaterial RayScene::material(Geometry geometry, const glm::vec4& color) const {
+    RayMaterial m;
+    m.color = color;
+    if (geometry < m_geometries.size() && m_geometries[geometry].vertexData) {
+        const Structure& s = m_geometries[geometry];
+        m.vertices = s.vertexData->deviceAddress();
+        m.indices = s.indexData->deviceAddress();
+        m.stride = s.stride;
+        m.normalOffset = sizeof(glm::vec3);
+    }
+    return m;
 }
 
 RayScene::Geometry RayScene::addBox(const glm::vec3& h) {
@@ -135,8 +167,103 @@ RayScene::Geometry RayScene::addBox(const glm::vec3& h) {
     return addTriangles(p, idx);
 }
 
-void RayScene::add(Geometry geometry, const glm::mat4& t, uint32_t custom, uint8_t mask) {
+namespace {
+
+VkAccelerationStructureGeometryKHR dynamicGeometry(VkDeviceAddress vertices, uint32_t stride, uint32_t vertexCount, VkDeviceAddress indices) {
+    VkAccelerationStructureGeometryKHR g{};
+    g.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+    g.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
+    g.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
+    g.geometry.triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
+    g.geometry.triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
+    g.geometry.triangles.vertexData.deviceAddress = vertices;
+    g.geometry.triangles.vertexStride = stride;
+    g.geometry.triangles.maxVertex = vertexCount > 0 ? vertexCount - 1 : 0;
+    g.geometry.triangles.indexType = VK_INDEX_TYPE_UINT32;
+    g.geometry.triangles.indexData.deviceAddress = indices;
+    return g;
+}
+
+} // namespace
+
+RayScene::Geometry RayScene::addDynamic(VkDeviceAddress vertices, uint32_t stride, uint32_t vertexCount, VkDeviceAddress indices,
+                                        uint32_t indexCount) {
+    VkAccelerationStructureGeometryKHR g = dynamicGeometry(vertices, stride, vertexCount, indices);
+    VkAccelerationStructureBuildGeometryInfoKHR build{};
+    build.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
+    build.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+    build.flags = VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR | VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
+    build.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+    build.geometryCount = 1;
+    build.pGeometries = &g;
+    const uint32_t triangles = indexCount / 3;
+    VkAccelerationStructureBuildSizesInfoKHR sizes{};
+    sizes.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
+    vkGetAccelerationStructureBuildSizesKHR(m_device.device(), VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &build, &triangles, &sizes);
+    Structure s = makeStructure(VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR, sizes.accelerationStructureSize);
+    // One scratch big enough to build it and, later, to update it.
+    s.scratch = std::make_unique<Buffer>(m_device, std::max(sizes.buildScratchSize, sizes.updateScratchSize) + m_scratchAlign,
+                                         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+    s.stride = stride;
+    s.vertexCount = vertexCount;
+    s.indexCount = indexCount;
+    s.indices = indices;
+    build.dstAccelerationStructure = s.handle;
+    build.scratchData.deviceAddress = alignUp(s.scratch->deviceAddress(), m_scratchAlign);
+    VkAccelerationStructureBuildRangeInfoKHR range{ triangles, 0, 0, 0 };
+    const VkAccelerationStructureBuildRangeInfoKHR* ranges = &range;
+    submitNow(m_device, [&](VkCommandBuffer cmd) { vkCmdBuildAccelerationStructuresKHR(cmd, 1, &build, &ranges); });
+    VkAccelerationStructureDeviceAddressInfoKHR ai{};
+    ai.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR;
+    ai.accelerationStructure = s.handle;
+    m_geometryAddress.push_back(vkGetAccelerationStructureDeviceAddressKHR(m_device.device(), &ai));
+    m_geometries.push_back(std::move(s));
+    return static_cast<Geometry>(m_geometries.size() - 1);
+}
+
+void RayScene::refit(VkCommandBuffer cmd, Geometry geometry, VkDeviceAddress vertices) {
     if (geometry >= m_geometries.size()) return;
+    Structure& s = m_geometries[geometry];
+    if (!s.handle || !s.scratch || s.refitFrame == m_frame) return;
+    s.refitFrame = m_frame;
+    if (!m_refitBarrier) {
+        // GPU skinning wrote the vertices in a compute shader earlier this frame.
+        VkMemoryBarrier b{};
+        b.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+        b.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_HOST_WRITE_BIT;
+        b.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR | VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_HOST_BIT,
+                             VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR, 0, 1, &b, 0, nullptr, 0, nullptr);
+        m_refitBarrier = true;
+    }
+    VkAccelerationStructureGeometryKHR g = dynamicGeometry(vertices, s.stride, s.vertexCount, s.indices);
+    VkAccelerationStructureBuildGeometryInfoKHR build{};
+    build.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
+    build.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+    build.flags = VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR | VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
+    build.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR;
+    build.srcAccelerationStructure = s.handle;
+    build.dstAccelerationStructure = s.handle;
+    build.geometryCount = 1;
+    build.pGeometries = &g;
+    build.scratchData.deviceAddress = alignUp(s.scratch->deviceAddress(), m_scratchAlign);
+    VkAccelerationStructureBuildRangeInfoKHR range{ s.indexCount / 3, 0, 0, 0 };
+    const VkAccelerationStructureBuildRangeInfoKHR* ranges = &range;
+    vkCmdBuildAccelerationStructuresKHR(cmd, 1, &build, &ranges);
+}
+
+void RayScene::remove(Geometry geometry) {
+    if (geometry >= m_geometries.size() || !m_geometries[geometry].handle) return;
+    // A frame in flight may still trace it.
+    vkDeviceWaitIdle(m_device.device());
+    destroy(m_geometries[geometry]);
+    m_geometries[geometry].scratch.reset();
+    m_geometries[geometry].vertexData.reset();
+    m_geometries[geometry].indexData.reset();
+}
+
+void RayScene::add(Geometry geometry, const glm::mat4& t, uint32_t custom, uint8_t mask) {
+    if (geometry >= m_geometries.size() || !m_geometries[geometry].handle) return;
     VkAccelerationStructureInstanceKHR inst{};
     for (int r = 0; r < 3; ++r)
         for (int c = 0; c < 4; ++c) inst.transform.matrix[r][c] = t[c][r]; // row-major 3x4
@@ -187,6 +314,17 @@ void RayScene::growTop(Top& top, uint32_t count) {
 void RayScene::build(VkCommandBuffer cmd, uint32_t slot) {
     Top& top = m_top[slot % kSlots];
     const uint32_t count = static_cast<uint32_t>(m_instances.size());
+    if (m_refitBarrier) {
+        // The refits recorded this frame finish before the top level reads them.
+        VkMemoryBarrier rb{};
+        rb.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+        rb.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+        rb.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR, VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+                             0, 1, &rb, 0, nullptr, 0, nullptr);
+    }
+    m_refitBarrier = false;
+    ++m_frame;
     if (!top.handle || count > top.capacity) growTop(top, count);
     if (count > 0) top.instances->upload(m_instances.data(), count * sizeof(VkAccelerationStructureInstanceKHR));
 
