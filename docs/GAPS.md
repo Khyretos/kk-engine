@@ -80,7 +80,7 @@ by area. The goal is parity with the big engines and more.
 | ID | Area | Feature | Status |
 |---|---|---|---|
 | ENG-F01 | Rendering | Real-time global illumination | ⬜ |
-| ENG-F02 | Rendering | Ray-traced reflections and refractions | ⬜ |
+| ENG-F02 | Rendering | Ray-traced reflections and refractions. Part 1 done: inline ray tracing (VK_KHR_ray_query) on devices that have it, `kke::RayScene` (acceleration structures), a GPU self-test in CI (`KKE_RAY_SELFTEST=1`). | 🔨 |
 | ENG-F03 | Rendering | Volumetric lighting and fog (height fog only today) | 🟡 |
 | ENG-F04 | Rendering | Screen-space ambient occlusion (GTAO/SSAO) | ⬜ |
 | ENG-F05 | Rendering | Temporal anti-aliasing (MSAA only today) | ⬜ |

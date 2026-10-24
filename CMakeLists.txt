@@ -813,12 +813,19 @@ function(engine_add_shader TARGET SHADER_SOURCE)
     get_filename_component(SHADER_NAME ${SHADER_SOURCE} NAME)
     set(SHADER_OUTPUT ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders/${SHADER_NAME}.spv)
     get_filename_component(SHADER_OUTPUT_DIR ${SHADER_OUTPUT} DIRECTORY)
+    # Ray-query shaders (ray_*, ENG-F02) need SPIR-V 1.4: Vulkan 1.2.
+    set(SHADER_ENV_GLSLC "")
+    set(SHADER_ENV_GLSLANG "")
+    if(SHADER_NAME MATCHES "^ray_")
+        set(SHADER_ENV_GLSLC --target-env=vulkan1.2)
+        set(SHADER_ENV_GLSLANG --target-env vulkan1.2)
+    endif()
 
     if(GLSLC_EXECUTABLE)
         add_custom_command(
             OUTPUT ${SHADER_OUTPUT}
             COMMAND ${CMAKE_COMMAND} -E make_directory ${SHADER_OUTPUT_DIR}
-            COMMAND ${GLSLC_EXECUTABLE} ${SHADER_SOURCE} -o ${SHADER_OUTPUT}
+            COMMAND ${GLSLC_EXECUTABLE} ${SHADER_ENV_GLSLC} ${SHADER_SOURCE} -o ${SHADER_OUTPUT}
             DEPENDS ${SHADER_SOURCE} ${KKE_SHADER_INCLUDES}
             COMMENT "Compiling shader ${SHADER_NAME} (glslc)"
         )
@@ -826,7 +833,7 @@ function(engine_add_shader TARGET SHADER_SOURCE)
         add_custom_command(
             OUTPUT ${SHADER_OUTPUT}
             COMMAND ${CMAKE_COMMAND} -E make_directory ${SHADER_OUTPUT_DIR}
-            COMMAND ${GLSLANG_VALIDATOR_EXECUTABLE} -V ${SHADER_SOURCE} -o ${SHADER_OUTPUT}
+            COMMAND ${GLSLANG_VALIDATOR_EXECUTABLE} -V ${SHADER_ENV_GLSLANG} ${SHADER_SOURCE} -o ${SHADER_OUTPUT}
             DEPENDS ${SHADER_SOURCE} ${KKE_SHADER_INCLUDES}
             COMMENT "Compiling shader ${SHADER_NAME} (glslangValidator)"
         )
