@@ -1,7 +1,8 @@
 # Algorithms
 
 Classic game algorithms, each in one Lua file you can read top to bottom:
-a maze generator, terrain from noise, A* pathfinding and flocking. They
+a maze generator, terrain from noise (and the engine's own terrain), A*
+pathfinding and flocking. They
 build with physics boxes and balls so you can walk into the result.
 
 ## Maze generation
@@ -49,6 +50,30 @@ snow. **N** makes a new landscape.
   have visible creases at every grid line.
 - Squaring the height before using it flattens the valleys and sharpens
   the peaks. Try `h ^ 3`, or `1 - math.abs(2 * h - 1)` for ridges.
+
+## A valley with the engine's terrain
+
+The recipe above builds hills from boxes to show how noise works. For a
+real level, the engine's terrain does the same in C++ with smooth ground
+you can walk, sculpt and paint ([TERRAIN.md](../TERRAIN.md)). Here a
+seed makes the land, a pad is flattened where the player starts, a dirt
+path winds to a hill, and the clock runs a whole day in a minute
+([Time of day](../MOODS.md#time-of-day)). **N** makes a new valley.
+
+![A green valley with a dirt path and rocky slopes in the afternoon](media/valley.jpg)
+
+```lua title="valley.lua"
+--8<-- "docs/cookbook/recipes/valley.lua"
+```
+
+[Download valley.lua](recipes/valley.lua){ .md-button }
+
+- `terrain.create` again replaces the old terrain, so **N** just builds
+  anew with the next seed.
+- `flatten` keeps the inner part of its circle exactly level: just under
+  the starter level's floor here, so the two meet without a step.
+- Add trees with `terrain.scatter{ model = models.load("..."), density = 3 }`
+  once you have a tree model (any FBX, OBJ or glTF).
 
 ## A* pathfinding
 
