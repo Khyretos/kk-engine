@@ -479,6 +479,28 @@ void ModelModule::setOverlayEnabled(InstanceId id, bool enabled) {
     if (auto it = m_instances.find(id); it != m_instances.end()) it->second.overlay = enabled;
 }
 
+void ModelModule::setToon(InstanceId id, bool toon, float outline) {
+    auto it = m_instances.find(id);
+    if (it == m_instances.end()) return;
+    it->second.toon = toon;
+    it->second.outline = outline;
+    if (!toon || m_toonPipeline) return;
+    // Made on first use, so games without toon shading needn't ship its shaders.
+    Application& app = *m_app;
+    PipelineConfig config;
+    config.cullMode = rhi::CullMode::Back;
+    config.frontFace = rhi::FrontFace::CounterClockwise;
+    config.pushConstantRange = { rhi::kVertex | rhi::kFragment, 0, sizeof(PushConstants) };
+    config.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), app.shadowMapSetLayout(), rhi::VulkanBindGroupLayout::vk(*m_surfaceLayout),
+                                    app.materialTextureSetLayout() };
+    m_toonPipeline = std::make_unique<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/model.vert.spv", "shaders/model_toon.frag.spv", config);
+    // The inverted hull: the mesh pushed out along its normals, only its
+    // back faces drawn, so it shows as a rim round the silhouette and creases.
+    config.cullMode = rhi::CullMode::Front;
+    m_outlinePipeline = std::make_unique<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/model_outline.vert.spv",
+                                                   "shaders/model_outline.frag.spv", config);
+}
+
 void ModelModule::setTint(InstanceId id, const glm::vec3& tint) {
     if (auto it = m_instances.find(id); it != m_instances.end()) it->second.tint = tint;
 }
@@ -919,7 +941,7 @@ void ModelModule::buildBatches(const Frustum& f, std::vector<Batch>& out, std::v
     };
     std::map<Key, std::vector<Instance*>> groups;
     for (auto& [id, inst] : m_instances) {
-        if (!inst.visible || !inst.deformed.empty() || !inst.worldOverride.empty() || !inst.skinned.empty()) continue;
+        if (!inst.visible || inst.toon || !inst.deformed.empty() || !inst.worldOverride.empty() || !inst.skinned.empty()) continue;
         const LoadedModel& lm = *m_models[inst.model];
         bool anySkinned = false;
         for (const GpuMesh& gm : lm.meshes) anySkinned |= gm.skinned;
@@ -1098,6 +1120,7 @@ void ModelModule::render(const RenderContext& ctx) {
         // own origin, i.e. last among close objects, which is harmless.
         skinVisible(frustum, ctx.frameIndex);
         m_singles.clear();
+        m_toons.clear();
         std::vector<glm::vec3> singlePos;
         for (auto& [id, inst] : m_instances) {
             if (!inst.visible) continue;
@@ -1106,11 +1129,15 @@ void ModelModule::render(const RenderContext& ctx) {
             m_countOccluded = false;
             if (!visible) { ++m_culled; continue; }
             if (inst.batchedFrame == m_viewPass) continue; // drawn instanced above
+            if (inst.toon && m_toonPipeline) {
+                m_toons.push_back(&inst);
+                continue;
+            }
             m_singles.push_back(&inst);
             singlePos.push_back(glm::vec3(inst.transform[3]));
         }
-        for (uint32_t idx : frontToBackOrder(singlePos, ctx.cameraPos)) {
-            Instance& inst = *m_singles[idx];
+        // outline > 0: the outline pass (model_outline.vert reads its width from material.z).
+        auto drawParts = [&](Instance& inst, Pipeline& pipe, float outline) {
             skinInstance(inst, ctx.frameIndex);
             uploadDeformed(inst, ctx.frameIndex);
             const LoadedModel& lm = *m_models[inst.model];
@@ -1125,16 +1152,17 @@ void ModelModule::render(const RenderContext& ctx) {
                 VkDescriptorSet tex = mat.textureSet ? mat.textureSet : m_defaultSurface;
                 if (inst.textureOverride && mat.albedo) tex = inst.textureOverride;
                 if (tex != boundTexture) {
-                    ctx.list->bindGroups(*m_pipeline, 2, rhi::VulkanCommandList::groups(&tex, 1));
+                    ctx.list->bindGroups(pipe, 2, rhi::VulkanCommandList::groups(&tex, 1));
                     boundTexture = tex;
                 }
-                float tile = inst.overlay ? m_overlayTile : 0.0f;
+                float tile = inst.overlay && !inst.toon ? m_overlayTile : 0.0f;
                 // Deformed parts are already in world space (identity
                 // model matrix) but their overlay positions are in model
                 // space: overlayScale carries the object's scale for them.
-                PushConstants pc{ worldSpace ? glm::mat4(1.0f) : inst.transform, glm::vec4(mat.metallic, mat.roughness, tile, m_overlayStrength),
+                PushConstants pc{ worldSpace ? glm::mat4(1.0f) : inst.transform,
+                                  glm::vec4(mat.metallic, mat.roughness, outline > 0.0f ? outline : tile, m_overlayStrength),
                                   glm::vec4(mat.color * inst.tint, worldSpace ? instanceScale(inst.transform) : 0.0f) };
-                ctx.list->pushConstants(*m_pipeline, pcStages, 0, sizeof(pc), &pc);
+                ctx.list->pushConstants(pipe, pcStages, 0, sizeof(pc), &pc);
                 if (deformed) {
                     SkinnedBuffers& sb = inst.deformed[gm.meshIndex];
                     if (sb.indexCount) {
@@ -1153,7 +1181,17 @@ void ModelModule::render(const RenderContext& ctx) {
                 }
                 ++m_drawCalls;
             }
-        }
+        };
+        for (uint32_t idx : frontToBackOrder(singlePos, ctx.cameraPos)) drawParts(*m_singles[idx], *m_pipeline, 0.0f);
+        // Toon instances (setToon): their shading, then their outline.
+        for (Instance* inst : m_toons)
+            for (Pipeline* pipe : { m_toonPipeline.get(), m_outlinePipeline.get() }) {
+                if (pipe == m_outlinePipeline.get() && inst->outline <= 0.0f) continue;
+                pipe->bind(*ctx.list);
+                ctx.list->bindGroups(*pipe, 0, rhi::VulkanCommandList::groups(sets, 4));
+                boundTexture = m_defaultSurface;
+                drawParts(*inst, *pipe, pipe == m_outlinePipeline.get() ? inst->outline : 0.0f);
+            }
     }
 
     m_occlusion = nullptr; // only this view's draws above use it

@@ -239,6 +239,33 @@ These are plain garments in one colour each: MakeHuman's own `.mhclo`
 clothes (with textures) can't be downloaded from here, and are the next
 step for richer outfits.
 
+## Anime style
+
+One person, two looks: the Realistic and Anime buttons switch how the
+same meshes, bones and materials are drawn, so a look, an outfit and every
+animation work in either (the "Character pipeline: one base, two styles"
+plan). `ModelModule::setToon(instance, true, outline)` draws an instance
+with `shaders/model_toon.frag` in place of model.frag, after the
+manner of VRM's MToon material:
+
+- Two tones, not a gradient: lit, or a cooler darker shade of the same
+  colour, split at a narrow soft edge a little past the side; cast
+  shadows only half way, so a nose or fringe shadow doesn't cut a face.
+- The sky's light flattened, a rim light on the silhouette, and one small
+  hard highlight where a material is really glossy (lips, eyes).
+- No normal map: pores would be noise in this style.
+- An outline: the mesh drawn again pushed out along its normals with only
+  its back faces (`model_outline.vert`/`.frag`), in a dark, more saturated
+  shade of its own colour, a little wider far away. The creator gives the
+  body 1.2 mm and clothes 1.5 mm, and none to eyes, brows and teeth.
+
+Toon instances are drawn one at a time (never instanced) and cost one
+more draw per mesh for the outline. The pipelines are made by the first
+`setToon`, so a game without it needn't ship the shaders. Not yet toon:
+the strand hair and cloth skirts (their own renderers), and the face
+keeps realistic proportions; anime faces (bigger eyes, smaller nose and
+mouth) and anime hair are the next steps.
+
 ## Multiplayer
 
 A character travels as its look (`kke/HumanLook.h`), never as a mesh:

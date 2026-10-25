@@ -12,6 +12,9 @@
         <button data-class-on="view == 'profile'" data-event-click="view('profile')">Profile</button>
         <button data-class-on="view == 'back'" data-event-click="view('back')">Back</button>
         <button data-class-on="turntable" data-event-click="toggle_turntable">Turn</button>
+        <span class="gap"></span>
+        <button data-class-on="!anime" data-event-click="style('realistic')">Realistic</button>
+        <button data-class-on="anime" data-event-click="style('anime')">Anime</button>
     </div>
 
     <div id="panel">

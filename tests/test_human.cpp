@@ -504,3 +504,23 @@ TEST(HumanClothes, KeepOutsideLiftsClothOffTheSkin) {
     EXPECT_NEAR(cloth.vertices[1].position.z, 0.01f, 1e-6f);
     EXPECT_NEAR(cloth.vertices[2].position.z, 0.003f, 1e-6f);
 }
+
+// The anime face is a style layer: every name is a slider the pack has,
+// it reshapes the face without touching the person's own values, and an
+// empty style gives the realistic face back exactly.
+TEST(HumanStyle, AnimeFaceReshapesWithoutChangingTheLook) {
+    NEED_PACK();
+    for (const auto& [name, offset] : kke::Human::animeFace()) EXPECT_GE(pack().findModifier(name), 0) << name;
+    kke::Human h(pack());
+    h.set("nose/nose-hump-decr|incr", 0.4f);
+    const std::vector<glm::vec3> real = h.shapedPositions();
+    const auto values = h.values();
+    h.setStyle(kke::Human::animeFace());
+    const std::vector<glm::vec3> anime = h.shapedPositions();
+    EXPECT_EQ(h.values(), values);
+    float moved = 0.0f;
+    for (size_t i = 0; i < real.size(); ++i) moved = std::max(moved, glm::length(anime[i] - real[i]));
+    EXPECT_GT(moved, 0.003f);
+    h.setStyle({});
+    EXPECT_EQ(h.shapedPositions(), real);
+}

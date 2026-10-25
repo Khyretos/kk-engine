@@ -114,6 +114,7 @@ private:
     void spawnBody();
     void setStatus(const std::string& text);
     void applyColours();
+    void applyStyle();     // m_anime on every model of the figure
     void randomise(bool everything);
     // A body type: "Average", "Slim", "Athletic", "Strong", "Curvy",
     // "Heavy" (the build sliders only: gender, age and face stay).
@@ -174,6 +175,7 @@ private:
     Rml::String m_hairStyle;
     bool m_mirror = true;
     bool m_turntable = false;
+    bool m_anime = false; // the Anime style: toon shading and outlines (ModelModule::setToon)
     Rml::String m_code, m_codeShort, m_status, m_view = "body";
     float m_statusTime = 0.0f;
 

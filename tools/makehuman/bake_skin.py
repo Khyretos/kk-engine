@@ -3,13 +3,15 @@
 
     tools/makehuman/bake_skin.py MAKEHUMAN_DATA OUT_DIR [--size 1024]
 
-Writes three PNGs in the body's UV layout into OUT_DIR (the engine
+Writes four PNGs in the body's UV layout into OUT_DIR (the engine
 reads them from assets/humans/):
 
 - skin_albedo.png: near white, multiplied by the skin colour the player
   picks, so every tone keeps its colour. It carries what a flat colour
   can't: redder lips, a blush over the cheeks, nose and ears, darker
   eyelids, and a faint blotchiness all over.
+- skin_albedo_anime.png: the same for the anime style (docs/HUMANS.md
+  "Anime style"): flat, with a blush on the cheeks and only a hint of lips.
 - skin_normal.png: pores and fine grain (tangent space, OpenGL +Y up),
   deeper on the face's cheeks and nose than on the body.
 - skin_roughness.png: lips and the face's T-zone shinier than the body.
@@ -185,10 +187,10 @@ def bake(data_dir, out_dir, size, log=print):
     height = pores(size, rng)
 
     log("writing maps")
-    albedo, normal, rough = [], [], []
+    albedo, anime, normal, rough = [], [], [], []
     strength = 0.25  # pore depth to slope: the face island is small, so keep it faint
     for y in range(size):
-        a_row, n_row, r_row = bytearray(), bytearray(), bytearray()
+        a_row, t_row, n_row, r_row = bytearray(), bytearray(), bytearray(), bytearray()
         for x in range(size):
             i = y * size + x
             lp, ld, ck, ns, er = grid[i] if grid[i] is not None else (0.0, 0.0, 0.0, 0.0, 0.0)
@@ -202,6 +204,11 @@ def bake(data_dir, out_dir, size, log=print):
             r, g, b = r - 0.04 * ld, g - 0.09 * ld, b - 0.06 * ld  # thinner, darker skin on the lids
             r, g, b = r * (1 - 0.06 * lp), g * (1 - 0.36 * lp), b * (1 - 0.30 * lp)  # the lips' red
             a_row += bytes(max(0, min(255, int(c * 248 + 0.5))) for c in (r, g, b))
+            # The anime face's: flat skin, an anime blush on the cheeks, the
+            # lips only a hint (a strong mouth reads as lipstick in that style).
+            ab = 0.16 * ck
+            t_row += bytes(max(0, min(255, int(c * 248 + 0.5)))
+                           for c in (1.0 - 0.02 * lp, 1.0 - ab * 0.75 - 0.14 * lp, 1.0 - ab * 0.55 - 0.10 * lp))
             # Normal from the pore height's slope, deeper on the face.
             k = strength * (0.3 + 0.9 * face) * (1.0 - 0.7 * lp)  # lips are smooth
             hx = height[y * size + (x + 1) % size] - height[y * size + (x - 1) % size]
@@ -213,10 +220,12 @@ def bake(data_dir, out_dir, size, log=print):
             rv = 0.62 - 0.30 * lp - 0.08 * ns + (0.5 - height[i]) * 0.10
             r_row += bytes((max(0, min(255, int(rv * 255 + 0.5))),) * 3)
         albedo.append(bytes(a_row))
+        anime.append(bytes(t_row))
         normal.append(bytes(n_row))
         rough.append(bytes(r_row))
     os.makedirs(out_dir, exist_ok=True)
     write_png(os.path.join(out_dir, "skin_albedo.png"), size, size, albedo, 3)
+    write_png(os.path.join(out_dir, "skin_albedo_anime.png"), size, size, anime, 3)
     write_png(os.path.join(out_dir, "skin_normal.png"), size, size, normal, 4)
     write_png(os.path.join(out_dir, "skin_roughness.png"), size, size, rough, 3)
 

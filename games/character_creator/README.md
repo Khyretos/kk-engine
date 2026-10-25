@@ -27,6 +27,7 @@ Run it: `cd build/bin && ./character_creator`.
 | Turn the camera | Left drag beside the panel, or a controller's right stick |
 | Views | Body, Face, Profile, Back |
 | See the hair and skirts move | Turn: the figure spins, its hair and skirt swing out |
+| Style | Realistic (lit skin, pores) or Anime (cel shading and outlines): the same person either way |
 | Wear something | Clothes tab: click a garment (again to take it off), then a colour |
 | Both sides at once | Mirror sides (on by default) |
 

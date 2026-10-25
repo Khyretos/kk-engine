@@ -22,6 +22,7 @@ button.primary:hover { background-color: #ffb04a; }
 
 .bar { position: absolute; pointer-events: auto; }
 #views { left: 20dp; top: 18dp; }
+#views .gap { display: inline-block; width: 14dp; }
 #actions { left: 20dp; bottom: 44dp; right: 470dp; }
 
 #panel {

@@ -349,6 +349,11 @@ void CharacterCreatorModule::init(Application& app) {
         fillSliders();
     }
     if (const char* view = dev::env("KKE_CREATOR_VIEW")) setView(view);
+    if (const char* style = dev::env("KKE_CREATOR_STYLE")) { // screenshots
+        m_anime = std::string(style) == "anime";
+        m_handle.DirtyVariable("anime");
+        applyStyle();
+    }
     if (const char* hair = dev::env("KKE_CREATOR_HAIR")) { // screenshots and CI: "long", "afro", "" = none
         m_look.hair = hair;
         fillSliders();
@@ -429,6 +434,12 @@ void CharacterCreatorModule::buildModel() {
         m_mirror = !m_mirror;
         h.DirtyVariable("mirror");
         fillSliders();
+    });
+    c.Bind("anime", &m_anime);
+    c.BindEventCallback("style", [this](Rml::DataModelHandle h, Rml::Event&, const Rml::VariantList& args) {
+        m_anime = !args.empty() && args[0].Get<Rml::String>() == "anime";
+        h.DirtyVariable("anime");
+        applyStyle();
     });
     c.BindEventCallback("toggle_turntable", [this](Rml::DataModelHandle h, Rml::Event&, const Rml::VariantList&) {
         m_turntable = !m_turntable; // the figure turns (fixedUpdate), so its hair swings
@@ -615,6 +626,7 @@ void CharacterCreatorModule::spawnBody() {
         m_cap = m_models->spawn(m_models->add(m_capModel, "character_creator/scalp"));
     }
     applyColours();
+    applyStyle();
     m_shapeDirty = true;
 }
 
@@ -633,6 +645,27 @@ void CharacterCreatorModule::applyColours() {
         // hair's own colour showed as a patch with a hard edge (Kees).
         m_models->setTint(m_cap, m_look.skin * 0.95f);
     }
+}
+
+void CharacterCreatorModule::applyStyle() {
+    // The anime face is a layer over the person's sliders (Human::setStyle):
+    // the look and its share code stay the same in either style.
+    const std::map<std::string, float>& face = m_anime ? Human::animeFace() : std::map<std::string, float>{};
+    if (m_human->style() != face) {
+        m_human->setStyle(face);
+        m_shapeDirty = true;
+        m_hairDirty = true; // regrown on the new head
+    }
+    // Outlines on the shapes (body, clothes), none on the small parts
+    // (eyes, brows, teeth): a line round each would read as a smudge.
+    for (const auto& [id, outline] : { std::pair{ m_body, 0.0012f }, std::pair{ m_parts, 0.0f }, std::pair{ m_irises, 0.0f },
+                                       std::pair{ m_brows, 0.0f }, std::pair{ m_cap, 0.0f } })
+        if (id) m_models->setToon(id, m_anime, outline);
+    for (auto& w : m_worn)
+        if (w->instance) m_models->setToon(w->instance, m_anime, 0.0015f);
+    // The anime skin: flat, a blush, only a hint of lips (bake_skin.py).
+    const std::string animeSkin = m_humansDir + "/skin_albedo_anime.png";
+    if (m_body && std::filesystem::exists(animeSkin)) m_models->setTextureOverride(m_body, m_anime ? animeSkin : std::string());
 }
 
 void CharacterCreatorModule::skinMaterial(ModelData& model) const {
@@ -1045,8 +1078,12 @@ void CharacterCreatorModule::setLook(const HumanLook& look) {
 ModelData CharacterCreatorModule::bakeSkinned() const {
     Human h(*m_pack);
     applyLook(h, look());
+    if (m_anime) h.setStyle(Human::animeFace());
     Human::Bake b = h.bake();
     skinMaterial(b.model);
+    if (m_anime)
+        for (ModelMaterial& m : b.model.materials)
+            if (m.name == "Human_body" && !m.albedoTexture.empty()) m.albedoTexture = m_humansDir + "/skin_albedo_anime.png";
     for (ModelMaterial& m : b.model.materials)
         if (m.name == "Human_body") m.baseColor = look().skin;
     addIrises(b.model, look().eyes);
@@ -1239,6 +1276,7 @@ void CharacterCreatorModule::dressUp() {
         m_worn.push_back(std::move(w));
     }
     moveClothes();
+    applyStyle();
 }
 
 void CharacterCreatorModule::moveClothes() {
