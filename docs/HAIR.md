@@ -82,6 +82,10 @@ drawn.update(guides, headMatrixNow);
   there are gaps between drawn hairs, and skin showing through them reads
   as thin hair. The demo does it with vertex colours.
 
+On a MakeHuman body (any head the character creator's sliders make),
+`kke::hairOnHuman` (`kke/HumanHair.h`, [HUMANS.md](HUMANS.md) "Hair")
+finds the scalp and sets the roots on it for you.
+
 ## Every hair type, 1A to 4C
 
 `hairStyle("1a")` to `hairStyle("4c")` give each type of Andre Walker's

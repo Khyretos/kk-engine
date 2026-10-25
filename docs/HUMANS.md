@@ -100,7 +100,8 @@ always add up to 1, and setting one scales the other two.
 
 `kke::CharacterCreatorModule` (`kke/modules/CharacterCreatorModule.h`) is
 the screen, ready for any game: tabs of sliders (body type, shape, torso,
-arms and legs, head and neck, eyes, nose, mouth and jaw, ears, skin),
+arms and legs, head and neck, eyes, nose, mouth and jaw, ears, skin,
+hair),
 mirrored sides, undo and redo, randomise (believable: few sliders, small
 moves), camera views, save and load, and the share code. A game adds it
 next to a `UiModule` and a `ModelModule`, calls `open()`, and hears
@@ -122,6 +123,29 @@ In CMake, `kke_use_character_creator(my_game)` copies the screen
 While a slider moves only vertices move (`Human::reshape` and
 `ModelModule::setDeformedVertices`), so dragging stays smooth on a phone
 GPU too.
+
+## Hair
+
+`kke/HumanHair.h` grows the engine's strand hair ([HAIR.md](HAIR.md)) on
+a MakeHuman head, whatever shape the sliders gave it:
+
+- `findScalp(pack, shaped)` finds where hair grows: the skin the head
+  bone carries, above the brows and the ear tops and behind the
+  hairline (heights measured from the eyes, as fractions of the head, so
+  they scale with it), and the sphere that fits it best.
+- `hairOnHuman(desc, style, pack, shaped, guides)` lays any hairstyle
+  (`hairstyleOnHead` names: afro, box braids, cornrows, locs...; or a
+  type, `short`, `long`, `4c`...) on that sphere, then sets every root on
+  the skin straight under it (a ray against the scalp's faces). Roots with
+  no scalp under them are dropped. Loose styles start back from the
+  hairline, since a real face stands out in front of the sphere.
+
+The creator puts the body in a `RigidWorld` as a mesh only cloth and hair
+feel, so long hair falls over the shoulders and back without going
+through them, and paints the scalp the hair's root colour (a copy of the
+scalp's triangles 2 mm over the skin), so no skin shows between the
+hairs. Turn spins the figure, not the camera, so the hair swings. A
+slider change regrows the hair on the new head once the slider rests.
 
 ## Multiplayer
 
@@ -147,7 +171,6 @@ Saves are JSON (`lookToJson`, `lookFromJson`: format `kk-human`, version
 
 The plan for the whole creator is in the project's "Character creator
 plan" document. In order: animation through retargeting (MakeHuman bone
-names to the engine's canonical ones), skin and eyes, strand hair rooted
-on the scalp, clothes fitted with MakeHuman's `.mhclo` files (each
+names to the engine's canonical ones), skin and eyes, clothes fitted with MakeHuman's `.mhclo` files (each
 clothing vertex rides three body vertices, so clothes fit every body),
 then facial expressions (ENG-F25).

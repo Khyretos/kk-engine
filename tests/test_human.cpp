@@ -1,4 +1,5 @@
 #include "kke/Human.h"
+#include "kke/HumanHair.h"
 #include "kke/HumanLook.h"
 #include "kke/HumanPack.h"
 
@@ -275,4 +276,56 @@ TEST(HumanLook, ShareCodeIsTheSameAfterARoundTrip) {
     ASSERT_TRUE(kke::fromShareCode(code, pack(), back));
     EXPECT_EQ(back.shape.count("nose/nose-hump-decr|incr"), 0u);
     EXPECT_EQ(kke::shareCode(back, pack()), code);
+}
+
+// Hair grows from the scalp the sliders made: above the brows and ears,
+// behind the hairline, on a head of a believable size.
+TEST(HumanHair, FindsTheScalp) {
+    NEED_PACK();
+    for (float gender : { 0.0f, 1.0f }) {
+        kke::Human h(pack());
+        h.set("macrodetails/Gender", gender);
+        const std::vector<glm::vec3> shaped = h.shapedPositions();
+        const kke::HumanScalp scalp = kke::findScalp(pack(), shaped);
+        ASSERT_GT(scalp.verts.size(), 120u) << gender;
+        EXPECT_GT(scalp.radius, 0.06f);
+        EXPECT_LT(scalp.radius, 0.14f);
+        EXPECT_GT(scalp.up.y, 0.9f);
+        EXPECT_GT(scalp.front.z, 0.9f);
+        const glm::vec3 eyes = 0.5f * (h.jointPosition("eye.L____head", shaped) + h.jointPosition("eye.R____head", shaped));
+        for (uint32_t v : scalp.verts) {
+            const glm::vec3 p = shaped[v] - eyes;
+            ASSERT_FALSE(p.z > 0.0f && p.y < 0.03f) << "scalp on the face at vertex " << v;
+            ASSERT_GT(p.y, -0.06f) << "scalp below the ears at vertex " << v;
+        }
+    }
+}
+
+TEST(HumanHair, RootsSitOnTheSkin) {
+    NEED_PACK();
+    kke::Human h(pack());
+    h.set("head/head-scale-vert-decr|incr", 0.6f); // a taller head: the hair follows it
+    const std::vector<glm::vec3> shaped = h.shapedPositions();
+    const kke::HumanScalp scalp = kke::findScalp(pack(), shaped);
+    for (const char* style : { "short", "long", "afro", "cornrows" }) {
+        kke::HairDesc d;
+        ASSERT_TRUE(kke::hairOnHuman(d, style, pack(), shaped, 160)) << style;
+        kke::HairDesc sphere; // the same style on the scalp's sphere: most roots have skin under them
+        ASSERT_TRUE(kke::hairstyleOnHead(sphere, style, scalp.centre, scalp.radius, 160, scalp.up, scalp.front));
+        EXPECT_GE(d.roots.size(), sphere.roots.size() * 6 / 10) << style;
+        EXPECT_EQ(d.directions.size(), d.roots.size());
+        if (!d.lengths.empty()) {
+            EXPECT_EQ(d.lengths.size(), d.roots.size());
+        }
+        if (!d.tiedTo.empty()) {
+            EXPECT_EQ(d.tiedTo.size(), d.roots.size());
+        }
+        for (const glm::vec3& r : d.roots) {
+            float nearest = 1e9f;
+            for (uint32_t v : scalp.verts) nearest = std::min(nearest, glm::distance(r, shaped[v]));
+            ASSERT_LT(nearest, 0.03f) << style; // on a scalp face (its corners are up to ~2.5 cm apart)
+        }
+    }
+    kke::HairDesc d;
+    EXPECT_FALSE(kke::hairOnHuman(d, "no such style", pack(), shaped, 160));
 }

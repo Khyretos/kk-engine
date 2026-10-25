@@ -3,7 +3,10 @@
 Make a realistic person with sliders: body type (gender, age, ancestry,
 muscle, weight, height, proportions), then the shape of the torso, arms
 and legs, head and neck, eyes, nose, mouth, jaw and ears, about 300
-sliders in all, and a skin tone. The person is MakeHuman's CC0 human
+sliders in all, a skin tone, and hair: 14 hairstyles from short and long
+to an afro, box braids, cornrows and locs, 11 colours and a length, as
+real strands grown from this head's own scalp and moved by the engine's
+hair physics. The person is MakeHuman's CC0 human
 (docs/HUMANS.md), so every slider is a morph sculpted by artists, and the
 sliders blend the way MakeHuman's do.
 
@@ -20,7 +23,8 @@ Run it: `cd build/bin && ./character_creator`.
 | --- | --- |
 | Move a slider | Drag it |
 | Turn the camera | Left drag beside the panel, or a controller's right stick |
-| Views | Body, Face, Profile, Back, Turn (turntable) |
+| Views | Body, Face, Profile, Back |
+| See the hair move | Turn: the figure spins and its hair swings out |
 | Both sides at once | Mirror sides (on by default) |
 
 Moving the sliders with a controller is not in yet.
@@ -34,6 +38,8 @@ has. **Undo** and **Redo** go back up to 100 steps (one step per drag).
 reads one.
 
 ![The face view: the head and neck tab](../../website/static/media/character-creator-face.webp)
+
+![The Hair tab: an afro grown from the head's own scalp](../../website/static/media/character-creator-hair.webp)
 
 ## How it is built
 
@@ -50,6 +56,11 @@ reads one.
   own body uses `quantised()` values, rounded exactly like the code, so
   everyone sees the same vertices. A code made with another pack is
   refused, not misread.
+- **Hair** is the engine's strand hair (docs/HAIR.md) grown from the
+  body's scalp by `kke::hairOnHuman` (docs/HUMANS.md "Hair"), simulated
+  in a `RigidWorld` where the body is a mesh only hair and cloth feel.
+  The scalp is painted the hair's root colour. 160 guide strands, a few
+  thousand drawn hairs built on the GPU.
 - **Saves** are JSON (`kk-human`, version 1) with MakeHuman's slider
   names, and `lookFromMhm` reads `.mhm` files from the MakeHuman app.
 - **The screen** is RmlUi: `assets/ui/character_creator/creator.rml` and
@@ -59,15 +70,16 @@ reads one.
   pack next to a game.
 
 For CI and screenshots: `KKE_CREATOR_TAB=nose`, `KKE_CREATOR_VIEW=face`,
-and `KKE_CREATOR_SELFTEST=1`, which makes a random person, sends it
-through a share code and back, and logs `creator self-test passed` when
-the code comes back the same and the person stands on the floor.
+`KKE_CREATOR_HAIR=afro` (a hairstyle, empty for none), `KKE_CREATOR_TURN=1`
+(start turning), and `KKE_CREATOR_SELFTEST=1`, which makes a random
+person, sends it through a share code and back, and logs `creator
+self-test passed` when the code comes back the same, the person stands on
+the floor and its hairstyle is on its head.
 
 ## Not yet
 
 The plan's next steps, in order: animation (MakeHuman's rig onto the
 engine's canonical bone names), skin textures, eye colour and brows,
-strand hair rooted on the scalp with the engine's own hair physics,
 clothes fitted with MakeHuman's `.mhclo` files with cloth physics for
 loose garments, a credits screen for CC-BY assets, and facial
 expressions (ENG-F25).

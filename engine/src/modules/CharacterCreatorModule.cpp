@@ -3,10 +3,16 @@
 #include "kke/Application.h"
 #include "kke/AssetCatalog.h"
 #include "kke/DevTools.h"
+#include "kke/HairRenderer.h"
+#include "kke/HumanHair.h"
 #include "kke/Log.h"
 #include "kke/Outfit.h"
+#include "kke/RigidWorld.h"
 #include "kke/modules/OrbitCameraModule.h"
 #include "kke/modules/UiModule.h"
+
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 #include <RmlUi/Core/Context.h>
 #include <RmlUi/Core/DataModelHandle.h>
@@ -52,6 +58,7 @@ const std::vector<TabDef>& tabDefs() {
         { "mouth", "Mouth & jaw", { "mouth", "chin", "cheek" } },
         { "ears", "Ears", { "ears" } },
         { "skin", "Skin & eyes", {} },
+        { "hair", "Hair", {} },
     };
     return tabs;
 }
@@ -134,6 +141,53 @@ std::string cssColour(const glm::vec3& c) {
     return buf;
 }
 
+// Natural hair colours, root and tip (sRGB): the tips a little lighter,
+// as sun and age leave them.
+struct HairColour {
+    const char* name;
+    glm::vec3 root, tip;
+};
+const std::vector<HairColour>& hairColours() {
+    static const std::vector<HairColour> c = {
+        { "Black", { 0.03f, 0.025f, 0.02f }, { 0.07f, 0.055f, 0.045f } },
+        { "Dark brown", { 0.10f, 0.06f, 0.04f }, { 0.20f, 0.13f, 0.08f } },
+        { "Brown", { 0.22f, 0.13f, 0.07f }, { 0.36f, 0.24f, 0.13f } },
+        { "Light brown", { 0.38f, 0.25f, 0.14f }, { 0.55f, 0.40f, 0.24f } },
+        { "Auburn", { 0.32f, 0.10f, 0.05f }, { 0.48f, 0.18f, 0.08f } },
+        { "Ginger", { 0.55f, 0.22f, 0.08f }, { 0.75f, 0.38f, 0.15f } },
+        { "Dark blonde", { 0.45f, 0.33f, 0.18f }, { 0.66f, 0.52f, 0.32f } },
+        { "Blonde", { 0.70f, 0.56f, 0.33f }, { 0.88f, 0.78f, 0.55f } },
+        { "Platinum", { 0.85f, 0.80f, 0.70f }, { 0.95f, 0.93f, 0.86f } },
+        { "Grey", { 0.45f, 0.43f, 0.41f }, { 0.68f, 0.67f, 0.65f } },
+        { "White", { 0.82f, 0.81f, 0.79f }, { 0.94f, 0.94f, 0.93f } },
+    };
+    return c;
+}
+
+// The hairstyles on the Hair tab: kke::hairstyleOnHead names and types.
+const std::vector<std::pair<const char*, const char*>>& hairChoices() {
+    static const std::vector<std::pair<const char*, const char*>> c = {
+        { "", "None" },
+        { "short", "Short" },
+        { "straight", "Straight" },
+        { "long", "Long" },
+        { "wavy", "Wavy" },
+        { "curly", "Curly" },
+        { "afro", "Afro" },
+        { "puff", "Puff" },
+        { "high-top fade", "High-top fade" },
+        { "twist-out", "Twist-out" },
+        { "bantu knots", "Bantu knots" },
+        { "box braids", "Box braids" },
+        { "cornrows", "Cornrows" },
+        { "locs", "Locs" },
+        { "two-strand twists", "Twists" },
+    };
+    return c;
+}
+
+constexpr int kHairGuides = 160;
+
 std::string uiRoot() {
     if (const char* env = dev::env("KKE_CREATOR_UI")) {
         std::string root = env;
@@ -178,12 +232,18 @@ void CharacterCreatorModule::init(Application& app) {
     };
     for (const NamedColour& c : eyes) m_eyeSwatches.push_back({ c.name, cssColour(c.rgb), c.rgb.r, c.rgb.g, c.rgb.b });
     for (const TabDef& t : tabDefs()) m_tabs.push_back({ t.id, t.label });
+    for (const HairColour& c : hairColours())
+        m_hairSwatches.push_back({ c.name, cssColour(0.5f * (c.root + c.tip)), c.root.r, c.root.g, c.root.b });
+    for (const auto& [id, label] : hairChoices()) m_hairChoices.push_back({ id, label });
+    m_look.hair = "short"; // a new person; a save replaces it
 
     buildModel();
     loadDocument();
     spawnBody();
+    buildWorld();
     // A save from last time, if there is one.
     if (std::filesystem::exists(savePath())) load();
+    m_hairDirty = true;
     fillSliders();
     setView("body");
     if (const char* tab = dev::env("KKE_CREATOR_TAB")) {
@@ -191,6 +251,11 @@ void CharacterCreatorModule::init(Application& app) {
         fillSliders();
     }
     if (const char* view = dev::env("KKE_CREATOR_VIEW")) setView(view);
+    if (const char* hair = dev::env("KKE_CREATOR_HAIR")) { // screenshots and CI: "long", "afro", "" = none
+        m_look.hair = hair;
+        fillSliders();
+    }
+    if (dev::env("KKE_CREATOR_TURN")) m_turntable = true;
     open();
 }
 
@@ -220,6 +285,15 @@ void CharacterCreatorModule::buildModel() {
     c.Bind("sliders", &m_sliders);
     c.Bind("skin_swatches", &m_skinSwatches);
     c.Bind("eye_swatches", &m_eyeSwatches);
+    if (auto h = c.RegisterStruct<HairChoice>()) {
+        h.RegisterMember("id", &HairChoice::id);
+        h.RegisterMember("label", &HairChoice::label);
+    }
+    c.RegisterArray<std::vector<HairChoice>>();
+    c.Bind("hair_choices", &m_hairChoices);
+    c.Bind("hair_swatches", &m_hairSwatches);
+    c.Bind("hair_style", &m_hairStyle);
+    c.Bind("hair_length", &m_hairLength);
     c.Bind("mirror", &m_mirror);
     c.Bind("turntable", &m_turntable);
     c.Bind("code", &m_codeShort);
@@ -235,12 +309,27 @@ void CharacterCreatorModule::buildModel() {
         fillSliders();
     });
     c.BindEventCallback("toggle_turntable", [this](Rml::DataModelHandle h, Rml::Event&, const Rml::VariantList&) {
-        m_turntable = !m_turntable;
-        if (m_orbit) m_orbit->setAutoOrbit(m_turntable, 25.0f);
+        m_turntable = !m_turntable; // the figure turns (fixedUpdate), so its hair swings
         h.DirtyVariable("turntable");
     });
-    c.BindEventCallback("view", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList& args) {
+    c.BindEventCallback("view", [this](Rml::DataModelHandle h, Rml::Event&, const Rml::VariantList& args) {
+        m_turntable = false;
+        m_yaw = 0.0f; // face the camera again
+        h.DirtyVariable("turntable");
         if (!args.empty()) setView(args[0].Get<Rml::String>());
+    });
+    c.BindEventCallback("hair_style", [this](Rml::DataModelHandle h, Rml::Event&, const Rml::VariantList& args) {
+        m_look.hair = args.empty() ? std::string() : args[0].Get<Rml::String>();
+        m_hairStyle = m_look.hair;
+        h.DirtyVariable("hair_style");
+        buildHair();
+    });
+    c.BindEventCallback("hair_colour", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList& args) {
+        const int i = args.empty() ? -1 : args[0].Get<int>();
+        if (i < 0 || i >= static_cast<int>(hairColours().size())) return;
+        m_look.hairRoot = hairColours()[static_cast<size_t>(i)].root;
+        m_look.hairTip = hairColours()[static_cast<size_t>(i)].tip;
+        buildHair();
     });
     c.BindEventCallback("skin", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList& args) {
         const int i = args.empty() ? -1 : args[0].Get<int>();
@@ -336,12 +425,69 @@ void CharacterCreatorModule::spawnBody() {
     const ModelModule::ModelId partsModel = m_models->add(m_partsBake.model, "character_creator/parts");
     m_body = m_models->spawn(bodyModel);
     m_parts = m_models->spawn(partsModel);
+
+    // The scalp cap: the body's triangles where hair grows (on the body
+    // as it starts; the triangles then follow every slider).
+    const HumanScalp scalp = findScalp(*m_pack, m_human->shapedPositions());
+    std::vector<bool> onScalp(m_pack->positions().size(), false);
+    for (uint32_t v : scalp.verts) onScalp[v] = true;
+    const ModelMesh& skin = m_bodyBake.model.meshes[0];
+    const std::vector<uint32_t>& from = m_bodyBake.sourceVertex[0];
+    ModelMesh cap;
+    cap.name = "scalp";
+    std::map<uint32_t, uint32_t> capIndex;
+    for (size_t t = 0; t + 2 < skin.indices.size(); t += 3) {
+        const uint32_t a = skin.indices[t], b = skin.indices[t + 1], c = skin.indices[t + 2];
+        if (!onScalp[from[a]] || !onScalp[from[b]] || !onScalp[from[c]]) continue;
+        for (uint32_t v : { a, b, c }) {
+            auto [it, added] = capIndex.emplace(v, static_cast<uint32_t>(m_capFrom.size()));
+            if (added) {
+                m_capFrom.push_back(v);
+                cap.vertices.push_back(skin.vertices[v]);
+            }
+            cap.indices.push_back(it->second);
+        }
+    }
+    if (!cap.indices.empty()) {
+        m_capModel.meshes.push_back(std::move(cap));
+        ModelMaterial m;
+        m.name = "scalp";
+        m.roughness = 0.9f;
+        m_capModel.materials.push_back(m);
+        moveCap();
+        // Bounds for culling: the whole body's, since the sliders move the head.
+        m_capModel.boundsMin = m_bodyBake.model.boundsMin - glm::vec3(0.2f);
+        m_capModel.boundsMax = m_bodyBake.model.boundsMax + glm::vec3(0.2f);
+        m_cap = m_models->spawn(m_models->add(m_capModel, "character_creator/scalp"));
+    }
     applyColours();
     m_shapeDirty = true;
 }
 
 void CharacterCreatorModule::applyColours() {
     if (m_body) m_models->setTint(m_body, m_look.skin);
+    if (m_cap) {
+        m_models->setVisible(m_cap, !m_look.hair.empty());
+        m_models->setTint(m_cap, glm::mix(m_look.skin, m_look.hairRoot, 0.95f));
+    }
+}
+
+void CharacterCreatorModule::moveCap() {
+    if (m_capModel.meshes.empty()) return;
+    const ModelMesh& skin = m_bodyBake.model.meshes[0];
+    ModelMesh& cap = m_capModel.meshes[0];
+    for (size_t i = 0; i < m_capFrom.size(); ++i) {
+        const ModelVertex& v = skin.vertices[m_capFrom[i]];
+        cap.vertices[i].position = v.position + v.normal * 0.002f; // over the skin, clear of depth fighting
+        cap.vertices[i].normal = v.normal;
+    }
+    if (!m_cap) return;
+    std::vector<std::vector<glm::vec3>> pos(1), nrm(1);
+    for (const ModelVertex& v : cap.vertices) {
+        pos[0].push_back(v.position);
+        nrm[0].push_back(v.normal);
+    }
+    m_models->setDeformedVertices(m_cap, pos, nrm, /*modelSpace=*/true);
 }
 
 void CharacterCreatorModule::reshape() {
@@ -358,6 +504,7 @@ void CharacterCreatorModule::reshape() {
         }
         m_models->setDeformedVertices(inst, pos, nrm, /*modelSpace=*/true);
     }
+    moveCap();
     m_code = shareCode();
     m_codeShort = m_code.size() > 40 ? m_code.substr(0, 36) + "... (" + std::to_string(m_code.size()) + " letters)" : m_code;
     m_handle.DirtyVariable("code");
@@ -387,8 +534,12 @@ void CharacterCreatorModule::fillSliders() {
             s.value = s.shown = m_human->get(m.name);
             m_sliders.push_back(std::move(s));
         }
+    m_hairStyle = m_look.hair;
+    m_hairLength = m_hairLengthShown = m_look.hairLength;
     m_handle.DirtyVariable("sliders");
     m_handle.DirtyVariable("tab");
+    m_handle.DirtyVariable("hair_style");
+    m_handle.DirtyVariable("hair_length");
 }
 
 void CharacterCreatorModule::pushUndo() {
@@ -447,6 +598,16 @@ void CharacterCreatorModule::randomise(bool everything) {
             const NamedColour& t = tones[std::uniform_int_distribution<size_t>(0, tones.size() - 1)(m_rng)];
             m_look.skin = t.rgb;
             applyColours();
+            const auto& choices = hairChoices();
+            m_look.hair = choices[std::uniform_int_distribution<size_t>(1, choices.size() - 1)(m_rng)].first;
+            const auto& colours = hairColours();
+            // Grey and white mostly on older people.
+            const size_t last = m_human->get("macrodetails/Age") > 0.75f ? colours.size() - 1 : colours.size() - 3;
+            const HairColour& c = colours[std::uniform_int_distribution<size_t>(0, last)(m_rng)];
+            m_look.hairRoot = c.root;
+            m_look.hairTip = c.tip;
+            m_look.hairLength = std::clamp(1.0f + n(m_rng) * 0.15f, 0.7f, 1.3f);
+            m_hairDirty = true;
         }
     }
     m_shapeDirty = true;
@@ -478,15 +639,22 @@ void CharacterCreatorModule::update(const UpdateContext& ctx) {
             m_handle.DirtyVariable("sliders");
         }
     }
+    if (std::abs(m_hairLength - m_hairLengthShown) > 0.004f) { // the length slider
+        m_look.hairLength = m_hairLengthShown = m_hairLength;
+        m_hairDirty = true;
+        m_sinceEdit = 0.0f;
+    }
     if (m_shapeDirty) {
         m_shapeDirty = false;
+        m_hairDirty = true; // roots on the new scalp, once the sliders rest
         reshape();
         // A new person (random, undo, load) may be a head taller: frame it
         // again. Not while a slider is dragged, so the camera holds still.
         if (!dragged) setView(m_view);
     }
     // CI (KKE_CREATOR_SELFTEST=1): a random person, through a share code
-    // and back, must come out the same and keep standing on the floor.
+    // and back, must come out the same, stand on the floor and have its
+    // hairstyle on its head.
     if (!m_selfTested && dev::env("KKE_CREATOR_SELFTEST")) {
         m_selfTested = true;
         randomise(true);
@@ -498,9 +666,13 @@ void CharacterCreatorModule::update(const UpdateContext& ctx) {
         reshape();
         const bool same = parsed && shareCode() == code;
         const bool floor = std::abs(m_bodyBake.model.boundsMin.y) < 1e-3f;
-        log::get(name())->info("creator self-test {} (code {}, floor {})", same && floor ? "passed" : "FAILED",
-                               same ? "round-trips" : "differs", floor ? "ok" : "off");
+        buildHair(); // the random hairstyle on the random head
+        const bool hair = m_look.hair.empty() || (m_hair && m_world->hairStats(m_hair).guides > 40);
+        log::get(name())->info("creator self-test {} (code {}, floor {}, hair '{}' {})", same && floor && hair ? "passed" : "FAILED",
+                               same ? "round-trips" : "differs", floor ? "ok" : "off", m_look.hair, hair ? "ok" : "missing");
     }
+    if (m_hairDirty && m_sinceEdit > 0.35f) buildHair();
+    if (m_hair && m_hairDrawn && m_world->hairPositions(m_hair, m_guides)) m_hairDrawn->update(m_guides, m_figure);
     if (!m_status.empty() && (m_statusTime -= ctx.dt) <= 0.0f) {
         m_status.clear();
         m_handle.DirtyVariable("status");
@@ -567,6 +739,7 @@ void CharacterCreatorModule::setLook(const HumanLook& look) {
     applyLook(*m_human, look);
     applyColours();
     m_shapeDirty = true;
+    m_hairDirty = true;
     fillSliders();
 }
 
@@ -609,11 +782,89 @@ void CharacterCreatorModule::load() {
 }
 
 void CharacterCreatorModule::shutdown() {
+    if (m_hairDrawn) m_app->renderer().retire(std::move(m_hairDrawn));
+    m_world.reset();
     if (m_doc) {
         m_doc->Close();
         m_doc = nullptr;
     }
     if (m_ui && m_ui->context()) m_ui->context()->RemoveDataModel("creator");
+}
+
+void CharacterCreatorModule::buildWorld() {
+    RigidWorld::Settings settings;
+    settings.threads = 1; // a few hundred strands: a worker is plenty, the game keeps the rest
+    m_world = std::make_unique<RigidWorld>(settings);
+}
+
+void CharacterCreatorModule::buildHair() {
+    m_hairDirty = false;
+    if (!m_world) return;
+    if (m_hair) m_world->removeHair(m_hair);
+    m_hair = 0;
+    if (m_hairDrawn) m_app->renderer().retire(std::move(m_hairDrawn));
+    // The body as it is now is what the hair falls on: a mesh only cloth
+    // and hair feel, turned with the figure.
+    if (m_bodyCollider != RigidWorld::kNoBody) m_world->remove(m_bodyCollider);
+    m_bodyCollider = RigidWorld::kNoBody;
+    RigidWorld::BodyDesc body;
+    body.shape = RigidWorld::Shape::Mesh;
+    body.motion = RigidWorld::Motion::Static; // a mesh can't be kinematic in Jolt (no mass); turned with setTransform
+    body.clothOnly = true;
+    for (const ModelMesh& mesh : m_bodyBake.model.meshes) {
+        const auto base = static_cast<uint32_t>(body.points.size());
+        for (const ModelVertex& v : mesh.vertices) body.points.push_back(v.position);
+        for (uint32_t i : mesh.indices) body.indices.push_back(base + i);
+    }
+    body.rotation = glm::angleAxis(m_yaw, glm::vec3(0, 1, 0));
+    m_bodyCollider = m_world->add(body);
+
+    applyColours(); // the scalp cap
+    if (m_look.hair.empty()) return;
+    HairDesc d;
+    d.style.rootColor = m_look.hairRoot;
+    d.style.tipColor = m_look.hairTip;
+    if (!hairOnHuman(d, m_look.hair, *m_pack, m_human->shapedPositions(), kHairGuides)) {
+        log::get(name())->warn("hair: no hairstyle '{}' (kke::hairstyleNames(), hairStyleNames())", m_look.hair);
+        return;
+    }
+    d.style.length *= std::clamp(m_look.hairLength, 0.3f, 2.0f);
+    d.wind = 0.0f; // indoors
+    d.bindPose = glm::mat4(1.0f); // the shaped body faces +Z at the origin
+    m_hair = m_world->addHair(d);
+    m_world->setHairJoint(m_hair, m_figure);
+    m_hairDrawn = std::make_unique<HairRenderer>(*m_app);
+    m_hairDrawn->build(d);
+}
+
+void CharacterCreatorModule::placeFigure() {
+    m_figure = glm::rotate(glm::mat4(1.0f), m_yaw, glm::vec3(0, 1, 0));
+    if (m_body) m_models->setTransform(m_body, m_figure);
+    if (m_parts) m_models->setTransform(m_parts, m_figure);
+    if (m_cap) m_models->setTransform(m_cap, m_figure);
+}
+
+void CharacterCreatorModule::fixedUpdate(const FixedUpdateContext& ctx) {
+    if (!m_world) return;
+    if (m_turntable) m_yaw = std::fmod(m_yaw + ctx.fixedDt * 0.7f, 2.0f * kPi);
+    const glm::mat4 before = m_figure;
+    placeFigure();
+    if (m_bodyCollider != RigidWorld::kNoBody && before != m_figure)
+        m_world->setTransform(m_bodyCollider, glm::vec3(0.0f), glm::angleAxis(m_yaw, glm::vec3(0, 1, 0)));
+    if (m_hair) m_world->setHairJoint(m_hair, m_figure);
+    m_world->step(ctx.fixedDt);
+}
+
+void CharacterCreatorModule::compute(VkCommandBuffer cmd) {
+    if (m_hairDrawn && m_hair) m_hairDrawn->compute(cmd); // the hairs' points, before the passes draw them
+}
+
+void CharacterCreatorModule::render(const RenderContext& ctx) {
+    if (m_hairDrawn && m_hair && m_open) m_hairDrawn->draw(ctx);
+}
+
+void CharacterCreatorModule::renderShadow(const ShadowRenderContext& ctx) {
+    if (m_hairDrawn && m_hair && m_open) m_hairDrawn->drawShadow(ctx, -m_app->lighting().lights[0].direction);
 }
 
 } // namespace kke
