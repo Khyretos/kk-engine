@@ -38,7 +38,8 @@ button.primary:hover { background-color: #ffb04a; }
 .tab.on { background-color: #bf4eff; color: #0c0917; font-weight: bold; }
 .tools { margin-bottom: 4dp; }
 
-#sliders { position: absolute; left: 16dp; right: 8dp; top: 150dp; bottom: 12dp; overflow-y: auto; padding-right: 8dp; }
+#sliders { position: absolute; left: 16dp; right: 8dp; top: 186dp; bottom: 12dp; overflow-y: auto; padding-right: 8dp; }
+#sliders.with-presets { top: 224dp; } /* the body type buttons above */
 .slider { display: block; height: 30dp; }
 .slider .label { display: inline-block; width: 178dp; color: #f4eefc; font-size: 13dp; vertical-align: middle; }
 .slider .value { display: inline-block; width: 40dp; text-align: right; color: #f3941f; font-size: 12dp; }

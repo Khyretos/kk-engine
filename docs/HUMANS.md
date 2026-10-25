@@ -159,6 +159,43 @@ just over the ball with 32 sides, so they stay round on the coarse
 eyeball, skinned like the eye. The creator tints them the eye colour
 chosen on the Skin & eyes tab; `bakeSkinned()` includes them.
 
+## Brows and lashes
+
+MakeHuman's eyebrow and eyelash meshes live in its asset library, not in
+the base the pack is cooked from, so `addBrows(model, skin, colour)` (also
+in `kke/HumanEyes.h`) grows them from the face: about 260 short hairs per
+brow lying flat on the skin over the brow ridge (thick and upright at the
+inner end, thin and swept out at the outer), and 60 curled lashes along
+each upper lid's edge, where the skin meets the eyeball's top half. Each
+hair is a thin tapered strip with the skin weights of the skin under its
+root, so brows follow the face and lashes the lids. They come from a
+fixed seed: the same face gives the same brows, with the same number of
+hairs after any slider, which `update` relies on. The creator tints them
+the hair's root colour (lashes darker); `bakeSkinned()` includes them.
+
+## Skin
+
+A flat colour made every face look like a doll's. Three maps in the
+body's UV layout, `assets/humans/skin_*.png`, give it what a single tint
+can't, and the creator puts them on the body's material:
+
+- `skin_albedo.png` is near white and multiplies the chosen skin tone, so
+  every tone keeps its colour: redder lips, a blush over the cheeks, nose
+  and ears, darker eyelids, faint blotchiness all over.
+- `skin_normal.png`: pores and fine grain, stronger on the face than on
+  the body (the body's UV islands are larger on screen per texel, and the
+  same grain there read as hair).
+- `skin_roughness.png`: glossy lips, a slightly shiny T-zone.
+
+`tools/makehuman/bake_skin.py MAKEHUMAN_DATA assets/humans` makes them
+(Python standard library, about 20 s at 1024). Where each region lies
+comes from MakeHuman's CC0 skin weights (the lips are what the `oris*`
+mouth ring bones move, the lids `orbicularis*`, the cheeks `risorius*`
+and `levator05-06`, the nose `levator02-04`, the ears `temporalis02`);
+every pattern is generated from a fixed seed, so the maps are the
+project's own (MIT). They cost three texture reads in the normal model
+shader: no extra pass, the same frame time as the flat colour.
+
 ## Clothes
 
 `kke/HumanClothes.h` cuts clothes from two shapes MakeHuman's base mesh
@@ -183,6 +220,13 @@ builds a model of the suit's triangles from them (moved with the body on
 every slider drag, like the scalp cap) or a `ClothDesc` from the skirt's
 faces. A slider change re-cuts the clothes once it rests, since socks and
 skirts are cut by height.
+
+The suit follows the body's targets but lags the strongest muscle and
+bust ones by a few millimetres, and the skin showed through a shirt on a
+Strong body. So every garment vertex also remembers the skin vertex
+nearest it (`skinUnder`) and is pushed out along that vertex's normal
+until it is at least its layer's offset over the skin (`keepOutside`),
+on every drag and in `dress()`.
 
 For the game, `dress(model, human, clothes)` adds the clothes to a
 skinned bake as meshes on the body's own bones (`garmentMesh` keeps the
@@ -221,6 +265,6 @@ Saves are JSON (`lookToJson`, `lookFromJson`: format `kk-human`, version
 
 The plan for the whole creator is in the project's "Character creator
 plan" document. In order: animation through retargeting (MakeHuman bone
-names to the engine's canonical ones), skin and eyes, MakeHuman's textured `.mhclo` clothes (each clothing
+names to the engine's canonical ones), MakeHuman's textured `.mhclo` clothes (each clothing
 vertex rides three body vertices, so clothes fit every body),
 then facial expressions (ENG-F25).

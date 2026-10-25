@@ -125,6 +125,7 @@ private:
     void placeFigure();    // the body, its collider and the hair's head at m_yaw
     void moveCap();        // the scalp cap onto the body as it is now
     void moveIrises();     // the pupils and irises onto the eyes as they are now
+    void moveBrows();      // the brows and lashes onto the face as it is now
     void dressUp();        // m_look's clothes on the body as it is now
     void moveClothes();    // the fitted clothes onto the body as it is now (a drag)
     void undress();
@@ -137,6 +138,8 @@ private:
     OrbitCameraModule* m_orbit = nullptr;
     std::string m_saveName;
     std::unique_ptr<HumanPack> m_pack;
+    std::string m_humansDir; // assets/humans: the pack and the skin maps
+    void skinMaterial(ModelData& model) const; // the skin maps on "Human_body"
     std::unique_ptr<Human> m_human;
     HumanLook m_look;
     Human::Bake m_bodyBake, m_partsBake;
@@ -149,6 +152,8 @@ private:
     // Pupils and irises (kke/HumanEyes.h): white, tinted the eye colour.
     ModelModule::InstanceId m_irises = 0;
     ModelData m_irisModel;
+    ModelModule::InstanceId m_brows = 0;
+    ModelData m_browModel;
     bool m_shapeDirty = false;
     bool m_open = false;
     bool m_selfTested = false;

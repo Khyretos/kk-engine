@@ -55,11 +55,21 @@ GarmentShape garmentShape(const HumanPack& pack, const std::vector<glm::vec3>& s
 ModelMesh garmentMesh(const ModelMesh& mesh, const std::vector<uint32_t>& sourceVertex, const GarmentShape& shape,
                       std::vector<uint32_t>* from = nullptr);
 
+// MakeHuman's tights helper follows the body's targets, but lags the
+// strongest muscle and bust ones by a few millimetres, and the skin
+// showed through a shirt on a Strong body. skinUnder() finds the skin
+// vertex nearest each garment vertex (once, when it is put on);
+// keepOutside() then pushes every garment vertex out along that skin
+// vertex's normal until it is at least `gap` over the skin.
+std::vector<uint32_t> skinUnder(const ModelMesh& garment, const ModelMesh& skin);
+void keepOutside(ModelMesh& garment, const ModelMesh& skin, const std::vector<uint32_t>& under, float gap);
+
 // Adds the clothes to a bake of `human` (Human::bake(), skinned or not):
 // a mesh and a material in the garment's colour each, on the same bones,
 // so the game animates a dressed person as one model. Skirts are added as
 // skinned meshes too (they follow the hips and legs); a game that wants
 // them to swing runs them as cloth instead (garmentShape().cloth).
+// Every garment is kept outside the skin (keepOutside).
 void dress(ModelData& model, const Human& human, const std::vector<HumanLook::Worn>& clothes, bool skeleton = true);
 
 } // namespace kke

@@ -437,3 +437,70 @@ TEST(HumanEyes, IrisesSitOnTheFrontOfEachEye) {
     EXPECT_LT(pupilTop, eyeTop); // moved up with the taller body's eyes
     EXPECT_GT(pupilTop, eyeTop - 0.03f);
 }
+
+// addBrows grows each brow over its eye and the lashes along the lid,
+// skinned like the face, the same count after a reshape so update moves
+// them instead of adding more.
+TEST(HumanEyes, BrowsAndLashesSitOverEachEye) {
+    NEED_PACK();
+    kke::Human h(pack());
+    kke::Human::Bake b = h.bake();
+    kke::ModelMesh skin;
+    glm::vec3 eyeMin(1e9f), eyeMax(-1e9f);
+    for (const kke::ModelMesh& m : b.model.meshes) {
+        if (m.name == "body") skin = m;
+        if (m.name == "helper-l-eye" || m.name == "helper-r-eye")
+            for (const kke::ModelVertex& v : m.vertices) {
+                eyeMin = glm::min(eyeMin, v.position);
+                eyeMax = glm::max(eyeMax, v.position);
+            }
+    }
+    const size_t before = b.model.meshes.size();
+    ASSERT_TRUE(kke::addBrows(b.model, skin, glm::vec3(0.3f, 0.2f, 0.1f)));
+    ASSERT_EQ(b.model.meshes.size(), before + 2);
+    const kke::ModelMesh& brows = b.model.meshes[before];
+    const kke::ModelMesh& lashes = b.model.meshes[before + 1];
+    EXPECT_EQ(brows.name, "brows");
+    EXPECT_EQ(lashes.name, "lashes");
+    EXPECT_TRUE(brows.skinned);
+    EXPECT_GT(brows.indices.size(), 1000u);
+    EXPECT_GT(lashes.indices.size(), 300u);
+    for (const kke::ModelVertex& v : brows.vertices) {
+        EXPECT_GT(v.position.y, eyeMax.y - 0.002f); // above the eyes
+        EXPECT_LT(v.position.y, eyeMax.y + 0.04f);  // but on the brow, not the forehead
+        EXPECT_NEAR(v.weights.x + v.weights.y + v.weights.z + v.weights.w, 1.0f, 1e-4f);
+    }
+    for (const kke::ModelVertex& v : lashes.vertices) {
+        EXPECT_GT(v.position.z, eyeMin.z); // in front of the eyes' backs
+        EXPECT_GT(v.position.y, (eyeMin.y + eyeMax.y) * 0.5f - 0.004f); // the upper lids
+    }
+    EXPECT_EQ(b.model.materials[brows.material].baseColor, glm::vec3(0.3f, 0.2f, 0.1f));
+
+    h.set("macrodetails-height/Height", 1.0f);
+    h.reshape(b);
+    for (const kke::ModelMesh& m : b.model.meshes)
+        if (m.name == "body") skin = m;
+    const glm::vec3 first = b.model.meshes[before].vertices[0].position;
+    ASSERT_TRUE(kke::addBrows(b.model, skin, glm::vec3(1.0f), /*update=*/true));
+    EXPECT_EQ(b.model.meshes.size(), before + 2);
+    EXPECT_GT(b.model.meshes[before].vertices[0].position.y, first.y); // up with the taller face
+}
+
+// keepOutside lifts a garment pushed into the skin back over it.
+TEST(HumanClothes, KeepOutsideLiftsClothOffTheSkin) {
+    kke::ModelMesh skin, cloth;
+    for (int i = 0; i < 4; ++i) {
+        kke::ModelVertex v;
+        v.position = glm::vec3(static_cast<float>(i), 0.0f, 0.0f);
+        v.normal = glm::vec3(0.0f, 0.0f, 1.0f);
+        skin.vertices.push_back(v);
+        v.position.z = i % 2 ? 0.01f : -0.005f; // two inside, two well clear
+        cloth.vertices.push_back(v);
+    }
+    const std::vector<uint32_t> under = kke::skinUnder(cloth, skin);
+    ASSERT_EQ(under, (std::vector<uint32_t>{ 0, 1, 2, 3 }));
+    kke::keepOutside(cloth, skin, under, 0.003f);
+    EXPECT_NEAR(cloth.vertices[0].position.z, 0.003f, 1e-6f);
+    EXPECT_NEAR(cloth.vertices[1].position.z, 0.01f, 1e-6f);
+    EXPECT_NEAR(cloth.vertices[2].position.z, 0.003f, 1e-6f);
+}

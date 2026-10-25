@@ -166,6 +166,33 @@ ModelMesh garmentMesh(const ModelMesh& mesh, const std::vector<uint32_t>& source
     return out;
 }
 
+std::vector<uint32_t> skinUnder(const ModelMesh& garment, const ModelMesh& skin) {
+    std::vector<uint32_t> under(garment.vertices.size(), 0);
+    if (skin.vertices.empty()) return under;
+    for (size_t i = 0; i < garment.vertices.size(); ++i) {
+        float best = 1e30f;
+        for (size_t s = 0; s < skin.vertices.size(); ++s) {
+            const glm::vec3 d = skin.vertices[s].position - garment.vertices[i].position;
+            if (const float dd = glm::dot(d, d); dd < best) {
+                best = dd;
+                under[i] = static_cast<uint32_t>(s);
+            }
+        }
+    }
+    return under;
+}
+
+void keepOutside(ModelMesh& garment, const ModelMesh& skin, const std::vector<uint32_t>& under, float gap) {
+    if (under.size() != garment.vertices.size()) return;
+    for (size_t i = 0; i < under.size(); ++i) {
+        if (under[i] >= skin.vertices.size()) continue;
+        const ModelVertex& s = skin.vertices[under[i]];
+        const glm::vec3 n = glm::normalize(s.normal);
+        const float over = glm::dot(garment.vertices[i].position - s.position, n);
+        if (over < gap) garment.vertices[i].position += n * (gap - over);
+    }
+}
+
 void dress(ModelData& model, const Human& human, const std::vector<HumanLook::Worn>& clothes, bool skeleton) {
     if (clothes.empty()) return;
     Human::BakeOptions options;
@@ -173,12 +200,16 @@ void dress(ModelData& model, const Human& human, const std::vector<HumanLook::Wo
     options.skeleton = skeleton;
     const Human::Bake helpers = human.bake(options); // the same bones as any bake of this human
     const std::vector<glm::vec3> shaped = human.shapedPositions();
+    ModelMesh skin;
+    for (const ModelMesh& m : model.meshes)
+        if (m.name == "body") skin = m;
     for (const HumanLook::Worn& worn : clothes) {
         const GarmentShape shape = garmentShape(human.pack(), shaped, worn.id);
         for (size_t m = 0; m < helpers.model.meshes.size(); ++m) {
             if (helpers.model.meshes[m].name != shape.group) continue;
             ModelMesh mesh = garmentMesh(helpers.model.meshes[m], helpers.sourceVertex[m], shape);
             if (mesh.indices.empty()) break;
+            keepOutside(mesh, skin, skinUnder(mesh, skin), shape.offset);
             ModelMaterial mat;
             mat.name = "Clothes_" + worn.id;
             mat.baseColor = worn.colour;

@@ -282,6 +282,7 @@ struct CharacterCreatorModule::WornPiece {
     ModelModule::ModelId model = 0;
     ModelModule::InstanceId instance = 0;
     std::vector<uint32_t> from; // piece vertex -> body suit bake vertex
+    std::vector<uint32_t> under; // piece vertex -> the skin vertex it must stay over
     ModelData data;
     // Cloth.
     RigidWorld::ClothId cloth = 0;
@@ -309,6 +310,7 @@ void CharacterCreatorModule::init(Application& app) {
     std::vector<std::string> searched;
     const std::string dir = findAssetFolder("assets/humans", { "KKE_HUMANS_DIR" }, base ? base : "", &searched);
     if (dir.empty()) throw std::runtime_error("CharacterCreatorModule: assets/humans/makehuman.kkhpack not found (docs/HUMANS.md)");
+    m_humansDir = dir;
     m_pack = std::make_unique<HumanPack>(HumanPack::load(dir + "/makehuman.kkhpack"));
     m_human = std::make_unique<Human>(*m_pack);
     log::get(name())->info("human pack: {} targets, {} sliders, {}", m_pack->targets().size(), m_pack->modifiers().size(),
@@ -406,6 +408,7 @@ void CharacterCreatorModule::buildModel() {
     }
     c.RegisterArray<std::vector<GarmentView>>();
     c.Bind("garments", &m_garments);
+    c.RegisterArray<std::vector<Rml::String>>();
     c.Bind("presets", &m_presets);
     c.BindEventCallback("preset", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList& args) {
         if (!args.empty()) applyPreset(args[0].Get<Rml::String>());
@@ -448,6 +451,7 @@ void CharacterCreatorModule::buildModel() {
         if (i < 0 || i >= static_cast<int>(hairColours().size())) return;
         m_look.hairRoot = hairColours()[static_cast<size_t>(i)].root;
         m_look.hairTip = hairColours()[static_cast<size_t>(i)].tip;
+        applyColours(); // the brows
         buildHair();
     });
     c.BindEventCallback("wear", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList& args) {
@@ -550,7 +554,7 @@ void CharacterCreatorModule::spawnBody() {
     body.skeleton = false; // edited as plain vertices; bakeSkinned() makes the animated one
     m_bodyBake = m_human->bake(body);
     m_bodyBake.model.materials[0].baseColor = glm::vec3(1.0f); // the tint is the skin colour
-    m_bodyBake.model.materials[0].roughness = 0.55f;
+    skinMaterial(m_bodyBake.model);
     Human::BakeOptions parts;
     parts.groups = { "helper-l-eye", "helper-r-eye", "helper-upper-teeth", "helper-lower-teeth", "helper-tongue" };
     parts.skeleton = false;
@@ -568,6 +572,12 @@ void CharacterCreatorModule::spawnBody() {
         m_irisModel.boundsMin = m_bodyBake.model.boundsMin - glm::vec3(0.2f);
         m_irisModel.boundsMax = m_bodyBake.model.boundsMax + glm::vec3(0.2f);
         m_irises = m_models->spawn(m_models->add(m_irisModel, "character_creator/irises"));
+    }
+    moveBrows();
+    if (!m_browModel.meshes.empty()) {
+        m_browModel.boundsMin = m_bodyBake.model.boundsMin - glm::vec3(0.2f);
+        m_browModel.boundsMax = m_bodyBake.model.boundsMax + glm::vec3(0.2f);
+        m_brows = m_models->spawn(m_models->add(m_browModel, "character_creator/brows"));
     }
 
     // The scalp cap: the body's triangles where hair grows (on the body
@@ -611,6 +621,7 @@ void CharacterCreatorModule::spawnBody() {
 void CharacterCreatorModule::applyColours() {
     if (m_body) m_models->setTint(m_body, m_look.skin);
     if (m_irises) m_models->setTint(m_irises, m_look.eyes);
+    if (m_brows) m_models->setTint(m_brows, m_look.hairRoot);
     for (auto& w : m_worn) {
         for (const HumanLook::Worn& worn : m_look.clothes)
             if (worn.id == w->id) w->colour = w->fabric.color = worn.colour;
@@ -621,6 +632,22 @@ void CharacterCreatorModule::applyColours() {
         // The skin a shade darker in the hair's shadow: a scalp in the
         // hair's own colour showed as a patch with a hard edge (Kees).
         m_models->setTint(m_cap, m_look.skin * 0.95f);
+    }
+}
+
+void CharacterCreatorModule::skinMaterial(ModelData& model) const {
+    // tools/makehuman/bake_skin.py: lips, blush, lids, pores, gloss, in the
+    // body's UV layout; the albedo is a near-white multiplier on the tint.
+    namespace fs = std::filesystem;
+    const std::string albedo = m_humansDir + "/skin_albedo.png";
+    for (ModelMaterial& m : model.materials) {
+        if (m.name != "Human_body") continue;
+        m.roughness = 0.55f;
+        if (!fs::exists(albedo)) continue; // a pack without the maps: the plain colour
+        m.albedoTexture = albedo;
+        m.normalTexture = m_humansDir + "/skin_normal.png";
+        m.roughnessTexture = m_humansDir + "/skin_roughness.png";
+        m.roughness = 1.0f; // the map holds it
     }
 }
 
@@ -646,6 +673,30 @@ void CharacterCreatorModule::moveIrises() {
         }
     }
     if (m_irises) m_models->setDeformedVertices(m_irises, pos, nrm, /*modelSpace=*/true);
+}
+
+void CharacterCreatorModule::moveBrows() {
+    ModelData face = m_partsBake.model; // the eyes as the sliders have them now
+    const size_t first = face.meshes.size();
+    if (!addBrows(face, m_bodyBake.model.meshes[0], glm::vec3(1.0f))) return;
+    if (m_browModel.meshes.empty()) {
+        for (size_t m = first; m < face.meshes.size(); ++m) {
+            m_browModel.materials.push_back(face.materials[face.meshes[m].material]);
+            face.meshes[m].material = static_cast<uint32_t>(m_browModel.materials.size() - 1);
+            m_browModel.meshes.push_back(std::move(face.meshes[m]));
+        }
+        return;
+    }
+    std::vector<std::vector<glm::vec3>> pos, nrm;
+    for (size_t m = first; m < face.meshes.size(); ++m) {
+        pos.emplace_back();
+        nrm.emplace_back();
+        for (const ModelVertex& v : face.meshes[m].vertices) {
+            pos.back().push_back(v.position);
+            nrm.back().push_back(v.normal);
+        }
+    }
+    if (m_brows) m_models->setDeformedVertices(m_brows, pos, nrm, /*modelSpace=*/true);
 }
 
 void CharacterCreatorModule::moveCap() {
@@ -682,6 +733,7 @@ void CharacterCreatorModule::reshape() {
     }
     moveCap();
     moveIrises();
+    moveBrows();
     moveClothes();
     m_code = shareCode();
     m_codeShort = m_code.size() > 40 ? m_code.substr(0, 36) + "... (" + std::to_string(m_code.size()) + " letters)" : m_code;
@@ -952,6 +1004,7 @@ void CharacterCreatorModule::open() {
     if (m_body) m_models->setVisible(m_body, true);
     if (m_parts) m_models->setVisible(m_parts, true);
     if (m_irises) m_models->setVisible(m_irises, true);
+    if (m_brows) m_models->setVisible(m_brows, true);
     for (auto& w : m_worn)
         if (w->instance) m_models->setVisible(w->instance, true);
 }
@@ -962,6 +1015,7 @@ void CharacterCreatorModule::close() {
     if (m_body) m_models->setVisible(m_body, false);
     if (m_parts) m_models->setVisible(m_parts, false);
     if (m_irises) m_models->setVisible(m_irises, false);
+    if (m_brows) m_models->setVisible(m_brows, false);
     for (auto& w : m_worn)
         if (w->instance) m_models->setVisible(w->instance, false);
 }
@@ -992,9 +1046,16 @@ ModelData CharacterCreatorModule::bakeSkinned() const {
     Human h(*m_pack);
     applyLook(h, look());
     Human::Bake b = h.bake();
+    skinMaterial(b.model);
     for (ModelMaterial& m : b.model.materials)
         if (m.name == "Human_body") m.baseColor = look().skin;
     addIrises(b.model, look().eyes);
+    for (const ModelMesh& m : b.model.meshes)
+        if (m.name == "body") {
+            const ModelMesh skin = m; // a copy: addBrows adds meshes to the model
+            addBrows(b.model, skin, look().hairRoot);
+            break;
+        }
     dress(b.model, h, look().clothes);
     return std::move(b.model);
 }
@@ -1191,6 +1252,9 @@ void CharacterCreatorModule::moveClothes() {
             mesh.vertices[i].position = v.position + v.normal * w->offset;
             mesh.vertices[i].normal = v.normal;
         }
+        const ModelMesh& skin = m_bodyBake.model.meshes[0];
+        if (w->under.empty()) w->under = skinUnder(mesh, skin);
+        keepOutside(mesh, skin, w->under, w->offset);
         if (!w->instance) continue;
         std::vector<std::vector<glm::vec3>> pos(1), nrm(1);
         for (const ModelVertex& v : mesh.vertices) {
@@ -1244,6 +1308,7 @@ void CharacterCreatorModule::placeFigure() {
     if (m_body) m_models->setTransform(m_body, m_figure);
     if (m_parts) m_models->setTransform(m_parts, m_figure);
     if (m_irises) m_models->setTransform(m_irises, m_figure);
+    if (m_brows) m_models->setTransform(m_brows, m_figure);
     if (m_cap) m_models->setTransform(m_cap, m_figure);
     for (auto& w : m_worn)
         if (w->instance) m_models->setTransform(w->instance, m_figure);
