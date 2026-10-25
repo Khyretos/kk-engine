@@ -68,7 +68,8 @@ TEST(HumanPack, RejectsWhatIsNotAPack) {
 TEST(Human, TwoSidedSlidersPickTheirSide) {
     NEED_PACK();
     kke::Human h(pack());
-    EXPECT_TRUE(std::none_of(h.targetWeights().begin(), h.targetWeights().end(),
+    const auto weights = h.targetWeights(); // a copy: begin and end must come from one vector
+    EXPECT_TRUE(std::none_of(weights.begin(), weights.end(),
                              [&](auto tw) { return pack().targets()[tw.first].name.rfind("nose/", 0) == 0; }));
     auto weightOf = [&](const std::string& target) {
         for (auto [t, w] : h.targetWeights())
