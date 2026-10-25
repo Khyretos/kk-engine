@@ -18,6 +18,15 @@ foreach(f ${GAME_SCRIPT_FILES})
     get_filename_component(fname ${f} NAME)
     engine_copy_runtime_file(${GAME_NAME} ${f} games/${GAME_NAME}/scripts/${fname})
 endforeach()
+# The game's own models and scenes (models/ and scenes/, any subfolders):
+# models.load and scene.load find them by name, and the F4 scene editor
+# saves into scenes/ here while you develop. Copied next to the executable
+# like the scripts.
+file(GLOB_RECURSE GAME_DATA_FILES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/models/* ${CMAKE_CURRENT_SOURCE_DIR}/scenes/*)
+foreach(f ${GAME_DATA_FILES})
+    file(RELATIVE_PATH rel ${CMAKE_CURRENT_SOURCE_DIR} ${f})
+    engine_copy_runtime_file(${GAME_NAME} ${f} games/${GAME_NAME}/${rel})
+endforeach()
 foreach(font NotoSans-Regular.ttf NotoSans-Bold.ttf NotoSans-Italic.ttf NotoColorEmoji.ttf)
     engine_copy_runtime_file(${GAME_NAME} ${CMAKE_SOURCE_DIR}/assets/fonts/${font} assets/fonts/${font})
 endforeach()

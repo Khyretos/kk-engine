@@ -115,12 +115,31 @@ bool ScriptModule::runsHere(const std::string& path, bool authority) {
     return true;
 }
 
+std::string ScriptModule::gameFolder() const {
+    std::filesystem::path dir(m_dir);
+    if (!dir.has_filename()) dir = dir.parent_path(); // "games/x/scripts/"
+    return dir.parent_path().string();
+}
+
+std::vector<std::string> ScriptModule::sceneFolders() const {
+    std::vector<std::string> out;
+    std::error_code ec;
+    const std::filesystem::path own = std::filesystem::path(gameFolder()) / "scenes";
+    if (!gameFolder().empty() && std::filesystem::is_directory(own, ec)) out.push_back(own.string());
+    const std::string shared = findAssetFolder("scenes", {"KKE_SCENES_DIR"}, baseDir());
+    if (!shared.empty() && std::filesystem::absolute(shared, ec) != std::filesystem::absolute(own, ec)) out.push_back(shared);
+    return out;
+}
+
 const AssetCatalog& ScriptModule::catalog() {
     if (!m_catalogScanned) {
         m_catalogScanned = true;
         const std::string root = findAssetFolder("assets/synty", {"KKE_ASSETS_DIR", "KKE_SYNTY_DIR"}, baseDir());
         if (!root.empty()) m_catalog = AssetCatalog::scan(root);
         log("", "asset catalog: " + std::to_string(m_catalog.assets.size()) + " assets" + (root.empty() ? " (no packs installed)" : " in " + root));
+        const std::string own = (std::filesystem::path(gameFolder()) / "models").string();
+        if (const size_t n = gameFolder().empty() ? 0 : m_catalog.addOwnModels(own))
+            log("", "the game's own models: " + std::to_string(n) + " in " + own);
     }
     return m_catalog;
 }
@@ -554,18 +573,17 @@ void ScriptModule::bindScenes() {
     auto* models = m_app->getModule<ModelModule>();
     if (!models) return;
     ScriptVM& vm = *m_vm;
-    auto sceneDir = []() { return findAssetFolder("scenes", {"KKE_SCENES_DIR"}, baseDir()); };
-
-    // scene.list() -> { "forest_trail", "town_block", ... }
-    vm.registerFunction("scene", "list", [sceneDir](lua_State* L) {
+    // scene.list() -> { "forest_trail", "town_block", ... }: the game's own
+    // scenes/ folder and the shared one (sceneFolders()).
+    vm.registerFunction("scene", "list", [this](lua_State* L) {
         lua_newtable(L);
-        const std::string dir = sceneDir();
-        if (dir.empty()) return 1;
         std::vector<std::string> names;
-        std::error_code ec;
-        for (const auto& e : std::filesystem::directory_iterator(dir, ec)) {
-            // forest.scene.json, .yml or .yaml: listed once whichever exist
-            if (std::string n = datafile::nameOf(e.path().filename(), ".scene"); !n.empty()) names.push_back(std::move(n));
+        for (const std::string& dir : sceneFolders()) {
+            std::error_code ec;
+            for (const auto& e : std::filesystem::directory_iterator(dir, ec)) {
+                // forest.scene.json, .yml or .yaml: listed once whichever exist
+                if (std::string n = datafile::nameOf(e.path().filename(), ".scene"); !n.empty()) names.push_back(std::move(n));
+            }
         }
         std::sort(names.begin(), names.end());
         names.erase(std::unique(names.begin(), names.end()), names.end());
@@ -576,7 +594,7 @@ void ScriptModule::bindScenes() {
         return 1;
     });
     // scene.load(name, origin) -> scene id (+ how many assets were missing), or nil + reason
-    vm.registerFunction("scene", "load", [this, models, sceneDir](lua_State* L) {
+    vm.registerFunction("scene", "load", [this, models](lua_State* L) {
         const std::string name = luaL_checkstring(L, 1);
         if (!safeRelativePath(name) || name.find('/') != std::string::npos)
             return luaL_error(L, "scene.load: '%s' must be a scene name from scene.list()", name.c_str());
@@ -584,10 +602,15 @@ void ScriptModule::bindScenes() {
         size_t mine = 0;
         for (const Scene& s : m_scenes) mine += s.source == src;
         if (mine >= maxScenesPerScript) return luaL_error(L, "scene.load: this script already has %d scenes loaded (maxScenesPerScript)", int(maxScenesPerScript));
-        const std::string dir = sceneDir();
-        const std::filesystem::path file = datafile::resolve(std::filesystem::path(dir) / (name + ".scene.json"));
+        // The first scenes folder that has it: the game's own, then the shared one.
+        std::filesystem::path file;
         std::error_code ec;
-        if (dir.empty() || !std::filesystem::is_regular_file(file, ec)) {
+        for (const std::string& dir : sceneFolders()) {
+            file = datafile::resolve(std::filesystem::path(dir) / (name + ".scene.json"));
+            if (std::filesystem::is_regular_file(file, ec)) break;
+            file.clear();
+        }
+        if (file.empty()) {
             lua_pushnil(L);
             lua_pushfstring(L, "no scene '%s' in the scenes folder", name.c_str());
             return 2;

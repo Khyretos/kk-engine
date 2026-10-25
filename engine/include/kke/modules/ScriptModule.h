@@ -92,6 +92,14 @@ public:
 
     ScriptVM& vm() { return *m_vm; }
     const std::string& scriptsDir() const { return m_dir; }
+    // The game's own folder: the one holding scriptsDir() (games/<game>
+    // while you develop, games/<game> next to the executable when shipped).
+    // Its models/ folder joins the asset catalog and its scenes/ folder is
+    // searched first by scene.list and scene.load.
+    std::string gameFolder() const;
+    // Where scene.load looks, in order: <game folder>/scenes, then the shared
+    // scenes/ folder (KKE_SCENES_DIR). Only folders that exist.
+    std::vector<std::string> sceneFolders() const;
     void reloadAll();
 
     int maxContactsPerFrame = 32;
@@ -152,7 +160,7 @@ private:
     bool runCallAtomically(const std::function<bool()>& run); // ScriptCalls::Link::atomically
     void scanFolder(bool reloadChanged);
     void log(const std::string& source, const std::string& text);
-    const AssetCatalog& catalog(); // installed packs, scanned on first use
+    const AssetCatalog& catalog(); // the game's models/ folder, then the installed packs; scanned on first use
     Document* document(int id);
 
     Application* m_app = nullptr;

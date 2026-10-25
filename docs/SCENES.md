@@ -22,6 +22,23 @@ same scene.
   headless, and the town block again after a save round trip. They skip
   when the packs are missing (CI).
 
+## A game's own models and scenes
+
+A game folder (`games/<game>/`, made by `tools/new_game`) can hold its own
+`models/` and `scenes/` folders next to `scripts/`:
+
+- `models/`: `.glb`, `.gltf`, `.fbx` or `.obj` files, in any subfolders.
+  They join the asset catalog as the pack `game`, searched before the
+  installed packs, so `models.load("Fox")` and a scene object with
+  `"asset": "Fox"` find `models/Fox.glb`. They load with their animation
+  clips, and no pack atlas is guessed for them.
+- `scenes/`: `*.scene.json` files. `scene.list()` and `scene.load(name)`
+  look here first, then in the shared `scenes/` folder.
+
+Both are copied next to the executable with the scripts (the template's
+CMakeLists.txt), so a shipped game finds them too. While you develop they
+are read from the game's source folder.
+
 ## Getting the packs
 
 `tools/fetch_assets.sh` downloads packs from the asset share and extracts
