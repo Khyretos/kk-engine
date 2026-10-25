@@ -205,7 +205,7 @@ Vectors: `Vec(x, y, z)` with `+ - * /`, `:length()`, `:normalized()`,
 | Table | Functions |
 |---|---|
 | `kke` | `log(...)`, `time()`, `dt()` (and plain `print`) |
-| `physics` | `box{pos, size, density, material, color, velocity, bounce, friction, static, visible, glass, cloudy, group}` / `sphere{pos, radius, ...}` → id (`visible = false`: collides but isn't drawn, an invisible wall; `glass = true`: see-through, tinted by `color`, `cloudy` 0 clear to 1 milky; the look reaches every player); `showHidden([on])` → on: draw the invisible ones faintly, on this machine (building a level; also a checkbox in the F1 Scripts panel); `remove(id)`, `position(id)`, `velocity(id)`, `setVelocity(id, v)`, `impulse(id, v [, point])`, `raycast(from, dir [, maxDist])` → `{pos, normal, distance, body, material}` or nil, `count()` |
+| `physics` | `box{pos, size, density, material, color, velocity, bounce, friction, static, visible, glass, cloudy, group}` / `sphere{pos, radius, ...}` → id (`visible = false`: collides but isn't drawn, an invisible wall; `glass = true`: see-through, tinted by `color`, `cloudy` 0 clear to 1 milky; the look reaches every player); `showHidden([on])` → on: draw the invisible ones faintly, on this machine (building a level; also a checkbox in the F1 Scripts panel); `remove(id)`, `position(id)`, `velocity(id)`, `setVelocity(id, v)`, `impulse(id, v [, point])`, `raycast(from, dir [, maxDist])` → `{pos, normal, distance, body, material}` or nil, `count()`; joints ("Joints" below): `joint{type, a, b, pos, posB, axis, min, max, frequency, damping, friction}` → joint or nil + reason, `motor(joint, mode [, target, maxForce])`, `jointValue(joint)`, `removeJoint(joint)` |
 | `audio` | `impact(pos, material, intensity)` (material id or name), `materials()` → `{Stone = 1, Wood = 2, ...}` |
 | `input` | `define(id, label, defaultKey [, padButton])` (pad button names: `"a"`, `"b"`, `"x"`, `"y"`, `"lb"`, `"rb"`, `"lt"`, `"rt"`, `"start"`, `"back"`, `"dpad_up"`...), `pressed(id)`, `held(id)`, `value(id)`; actions show up in the rebinding screen like any other. Button prompts ([INPUT.md](INPUT.md) "Button prompts"): `style([player])` → `"keyboard"`, `"xbox"`, `"playstation"`, `"switch"`, `"steamdeck"`, `"steamcontroller"` or `"touch"`, the device the player uses now; `prompt(action or button [, label, player])` → RML with the button's picture (for `ui.rml`); `promptText("{jump} jump, {sprint} run" [, player])` → RML; `glyph(action or button [, player or style])` → the picture's path (for your own `<img>`), or nil + why. In documents, `<prompt action="jump" label="Jump"/>` redraws by itself. |
 | `camera` | `position()`, `target()`, `forward()` |
@@ -224,8 +224,43 @@ Everything a script makes (bodies, models, lights, breakables, documents,
 scenes, click handlers) belongs to it: reloading, unloading or stopping
 the script removes it all. Ids from another script, or made up, are an
 error naming the id. Each kind has a per-script budget
-(`ScriptModule::max*PerScript`: 2,000 bodies and models, 64 breakables,
-16 documents, 4 scenes).
+(`ScriptModule::max*PerScript`: 2,000 bodies, models and joints, 64
+breakables, 16 documents, 4 scenes).
+
+### Joints
+
+`physics.joint{...}` holds two script bodies together (`a` and `b`), or
+one to the world (leave `b` out). Points and axes are in world space, as
+the bodies stand when you make it; removing a body removes its joints.
+
+| `type` | What | Fields |
+|---|---|---|
+| `"hinge"` | doors, wheels, flaps, a see-saw | `pos` (where it turns), `axis` (turns about it), `min`/`max` (degrees from now, within -180..180), `friction` (N·m) |
+| `"slider"` | drawers, lifts, pistons | `pos`, `axis` (slides along it), `min` and `max` (metres along the axis from now; give both), `friction` (N) |
+| `"spring"` | bouncy links, suspension | `pos` (a's end, default its centre), `posB` (b's end, or the world point), `frequency` (Hz, default 2: 1 soft to 5 firm), `damping` (0 bounces to 1 settles, default 0.3), `min`/`max` (shortest and longest; default its length now) |
+| `"rope"` | ropes, chains, a grappling line | like spring, but only pulls: slack up to `max` (default its length now) |
+| `"ball"` | a chain link, a ball joint | `pos` (where they join, default halfway) |
+| `"fixed"` | welds | none: they stay as they are now |
+
+Hinges and sliders take a motor: `physics.motor(j, "velocity", 90)` turns
+a hinge at 90 degrees a second (sliders: m/s), `physics.motor(j,
+"position", 30)` drives it to 30 degrees (sliders: metres), and `"off"`
+lets it go. A fourth number caps its strength (N·m or N; left out: as
+strong as needed, which also pushes a velocity motor through the joint's
+limits: give a limited joint's motor a cap). `physics.jointValue(j)` reads a hinge's angle, a
+slider's travel or a spring's length now.
+
+```lua
+-- 5 cm off the floor: a door dragging on the ground needs far more push
+local door = physics.box{ pos = Vec(0.5, 1.05, 0), size = Vec(1, 2, 0.1) }
+local hinge = physics.joint{ type = "hinge", a = door, pos = Vec(0, 1.05, 0), axis = Vec(0, 1, 0), min = 0, max = 100 }
+physics.motor(hinge, "position", 90, 50)          -- swing it open, gently
+local lamp = physics.sphere{ pos = Vec(3, 2, 0), radius = 0.2 }
+physics.joint{ type = "rope", a = lamp, posB = Vec(3, 4, 0) } -- hangs from the ceiling
+```
+
+Joints are made where the script runs: an `sv_` script's joints hold on
+the host, and players see where the bodies go.
 
 ### Play blocks (`play`)
 

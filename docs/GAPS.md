@@ -115,7 +115,7 @@ by area. The goal is parity with the big engines and more.
 | ENG-F34 | Physics | Debris with secondary collisions (G10 leftovers) | 🟡 |
 | ENG-F35 | Physics | Cloth-to-cloth collision | ✅ |
 | ENG-F36 | Physics | Strand hair (docs/HAIR.md) | ✅ |
-| ENG-F37 | Physics | Joints and constraints API in Lua (hinge, slider, spring, motor) | ⬜ |
+| ENG-F37 | Physics | Joints and constraints API in Lua (hinge, slider, spring, motor): `RigidWorld::addJoint` (fixed, ball, hinge, slider, spring/rope) with motors, Lua `physics.joint`/`motor`/`jointValue` | ✅ |
 | ENG-F38 | Audio | HRTF spatial audio | ⬜ |
 | ENG-F39 | Audio | Dynamic, adaptive music | ⬜ |
 | ENG-F40 | Audio | Spatial voice chat (proximity voice exists) | ✅ |

@@ -552,6 +552,100 @@ void ScriptModule::bindAll() {
             return 1;
         });
         vm.registerFunction("physics", "count", [this](lua_State* L) { lua_pushinteger(L, lua_Integer(m_bodies.size())); return 1; });
+        // physics.joint{type, a, b, pos, posB, axis, min, max, frequency,
+        // damping, friction} -> joint, or nil + reason (docs/SCRIPTING.md
+        // "Joints"). b left out: a is held to the world.
+        vm.registerFunction("physics", "joint", [this, rbm, owned](lua_State* L) {
+            luaL_checktype(L, 1, LUA_TTABLE);
+            const std::string src = m_vm->currentSource();
+            size_t mine = 0;
+            for (const Joint& j : m_joints) mine += j.source == src && rbm->world().hasJoint(j.id);
+            if (mine >= maxJointsPerScript) return luaL_error(L, "physics.joint: this script already has %d joints (maxJointsPerScript)", int(maxJointsPerScript));
+            lua_getfield(L, 1, "type");
+            const std::string type = lua_isstring(L, -1) ? lua_tostring(L, -1) : "ball";
+            lua_pop(L, 1);
+            RigidWorld::JointDesc d;
+            bool rope = false;
+            if (type == "fixed") d.type = RigidWorld::JointType::Fixed;
+            else if (type == "ball") d.type = RigidWorld::JointType::Ball;
+            else if (type == "hinge") d.type = RigidWorld::JointType::Hinge;
+            else if (type == "slider") d.type = RigidWorld::JointType::Slider;
+            else if (type == "spring") d.type = RigidWorld::JointType::Spring;
+            else if (type == "rope") { d.type = RigidWorld::JointType::Spring; rope = true; }
+            else return luaL_error(L, "physics.joint: type '%s' isn't one of fixed, ball, hinge, slider, spring, rope", type.c_str());
+            auto body = [&](const char* field) -> RigidWorld::BodyId {
+                lua_getfield(L, 1, field);
+                const bool given = !lua_isnil(L, -1);
+                lua_pop(L, 1);
+                if (!given) return RigidWorld::kNoBody;
+                lua_getfield(L, 1, field);
+                const RigidWorld::BodyId id = owned(L, lua_gettop(L));
+                lua_pop(L, 1);
+                return id;
+            };
+            d.a = body("a");
+            d.b = body("b");
+            if (d.a == RigidWorld::kNoBody) return luaL_error(L, "physics.joint: needs a = a body (b is optional: left out, a is held to the world)");
+            const glm::vec3 posA = rbm->world().position(d.a);
+            const glm::vec3 posB = d.b == RigidWorld::kNoBody ? posA : rbm->world().position(d.b);
+            d.anchor = ScriptVM::fieldVec3(L, 1, "pos", d.type == RigidWorld::JointType::Spring ? posA : (posA + posB) * 0.5f);
+            d.anchorB = ScriptVM::fieldVec3(L, 1, "posB", posB);
+            d.axis = ScriptVM::fieldVec3(L, 1, "axis", glm::vec3(0, 1, 0));
+            lua_getfield(L, 1, "min");
+            lua_getfield(L, 1, "max");
+            const bool hasMin = lua_isnumber(L, -2), hasMax = lua_isnumber(L, -1);
+            lua_pop(L, 2);
+            const float length = glm::length(d.anchorB - d.anchor);
+            d.limited = hasMin || hasMax || rope;
+            d.min = ScriptVM::fieldNumber(L, 1, "min", rope ? 0.0f : d.type == RigidWorld::JointType::Spring ? length : -180.0f);
+            d.max = ScriptVM::fieldNumber(L, 1, "max", d.type == RigidWorld::JointType::Spring ? length : 180.0f);
+            if (d.type == RigidWorld::JointType::Slider && d.limited && !(hasMin && hasMax))
+                return luaL_error(L, "physics.joint: a limited slider needs both min and max (metres along the axis)");
+            d.frequency = ScriptVM::fieldNumber(L, 1, "frequency", d.type == RigidWorld::JointType::Spring && !rope ? 2.0f : 0.0f);
+            d.damping = ScriptVM::fieldNumber(L, 1, "damping", 0.3f);
+            d.friction = ScriptVM::fieldNumber(L, 1, "friction", 0.0f);
+            const RigidWorld::JointId id = rbm->world().addJoint(d);
+            if (!id) {
+                lua_pushnil(L);
+                lua_pushstring(L, "the joint couldn't be made (the same body twice, or a zero axis?)");
+                return 2;
+            }
+            std::erase_if(m_joints, [&](const Joint& j) { return !rbm->world().hasJoint(j.id); }); // their bodies went
+            m_joints.push_back({id, src});
+            lua_pushinteger(L, lua_Integer(id));
+            return 1;
+        });
+        auto ownedJoint = [this, rbm](lua_State* L, int idx, const char* what) -> uint32_t {
+            const auto id = uint32_t(luaL_checkinteger(L, idx));
+            for (const Joint& j : m_joints)
+                if (j.id == id && rbm->world().hasJoint(id)) return id;
+            luaL_error(L, "%s: %d is not a joint (a script's, still there: removing a body removes its joints)", what, int(id));
+            return 0;
+        };
+        // physics.motor(joint, "velocity" | "position" | "off" [, target, maxForce]):
+        // hinge deg/s or degrees and N*m; slider m/s or metres and N.
+        vm.registerFunction("physics", "motor", [rbm, ownedJoint](lua_State* L) {
+            const uint32_t id = ownedJoint(L, 1, "physics.motor");
+            const std::string mode = luaL_checkstring(L, 2);
+            RigidWorld::JointMotor m = RigidWorld::JointMotor::Off;
+            if (mode == "velocity") m = RigidWorld::JointMotor::Velocity;
+            else if (mode == "position") m = RigidWorld::JointMotor::Position;
+            else if (mode != "off") return luaL_error(L, "physics.motor: mode '%s' isn't velocity, position or off", mode.c_str());
+            if (!rbm->world().setJointMotor(id, m, float(luaL_optnumber(L, 3, 0.0)), float(luaL_optnumber(L, 4, 0.0))))
+                return luaL_error(L, "physics.motor: only hinges and sliders have a motor");
+            return 0;
+        });
+        vm.registerFunction("physics", "jointValue", [rbm, ownedJoint](lua_State* L) {
+            lua_pushnumber(L, rbm->world().jointValue(ownedJoint(L, 1, "physics.jointValue")));
+            return 1;
+        });
+        vm.registerFunction("physics", "removeJoint", [this, rbm](lua_State* L) {
+            const auto id = uint32_t(luaL_checkinteger(L, 1));
+            for (const Joint& j : m_joints)
+                if (j.id == id) rbm->world().removeJoint(id);
+            std::erase_if(m_joints, [&](const Joint& j) { return j.id == id; });
+            return 0;
+        });
     }
 #endif
     bindModels();

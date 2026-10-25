@@ -843,9 +843,12 @@ void ScriptModule::releaseScript(const std::string& source) {
         if (mine(b.source)) unreplicate(b.netId);
 #if KKE_ENABLE_JOLT
     auto* rb = m_app->getModule<RigidBodyModule>();
+    for (const Joint& j : m_joints)
+        if (mine(j.source) && rb) rb->world().removeJoint(j.id);
     for (const Body& b : m_bodies)
         if (mine(b.source) && rb) rb->world().remove(b.id);
 #endif
+    std::erase_if(m_joints, [&](const Joint& j) { return mine(j.source); });
     m_bodies.erase(std::remove_if(m_bodies.begin(), m_bodies.end(), [&](const Body& b) { return mine(b.source); }), m_bodies.end());
 
     if (auto* models = m_app->getModule<ModelModule>())
