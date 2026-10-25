@@ -176,25 +176,51 @@ the hair's root colour (lashes darker); `bakeSkinned()` includes them.
 ## Skin
 
 A flat colour made every face look like a doll's. Three maps in the
-body's UV layout, `assets/humans/skin_*.png`, give it what a single tint
-can't, and the creator puts them on the body's material:
+body's UV layout (2048 square), `assets/humans/skin_*.png`, give it what
+a single tint can't, and the creator puts them on the body's material:
 
 - `skin_albedo.png` is near white and multiplies the chosen skin tone, so
-  every tone keeps its colour: redder lips, a blush over the cheeks, nose
-  and ears, darker eyelids, faint blotchiness all over.
-- `skin_normal.png`: pores and fine grain, stronger on the face than on
-  the body (the body's UV islands are larger on screen per texel, and the
-  same grain there read as hair).
-- `skin_roughness.png`: glossy lips, a slightly shiny T-zone.
+  every tone keeps its colour: scanned blotchiness, the knees', elbows'
+  and knuckles' colour, redder lips, a blush over the cheeks, nose and
+  ears.
+- `skin_normal.png`: creases, wrinkles and lip lines from the scan, plus
+  fine pores (stronger on the face than on the body).
+- `skin_roughness.png`: the scan's gloss pattern; glossy lips.
 
-`tools/makehuman/bake_skin.py MAKEHUMAN_DATA assets/humans` makes them
-(Python standard library, about 20 s at 1024). Where each region lies
-comes from MakeHuman's CC0 skin weights (the lips are what the `oris*`
-mouth ring bones move, the lids `orbicularis*`, the cheeks `risorius*`
-and `levator05-06`, the nose `levator02-04`, the ears `temporalis02`);
-every pattern is generated from a fixed seed, so the maps are the
-project's own (MIT). They cost three texture reads in the normal model
-shader: no extra pass, the same frame time as the flat colour.
+They come from CharMorph's Vitruvian body (CC0, Sean Buckley and Olaf
+Delgado-Friedrichs): a 37,000 vertex body with 4K skin textures over
+four UDIM tiles. `tools/makehuman/vitruvian_export.py` (run with
+Blender's `bpy` from PyPI) writes its mesh to an `.npz`;
+`tools/makehuman/bake_vitruvian.py MAKEHUMAN_DATA VITRUVIAN vit.npz
+assets/humans` (numpy, scipy, OpenEXR; about 2 minutes) warps it onto
+MakeHuman's base body and reads, for every texel of MakeHuman's UV
+layout, the Vitruvian skin at that spot:
+
+1. A thin-plate spline through 42 points both bodies have (the joints of
+   both rigs, the eyes, the nose tip, chin, crown, back of the head, ears,
+   heels and toes) brings Vitruvian into MakeHuman's place.
+2. Six refits pull its surface onto MakeHuman's, each adding the nearest
+   points that face the same way as pairs (mean gap 1.6 mm at the end).
+3. Each texel takes the nearest spot on a Vitruvian skin triangle that
+   faces its way (the lips and fingers lie close to other surfaces),
+   0.7 mm away at the median.
+
+The colour is divided by Vitruvian's own skin tone, so the player's
+colour still sets the tone; half its colour shifts are kept (all of them
+read as bruises over a warm skin) and two thirds of its brightness swings.
+The lips' red and the blush come from MakeHuman's CC0 skin weights (the
+lips are what the `oris*` mouth ring bones move, the lids
+`orbicularis*`, the cheeks `risorius*` and `levator05-06`, the nose
+`levator02-04`, the ears `temporalis02`). The height loses its slow swell
+(that is the mesh's job) before it becomes the normal map.
+
+So the realistic body keeps MakeHuman's 13,000 vertices and every slider;
+the detail is three texture reads in the normal model shader, no extra
+pass. The baked maps are the project's own (MIT).
+
+`tools/makehuman/bake_skin.py` still makes the anime style's
+`skin_albedo_anime.png`, and the procedural set when Vitruvian isn't at
+hand.
 
 ## Clothes
 
