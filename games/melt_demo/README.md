@@ -35,6 +35,9 @@ KKE_MELT_PRESET=3 ./melt_demo     # start with the aluminium block
 | Variable | Effect |
 |---|---|
 | `KKE_MELT_PRESET=0..3` | the starting block: 0 ice, 1 wax, 2 chocolate, 3 aluminium (clamped to that range) |
+| `KKE_MELT_FILL=N` | start with N particles of lava already poured, beside the block (the budget grows to fit), and log the liquid's timings every 5 s: for measuring big liquids |
+| `KKE_FLUID_GPU=0` / `shared` | the liquid's neighbour search on the CPU only / on the graphics queue (a GPU with one queue); see `kke/FluidGpu.h` |
+| `KKE_FLUID_GPU_CHECK=1` | search on GPU and CPU both and log how often they differed (slow) |
 | `KKE_SKIP_INTRO=1` | skip the logo intro (engine-wide) |
 
 Rebindings are saved to `melt_demo_input.json` (the name passed to

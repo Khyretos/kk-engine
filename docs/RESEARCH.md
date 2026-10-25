@@ -21,6 +21,17 @@ metrics row and the pull request.
 | Karis, "Real Shading in Unreal Engine 4", SIGGRAPH 2013 | PBR, reflections | Done: the split-sum environment lighting. |
 | Quilez, "Better Fog" | Height fog | Done: the analytic exponential height fog. |
 
+## Engines we learn from
+
+Read for techniques, not taken as dependencies (reviewed 2026-10-25,
+Kees's ask; review page https://claude.ai/artifact/AJXnSvsvhYnsTr3GUAeiN1).
+No code is copied from them; copying any would need Kees's OK first.
+
+| Project | Licence | What we took | Still to try |
+|---|---|---|---|
+| [Galaxy Engine](https://github.com/NarcisCalin/Galaxy-Engine) (Narcis Calin), a C++/raylib particle simulation sandbox | MIT | Its SPH neighbour search: particles sorted into a cell-ordered copy so the 27-cell queries read contiguous memory, every per-particle pass split over the cores, and the same queries on the GPU (spatial hash in a compute shader). Done for kke::ParticleFluid (docs/OPTIMIZATION.md #44, #45) | Particle-to-particle gravity: a Barnes-Hut tree over Morton-sorted particles walked on the GPU without a stack (`src/Physics/morton.cpp`, `quadtree.cpp`, `globalLogic.cpp` there), for space-style games |
+| [GalaxyCore / Galaxy Network](https://github.com/defraswiew/GalaxyCore), a C# netcode SDK for Unity, Stride and UNIGINE | None published (closed DLLs): not FOSS, not usable | Nothing yet | A broad phase for server fog of war past ~32 players (`net/Visibility.cpp` checks every pair): its measurements favour a dynamic AABB tree for moving players (~0.6-1.9 ms per 1,000 moves among 100k objects, against ~1 s for an octree) |
+
 ## Rendering references
 
 [docs/RENDERING_PRINCIPLES.md](RENDERING_PRINCIPLES.md) holds the rendering

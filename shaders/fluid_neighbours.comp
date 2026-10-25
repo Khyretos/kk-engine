@@ -1,0 +1,74 @@
+#version 450
+// The particle liquid's neighbour search on the GPU (kke::FluidGpu,
+// engine/src/FluidGpu.cpp): every slot's neighbours, exactly as
+// ParticleFluid::findNeighbours() finds them on the CPU
+// (engine/src/ParticleFluid.cpp), one thread per slot. The CPU sorts the
+// particles into cells (cheap); this does the 27-cell queries, the part
+// that costs. The same technique as Galaxy Engine's SPH neighbour search
+// (MIT; docs/RESEARCH.md), written for this solver's grid.
+//
+// Same cells, same bucket order, same slot order and `precise` maths, so
+// the lists match the CPU's, except now and then a pair right at the
+// kernel's edge where the two round differently (the CPU build may fuse
+// multiply-adds): about 1 search in 600 in melt_demo on lavapipe.
+layout(local_size_x = 64) in;
+
+// In: positions (4 words a slot: x, y, z, unused), then cellStart.
+layout(std430, set = 0, binding = 0) readonly buffer In { uint w[]; } src;
+// Out: [0] the most neighbours any slot has when that is more than
+// stride (else 0), then a count per slot, then stride words per slot.
+layout(std430, set = 0, binding = 1) buffer Out { uint w[]; } dst;
+
+layout(push_constant) uniform Push {
+    uint count;
+    uint tableSize;  // a power of two
+    uint stride;
+    uint cellOffset; // where cellStart begins in src
+    float invCell;
+    float radius2;
+} pc;
+
+uint hashCell(ivec3 c, uint mask) {
+    return ((uint(c.x) * 73856093u) ^ (uint(c.y) * 19349663u) ^ (uint(c.z) * 83492791u)) & mask;
+}
+
+vec3 slotPos(uint s) {
+    uint b = s * 4u;
+    return vec3(uintBitsToFloat(src.w[b]), uintBitsToFloat(src.w[b + 1u]), uintBitsToFloat(src.w[b + 2u]));
+}
+
+void main() {
+    uint s = gl_GlobalInvocationID.x;
+    if (s >= pc.count) return;
+    precise vec3 p = slotPos(s);
+    precise vec3 scaled = p * pc.invCell;
+    ivec3 c = ivec3(floor(scaled));
+    uint mask = pc.tableSize - 1u;
+    uint seen[27];
+    int nSeen = 0;
+    uint found = 0u;
+    uint base = 1u + pc.count + s * pc.stride;
+    for (int dz = -1; dz <= 1; ++dz)
+        for (int dy = -1; dy <= 1; ++dy)
+            for (int dx = -1; dx <= 1; ++dx) {
+                uint k = hashCell(c + ivec3(dx, dy, dz), mask);
+                uint b0 = src.w[pc.cellOffset + k], b1 = src.w[pc.cellOffset + k + 1u];
+                if (b0 == b1) continue; // empty bucket
+                bool dup = false;
+                for (int i = 0; i < nSeen; ++i)
+                    if (seen[i] == k) dup = true;
+                if (dup) continue;
+                seen[nSeen++] = k;
+                for (uint t = b0; t < b1; ++t) {
+                    if (t == s) continue;
+                    precise vec3 r = p - slotPos(t);
+                    precise float d2 = (r.x * r.x + r.y * r.y) + r.z * r.z;
+                    if (d2 < pc.radius2) {
+                        if (found < pc.stride) dst.w[base + found] = t;
+                        ++found;
+                    }
+                }
+            }
+    dst.w[1u + s] = found;
+    if (found > pc.stride) atomicMax(dst.w[0], found);
+}

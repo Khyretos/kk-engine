@@ -458,6 +458,25 @@ std::vector<Case> makeCases() {
         });
     } });
 
+    // A big liquid: 8,000 particles, where the neighbour search and the
+    // cache misses dominate (docs/OPTIMIZATION.md #44). One thread, as
+    // every case here.
+    cases.push_back({ "particle_fluid_8000", "Position Based Fluids: one 60 Hz step of 8000 particles in a box", 30, [] {
+        kke::ParticleFluid::Params p;
+        p.radius = 0.04f;
+        p.boundsMin = glm::vec3(-1.0f, -1.0f, -1.0f);
+        p.boundsMax = glm::vec3(1.0f, 10.0f, 1.0f);
+        auto f = std::make_shared<kke::ParticleFluid>(p, 8000);
+        for (int x = 0; x < 20; ++x)
+            for (int y = 0; y < 20; ++y)
+                for (int z = 0; z < 20; ++z) f->add(glm::vec3(x - 9.5f, y + 2.0f, z - 9.5f) * 0.08f, glm::vec3(0.0f), 20.0f);
+        for (int i = 0; i < 30; ++i) f->step(1.0f / 60.0f);
+        return std::function<double()>([f] {
+            f->step(1.0f / 60.0f);
+            return double(f->positions()[0].y);
+        });
+    } });
+
     // The mixer at its voice budget: 32 spatial voices, reverb on. One
     // sample = 10 ms of output, so a median under 10 ms is real time and
     // (10 / median) is the headroom.

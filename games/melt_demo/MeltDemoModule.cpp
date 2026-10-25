@@ -1,6 +1,7 @@
 #include "MeltDemoModule.h"
 
 #include "kke/Application.h"
+#include "kke/Log.h"
 #include "kke/Mesh.h"
 #include "kke/modules/DemoPanelModule.h"
 #include "kke/modules/InputModule.h"
@@ -46,6 +47,8 @@ float rand01(uint32_t& s) {
 
 void MeltDemoModule::init(kke::Application& app) {
     m_app = &app;
+    m_pool = std::make_unique<kke::TaskPool>(app.resourceBudget().workerThreads);
+    m_fluidGpu = kke::FluidGpu::create(app.device());
     defineInput();
     m_spheres = std::make_unique<kke::SphereImpostorRenderer>(app);
     m_surface = std::make_unique<kke::FluidSurfaceRenderer>(app);
@@ -61,6 +64,9 @@ void MeltDemoModule::init(kke::Application& app) {
     m_ground->upload(gv, { 0, 2, 1, 0, 3, 2 });
     // KKE_MELT_PRESET=0..3 picks the starting block (screenshots, sharing).
     if (const char* e = std::getenv("KKE_MELT_PRESET")) m_preset = std::clamp(std::atoi(e), 0, kPresetCount - 1);
+    // KKE_MELT_FILL=N starts with N particles of lava already poured (the
+    // budget grows to fit): for measuring big liquids, CPU against GPU.
+    if (const char* e = std::getenv("KKE_MELT_FILL")) m_fill = static_cast<size_t>(std::clamp(std::atoi(e), 0, 200000));
     reset();
     buildPanel();
 }
@@ -76,7 +82,9 @@ void MeltDemoModule::reset() {
     fp.heatDiffusion = 3.0f;
     fp.friction = 0.02f;          // liquids slide; high contact friction made piles stand with vertical walls
     fp.substeps = 2;              // a 1.5 m drop reaches ~6 m/s: 120 Hz keeps it from tunnelling
-    m_fluid = std::make_unique<kke::ParticleFluid>(fp, kMaxParticles);
+    m_fluid = std::make_unique<kke::ParticleFluid>(fp, std::max(kMaxParticles, m_fill));
+    m_fluid->setTaskPool(m_pool.get());
+    m_fluid->setNeighbourSearch(m_fluidGpu);
     kke::FluidMaterial lava;
     // XSPH factors stay small (<= ~0.15): large values average every
     // particle's velocity with its neighbours so hard that a whole blob
@@ -109,6 +117,13 @@ void MeltDemoModule::reset() {
     kke::MeltVolume* block = m_block.get();
     m_fluid->addCollider([block](const glm::vec3& pos, glm::vec3& n) { return block->signedDistance(pos, n); });
     m_emitAccum = 0.0f;
+    // A lava column beside the block, settling as it starts.
+    const int side = static_cast<int>(std::ceil(std::cbrt(static_cast<double>(m_fill) / 2.0)));
+    for (size_t i = 0; i < m_fill; ++i) {
+        const int x = static_cast<int>(i % side), z = static_cast<int>((i / side) % side), y = static_cast<int>(i / (size_t(side) * side));
+        const float d = kParticleRadius * 2.0f;
+        m_fluid->add(glm::vec3(-2.6f + x * d, d * 0.5f + y * d, -2.6f + z * d), glm::vec3(0.0f), m_lavaTemperature, kLava);
+    }
 }
 
 void MeltDemoModule::fixedUpdate(const kke::FixedUpdateContext& ctx) {
@@ -131,6 +146,22 @@ void MeltDemoModule::fixedUpdate(const kke::FixedUpdateContext& ctx) {
     // Smoothed timings for the panel.
     m_fluidMs = m_fluidMs * 0.9 + std::chrono::duration<double, std::milli>(t1 - t0).count() * 0.1;
     m_meltMs = m_meltMs * 0.9 + std::chrono::duration<double, std::milli>(t2 - t1).count() * 0.1;
+    // KKE_MELT_FILL: the numbers, every 300 steps (5 s).
+    if (m_fill > 0 && ++m_steps % 300 == 0) {
+        const kke::ParticleFluid::SearchStats& st = m_fluid->searchStats();
+        kke::log::get("MeltDemo")->info("liquid: {} particles, {:.2f} ms a step on {} thread(s); neighbours on the {} (GPU {:.3f} ms, CPU {:.3f} ms a search; "
+                                        "{} GPU searches, {} declined)",
+                                        m_fluid->size(), m_fluidMs, m_pool->workers(), m_fluidGpu && !st.onCpu && st.elsewhere ? "GPU" : "CPU", st.elsewhereMs, st.cpuMs,
+                                        st.elsewhere, st.declined);
+    }
+    // KKE_FLUID_GPU_CHECK=1: how often the GPU's neighbours differed from the CPU's.
+    if (m_fluidGpu && m_fluidGpu->checkAgainstCpu()) {
+        const kke::ParticleFluid::SearchStats& st = m_fluid->searchStats();
+        if (st.checks / 120 != m_loggedChecks / 120 || (m_loggedChecks == 0 && st.checks > 0))
+            kke::log::get("FluidGpu")->info("check: {} of {} GPU searches differed from the CPU's ({} particles; GPU {:.3f} ms, CPU {:.3f} ms)", st.differed,
+                                            st.checks, m_fluid->size(), st.elsewhereMs, st.cpuMs);
+        m_loggedChecks = st.checks;
+    }
 }
 
 void MeltDemoModule::update(const kke::UpdateContext&) {
@@ -259,6 +290,16 @@ void MeltDemoModule::buildPanel() {
     s.text([this] {
         char buf[160];
         std::snprintf(buf, sizeof(buf), "Fluid %.2f ms, melt %.2f ms per step. Block surface: %zu triangles", m_fluidMs, m_meltMs, m_meshTris);
+        return std::string(buf);
+    });
+    s.text([this] {
+        char buf[200];
+        const kke::ParticleFluid::SearchStats st = m_fluid ? m_fluid->searchStats() : kke::ParticleFluid::SearchStats{};
+        if (!m_fluidGpu)
+            std::snprintf(buf, sizeof(buf), "Liquid on %d thread(s); neighbours found on the CPU", m_pool ? m_pool->workers() : 1);
+        else
+            std::snprintf(buf, sizeof(buf), "Liquid on %d thread(s); neighbours on the %s (GPU %.2f ms, CPU %.2f ms a search)", m_pool ? m_pool->workers() : 1,
+                          st.onCpu || st.elsewhere == 0 ? "CPU" : "GPU", st.elsewhereMs, st.cpuMs);
         return std::string(buf);
     });
     s.note("Lava crusts over below 550 C. Ice turns to water that chills the lava; wax and chocolate harden again as they cool; "
