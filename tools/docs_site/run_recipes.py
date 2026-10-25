@@ -58,6 +58,7 @@ SPECIAL = {
     "round.lua": {"shot": 3},
     "launch_pad.lua": {"shot": 6.3},
     "walls.lua": {"camera": ("0 4.5 7.5", "0 0.6 0"), "shot": 2},
+    "cutscene.lua": {"shot": 4},
 }
 
 SHOT_CAMERA = ("0 5.5 12", "0 0.3 -0.5")

@@ -847,8 +847,14 @@ void Application::run() {
             float effectiveDt = m_paused ? m_fixedDt : dt * m_timeScale;
             m_fixedAlpha = m_paused ? 1.0f : std::clamp(accumulator / m_fixedDt, 0.0f, 1.0f);
             UpdateContext updateCtx{ effectiveDt, totalTime, m_fixedAlpha };
+            if (m_cameraDirected) m_camera = m_gameplayCamera; // last frame's cutscene shot was for that frame only
             for (Module* m : m_initOrder) {
                 safeInvoke(m, "update", [&] { m->update(updateCtx); });
+            }
+            m_cameraDirected = false;
+            if (m_cameraDirector) {
+                m_gameplayCamera = m_camera;
+                m_cameraDirected = m_cameraDirector(m_camera, effectiveDt);
             }
         }
         m_stepRequested = false; // consumed whether or not we were actually paused
