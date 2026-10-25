@@ -23,6 +23,7 @@ set(ENGINE_SOURCES
     src/GameManifest.cpp
     src/EngineSettings.cpp
     src/ModelAsset.cpp
+    src/GltfAsset.cpp
     src/Ragdoll.cpp
     src/BenchmarkReport.cpp
     src/BenchRecorder.cpp
@@ -375,6 +376,9 @@ target_include_directories(kke_engine PUBLIC
 )
 target_link_libraries(kke_engine PRIVATE yaml-cpp::yaml-cpp) # kke/DataFile.h only
 target_link_libraries(kke_engine PRIVATE meshoptimizer) # kke/MeshLod.h only
+# cgltf (MIT, one vendored header, external/cgltf/KKE_VENDORED.md): glTF 2.0
+# import in src/GltfAsset.cpp only. SYSTEM: its warnings are not ours.
+target_include_directories(kke_engine SYSTEM PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../external/cgltf)
 
 target_link_libraries(kke_engine PUBLIC
     volk

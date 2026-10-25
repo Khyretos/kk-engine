@@ -30,6 +30,13 @@ inline constexpr char kMagic[8] = { 'K', 'K', 'E', 'C', 'O', 'O', 'K', '2' };
 // file (tools/packaging/bake_with_art.sh records which art a game uses).
 bool readAssetFile(const std::string& path, std::vector<uint8_t>& out, std::string* error = nullptr);
 
+// Files that exist only in memory, such as the images inside a .glb
+// (kke/ModelAsset.h names them "<model file>#<name>"). readAssetFile()
+// returns one of these before looking on disk, so every loader that reads
+// art through it takes them unchanged. Putting a path again replaces it.
+void putMemoryFile(const std::string& path, std::vector<uint8_t> bytes);
+bool hasMemoryFile(const std::string& path);
+
 // Plain bytes -> a cooked file's bytes (a fresh random nonce each time),
 // and back. False when the OS has no secure random source, or the bytes
 // aren't cooked for this build.

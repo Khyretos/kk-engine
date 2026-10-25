@@ -34,7 +34,7 @@ running on a single-core minimum spec.
 | **Rendering** | Vulkan (volk + VMA), PBR (Cook-Torrance), up to 4 lights, soft shadow maps, GPU particles, instancing, frustum culling, mip maps |
 | **Physics** | Jolt rigid bodies, world collision and a character controller; AMD FEMFX deformable bodies with plasticity, material fracture and Voronoi breaking; jiggle physics for bones and soft bodies |
 | **Simulation** | Particle liquids (PBF) with temperature, meltable voxel solids, Gerstner ocean with buoyancy |
-| **Characters** | FBX/OBJ import (ufbx), skinning, animation blending, locomotion with vaulting, ledge hang and shimmy, ragdolls |
+| **Characters** | FBX/OBJ import (ufbx), glTF 2.0 import (cgltf), skinning, animation blending, locomotion with vaulting, ledge hang and shimmy, ragdolls |
 | **UI** | RmlUi (HTML/CSS-style game UI) on a custom Vulkan backend, Dear ImGui debug panels, player settings, Noto fonts with colour emoji |
 | **Audio** | miniaudio output, own mixer, 3D sound, occlusion, synthesized impact sounds, a sound visualizer for deaf and hard-of-hearing players |
 | **Input** | Rebindable actions for keyboard, mouse, gamepads (paddles, gyro), HOTAS and twin sticks, with hold/tap/double-tap/toggle triggers and chords |

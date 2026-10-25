@@ -11,6 +11,7 @@
 #include <fstream>
 #include <mutex>
 #include <system_error>
+#include <unordered_map>
 #include <utility>
 
 namespace kke::cooked {
@@ -101,7 +102,41 @@ bool uncook(const std::vector<uint8_t>& cooked, std::vector<uint8_t>& out, std::
     return true;
 }
 
+namespace {
+
+struct MemoryFiles {
+    std::mutex mutex;
+    std::unordered_map<std::string, std::vector<uint8_t>> files;
+};
+
+MemoryFiles& memoryFiles() {
+    static MemoryFiles m;
+    return m;
+}
+
+} // namespace
+
+void putMemoryFile(const std::string& path, std::vector<uint8_t> bytes) {
+    MemoryFiles& m = memoryFiles();
+    std::lock_guard<std::mutex> lock(m.mutex);
+    m.files[path] = std::move(bytes);
+}
+
+bool hasMemoryFile(const std::string& path) {
+    MemoryFiles& m = memoryFiles();
+    std::lock_guard<std::mutex> lock(m.mutex);
+    return m.files.count(path) != 0;
+}
+
 bool readAssetFile(const std::string& path, std::vector<uint8_t>& out, std::string* error) {
+    {
+        MemoryFiles& m = memoryFiles();
+        std::lock_guard<std::mutex> lock(m.mutex);
+        if (auto it = m.files.find(path); it != m.files.end()) {
+            out = it->second;
+            return true;
+        }
+    }
     std::ifstream in(path, std::ios::binary | std::ios::ate); // narrow, like the loaders it replaces
     if (!in) {
         if (error) *error = "can't open '" + path + "'";

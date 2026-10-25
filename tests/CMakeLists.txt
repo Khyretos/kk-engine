@@ -10,6 +10,7 @@ add_executable(kke_tests
     test_engine_error.cpp
     test_engine_settings.cpp
     test_model_asset.cpp
+    test_gltf_asset.cpp
     test_ragdoll.cpp
     test_benchmark_report.cpp
     test_asset_catalog.cpp

@@ -124,6 +124,17 @@ In an FBX file the normal map is the material's `NormalMap` slot (a
 their roughness and metallic maps and numbers; older Phong materials
 keep the engine's defaults (roughness 0.8, metallic 0).
 
+In a glTF file (`.gltf` or `.glb`) the material's metallic-roughness block
+gives the colour, metallic and roughness numbers and maps, and
+`normalTexture` the normal map. glTF keeps roughness (green) and metallic
+(blue) in one image; the engine splits it into two grey maps when it
+loads the model. Images inside a `.glb` or as data URIs are read from
+the file itself; a `.gltf` finds its images next to it, or by file name
+like an FBX's. Not read yet: morph targets, emissive, alpha modes,
+`KHR_texture_transform` and the `KHR_materials_*` extensions; files that
+need Draco or meshopt mesh compression, or KTX2/WebP-only textures,
+are refused with a message saying so (export without them).
+
 In an OBJ's `.mtl` file: `norm` is the normal map, `map_Pr` and `map_Pm`
 are the roughness and metallic maps, `Pr` and `Pm` are the numbers.
 `bump` is ignored.
