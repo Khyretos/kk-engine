@@ -43,6 +43,7 @@
 #include <functional>
 #include <memory>
 #include <stdexcept>
+#include <system_error>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
