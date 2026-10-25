@@ -2,6 +2,7 @@
 
 #include "kke/Application.h"
 #include "kke/Module.h"
+#include "kke/Picking.h"
 #include "kke/ScriptVM.h"
 #include "kke/SphereImpostors.h"
 #if KKE_ENABLE_JOLT
@@ -61,6 +62,7 @@ void ScriptTerrain::clear() {
     m_chunks.reset();
     m_meshes.clear();
     m_meshIndices.clear();
+    m_bounds.clear();
     m_owner.clear();
     m_collisionDirty = false;
 }
@@ -117,19 +119,33 @@ void ScriptTerrain::update(float dt, const glm::vec3& camera) {
         if (!m_meshes[i]) m_meshes[i] = std::make_unique<DynamicMeshRenderer>(*m_app);
         if (!idx.empty()) m_meshes[i]->upload(v, idx);
         m_meshIndices[i] = idx.size();
+        // Its bounds, for culling (vertices are in world space; skirts included).
+        glm::vec3 lo(1e30f), hi(-1e30f);
+        for (const Vertex& vert : v) {
+            lo = glm::min(lo, vert.position);
+            hi = glm::max(hi, vert.position);
+        }
+        m_bounds[i] = {lo, hi};
         m_chunks->built(i, step);
         ++m_chunksBuilt;
     }
 }
 
 void ScriptTerrain::render(const RenderContext& ctx) {
+    // Only the chunks the camera can see.
+    const Frustum f = Frustum::fromViewProj(ctx.proj * ctx.view);
+    m_drawnLastFrame = 0;
     for (size_t i = 0; i < m_meshes.size(); ++i)
-        if (m_meshes[i] && m_meshIndices[i]) m_meshes[i]->draw(ctx, glm::mat4(1.0f), 0.0f, 0.9f);
+        if (m_meshes[i] && m_meshIndices[i] && f.intersectsAabb(m_bounds[i].first, m_bounds[i].second)) {
+            m_meshes[i]->draw(ctx, glm::mat4(1.0f), 0.0f, 0.9f);
+            ++m_drawnLastFrame;
+        }
 }
 
 void ScriptTerrain::renderShadow(const ShadowRenderContext& ctx) {
+    const Frustum f = Frustum::fromViewProj(ctx.lightViewProj);
     for (size_t i = 0; i < m_meshes.size(); ++i)
-        if (m_meshes[i] && m_meshIndices[i]) m_meshes[i]->drawShadow(ctx, glm::mat4(1.0f));
+        if (m_meshes[i] && m_meshIndices[i] && f.intersectsAabb(m_bounds[i].first, m_bounds[i].second)) m_meshes[i]->drawShadow(ctx, glm::mat4(1.0f));
 }
 
 void ScriptTerrain::bind(ScriptVM& vm) {
@@ -203,9 +219,12 @@ void ScriptTerrain::bind(ScriptVM& vm) {
         clear();
         m_terrain = std::move(t);
         m_owner = src;
-        m_chunks = std::make_unique<TerrainChunks>(*m_terrain, 32, std::max(30.0f, m_terrain->spacing() * 48.0f));
+        // Chunks of 32 cells, bigger on big terrains so there are never more than 16 x 16 to draw.
+        const int cells = std::max(32, (m_terrain->samples() - 1 + 15) / 16);
+        m_chunks = std::make_unique<TerrainChunks>(*m_terrain, cells, std::max(30.0f, m_terrain->spacing() * 48.0f));
         m_meshes.resize(m_chunks->chunks().size());
         m_meshIndices.assign(m_chunks->chunks().size(), 0);
+        m_bounds.assign(m_chunks->chunks().size(), {glm::vec3(0.0f), glm::vec3(0.0f)});
         m_freshAt = m_chunksBuilt;
         rebuildCollision(); // at once: things placed next line land on it
         lua_pushboolean(L, 1);

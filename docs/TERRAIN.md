@@ -70,7 +70,9 @@ a game's C++.
 
 ## How it is drawn
 
-- Chunks of 32 x 32 cells, each its own mesh. Nearby chunks use every
+- Chunks of 32 x 32 cells (more on terrains over 513 heights a side, so
+  there are never more than 16 x 16), each its own mesh, drawn only when
+  it's in view (and in the sun's shadow view). Nearby chunks use every
   height. From 48 cells away they use every 2nd, from 96 every 4th, from
   192 every 8th. A curtain (a skirt) hangs from every chunk edge,
   so neighbours at different detail never show a crack.

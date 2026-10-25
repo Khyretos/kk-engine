@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace kke {
@@ -43,6 +44,8 @@ public:
     const std::string& owner() const { return m_owner; }
     uint32_t collisionBody() const { return m_body; }
     size_t chunksBuilt() const { return m_chunksBuilt; } // meshes made so far (all chunks, all rebuilds)
+    size_t chunkCount() const { return m_meshes.size(); }
+    size_t drawnLastFrame() const { return m_drawnLastFrame; } // chunks in view last frame
 
     // Where terrain.create{image = "..."} looks (relative names only), in order.
     std::vector<std::filesystem::path> searchDirs;
@@ -63,6 +66,8 @@ private:
     std::unique_ptr<TerrainChunks> m_chunks;
     std::vector<std::unique_ptr<DynamicMeshRenderer>> m_meshes; // per chunk, made on first build
     std::vector<size_t> m_meshIndices;                          // per chunk: indices uploaded (0 = nothing to draw)
+    std::vector<std::pair<glm::vec3, glm::vec3>> m_bounds;      // per chunk: world bounds of its mesh
+    size_t m_drawnLastFrame = 0;
     std::string m_owner;
     uint32_t m_body = 0xffffffffu;   // RigidWorld::kNoBody
     bool m_collisionDirty = false;
