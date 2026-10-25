@@ -213,3 +213,38 @@ TEST(RigidWorld, AThousandFallingBoxesFitAFrameOnOneThread) {
     std::printf("1000 boxes, 1 thread: avg %.2f ms, worst %.2f ms per step\n", total / 180.0, worst);
     EXPECT_LT(total / 180.0, 16.0);
 }
+
+TEST(RigidWorld, StaticTrianglesAreTheLevelsCollision) {
+    kke::RigidWorld w(single());
+    ground(w); // a box: 12 triangles
+    kke::RigidWorld::BodyDesc crate;
+    crate.halfExtents = glm::vec3(0.5f);
+    crate.position = glm::vec3(0.0f, 3.0f, 0.0f); // dynamic: not part of the level
+    w.add(crate);
+    kke::RigidWorld::BodyDesc proxy = crate;
+    proxy.motion = kke::RigidWorld::Motion::Static;
+    proxy.clothOnly = true; // seen only by cloth: not the level either
+    w.add(proxy);
+    std::vector<glm::vec3> v;
+    std::vector<uint32_t> idx;
+    EXPECT_EQ(w.staticTriangles(v, idx), 12u);
+    ASSERT_EQ(idx.size(), 36u);
+    ASSERT_EQ(v.size(), 36u);
+    // World space, and wound counter-clockwise seen from outside: the top
+    // faces' normals point up (what Recast takes as walkable).
+    int up = 0;
+    for (size_t t = 0; t < idx.size(); t += 3) {
+        const glm::vec3 a = v[idx[t]], b = v[idx[t + 1]], c = v[idx[t + 2]];
+        const glm::vec3 n = glm::cross(b - a, c - a);
+        if (std::abs(a.y) < 1e-3f && std::abs(b.y) < 1e-3f && std::abs(c.y) < 1e-3f) {
+            EXPECT_GT(n.y, 0.0f);
+            ++up;
+        }
+        for (const glm::vec3& p : { a, b, c }) EXPECT_LE(std::abs(p.x), 50.0f + 1e-3f);
+    }
+    EXPECT_EQ(up, 2);
+    // A cap is kept.
+    v.clear();
+    idx.clear();
+    EXPECT_EQ(w.staticTriangles(v, idx, 5), 5u);
+}

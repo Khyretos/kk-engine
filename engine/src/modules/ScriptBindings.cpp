@@ -34,6 +34,8 @@
 #include "kke/modules/NetModule.h"
 #endif
 
+#include <chrono>
+
 #include <RmlUi/Core/Context.h>
 #include <RmlUi/Core/Element.h>
 #include <RmlUi/Core/ElementDocument.h>
@@ -832,6 +834,181 @@ void ScriptModule::dispatchNet() {
 }
 
 // ---------------------------------------------------------------- cleanup
+// ---------------------------------------------------------------- nav.* (pathfinding)
+void ScriptModule::bindNav() {
+    ScriptVM& vm = *m_vm;
+    auto need = [this](lua_State* L, const char* fn) -> ai::NavMesh& {
+        if (!m_nav || !m_nav->valid()) luaL_error(L, "%s: there's no navmesh yet (call nav.build first)", fn);
+        return *m_nav;
+    };
+
+    // nav.build({radius, height, climb, slope, cell, tile, dynamic}) -> true, info; or nil, reason.
+    // From the level's collision: every static body (physics.box{static = true}, scenes, terrain).
+    vm.registerFunction("nav", "build", [this](lua_State* L) {
+#if KKE_ENABLE_JOLT
+        auto* rbm = m_app->getModule<RigidBodyModule>();
+        if (!rbm) return luaL_error(L, "nav.build: this game has no physics world to build from");
+        ai::NavMeshSettings s;
+        ai::DynamicNavSettings d;
+        bool dynamic = true;
+        if (lua_istable(L, 1)) {
+            auto field = [L](const char* k, float fallback, float lo, float hi) {
+                const float v = ScriptVM::fieldNumber(L, 1, k, fallback);
+                return std::isfinite(v) ? std::clamp(v, lo, hi) : fallback;
+            };
+            s.agentRadius = field("radius", s.agentRadius, 0.05f, 5.0f);
+            s.agentHeight = field("height", s.agentHeight, 0.2f, 10.0f);
+            s.agentMaxClimb = field("climb", s.agentMaxClimb, 0.0f, 3.0f);
+            s.agentMaxSlope = field("slope", s.agentMaxSlope, 0.0f, 85.0f);
+            s.cellSize = field("cell", s.cellSize, 0.05f, 2.0f);
+            s.cellHeight = std::min(s.cellHeight, s.cellSize);
+            d.tileSize = field("tile", d.tileSize, 4.0f, 256.0f);
+            dynamic = ScriptVM::fieldBool(L, 1, "dynamic", true);
+        } else if (!lua_isnoneornil(L, 1)) {
+            return luaL_error(L, "nav.build: the argument is a table {radius =, height =, climb =, ...}");
+        }
+        std::vector<glm::vec3> v;
+        std::vector<uint32_t> idx;
+        const auto t0 = std::chrono::steady_clock::now();
+        const size_t tris = rbm->world().staticTriangles(v, idx);
+        // The old mesh's obstacles go with it.
+        m_navObstacles.clear();
+        auto mesh = std::make_unique<ai::NavMesh>();
+        std::string error;
+        const bool ok = tris > 0 && (dynamic ? mesh->buildDynamic(v, idx, s, d, &error) : mesh->build(v, idx, s, &error));
+        if (!ok) {
+            m_nav.reset();
+            lua_pushnil(L);
+            lua_pushstring(L, tris == 0 ? "nothing to walk on: the level has no static bodies" : error.c_str());
+            return 2;
+        }
+        const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        m_nav = std::move(mesh);
+        m_navSource = m_vm->currentSource();
+        lua_pushboolean(L, 1);
+        lua_createtable(L, 0, 4);
+        lua_pushinteger(L, lua_Integer(m_nav->polygonCount()));
+        lua_setfield(L, -2, "polygons");
+        lua_pushinteger(L, lua_Integer(tris));
+        lua_setfield(L, -2, "triangles");
+        lua_pushinteger(L, lua_Integer(m_nav->tileCount()));
+        lua_setfield(L, -2, "tiles");
+        lua_pushnumber(L, ms);
+        lua_setfield(L, -2, "ms");
+        return 2;
+#else
+        lua_pushnil(L);
+        lua_pushstring(L, "this build has no physics (Jolt) to build a navmesh from");
+        return 2;
+#endif
+    });
+    vm.registerFunction("nav", "ready", [this](lua_State* L) {
+        lua_pushboolean(L, m_nav && m_nav->valid());
+        return 1;
+    });
+    // nav.path(from, to) -> { Vec, ... }, partial; or nil when either end is off the mesh.
+    vm.registerFunction("nav", "path", [need](lua_State* L) {
+        ai::NavMesh& nav = need(L, "nav.path");
+        ai::NavMesh::Path p;
+        if (!nav.findPath(ScriptVM::toVec3(L, 1), ScriptVM::toVec3(L, 2), p)) {
+            lua_pushnil(L);
+            lua_pushstring(L, "off the navmesh");
+            return 2;
+        }
+        lua_createtable(L, int(p.points.size()), 0);
+        for (size_t i = 0; i < p.points.size(); ++i) {
+            ScriptVM::pushVec3(L, p.points[i]);
+            lua_rawseti(L, -2, lua_Integer(i + 1));
+        }
+        lua_pushboolean(L, p.partial);
+        return 2;
+    });
+    // nav.walkable(from, to) -> clear, fraction (how far the straight line gets).
+    vm.registerFunction("nav", "walkable", [need](lua_State* L) {
+        float t = 0.0f;
+        const bool clear = need(L, "nav.walkable").walkable(ScriptVM::toVec3(L, 1), ScriptVM::toVec3(L, 2), &t);
+        lua_pushboolean(L, clear);
+        lua_pushnumber(L, t);
+        return 2;
+    });
+    // nav.nearest(pos [, reach]) -> the closest point on the mesh, or nil.
+    vm.registerFunction("nav", "nearest", [need](lua_State* L) {
+        ai::NavMesh& nav = need(L, "nav.nearest");
+        const float reach = std::clamp(float(luaL_optnumber(L, 2, 2.0)), 0.1f, 100.0f);
+        glm::vec3 out;
+        if (!nav.nearestPoint(ScriptVM::toVec3(L, 1), out, { reach, reach * 2.0f, reach })) {
+            lua_pushnil(L);
+            return 1;
+        }
+        ScriptVM::pushVec3(L, out);
+        return 1;
+    });
+    // nav.move(from, to) -> where sliding along the ground from `from` towards `to` ends.
+    vm.registerFunction("nav", "move", [need](lua_State* L) {
+        ScriptVM::pushVec3(L, need(L, "nav.move").moveAlongSurface(ScriptVM::toVec3(L, 1), ScriptVM::toVec3(L, 2)));
+        return 1;
+    });
+    // nav.random(centre, radius) -> a reachable point about that far, or nil.
+    vm.registerFunction("nav", "random", [this, need](lua_State* L) {
+        ai::NavMesh& nav = need(L, "nav.random");
+        const float radius = std::clamp(float(luaL_checknumber(L, 2)), 0.1f, 500.0f);
+        auto next = [this] {
+            m_navRandom ^= m_navRandom << 13; // xorshift32: the same points every run
+            m_navRandom ^= m_navRandom >> 17;
+            m_navRandom ^= m_navRandom << 5;
+            return float(m_navRandom >> 8) / float(1u << 24);
+        };
+        glm::vec3 out;
+        if (!nav.randomPointNear(ScriptVM::toVec3(L, 1), radius, next, out)) {
+            lua_pushnil(L);
+            return 1;
+        }
+        ScriptVM::pushVec3(L, out);
+        return 1;
+    });
+    // nav.obstacle{pos, size, yaw} (a box; pos is its middle) or {pos, radius, height}
+    // (a post standing on pos) -> id, or nil + reason. Paths go round it from the next frame.
+    vm.registerFunction("nav", "obstacle", [this, need](lua_State* L) {
+        ai::NavMesh& nav = need(L, "nav.obstacle");
+        luaL_checktype(L, 1, LUA_TTABLE);
+        if (!nav.dynamic()) return luaL_error(L, "nav.obstacle: this navmesh was built with dynamic = false");
+        const std::string src = m_vm->currentSource();
+        size_t mine = 0;
+        for (const NavObstacle& o : m_navObstacles) mine += o.source == src;
+        if (mine >= maxNavObstaclesPerScript)
+            return luaL_error(L, "nav.obstacle: this script already has %d obstacles (maxNavObstaclesPerScript)", int(maxNavObstaclesPerScript));
+        const glm::vec3 pos = ScriptVM::fieldVec3(L, 1, "pos", glm::vec3(0.0f));
+        ai::NavMesh::ObstacleId id = 0;
+        lua_getfield(L, 1, "size");
+        const bool box = !lua_isnil(L, -1);
+        lua_pop(L, 1);
+        if (box) {
+            const glm::vec3 size = ScriptVM::fieldVec3(L, 1, "size", glm::vec3(1.0f));
+            id = nav.addBoxObstacle(pos, size * 0.5f, glm::radians(ScriptVM::fieldNumber(L, 1, "yaw", 0.0f)));
+        } else {
+            id = nav.addCylinderObstacle(pos, ScriptVM::fieldNumber(L, 1, "radius", 0.5f), ScriptVM::fieldNumber(L, 1, "height", 2.0f));
+        }
+        if (!id) {
+            lua_pushnil(L);
+            lua_pushstring(L, "refused: a size or radius that isn't above 0, or too many obstacles waiting (try next frame)");
+            return 2;
+        }
+        m_navObstacles.push_back({ id, src });
+        lua_pushinteger(L, lua_Integer(id));
+        return 1;
+    });
+    vm.registerFunction("nav", "remove", [this, need](lua_State* L) {
+        ai::NavMesh& nav = need(L, "nav.remove");
+        const auto id = ai::NavMesh::ObstacleId(checkId(L, 1, "nav.remove"));
+        auto it = std::find_if(m_navObstacles.begin(), m_navObstacles.end(), [&](const NavObstacle& o) { return o.id == id; });
+        if (it == m_navObstacles.end() || it->source != m_vm->currentSource())
+            return luaL_error(L, "nav.remove: %d is not an obstacle this script added", int(id));
+        nav.removeObstacle(id);
+        m_navObstacles.erase(it);
+        return 0;
+    });
+}
+
 void ScriptModule::releaseScript(const std::string& source) {
     if (m_calls) m_calls->release(source);
     if (m_tables) m_tables->release(source);
@@ -877,6 +1054,17 @@ void ScriptModule::releaseScript(const std::string& source) {
 #endif
     m_scenes.erase(std::remove_if(m_scenes.begin(), m_scenes.end(), [&](const Scene& s) { return mine(s.source); }), m_scenes.end());
     m_lights.releaseAll(m_app->lighting(), source);
+    // Its obstacles; the navmesh with the script that built it.
+    if (m_nav)
+        for (const NavObstacle& o : m_navObstacles)
+            if (mine(o.source)) m_nav->removeObstacle(o.id);
+    m_navObstacles.erase(std::remove_if(m_navObstacles.begin(), m_navObstacles.end(), [&](const NavObstacle& o) { return mine(o.source); }),
+                         m_navObstacles.end());
+    if (m_nav && mine(m_navSource)) {
+        m_nav.reset();
+        m_navObstacles.clear();
+        m_navSource.clear();
+    }
     // Its effects stop emitting; what is already in the air finishes.
     for (ScriptFx::EmitterId id : m_fx.releaseAll(source))
         if (m_fxLibrary) m_fxLibrary->stop(id);
@@ -893,6 +1081,8 @@ void ScriptModule::releaseAll() {
     for (const Document& d : m_documents) add(d.source);
     for (const ClickHandler& h : m_clickHandlers) add(h.source);
     for (const Scene& s : m_scenes) add(s.source);
+    for (const NavObstacle& o : m_navObstacles) add(o.source);
+    if (!m_navSource.empty()) add(m_navSource);
     for (const std::string& s : sources) releaseScript(s);
     m_lights.clear(m_app->lighting());
     m_fx.clear();

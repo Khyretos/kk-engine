@@ -9,6 +9,7 @@
 #include "kke/ScriptStore.h"
 #include "kke/ScriptTables.h"
 #include "kke/ScriptVM.h"
+#include "kke/ai/NavMesh.h"
 #include "kke/modules/ModelModule.h"
 
 #include <filesystem>
@@ -100,6 +101,7 @@ public:
     size_t maxBreakablesPerScript = 64; // FEMFX bodies are expensive (docs/OPTIMIZATION.md)
     size_t maxDocumentsPerScript = 16;
     size_t maxScenesPerScript = 4;
+    size_t maxNavObstaclesPerScript = 256;
 
     // Where store.* keeps what scripts save (docs/STORAGE.md urls), opened
     // on first use; KKE_SCRIPT_STORE overrides it. Set before init.
@@ -110,6 +112,8 @@ public:
     // Or: a store someone else owns (a server's), used instead of storeUrl.
     void useStore(storage::Store* shared) { m_sharedStore = shared; }
     ScriptStore* scriptStore() { return m_store.get(); }
+    // The navmesh nav.build made (null before it), for a game's own C++ (an AiWorld).
+    ai::NavMesh* navMesh() { return m_nav.get(); }
 
     // Whether a script file runs on this machine right now (realms above).
     static bool runsHere(const std::string& path, bool authority);
@@ -135,6 +139,7 @@ private:
     void bindScenes();
     void bindNet();
     void bindStore();
+    void bindNav(); // nav.* pathfinding (ScriptBindings.cpp)
     // Multiplayer copies of what sv_ scripts spawn (ScriptReplication.cpp).
     void bindReplication();
     void syncNetRole();                    // hosting / joining / leaving changed what's replicated
@@ -175,6 +180,11 @@ private:
     std::vector<std::pair<int, std::string>> m_pendingClicks;
     std::unique_ptr<Rml::EventListener> m_clickListener;
     std::vector<Scene> m_scenes;
+    std::unique_ptr<ai::NavMesh> m_nav;         // nav.build's
+    std::string m_navSource;                    // the script that built it
+    struct NavObstacle { ai::NavMesh::ObstacleId id; std::string source; };
+    std::vector<NavObstacle> m_navObstacles;
+    uint32_t m_navRandom = 0x9E3779B9u;         // nav.random's sequence
     ScriptLights m_lights; // light.*: lamps scripts placed (kke/ScriptLights.h)
     // fx.*: one particle pool and library for every script, made on first use.
     static constexpr size_t kFxParticles = 8000;
