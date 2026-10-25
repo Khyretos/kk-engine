@@ -350,6 +350,47 @@ std::vector<const CatalogAsset*> AssetCatalog::filter(const std::string& packNam
     return result;
 }
 
+size_t AssetCatalog::addOwnModels(const std::string& dir, const std::string& packName) {
+    std::error_code ec;
+    if (dir.empty() || !fs::is_directory(dir, ec)) return 0;
+    // Every model under the folder, whatever its subfolders are called:
+    // one pack, not the pack detection scan() does for asset stores.
+    CatalogPack pack;
+    pack.name = packName;
+    pack.root = dir;
+    pack.own = true;
+    std::map<std::string, fs::path> byStem; // lower-case stem -> chosen file
+    const CatalogScanOptions options;
+    Walker walker(options, errors); // a folder it can't read goes in errors, like scan()
+    walker.walk(fs::path(dir), false, [&](const fs::path& p, bool isDir) {
+        if (isDir) {
+            if (lower(p.filename().string()) == "textures") pack.textureDirs.push_back(p.string());
+            return true;
+        }
+        if (!isModelFile(p)) return true;
+        const std::string key = lower(p.stem().string());
+        auto found = byStem.find(key);
+        if (found == byStem.end()) byStem[key] = p;
+        return true;
+    });
+    std::sort(pack.textureDirs.begin(), pack.textureDirs.end());
+    std::vector<CatalogAsset> own;
+    for (auto& [key, path] : byStem) {
+        CatalogAsset a;
+        a.name = path.stem().string();
+        a.path = path.string();
+        a.pack = packName;
+        a.category = categoryForAssetName(a.name);
+        a.skinned = a.category == "Characters";
+        own.push_back(std::move(a));
+    }
+    pack.assetCount = own.size();
+    if (own.empty()) return 0;
+    packs.insert(packs.begin(), std::move(pack));
+    assets.insert(assets.begin(), own.begin(), own.end());
+    return own.size();
+}
+
 const CatalogAsset* AssetCatalog::find(const std::string& name) const {
     for (const CatalogAsset& a : assets) if (a.name == name) return &a;
     return nullptr;

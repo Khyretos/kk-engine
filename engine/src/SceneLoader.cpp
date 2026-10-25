@@ -67,6 +67,12 @@ ModelLoadOptions packLoadOptions(const AssetCatalog& catalog, const CatalogAsset
     opts.loadAnimations = false;
     if (const CatalogPack* pack = catalog.pack(asset.pack)) {
         opts.textureSearchPaths = pack->textureDirs;
+        if (pack->own) {
+            // The game's own models (AssetCatalog::addOwnModels): as the
+            // file says, clips included; no pack atlas to fall back on.
+            opts.loadAnimations = true;
+            return opts;
+        }
         // Some meshes point at another pack's atlas: use this one's.
         opts.fallbackTexture = pack->defaultTexture;
         opts.assetTexture = catalog.namedTexture(asset);

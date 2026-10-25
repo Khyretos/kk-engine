@@ -381,3 +381,33 @@ TEST(AssetCatalog, FindAssetFolderSearchesEnvThenParents) {
     EXPECT_EQ(kke::findAssetFolder("definitely/not/here", {}, (base / "build/bin").string()), "");
     fs::remove_all(base);
 }
+
+// A game's own models/ folder (ScriptModule::catalog): one pack named
+// "game", searched before the installed packs, no atlas guessed.
+TEST(AssetCatalog, AddsAGamesOwnModelsFirst) {
+    kke::AssetCatalog catalog = kke::AssetCatalog::scan(makeUserLayout().string());
+    const size_t packsBefore = catalog.packs.size();
+    ASSERT_NE(catalog.find("SM_Prop_Crate_01"), nullptr);
+    const fs::path own = fs::temp_directory_path() / "kke_catalog_own";
+    fs::remove_all(own);
+    touch(own / "Fox.glb");
+    touch(own / "props/SM_Prop_Crate_01.gltf"); // the game's own crate wins over the pack's
+    touch(own / "props/textures/crate.png");
+    touch(own / "readme.txt");
+    EXPECT_EQ(catalog.addOwnModels(own.string()), 2u);
+    ASSERT_EQ(catalog.packs.size(), packsBefore + 1);
+    const kke::CatalogPack& pack = catalog.packs.front();
+    EXPECT_EQ(pack.name, "game");
+    EXPECT_TRUE(pack.own);
+    EXPECT_TRUE(pack.defaultTexture.empty());
+    ASSERT_EQ(pack.textureDirs.size(), 1u);
+    const kke::CatalogAsset* crate = catalog.find("SM_Prop_Crate_01");
+    ASSERT_NE(crate, nullptr);
+    EXPECT_EQ(crate->pack, "game");
+    EXPECT_EQ(fs::path(crate->path).extension(), ".gltf");
+    ASSERT_NE(catalog.find("Fox"), nullptr);
+    EXPECT_EQ(catalog.pack("game"), &catalog.packs.front());
+    // A missing folder adds nothing.
+    EXPECT_EQ(catalog.addOwnModels((own / "nope").string()), 0u);
+    EXPECT_EQ(catalog.packs.size(), packsBefore + 1);
+}

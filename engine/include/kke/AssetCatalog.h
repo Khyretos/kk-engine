@@ -47,6 +47,9 @@ struct CatalogPack {
     // measuring grids), sorted.
     std::vector<std::string> overlayTextures;
     size_t assetCount = 0;
+    // A game's own models folder (addOwnModels): no atlas guessing, and
+    // its models load with their animations.
+    bool own = false;
 };
 
 // A file or folder the scan could not read, even after retrying.
@@ -90,6 +93,13 @@ struct AssetCatalog {
     // Never throws; a missing/empty folder gives an empty catalog (no
     // error: findAssetFolder() decides whether a folder exists).
     static AssetCatalog scan(const std::string& root, const CatalogScanOptions& options = {});
+
+    // Adds a game's own models (its `models/` folder: .glb, .gltf, .fbx,
+    // .obj, any subfolders) as one pack named `packName`, searched before
+    // the installed packs, so models.load and scene files find them by
+    // file name. No atlas is guessed for it (defaultTexture stays empty).
+    // Returns how many models it added; a missing folder adds none.
+    size_t addOwnModels(const std::string& dir, const std::string& packName = "game");
 
     const CatalogPack* pack(const std::string& name) const;
     // Every category present, in a stable, friendly order.
