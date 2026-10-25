@@ -50,6 +50,8 @@ set(ENGINE_SOURCES
     src/Animator.cpp
     src/AnimRig.cpp
     src/BodyShape.cpp
+    src/Human.cpp
+    src/HumanPack.cpp
     src/CharacterIk.cpp
     src/Equipment.cpp
     src/Inventory.cpp

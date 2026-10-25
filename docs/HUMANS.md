@@ -1,0 +1,113 @@
+# Humans: MakeHuman bodies from sliders
+
+`kke::Human` (`kke/Human.h`) makes a realistic person from slider values:
+gender, age, muscle, weight, height, ancestry, and about 300 face and body
+sliders (nose hump, eye fold, jaw, waist, hand size...). It is the base of
+character creator screens: set the sliders, `bake()` once, and the result
+is an ordinary skinned model, so a custom character costs the same per
+frame as any other model and animates with the engine's GPU skinning.
+
+The human is [MakeHuman](http://www.makehumancommunity.org)'s: its base
+mesh, its 1,280 morph targets, its skeleton and skin weights.
+
+## Licence: what can ship
+
+| Part | Licence | In a game, commercial too |
+| --- | --- | --- |
+| Base mesh, morph targets, modifier lists, skeleton, skin weights | CC0 (MakeHuman's [LICENSE.md](https://github.com/makehumancommunity/makehuman/blob/master/LICENSE.md), section C) | Yes, nothing asked |
+| MakeHuman's program code | AGPL-3.0 | Not used: the engine reads only the data files, with its own code |
+| MPFB2, MakeHuman's Blender add-on | GPL-3.0 | A tool on your PC; what you export with it is yours |
+| Community asset packs (clothes, hair, skins) | CC0 or CC-BY, per pack | Yes; CC-BY packs need their authors in the game's credits |
+
+`assets/humans/credits.json` lists every asset in the pack with its
+authors and licence, for a game's credits screen.
+
+## The pack
+
+`assets/humans/makehuman.kkhpack` (about 10 MB) is cooked from MakeHuman's
+`makehuman/data` folder at the commit in `tools/makehuman/makehuman.lock`:
+
+```bash
+git clone https://github.com/makehumancommunity/makehuman /tmp/makehuman
+git -C /tmp/makehuman checkout "$(sed -n 's/^commit //p' tools/makehuman/makehuman.lock)"
+python3 tools/makehuman/cook_human.py /tmp/makehuman/makehuman/data \
+    assets/humans/makehuman.kkhpack --credits assets/humans/credits.json \
+    --commit "$(sed -n 's/^commit //p' tools/makehuman/makehuman.lock)"
+```
+
+The cooker keeps every target exact (the `.target` files are in steps of
+0.1 mm and so is the pack) but leaves out the vertices a target doesn't
+move and packs the rest with zlib: 127 MB of text becomes 10 MB. Its
+format is described at the top of `cook_human.py`, and
+`tools/makehuman/test_cook_human.py` checks it.
+
+## Using it
+
+```cpp
+#include "kke/Human.h"
+
+static const kke::HumanPack pack = kke::HumanPack::load("assets/humans/makehuman.kkhpack");
+
+kke::Human h(pack);
+h.set("macrodetails/Gender", 0.2f);            // 0 female, 1 male
+h.set("macrodetails/Age", 0.5f);               // 0 = 1 year, 0.1875 = 11, 0.5 = 25, 1 = 90
+h.set("macrodetails-universal/Muscle", 0.7f);
+h.set("nose/nose-hump-decr|incr", 0.4f);       // two-sided: -1..1
+
+kke::Human::Bake bake = h.bake();               // bake.model is a ModelData
+ModelModule::ModelId id = models.add(bake.model, "player/1"); // one model per look
+
+// While a slider is dragged: move the same bake, then re-upload it.
+h.set("chin/chin-width-decr|incr", -0.3f);
+h.reshape(bake);
+```
+
+Slider names are MakeHuman's own, so a save made here and an `.mhm` file
+from the MakeHuman app use the same words. `HumanPack::modifiers()` lists
+them all with their group (the tab) and range;
+`HumanPack::description(name)` has MakeHuman's one-line explanation.
+
+### Body type
+
+The body-type sliders blend MakeHuman's macro targets. Each one is named
+after the body it was sculpted for (`universal-female-young-averagemuscle-maxweight`,
+`height/male-old-minmuscle-averageweight-maxheight`), and its weight is how
+close the sliders are to that body: per word, 1 at that word's slider
+value, falling linearly to 0 at the next value either side; the words'
+weights multiply. Ancestry (African, Asian, European) is a mix: the three
+always add up to 1, and setting one scales the other two.
+
+| Slider | Values the targets were made at |
+| --- | --- |
+| Gender | female 0, male 1 |
+| Age | baby 0 (1 year), child 0.1875 (11), young 0.5 (25), old 1 (90) |
+| Muscle, Weight, breast size and firmness | min 0, average 0.5, max 1 |
+| Height, proportions | min (or uncommon) 0, max (or ideal) 1; none at 0.5 |
+
+### The bake
+
+- One mesh per group: the skin, plus MakeHuman's helper eyes, teeth and
+  tongue, which stand in until eye and teeth assets are added.
+- The skeleton is MakeHuman's default rig (163 bones). Each joint sits at
+  the centre of its own vertices on the shaped body, so a tall, broad or
+  small body gets a skeleton its size. A bone's roll comes from its plane
+  of three joints.
+- Up to four bone weights per vertex, the strongest, renormalised.
+- `Bake::sourceVertex` maps each model vertex back to the pack vertex it
+  came from (a vertex on a UV seam becomes several), which `reshape` uses.
+
+## Multiplayer
+
+A character travels as its slider values, never as a mesh. Every machine
+loads the same pack and bakes the same body from the same values. The
+compact share code that goes in a player's look string comes with the
+creator screen (step 3 of the plan).
+
+## What comes next
+
+The plan for the whole creator is in the project's "Character creator
+plan" document. In order: the creator demo screen, animation through
+retargeting (MakeHuman bone names to the engine's canonical ones), skin
+and eyes, strand hair rooted on the scalp, clothes fitted with MakeHuman's
+`.mhclo` files (each clothing vertex rides three body vertices, so clothes
+fit every body), then facial expressions (ENG-F25).

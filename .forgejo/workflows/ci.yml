@@ -126,6 +126,8 @@ jobs:
         run: python3 -W error tools/ci/check_dependencies.py
       - name: Every game.json lists the modules its game adds
         run: python3 -W error tools/ci/check_game_modules.py
+      - name: The MakeHuman cooker writes the pack the engine reads
+        run: python3 -W error tools/makehuman/test_cook_human.py
 
   # Every std:: name must come from a header the file includes. CI's GCC 13
   # still pulls many headers in through others; GCC 15/16 (Arch, Fedora)

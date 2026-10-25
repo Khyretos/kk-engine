@@ -148,6 +148,7 @@ nav:
       - Menus, pause and settings: GAME_SHELL.md
       - Start menu and joining: LOBBY.md
       - Outfits: OUTFITS.md
+      - Humans: HUMANS.md
       - Settings panel: DEMO_PANEL.md
       - Commands and orders: COMMANDS.md
       - Audio: AUDIO.md

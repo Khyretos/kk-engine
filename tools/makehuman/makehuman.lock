@@ -1,0 +1,4 @@
+# The MakeHuman checkout assets/humans/makehuman.kkhpack is cooked from (docs/HUMANS.md).
+# Only makehuman/data (CC0) is read; none of MakeHuman's AGPL code is used.
+repo https://github.com/makehumancommunity/makehuman
+commit a8bc2d54ff0ac92e78ff71431b1023eda42bf482

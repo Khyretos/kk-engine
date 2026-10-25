@@ -35,6 +35,7 @@ add_executable(kke_tests
     test_character_ik.cpp
     test_inventory.cpp
     test_body_shape.cpp
+    test_human.cpp
     test_procedural_anim.cpp
     test_climb_wall.cpp
     test_climb_mountains.cpp
