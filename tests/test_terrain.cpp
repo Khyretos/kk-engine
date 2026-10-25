@@ -264,4 +264,62 @@ TEST(ScriptTerrain, LuaMakesSculptsAndPaintsIt) {
         assert(terrain.height(3, 3) == 0)
     )", "world.lua")) << lastError(vm);
     EXPECT_FALSE(vm.runString("terrain.create{ image = '../secret.png' }", "world.lua"));
+    // No models module here: scatter says so.
+    EXPECT_FALSE(vm.runString("terrain.scatter{ model = 1 }", "world.lua"));
+    EXPECT_NE(lastError(vm).find("no models module"), std::string::npos) << lastError(vm);
+    EXPECT_EQ(st.scatteredCount(), 0u);
+}
+
+TEST(Terrain, ScatterFollowsTheRulesAndIsTheSameEveryTime) {
+    Terrain t(100.0f, 101); // 1 m cells
+    for (int z = 0; z <= 100; ++z)
+        for (int x = 70; x <= 100; ++x) t.setSample(x, z, float(x - 70) * 2.0f); // a steep bank past x = 20
+    t.paint(glm::vec3(-25.0f, 0.0f, -25.0f), 30.0f, 2); // a dirt patch, solid out to about 16 m
+    Terrain::ScatterRule r;
+    r.density = 4.0f; // one per 25 m^2
+    r.seed = 9;
+    const std::vector<Terrain::Placement> a = t.scatter(r), b = t.scatter(r);
+    ASSERT_EQ(a.size(), b.size());
+    for (size_t i = 0; i < a.size(); ++i) EXPECT_EQ(a[i].position, b[i].position);
+    // About density x area, minus the steep bank (30 of 100 m wide).
+    EXPECT_GT(a.size(), 230u);
+    EXPECT_LT(a.size(), 300u);
+    for (const Terrain::Placement& p : a) {
+        EXPECT_LT(p.position.x, 21.0f) << "on the steep bank";
+        EXPECT_NEAR(p.position.y, t.heightAt(p.position.x, p.position.z), 1e-4f);
+        EXPECT_GE(p.scale, r.minScale);
+        EXPECT_LE(p.scale, r.maxScale);
+        EXPECT_EQ(p.up, glm::vec3(0.0f, 1.0f, 0.0f));
+    }
+    r.seed = 10;
+    EXPECT_NE(t.scatter(r)[0].position, a[0].position);
+    // Only on dirt: inside the patch.
+    r.layer = 2;
+    const auto dirt = t.scatter(r);
+    EXPECT_GT(dirt.size(), 20u);
+    for (const Terrain::Placement& p : dirt) EXPECT_LT(glm::length(glm::vec2(p.position.x + 25.0f, p.position.z + 25.0f)), 17.0f);
+    // A circle, a cap, and leaning with the ground.
+    r.layer = -1;
+    r.radius = 10.0f;
+    r.centre = {0.0f, 0.0f};
+    for (const Terrain::Placement& p : t.scatter(r)) EXPECT_LE(glm::length(glm::vec2(p.position.x, p.position.z)), 10.0f);
+    r.radius = 0.0f;
+    r.keepClear = {glm::vec3(0.0f, 0.0f, 12.0f)};
+    for (const Terrain::Placement& p : t.scatter(r)) EXPECT_GE(glm::length(glm::vec2(p.position.x, p.position.z)), 12.0f);
+    r.keepClear.clear();
+    r.maxCount = 7;
+    EXPECT_EQ(t.scatter(r).size(), 7u);
+    r.maxCount = 100000;
+    r.maxSlope = 90.0f;
+    r.alignToSlope = true;
+    bool leaned = false;
+    for (const Terrain::Placement& p : t.scatter(r))
+        if (p.position.x > 24.0f && p.position.x < 48.0f) { // on the bank, away from its edges
+            leaned = true;
+            EXPECT_LT(p.up.y, 0.6f);
+            // The transform stands the thing up along the ground's normal.
+            const glm::vec3 up = glm::normalize(glm::vec3(p.transform() * glm::vec4(0, 1, 0, 0)));
+            EXPECT_NEAR(glm::dot(up, glm::normalize(p.up)), 1.0f, 1e-3f);
+        }
+    EXPECT_TRUE(leaned);
 }

@@ -2,6 +2,8 @@
 
 #include <stb_image.h>
 
+#include <glm/gtc/matrix_transform.hpp>
+
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -347,6 +349,58 @@ void Terrain::buildMesh(int x0, int z0, int cellsX, int cellsZ, int step, float 
     curtain(nx, [&](int k) { return base + uint32_t((nz - 1) * nx + k); }, false);                      // far z edge, faces +z
     curtain(nz, [&](int k) { return base + uint32_t(k * nx); }, false);                                 // x0 edge, faces -x
     curtain(nz, [&](int k) { return base + uint32_t(k * nx + nx - 1); }, true);                       // far x edge, faces +x
+}
+
+glm::mat4 Terrain::Placement::transform() const {
+    glm::mat4 m = glm::translate(glm::mat4(1.0f), position);
+    const glm::vec3 u = glm::normalize(up);
+    const float c = glm::clamp(u.y, -1.0f, 1.0f);
+    if (c < 0.9999f) {
+        // Lean from straight up to `up`.
+        const glm::vec3 axis = glm::normalize(glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), u));
+        m = glm::rotate(m, std::acos(c), axis);
+    }
+    m = glm::rotate(m, glm::radians(yawDegrees), glm::vec3(0.0f, 1.0f, 0.0f));
+    return glm::scale(m, glm::vec3(scale));
+}
+
+std::vector<Terrain::Placement> Terrain::scatter(const ScatterRule& rule) const {
+    std::vector<Placement> out;
+    if (!(rule.density > 0.0f)) return out;
+    const float cell = std::max(0.25f, std::sqrt(100.0f / rule.density));
+    const int cells = int(std::ceil(m_size / cell));
+    const float s = spacing();
+    const int layer = rule.layer >= 0 && rule.layer < kLayers ? rule.layer : -1;
+    for (int j = 0; j < cells; ++j)
+        for (int i = 0; i < cells; ++i) {
+            if (out.size() >= rule.maxCount) return out;
+            // One point per cell, anywhere in it: random but steady (a hash of seed and cell).
+            uint64_t h = (uint64_t(rule.seed) << 32) ^ (uint64_t(uint32_t(i)) * 0x9E3779B1ull) ^ (uint64_t(uint32_t(j)) * 0x85EBCA77ull << 16);
+            auto next = [&h]() { return float(mix(h) >> 40) / float(1ull << 24); }; // 0..1
+            const float wx = m_corner.x + (float(i) + next()) * cell, wz = m_corner.z + (float(j) + next()) * cell;
+            const float yaw = next() * 360.0f, sc = rule.minScale + (rule.maxScale - rule.minScale) * next(), keep = next();
+            if (!contains(wx, wz)) continue;
+            if (rule.radius > 0.0f && glm::length(glm::vec2(wx, wz) - rule.centre) > rule.radius) continue;
+            bool blocked = false;
+            for (const glm::vec3& c : rule.keepClear) blocked = blocked || glm::length(glm::vec2(wx - c.x, wz - c.y)) < c.z;
+            if (blocked) continue;
+            const float y = heightAt(wx, wz);
+            if (y < rule.minHeight || y > rule.maxHeight) continue;
+            if (slopeAt(wx, wz) > rule.maxSlope) continue;
+            if (layer >= 0) {
+                const int sx = int(std::lround((wx - m_corner.x) / s)), sz = int(std::lround((wz - m_corner.z) / s));
+                const float w = float(weights(sx, sz)[size_t(layer)]) / 255.0f;
+                if (w < rule.minWeight) continue;
+                if (keep > (w - rule.minWeight) / std::max(1e-3f, 1.0f - rule.minWeight) + 0.5f) continue; // thinner at the layer's edge
+            }
+            Placement p;
+            p.position = {wx, y, wz};
+            p.yawDegrees = yaw;
+            p.scale = sc;
+            if (rule.alignToSlope) p.up = normalAt(wx, wz);
+            out.push_back(p);
+        }
+    return out;
 }
 
 TerrainChunks::TerrainChunks(const Terrain& terrain, int cells, float lodDistance)

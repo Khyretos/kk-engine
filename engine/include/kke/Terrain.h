@@ -98,6 +98,32 @@ public:
     std::array<uint8_t, kLayers> weights(int x, int z) const;
     glm::vec3 colorAt(int x, int z) const; // what a vertex there is coloured
 
+    // ---- scattering things (trees, rocks, grass tufts: ENG-F79). Points on
+    // a jittered grid, kept where the rule allows, the same for the same
+    // seed on every machine.
+    struct ScatterRule {
+        float density = 1.0f;     // things per 100 m^2 where allowed (one every 10 x 10 m)
+        int layer = -1;           // only where this layer is painted (weight >= minWeight); -1 = anywhere
+        float minWeight = 0.5f;
+        float maxSlope = 30.0f;   // degrees
+        float minHeight = -1e30f, maxHeight = 1e30f; // world heights
+        float minScale = 0.8f, maxScale = 1.2f;
+        bool alignToSlope = false; // lean with the ground (rocks, grass) or stand straight (trees)
+        uint32_t seed = 1;
+        glm::vec2 centre{0.0f};   // with radius > 0: only inside this circle (world x, z)
+        float radius = 0.0f;
+        std::vector<glm::vec3> keepClear; // circles (x, z, radius) left empty: a start, a road, a house
+        size_t maxCount = 20000;
+    };
+    struct Placement {
+        glm::vec3 position{0.0f};
+        float yawDegrees = 0.0f;
+        float scale = 1.0f;
+        glm::vec3 up{0.0f, 1.0f, 0.0f};
+        glm::mat4 transform() const; // translate, lean to `up`, turn by yaw, scale
+    };
+    std::vector<Placement> scatter(const ScatterRule& rule) const;
+
     // Bumps with every change to heights; paintVersion with every paint.
     uint64_t version() const { return m_version; }
     uint64_t paintVersion() const { return m_paintVersion; }

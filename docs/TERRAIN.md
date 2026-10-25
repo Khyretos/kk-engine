@@ -57,11 +57,50 @@ Calling it again from the same script replaces the terrain.
   `terrain.info()` gives `size`, `resolution`, `spacing`, `corner`,
   `centre` and `owner`. `terrain.remove()` takes it away.
 
+## Trees, rocks and bushes
+
+`terrain.scatter` puts copies of a model over the terrain by rule: only
+on a layer, only where it isn't too steep, only between two heights.
+
+```lua
+local pine = models.load("SM_Env_Tree_Pine_01")
+local forest, n = terrain.scatter{ model = pine, density = 3, maxSlope = 25, scale = { 0.8, 1.5 },
+                                   solid = 0.25, clear = { { pos = Vec(0, 0, 0), radius = 12 } } }
+terrain.scatter{ model = models.load("SM_Env_Rock_01"), layer = "rock", density = 6, align = true }
+terrain.scatter{ model = models.load("SM_Env_Bush_01"), layer = "dirt", density = 20, scale = 0.5 }
+terrain.unscatter(forest)                  -- all of that group gone again
+print(terrain.scattered())                 -- how many things in all
+```
+
+| Field | Default | Does |
+|---|---|---|
+| `model` | (needed) | a model from `models.load` |
+| `density` | 1 | things per 100 m² where they're allowed (3 = a light forest) |
+| `layer`, `minWeight` | anywhere, 0.5 | only where that layer is painted at least this much; thinner towards the edge |
+| `maxSlope` | 30 | degrees |
+| `minHeight`, `maxHeight` | any | world heights (trees below the snow line) |
+| `scale` | `{0.8, 1.2}` | a random size between the two, or one number |
+| `align` | false | lean with the ground (rocks, grass) instead of standing straight (trees) |
+| `pos`, `radius` | the whole terrain | only inside this circle |
+| `clear` | none | circles left empty: `{ {pos = Vec, radius = r}, ... }` (a start, a camp, a road) |
+| `solid` | 0 | a trunk this many metres thick that blocks the player and bodies (capsule up the model's height) |
+| `seed` | the group's number | the same seed puts everything in the same place on every machine |
+| `max` | 5000 | at most this many in the group |
+
+- It returns the group's number and how many it placed. A game has at
+  most 50,000 scattered things (`ScriptTerrain::maxScattered`). Each is
+  an ordinary model instance, drawn instanced and culled outside the
+  view by the model module.
+- Sculpting moves what stands there with the ground (solid trunks too).
+- Points come from a jittered grid (one per cell, anywhere in it), so
+  things never pile up on each other and never line up in rows.
+
 ## From C++
 
 `kke::Terrain` (`kke/Terrain.h`) is the heightmap alone: `generate`,
 `loadImage`, `raise`, `smooth`, `flatten`, `paint`, `heightAt`,
-`normalAt`, and `buildMesh` for a chunk's vertices. `kke::TerrainChunks`
+`normalAt`, `scatter` (the placements by rule), and `buildMesh` for a
+chunk's vertices. `kke::TerrainChunks`
 decides which chunk is drawn at which detail. `RigidWorld::Shape::HeightField`
 collides with exactly the triangles `heightAt` uses (each cell split on
 the diagonal from (x, z) to (x+1, z+1), as Jolt does). `kke::ScriptTerrain`
@@ -93,4 +132,6 @@ a game's C++.
 - Saving sculpted terrain with the level, and multiplayer: every machine
   makes the same land from the same seed, but sculpting is local. Sculpt
   from an `sv_` script and every player's copy won't follow yet.
-- Foliage (ENG-F79): grass and trees placed by layer.
+- Grass blades drawn by the GPU (thousands per metre, swaying). Scatter
+  places models, which is right for trees, rocks and bushes but not for
+  grass. Scattered things don't sway in the wind yet either.

@@ -75,7 +75,8 @@ class ParticleLibrary;
 //   input.*      define(id, label, key), pressed, held, value  (InputModule)
 //   camera.*     position, forward, target
 //   terrain.*    create, height, normal, slope, ground, raise, lower, smooth,
-//                flatten, paint, layer, info, remove: heightmap ground
+//                flatten, paint, scatter, unscatter, layer, info, remove:
+//                heightmap ground with trees and rocks
 //                (kke/ScriptTerrain.h; collides through RigidBodyModule)
 //   clock.*      start, set, pause, resume, stop, hour, time, isDay, sun,
 //                dayLength: time of day; Dawn/Dusk/Hour hooks (kke/ScriptClock.h)
