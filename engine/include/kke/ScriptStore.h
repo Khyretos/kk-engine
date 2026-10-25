@@ -15,7 +15,17 @@
 // or overwrite another's. Nothing is opened until a script first uses it.
 // save and remove return true, or false and why (a full disk); load
 // never fails a script: a value it can't read is the default.
+//
+// Save slots (docs/SAVING.md) are bound with it, in the same store:
+//
+//   saves.version(2)                                  -- what saves.write stamps
+//   saves.migrate(1, function(d) d.hp = d.health return d end)   -- 1 -> 2, run on read
+//   saves.write("slot 1", state, { title = "The docks", playtime = 3600 })
+//   local state, info = saves.read("slot 1")          -- nil, reason when empty or damaged
+//   for _, s in ipairs(saves.list()) do print(s.slot, s.title, s.time) end   -- newest first
+//   saves.remove("slot 1")
 
+#include "kke/SaveSlots.h"
 #include "kke/ScriptVM.h"
 #include "kke/storage/Store.h"
 
@@ -28,6 +38,7 @@ class ScriptStore {
 public:
     static constexpr size_t kMaxValueBytes = 1024 * 1024; // per saved value, encoded
     static constexpr size_t kMaxKeys = 1000;              // what one store.keys() returns, at most
+    static constexpr size_t kMaxSaveBytes = SaveSlots::kMaxData; // one saves.write, encoded
 
     // `url`: where (openStore); `game`: whose collection ("lua." + game,
     // folded to a-z 0-9 _ - .).
@@ -36,7 +47,7 @@ public:
     ScriptStore(storage::Store& shared, const std::string& game);
     ~ScriptStore();
 
-    // Adds store.* to `vm`. The ScriptStore must outlive the vm's use of it.
+    // Adds store.* and saves.* to `vm`. The ScriptStore must outlive the vm's use of it.
     void bind(ScriptVM& vm);
 
     const std::string& collection() const { return m_collection; }
@@ -44,17 +55,23 @@ public:
     // Null until first used, or when it couldn't be opened (error() says why).
     storage::Store* store();
     const std::string& error() const { return m_error; }
+    // The save slots (saves.*), made on first use; null when the store can't be opened.
+    SaveSlots* saveSlots();
 
     // "lua." + `game`, made a valid collection name.
     static std::string collectionFor(const std::string& game);
 
 private:
+    void bindSaves(ScriptVM& vm);
+
     std::string m_url;
     std::string m_collection;
     std::unique_ptr<storage::Store> m_owned;
     storage::Store* m_store = nullptr;
     bool m_tried = false;
     std::string m_error;
+    std::string m_game;
+    std::unique_ptr<SaveSlots> m_saves;
 };
 
 } // namespace kke

@@ -96,6 +96,7 @@ set(ENGINE_SOURCES
     src/storage/Store.cpp
     src/storage/MemoryStore.cpp
     src/storage/SqliteStore.cpp
+    src/SaveSlots.cpp
     src/net/Authority.cpp
     src/net/Visibility.cpp
     src/GameRules.cpp

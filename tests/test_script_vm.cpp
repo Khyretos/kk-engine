@@ -636,6 +636,96 @@ TEST(ScriptStore, KeepsSavesInAFileAcrossRuns) {
     EXPECT_EQ(globalNumber(vm, "y"), 4);
 }
 
+// ---------------------------------------------------------------- saves.* (kke/SaveSlots.h, ENG-F53)
+
+TEST(ScriptSaves, WritesReadsListsAndRemoves) {
+    ScriptVM vm;
+    ScriptStore store("memory:", "rpg");
+    store.bind(vm);
+    ASSERT_TRUE(vm.runString(R"(
+        ok = saves.write("slot 1", { level = 3, items = { "sword" } }, { title = "The docks", playtime = 3725.5 })
+        saves.write(2, { level = 1 })                 -- a number is the slot "2"
+        data, info = saves.read("slot 1")
+        level, item, title, play, version, bytes = data.level, data.items[1], info.title, info.playtime, info.version, info.bytes
+        timeType = math.type(info.time)
+        n = #saves.list()
+        two = saves.exists("2")
+        saves.remove("2")
+        gone, why = saves.read("2")
+        after = #saves.list()
+        still = store.load("anything", "keys and slots don't mix") -- store.* is a separate space
+    )")) << (vm.errors().empty() ? "" : vm.errors().back().message);
+    EXPECT_TRUE(globalBool(vm, "ok"));
+    EXPECT_EQ(globalNumber(vm, "level"), 3);
+    EXPECT_EQ(globalString(vm, "item"), "sword");
+    EXPECT_EQ(globalString(vm, "title"), "The docks");
+    EXPECT_EQ(globalNumber(vm, "play"), 3725.5);
+    EXPECT_EQ(globalNumber(vm, "version"), 1);
+    EXPECT_GT(globalNumber(vm, "bytes"), 0);
+    EXPECT_EQ(globalString(vm, "timeType"), "integer");
+    EXPECT_EQ(globalNumber(vm, "n"), 2);
+    EXPECT_TRUE(globalBool(vm, "two"));
+    EXPECT_NE(globalString(vm, "why").find("nothing is saved in '2'"), std::string::npos);
+    EXPECT_EQ(globalNumber(vm, "after"), 1);
+    EXPECT_EQ(store.saveSlots()->collection(), "saves.rpg");
+}
+
+TEST(ScriptSaves, MigratesOldSavesAndRefusesNewerOnes) {
+    auto shared = kke::storage::openStore("memory:");
+    ASSERT_TRUE(shared);
+    {
+        ScriptVM v1; // the game as it shipped: version 1 saves `health`
+        ScriptStore s(*shared, "rpg");
+        s.bind(v1);
+        ASSERT_TRUE(v1.runString("saves.write('slot 1', { health = 80, gold = 5 })"));
+    }
+    ScriptVM v3; // two updates later
+    ScriptStore s(*shared, "rpg");
+    s.bind(v3);
+    ASSERT_TRUE(v3.runString(R"(
+        saves.version(3)
+        saves.migrate(1, function(d) d.hp = d.health d.health = nil end)      -- changes the table in place
+        saves.migrate(2, function(d) return { hp = d.hp, purse = { gold = d.gold } } end) -- or returns new data
+        d, info = saves.read("slot 1")
+        hp, gold, oldHealth, savedAs = d.hp, d.purse.gold, d.health, info.version
+        saves.write("slot 1", d)
+        _, info2 = saves.read("slot 1")
+        now = info2.version
+    )")) << (v3.errors().empty() ? "" : v3.errors().back().message);
+    EXPECT_EQ(globalNumber(v3, "hp"), 80);
+    EXPECT_EQ(globalNumber(v3, "gold"), 5);
+    EXPECT_EQ(globalString(v3, "oldHealth"), "");
+    EXPECT_EQ(globalNumber(v3, "savedAs"), 1); // info says what was on disk
+    EXPECT_EQ(globalNumber(v3, "now"), 3);
+
+    // The old game can't read the new save, and says why instead of reading it wrong.
+    ScriptVM old;
+    ScriptStore so(*shared, "rpg");
+    so.bind(old);
+    ASSERT_TRUE(old.runString("d, why = saves.read('slot 1')"));
+    EXPECT_NE(globalString(old, "why").find("newer version of the game (save version 3, this game 1)"), std::string::npos)
+        << globalString(old, "why");
+    // A missing step is named.
+    ASSERT_TRUE(old.runString("saves.write('slot 2', { x = 1 }) saves.version(4) saves.migrate(1, function(d) end) d, why2 = saves.read('slot 2')"));
+    EXPECT_NE(globalString(old, "why2").find("no saves.migrate(2, ...)"), std::string::npos) << globalString(old, "why2");
+}
+
+TEST(ScriptSaves, MistakesAreScriptErrors) {
+    ScriptVM vm;
+    ScriptStore store("memory:", "g");
+    store.bind(vm);
+    EXPECT_FALSE(vm.runString("saves.write('a/b', {})"));       // bad slot name
+    EXPECT_FALSE(vm.runString("saves.write('a', print)"));      // functions can't be saved
+    EXPECT_FALSE(vm.runString("saves.write('a')"));             // nothing to save
+    EXPECT_FALSE(vm.runString("saves.write('a', {}, 'title')")); // options are a table
+    EXPECT_FALSE(vm.runString("saves.version(0)"));
+    EXPECT_FALSE(vm.runString("saves.migrate(1, 'nope')"));
+    EXPECT_FALSE(vm.runString("saves.version(2) saves.migrate(1, function(d) error('broken step') end) saves.write('b', {}) "
+                              "saves.version(1) saves.write('b', {}) saves.version(2) saves.read('b')"));
+    EXPECT_NE(vm.errors().back().message.find("broken step"), std::string::npos) << vm.errors().back().message;
+    EXPECT_EQ(vm.errors().size(), 7u);
+}
+
 // ENG-G18: fx.define takes an effect written as a Lua table; it reaches
 // kke::ParticleLibrary as the JSON its YAML would be.
 TEST(ScriptVM, TablesBecomeJson) {

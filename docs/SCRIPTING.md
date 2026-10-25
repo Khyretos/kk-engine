@@ -219,6 +219,7 @@ Vectors: `Vec(x, y, z)` with `+ - * /`, `:length()`, `:normalized()`,
 | `scene` | `list()` → names in `scenes/`, `load(name, origin)` → scene, missing count (or nil + reason), `unload(scene)`, `spawnPoint(scene)` → pos, yaw |
 | `net` | `role()` (`"offline"`, `"host"`, `"client"`), `isServer()`, `connected()`, `playerId()`, `players()` → `{ {id, name}, ... }`, `send(name, data)`: from a client to the host, from the host to every client; `data` is nil, a boolean, number, string or a table of those (about 500 bytes encoded, one network event); `call(name, data [, function(ok, answer) end])` → sent? and `handle(name, function(data, from) end)`: a question to the host and its answer ("Calls" below); `table(name)` → a synced table (host/server only: `:set(key, row)`, `:get(key)`, `:remove(key)`, `:rows()`, `:count()`, `:clear()`) and `watch(name [, filter] [, function(event, key, row, old) end])` → a view (`:rows()`, `:get(key)`, `:ready()`, `:count()`, `:stop()`) ("Synced tables" below) |
 | `store` | What outlives the session ("Saving" below): `save(name, value)` → true or false, reason; `load(name [, default])`; `add(name [, n])` → new count; `remove(name)`; `keys([prefix])` → names in order |
+| `saves` | Save slots for a "Load game" menu ([SAVING.md](SAVING.md)): `write(slot, data [, {title, playtime}])`, `read(slot)` → data, info, `list()` newest first, `exists`, `remove`, `version([n])`, `migrate(from, fn)` |
 
 Everything a script makes (bodies, models, lights, breakables, documents,
 scenes, click handlers) belongs to it: reloading, unloading or stopping
@@ -294,6 +295,8 @@ for _, key in ipairs(store.keys("player.")) do print(key) end   -- names startin
   save the shared world there; scripts on a player's machine save that
   player's own things there.
 - break-the-targets (games/first_lua_game) keeps its best score this way.
+- A whole game's state, with a slot menu, versions and migrations: `saves.*`
+  ([SAVING.md](SAVING.md)).
 
 ## Safety and limits
 
