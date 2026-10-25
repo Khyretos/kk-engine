@@ -181,6 +181,7 @@ struct Agent {
     size_t pathIndex = 0;
     glm::vec3 pathGoal{0.0f};
     float repathTimer = 0.0f;
+    uint32_t pathRevision = 0; // NavMesh::revision() the path was found on (a moved obstacle: find it again)
     float wanderAngle = 0.0f;
     float thinkTimer = 0.0f;
     float perceiveTimer = 0.0f;

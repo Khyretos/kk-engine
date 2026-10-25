@@ -762,12 +762,13 @@ glm::vec3 AiWorld::followPath(Agent& a, const glm::vec3& goal, float arriveRadiu
     Mover m{ a.position, a.velocity, speed, s.acceleration, s.radius };
     if (!m_nav || !m_nav->valid()) return arrive(m, goal, std::max(arriveRadius, 1.5f));
     a.repathTimer -= dt;
-    if (a.path.empty() || flatDistance(goal, a.pathGoal) > 1.0f || a.repathTimer <= 0.0f) {
+    if (a.path.empty() || flatDistance(goal, a.pathGoal) > 1.0f || a.repathTimer <= 0.0f || a.pathRevision != m_nav->revision()) {
         NavMesh::Path p;
         a.path.clear();
         a.pathIndex = 0;
         if (m_nav->findPath(a.position, goal, p)) a.path = std::move(p.points);
         a.pathGoal = goal;
+        a.pathRevision = m_nav->revision();
         a.repathTimer = 1.0f + random01() * 0.5f;
         if (a.path.empty()) return arrive(m, goal, 1.5f);
     }
