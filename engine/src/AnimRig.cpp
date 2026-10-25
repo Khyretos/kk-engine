@@ -5,7 +5,9 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace kke {
 
@@ -514,6 +516,61 @@ void FootPlacer::apply(const ModelData& model, Pose& pose, const SurfaceQuery& g
 // ---------------------------------------------------------------------
 // Retargeting
 
+namespace {
+
+// VRM avatars (VRoid's "J_Bip_L_UpperArm", the VRM humanoid's 54 bones)
+// and MakeHuman's default rig ("upperarm01.L", docs/HUMANS.md) to the
+// UE-style names, so one clip plays on both: the anime and the realistic
+// person share their animations. `n` is lower case; "" if neither.
+// MakeHuman splits limbs in two (upperarm01/02, lowerleg01/02): the first
+// part takes the motion, the second stays at rest under it. Its hips are
+// "root", which UE rigs use for the bone above the pelvis: matchBones
+// pairs a "root" as the pelvis only on a skeleton with no pelvis.
+std::string vrmOrMakeHumanBone(const std::string& n) {
+    static const std::pair<const char*, const char*> kVrmParts[] = {
+        { "hips", "pelvis" },      { "spine", "spine_01" },     { "chest", "spine_02" },   { "upperchest", "spine_03" },
+        { "neck", "neck_01" },     { "head", "head" },          { "shoulder", "clavicle" }, { "upperarm", "upperarm" },
+        { "lowerarm", "lowerarm" }, { "hand", "hand" },         { "upperleg", "thigh" },   { "lowerleg", "calf" },
+        { "foot", "foot" },        { "toebase", "ball" },       { "thumb", "thumb" },      { "index", "index" },
+        { "middle", "middle" },    { "ring", "ring" },          { "little", "pinky" },
+    };
+    if (n.rfind("j_bip_", 0) == 0 && n.size() > 8 && n[7] == '_') {
+        const char side = n[6]; // c, l or r
+        std::string part = n.substr(8), digit;
+        while (!part.empty() && std::isdigit(static_cast<unsigned char>(part.back()))) {
+            digit.insert(digit.begin(), part.back());
+            part.pop_back();
+        }
+        for (const auto& [from, to] : kVrmParts) {
+            if (part != from) continue;
+            std::string out = to;
+            if (!digit.empty()) out += "_0" + digit;
+            if (side == 'l' || side == 'r') out += std::string("_") + side;
+            return out;
+        }
+        return {};
+    }
+    static const std::pair<const char*, const char*> kMakeHuman[] = {
+        { "spine05", "spine_01" },  { "spine03", "spine_02" },   { "spine01", "spine_03" },
+        { "neck01", "neck_01" },     { "head", "head" },         { "clavicle", "clavicle" },  { "upperarm01", "upperarm" },
+        { "lowerarm01", "lowerarm" }, { "wrist", "hand" },       { "upperleg01", "thigh" },   { "lowerleg01", "calf" },
+        { "foot", "foot" },          { "finger1-1", "thumb_01" }, { "finger1-2", "thumb_02" }, { "finger1-3", "thumb_03" },
+        { "finger2-1", "index_01" }, { "finger2-2", "index_02" }, { "finger2-3", "index_03" }, { "finger3-1", "middle_01" },
+        { "finger3-2", "middle_02" }, { "finger3-3", "middle_03" }, { "finger4-1", "ring_01" }, { "finger4-2", "ring_02" },
+        { "finger4-3", "ring_03" },  { "finger5-1", "pinky_01" }, { "finger5-2", "pinky_02" }, { "finger5-3", "pinky_03" },
+    };
+    std::string base = n, side;
+    if (n.size() > 2 && n[n.size() - 2] == '.' && (n.back() == 'l' || n.back() == 'r')) {
+        base = n.substr(0, n.size() - 2);
+        side = std::string("_") + n.back();
+    }
+    for (const auto& [from, to] : kMakeHuman)
+        if (base == from) return to + side;
+    return {};
+}
+
+} // namespace
+
 std::string canonicalBoneName(const std::string& name) {
     std::string n;
     for (char c : name) n += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
@@ -523,6 +580,7 @@ std::string canonicalBoneName(const std::string& name) {
     auto replace = [&](const std::string& from, const std::string& to) {
         if (auto p = n.find(from); p != std::string::npos) n.replace(p, from.size(), to);
     };
+    if (const std::string vrm = vrmOrMakeHumanBone(n); !vrm.empty()) return vrm;
     replace("indexfinger", "index");            // Synty
     if (n.rfind("finger_", 0) == 0) n = "middle_" + n.substr(7); // Synty's merged fingers
     replace("_leaf", "");                       // UAL end markers
@@ -561,13 +619,28 @@ glm::vec3 modelForward(const ModelData& model) {
     return glm::vec3(0, 0, 1);
 }
 
+// Canonical names for a skeleton's bones; a "root" is the pelvis on a
+// skeleton that has none (MakeHuman's hips are its root).
+static std::vector<std::string> canonicalNames(const ModelData& model) {
+    std::vector<std::string> names;
+    for (const ModelBone& b : model.bones) names.push_back(canonicalBoneName(b.name));
+    if (std::find(names.begin(), names.end(), "pelvis") == names.end())
+        for (std::string& n : names)
+            if (n == "root") {
+                n = "pelvis";
+                break;
+            }
+    return names;
+}
+
 BoneMatch matchBones(const ModelData& source, const ModelData& target) {
     std::unordered_map<std::string, int> byName;
-    for (size_t i = 0; i < source.bones.size(); ++i) byName.emplace(canonicalBoneName(source.bones[i].name), static_cast<int>(i));
+    const std::vector<std::string> sourceNames = canonicalNames(source), targetNames = canonicalNames(target);
+    for (size_t i = 0; i < source.bones.size(); ++i) byName.emplace(sourceNames[i], static_cast<int>(i));
     BoneMatch m;
     m.sourceOf.assign(target.bones.size(), -1);
     for (size_t i = 0; i < target.bones.size(); ++i) {
-        auto it = byName.find(canonicalBoneName(target.bones[i].name));
+        auto it = byName.find(targetNames[i]);
         if (it != byName.end()) {
             m.sourceOf[i] = it->second;
             ++m.matched;
@@ -620,10 +693,11 @@ PoseRetarget::PoseRetarget(const ModelData& source, const ModelData& target, con
     // the ratio of pelvis heights, so a shorter character takes shorter
     // steps instead of sliding.
     m_moves.assign(nt, false);
+    const std::vector<std::string> targetNames = canonicalNames(target);
     for (size_t b = 0; b < nt; ++b) {
         const int s = m_match.sourceOf[b];
         if (s < 0) continue;
-        const std::string name = canonicalBoneName(target.bones[b].name);
+        const std::string& name = targetNames[b];
         if (name == "pelvis") {
             m_moves[b] = true;
             const float hs = m_sourceRestPos[static_cast<size_t>(s)].y, ht = positionOf(m_targetRest[b]).y;
@@ -656,7 +730,7 @@ PoseRetarget::PoseRetarget(const ModelData& source, const ModelData& target, con
     for (size_t b = 0; b < nt; ++b) {
         const int s = m_match.sourceOf[b], p = m_targetParent[b];
         if (m_moves[b]) continue; // the root and pelvis carry the body: never tilted
-        const std::string name = canonicalBoneName(target.bones[b].name);
+        const std::string& name = targetNames[b];
         auto is = [&](const char* prefix) { return name.rfind(prefix, 0) == 0; };
         if (is("foot") || is("ball") || is("toe")) continue;
         // A hand and its fingers turn with the forearm, so they keep their

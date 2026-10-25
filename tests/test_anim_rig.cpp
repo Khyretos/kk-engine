@@ -778,3 +778,25 @@ TEST(AnimRig, HumanArmForearmTakesTheTwistWithinItsRange) {
         }
     }
 }
+
+// VRM avatars (VRoid) and MakeHuman's rig pair with the UE-style names,
+// so the anime and the realistic person play the same clips.
+TEST(AnimRig, CanonicalNamesPairVrmAndMakeHuman) {
+    EXPECT_EQ(kke::canonicalBoneName("J_Bip_C_Hips"), "pelvis");
+    EXPECT_EQ(kke::canonicalBoneName("J_Bip_L_UpperArm"), "upperarm_l");
+    EXPECT_EQ(kke::canonicalBoneName("J_Bip_R_LowerLeg"), "calf_r");
+    EXPECT_EQ(kke::canonicalBoneName("J_Bip_L_Little2"), "pinky_02_l");
+    EXPECT_EQ(kke::canonicalBoneName("J_Bip_C_UpperChest"), "spine_03");
+    EXPECT_EQ(kke::canonicalBoneName("upperarm01.L"), "upperarm_l");
+    EXPECT_EQ(kke::canonicalBoneName("finger2-3.R"), "index_03_r");
+    EXPECT_EQ(kke::canonicalBoneName("wrist.L"), kke::canonicalBoneName("J_Bip_L_Hand"));
+    EXPECT_EQ(kke::canonicalBoneName("spine05"), kke::canonicalBoneName("J_Bip_C_Spine"));
+    EXPECT_EQ(kke::canonicalBoneName("root"), "root"); // UE's root stays the root
+    // MakeHuman's hips are its root: paired as the pelvis on a skeleton without one.
+    kke::ModelData mh, vrm;
+    for (const char* n : { "root", "spine05", "upperarm01.L" }) mh.bones.push_back({ n, -1 });
+    for (const char* n : { "J_Bip_C_Hips", "J_Bip_C_Spine", "J_Bip_L_UpperArm" }) vrm.bones.push_back({ n, -1 });
+    const kke::BoneMatch m = kke::matchBones(vrm, mh);
+    EXPECT_EQ(m.matched, 3);
+    EXPECT_EQ(m.sourceOf[0], 0);
+}
