@@ -20,13 +20,27 @@
 #include "kke/modules/PhysicsModule.h"
 #endif
 
+#include <filesystem>
 #include <iostream>
 #include <vector>
 
 // The sandbox: finds your asset packs, lets you build with them and break
 // what you built. See SandboxModule.h and docs/HISTORY.md "Sandbox".
-int main() {
+//
+//   sandbox                             the sandbox's own level
+//   sandbox games/my_game [level]       edit games/my_game/scenes/<level>.scene.json
+//                                       with the game's models/ (docs/SCENES.md)
+int main(int argc, char** argv) {
     try {
+        // Before Application: it may switch to the executable's folder
+        // (enterRuntimeDirectory), and a relative game path means the
+        // folder it was typed in.
+        std::string game;
+        if (argc > 1) {
+            std::error_code ec;
+            const std::filesystem::path abs = std::filesystem::absolute(argv[1], ec);
+            game = ec ? std::string(argv[1]) : abs.lexically_normal().string();
+        }
         kke::Application app("Kreative Kompas Engine - Sandbox", 1280, 720);
         // A bright day to build in (assets/moods/clear_day.yaml).
         app.setMood("clear_day");
@@ -69,6 +83,7 @@ int main() {
         // tool down (SandboxModule::escWouldCancel).
         app.addModule<kke::GameShellModule>("Sandbox", "Drag things in, then bonk, shoot, burn and melt them");
         auto& sandbox = app.addModule<kke_sandbox::SandboxModule>();
+        if (!game.empty()) sandbox.setGame(game, argc > 2 ? argv[2] : "");
         panels.push_back(&app.addModule<kke::DebugControlModule>());
         panels.push_back(&app.addModule<kke::StatsModule>());
         sandbox.setEnginePanels(panels);

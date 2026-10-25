@@ -146,13 +146,24 @@ void SandboxModule::init(kke::Application& app) {
     if (const char* replay = std::getenv("KKE_SANDBOX_REPLAY"); replay && *replay) loadReplay(replay);
     const char* base = SDL_GetBasePath();
     std::string folder = kke::findAssetFolder("assets/synty", { "KKE_ASSETS_DIR", "KKE_SYNTY_DIR" }, base ? base : "", &m_searched);
-    if (!folder.empty()) openAssetFolder(folder);
+    if (!folder.empty() || !m_gameFolder.empty()) openAssetFolder(folder);
     else kke::log::get(name())->info("no asset folder found - the Assets panel lists where it looked and takes a path");
     // Save next to the scenes kke_demo loads (its Scenes panel lists every
     // scenes/*.scene.json), so a level built here is playable there.
     const std::string scenes = kke::findAssetFolder("scenes", { "KKE_SCENES_DIR" }, base ? base : "");
     if (!scenes.empty())
         m_layoutPath = (std::filesystem::path(scenes) / "sandbox.scene.json").string();
+    // A game's level: saved in the game's own scenes/, which its Lua
+    // scene.load("<level>") reads first (docs/SCENES.md).
+    if (!m_gameFolder.empty()) {
+        m_layoutPath = (std::filesystem::path(m_gameFolder) / "scenes" / (m_gameLevel + ".scene.json")).string();
+        m_levelName = m_gameLevel;
+        m_mode = Mode::Build;
+        std::error_code ec;
+        if (std::filesystem::exists(m_layoutPath, ec)) loadLayout(m_layoutPath);
+        else m_status = "New level: Save (Ctrl+S) writes " + m_layoutPath;
+        kke::log::get(name())->info("editing the level '{}' of the game in '{}'", m_gameLevel, m_gameFolder);
+    }
     // Optional: KKE_SANDBOX_LAYOUT=file.json loads a layout at startup
     // (used by the automated screenshot tests, handy for sharing scenes).
     if (const char* layout = std::getenv("KKE_SANDBOX_LAYOUT")) {
@@ -184,6 +195,17 @@ void SandboxModule::setEnginePanels(std::vector<kke::Module*> panels) {
     for (kke::Module* m : m_enginePanels) m->setUiVisible(m_showEnginePanels);
 }
 
+void SandboxModule::setGame(const std::string& folder, const std::string& level) {
+    if (folder.empty()) {
+        m_gameFolder.clear();
+        return;
+    }
+    std::error_code ec;
+    const std::filesystem::path abs = std::filesystem::absolute(folder, ec);
+    m_gameFolder = (ec ? std::filesystem::path(folder) : abs).lexically_normal().string();
+    m_gameLevel = level.empty() ? std::string("level") : level;
+}
+
 void SandboxModule::openAssetFolder(const std::string& folder) {
     clearAll();
     if (m_bat) m_models->remove(m_bat);
@@ -196,8 +218,10 @@ void SandboxModule::openAssetFolder(const std::string& folder) {
     for (Pickup& p : m_pickups)
         if (p.instance) m_models->remove(p.instance);
     m_pickups.clear();
-    m_catalog = kke::AssetCatalog::scan(folder);
-    m_assetFolder = m_catalog.assets.empty() ? std::string() : folder;
+    m_catalog = folder.empty() ? kke::AssetCatalog{} : kke::AssetCatalog::scan(folder);
+    // The game's own models first, as the game itself sees them.
+    if (!m_gameFolder.empty()) m_catalog.addOwnModels((std::filesystem::path(m_gameFolder) / "models").string());
+    m_assetFolder = m_catalog.assets.empty() ? std::string() : folder.empty() ? m_gameFolder : folder;
     // The palette shows only the blocks whose assets these packs have.
     for (size_t i = 0; i < m_blocks.size(); ++i)
         m_blockAssets[i] = kke::availableAssets(m_blocks[i], [&](const std::string& n) { return m_catalog.find(n) != nullptr; });
@@ -205,7 +229,7 @@ void SandboxModule::openAssetFolder(const std::string& folder) {
     m_filterCategory.clear();
     m_filterDirty = true;
     if (m_assetFolder.empty()) {
-        m_status = "No model files (.fbx/.obj/.gltf) under '" + folder + "'";
+        m_status = "No model files (.fbx/.obj/.gltf/.glb) under '" + (folder.empty() ? m_gameFolder + "/models" : folder) + "'";
         kke::log::get(name())->warn("{}", m_status);
         return;
     }
@@ -214,7 +238,7 @@ void SandboxModule::openAssetFolder(const std::string& folder) {
     m_overlay = 1; // the pack's first grid, if it has one: Synty's Prototype look
     applyLook();
     m_status = std::to_string(m_catalog.assets.size()) + " assets in " + std::to_string(m_catalog.packs.size()) + " pack(s)";
-    kke::log::get(name())->info("asset folder '{}': {}", folder, m_status);
+    kke::log::get(name())->info("asset folder '{}': {}", m_assetFolder, m_status);
 }
 
 // ---------------------------------------------------------------- objects
@@ -1623,6 +1647,9 @@ kke::SceneFile SandboxModule::toScene() const {
 bool SandboxModule::saveLayout(const std::string& path) {
     try {
         const kke::SceneFile scene = toScene();
+        // A game's first level: its scenes/ folder may not exist yet.
+        if (!m_gameFolder.empty() && std::filesystem::path(path).has_parent_path())
+            std::filesystem::create_directories(std::filesystem::path(path).parent_path());
         scene.save(path);
         m_status = "Saved " + std::to_string(m_objects.size()) + " objects to " + path;
         kke::log::get(name())->info("{} (assets: {})", m_status, scene.assetsUsed().size());
@@ -2038,9 +2065,13 @@ void SandboxModule::inspectorUi() {
     if (p.section("Level")) {
         p.textField("Name", m_levelName);
         p.textField("File", m_layoutPath);
-        p.text("A kke.scene file in scenes/: kke_demo lists it in its Scenes panel (walk it with collision). "
-               "Older sandbox layouts load too.",
-               Tone::Muted);
+        if (!m_gameFolder.empty())
+            p.text("This game's level: its Lua loads it with scene.load(\"" + m_gameLevel + "\"), the models from the game's models/ folder.",
+                   Tone::Muted);
+        else
+            p.text("A kke.scene file in scenes/: kke_demo lists it in its Scenes panel (walk it with collision). "
+                   "Older sandbox layouts load too.",
+                   Tone::Muted);
         if (p.button("Save (Ctrl+S)")) saveLayout(m_layoutPath);
         if (p.button("Load (Ctrl+L)")) loadLayout(m_layoutPath);
         if (p.button("Clear")) {

@@ -55,6 +55,7 @@ file and line, and then OK or FAILED:
 tools/check_game my_game                  # the game's own scripts
 tools/check_game my_game --shot look.jpg  # and a screenshot
 tools/check_game my_game --keys "e space" # press keys while it runs
+tools/check_game sandbox --arg games/my_game   # the level editor on my_game
 ```
 
 It works on a server with no screen and no GPU. An assistant is told
