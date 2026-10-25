@@ -185,6 +185,10 @@ private:
     };
     void createLayerResources();
     void destroyLayerResources();
+    // Everything the constructor made; safe to call twice and on a
+    // half-built object (the constructor calls it when it throws).
+    void releaseResources();
+    void createPipelines(VkRenderPass renderPass, bool targetEncoded);
     std::unique_ptr<LayerTarget> createLayerTarget(VkExtent2D extent);
     void destroyLayerTarget(LayerTarget& target);
     LayerTarget* layerTarget(Rml::LayerHandle handle); // nullptr = the frame's own image

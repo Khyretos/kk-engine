@@ -146,8 +146,11 @@ void ModelModule::init(Application& app) {
         // ENG-G08: skinning on the GPU (shaders/skin.comp) unless
         // KKE_CPU_SKINNING=1 (the CPU path, for comparisons).
         const char* cpuSkinning = std::getenv("KKE_CPU_SKINNING");
-        m_gpuSkinning = !(cpuSkinning && std::string(cpuSkinning) == "1");
-        if (m_gpuSkinning) createSkinPipeline();
+        // On only once the pipeline exists: other modules still load models
+        // through a module whose init() threw, and must get the CPU path.
+        const bool gpuSkinning = !(cpuSkinning && std::string(cpuSkinning) == "1");
+        if (gpuSkinning) createSkinPipeline();
+        m_gpuSkinning = gpuSkinning;
     }
 
     PipelineConfig config;
@@ -656,6 +659,10 @@ void ModelModule::uploadDeformed(Instance& inst, uint32_t frameIndex) {
 // skin.comp's descriptor set layout (bind vertices, skin data, the part's
 // vertices: three storage buffers), its pipeline layout and pipeline.
 void ModelModule::createSkinPipeline() {
+    // The shader first: when it is missing (no compiled shaders where the
+    // game started) init() throws before anything below exists, and a
+    // module whose init() threw never gets shutdown() (BUG-093).
+    VkShaderModule module = loadShaderModule(m_app->device(), "shaders/skin.comp.spv");
     VkDescriptorSetLayoutBinding bindings[3]{};
     for (uint32_t i = 0; i < 3; ++i) bindings[i] = { i, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr };
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
@@ -671,7 +678,6 @@ void ModelModule::createSkinPipeline() {
     pipelineLayoutInfo.pushConstantRangeCount = 1;
     pipelineLayoutInfo.pPushConstantRanges = &push;
     VK_CHECK(vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_skinLayout));
-    VkShaderModule module = loadShaderModule(m_app->device(), "shaders/skin.comp.spv");
     VkComputePipelineCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
     info.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
