@@ -21,6 +21,7 @@ add_executable(kke_tests
     test_node_graph.cpp
     test_ai.cpp
     test_terrain.cpp
+    test_day_night.cpp
     test_touch_gestures.cpp
     test_touch_controls.cpp
     test_demo_panel.cpp

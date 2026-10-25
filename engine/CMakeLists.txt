@@ -135,6 +135,8 @@ set(ENGINE_SOURCES
     src/SphereImpostors.cpp
     src/Terrain.cpp
     src/ScriptTerrain.cpp
+    src/DayNight.cpp
+    src/ScriptClock.cpp
     src/ParticleSim.cpp
     src/ParticleStep.cpp
     src/ParticleMotion.cpp

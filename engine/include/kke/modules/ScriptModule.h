@@ -28,6 +28,7 @@ class EventListener;
 namespace kke {
 
 class DynamicMeshRenderer;
+class ScriptClock;
 class ScriptTerrain;
 class ParticleEffects;
 class ParticleLibrary;
@@ -76,6 +77,8 @@ class ParticleLibrary;
 //   terrain.*    create, height, normal, slope, ground, raise, lower, smooth,
 //                flatten, paint, layer, info, remove: heightmap ground
 //                (kke/ScriptTerrain.h; collides through RigidBodyModule)
+//   clock.*      start, set, pause, resume, stop, hour, time, isDay, sun,
+//                dayLength: time of day; Dawn/Dusk/Hour hooks (kke/ScriptClock.h)
 //   store.*      save, load, add, remove, keys: what outlives the session
 //                (kke/ScriptStore.h; a file by default, see storeUrl)
 //
@@ -136,6 +139,8 @@ public:
     // ai.*'s creatures (docs/SCRIPTING.md "Creatures"): a game's C++ adds its
     // player here as an actor (AiWorld::addActor / setTransform) so they see it.
     ai::AiWorld& aiWorld() { return *m_ai; }
+    // clock.*: the time of day (kke/ScriptClock.h, docs/MOODS.md "Time of day").
+    ScriptClock* clock() { return m_clock.get(); }
 
     // Whether a script file runs on this machine right now (realms above).
     static bool runsHere(const std::string& path, bool authority);
@@ -223,6 +228,7 @@ private:
     std::unordered_map<uint32_t, CreatureClips> m_creatureClips; // ai.anims, by model instance
     ScriptLights m_lights; // light.*: lamps scripts placed (kke/ScriptLights.h)
     std::unique_ptr<ScriptTerrain> m_terrain; // terrain.*
+    std::unique_ptr<ScriptClock> m_clock;     // clock.*
     // fx.*: one particle pool and library for every script, made on first use.
     static constexpr size_t kFxParticles = 8000;
     std::unique_ptr<ParticleEffects> m_fxEffects;

@@ -132,6 +132,50 @@ curve and the look, to the colours on screen, read with tetrahedral
 interpolation (greys stay grey). The engine ships `teal_orange` and
 `bleach_bypass` (made by `tools/luts/make_luts.py`).
 
+## Time of day
+
+A mood is one moment. The clock moves through all of them: the sun rises
+in the east, crosses the south and sets in the west. The sky, the sun's
+colour and strength, and the exposure follow it, through golden hour and
+dusk to a moonlit night and back.
+
+```lua
+clock.start{ hour = 7, dayLength = 1200 }   -- 7 in the morning; a whole day takes 20 real minutes
+clock.set(18.5)                             -- jump to half past six in the evening
+print(clock.time(), clock.isDay())          -- "18:30"  true
+local towardsSun, elevation = clock.sun()   -- for a sundial, or a vampire
+clock.pause(); clock.resume(); clock.stop()
+
+hook.Add("Dusk", "lamps", function() light.point{ pos = Vec(0, 3, 0), color = Vec(1, 0.8, 0.5) } end)
+hook.Add("Dawn", "rooster", function() print("cock-a-doodle-doo") end)
+hook.Add("Hour", "bell", function(e) if e.hour == 12 then print("noon") end end)
+```
+
+- `clock.start{...}` also takes `noon` (how high the sun climbs in
+  degrees, default 62; lower for a northern winter), and `sunrise` and
+  `sunset` hours (6 and 18). `clock.set(hour)` alone shows that time and
+  keeps it there. `clock.dayLength(seconds)` changes the speed.
+- By night the moon (opposite the sun, at least 25 degrees up) lights the
+  scene in a pale blue, and the exposure rises so a night level stays
+  playable.
+- The clock turns the scene's fill light (a mood's `fill`) off and lets
+  the sky fill the shadows. Choosing a mood (`mood.set`, or a scene that
+  has one) stops the clock. So does `clock.stop()`, which leaves the
+  light as it is. Unloading the script that started it stops it too.
+- The sun moves every frame. The sky follows when it has changed enough
+  to see, at most twice a second, because each new sky is analysed again
+  for ambient light and reflections (a few milliseconds on the CPU). At a
+  real game speed that's every few seconds around dusk. Even at an hour
+  a second, the clock cost about 10% of a frame in our software-rendered
+  check.
+- In C++: `kke::DayNight` (`kke/DayNight.h`) gives the look at any hour
+  (`lookAt`), moves the clock (`advance`, which returns the hours, dawns
+  and dusks it passed) and puts the look into a `Lighting` (`apply`).
+  `ScriptModule::clock()` is the one Lua uses.
+
+Not yet: stars and the moon drawn in the sky, clouds that move, weather
+(ENG-F81), and keeping every player's clock together in multiplayer.
+
 ## In C++
 
 `app.setMood(name)` loads and applies a mood; `app.mood()` is the last one
