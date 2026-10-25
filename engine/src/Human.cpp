@@ -92,6 +92,16 @@ std::vector<glm::vec3> vertexNormals(const HumanPack& pack, const std::vector<gl
 } // namespace
 
 Human::Human(const HumanPack& pack) : m_pack(&pack) {
+    if (const int body = pack.findGroup("body"); body >= 0) {
+        std::vector<bool> seen(pack.positions().size(), false);
+        for (const HumanQuad& q : pack.quads())
+            if (q.group == body)
+                for (uint32_t v : q.verts)
+                    if (!seen[v]) {
+                        seen[v] = true;
+                        m_bodyVerts.push_back(v);
+                    }
+    }
     for (size_t t = 0; t < pack.targets().size(); ++t) {
         const std::string& name = pack.targets()[t].name;
         const std::string base = name.substr(name.rfind('/') + 1);
@@ -147,6 +157,24 @@ float Human::get(const std::string& modifier) const {
 
 void Human::reset() { m_values.clear(); }
 
+void Human::setAll(const std::map<std::string, float>& values) {
+    m_values.clear();
+    for (const auto& [name, v] : values) {
+        const int i = m_pack->findModifier(name);
+        m_values[name] = i < 0 ? v : std::clamp(v, m_pack->modifiers()[i].min, m_pack->modifiers()[i].max);
+    }
+    float sum = 0.0f;
+    std::vector<std::string> ancestry;
+    for (const HumanModifier& m : m_pack->modifiers())
+        if (isAncestry(macroVar(m.macro))) {
+            ancestry.push_back(m.name);
+            sum += get(m.name);
+        }
+    if (ancestry.empty() || std::abs(sum - 1.0f) < 0.02f) return;
+    for (const std::string& a : ancestry)
+        m_values[a] = sum > 1e-6f ? get(a) / sum : 1.0f / static_cast<float>(ancestry.size());
+}
+
 std::map<std::string, float> Human::values() const {
     std::map<std::string, float> out;
     for (const auto& [name, v] : m_values) {
@@ -188,11 +216,49 @@ std::vector<std::pair<int, float>> Human::targetWeights() const {
 }
 
 std::vector<glm::vec3> Human::shapedPositions() const {
-    std::vector<glm::vec3> p = m_pack->positions();
-    for (auto [t, w] : targetWeights()) {
+    // The body-type targets cover the whole mesh, so their sum is kept
+    // until a body-type slider moves: dragging a nose slider then only
+    // adds the few small targets on top.
+    std::array<float, VarCount> value{};
+    for (const HumanModifier& mod : m_pack->modifiers())
+        if (const Var v = macroVar(mod.macro); v != VarCount) value[v] = get(mod.name);
+    const std::vector<float> key(value.begin(), value.end());
+    if (m_macroKey != key || m_macroShape.empty()) {
+        m_macroShape = m_pack->positions();
+        for (const MacroTarget& m : m_macroTargets) {
+            const float w = macroWeight(m, value.data());
+            if (w <= 1e-5f) continue;
+            const HumanTarget& tg = m_pack->targets()[m.target];
+            for (size_t k = 0; k < tg.verts.size(); ++k) m_macroShape[tg.verts[k]] += tg.offsets[k] * w;
+        }
+        m_macroKey = key;
+    }
+    std::vector<glm::vec3> p = m_macroShape;
+    for (const HumanModifier& mod : m_pack->modifiers()) {
+        if (!mod.macro.empty() || mod.targets.empty()) continue;
+        const float v = get(mod.name);
+        int t = -1;
+        float w = 0.0f;
+        if (mod.targets.size() == 1 && v > 1e-5f) {
+            t = mod.targets[0];
+            w = v;
+        } else if (mod.targets.size() == 2 && v < -1e-5f) {
+            t = mod.targets[0];
+            w = -v;
+        } else if (mod.targets.size() == 2 && v > 1e-5f) {
+            t = mod.targets[1];
+            w = v;
+        }
+        if (t < 0) continue;
         const HumanTarget& tg = m_pack->targets()[t];
         for (size_t k = 0; k < tg.verts.size(); ++k) p[tg.verts[k]] += tg.offsets[k] * w;
     }
+    // Stand on y = 0 (MakeHuman centres the body on the origin), so a
+    // child and a tall adult both have their feet on the floor.
+    float floor = 1e30f;
+    for (uint32_t v : m_bodyVerts) floor = std::min(floor, p[v].y);
+    if (floor < 1e29f)
+        for (glm::vec3& x : p) x.y -= floor;
     return p;
 }
 

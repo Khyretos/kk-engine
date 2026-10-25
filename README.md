@@ -93,6 +93,7 @@ Actions. Platforms, hardware targets and consoles: [docs/PLATFORMS.md](docs/PLAT
 | `melt_demo` | Pour lava on ice, wax, chocolate and aluminium and watch them melt |
 | `sea_demo` | Drive a boat over the swell; foam floats, iron sinks |
 | `jiggle_demo` | Jelly on a plate and soft-tissue bones on a jogging character |
+| `character_creator` | Make a realistic person with about 300 sliders on MakeHuman's CC0 human; save it and share it as a short code |
 | `farm_demo` | You are a dog on a farm; sheep, cows, pigs, horses and a fox react to you (AI core) |
 | `procedural_demo` | A spider, a beetle, a dog and a person walking over hills with no animation clips: procedural gaits, look-at, FABRIK, and active ragdolls that stagger, fall and get up |
 | `pet_companion` | You and a pug in a garden: come, sit, stay, fetch and pet it with mouse, controller or touch; it reads what you do and never gets in your way (AI core, orders) |

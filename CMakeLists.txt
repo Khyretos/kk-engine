@@ -859,6 +859,22 @@ endfunction()
 # (kke::UiModule, kke::LobbyModule, kke::DemoPanelModule): the UI shaders
 # and the bundled Noto fonts. Button prompt glyphs are copied for every
 # game already (see engine/CMakeLists.txt).
+# A game with kke::CharacterCreatorModule (docs/HUMANS.md): the screen's
+# files, the MakeHuman pack and its credits next to the executable, and
+# the shaders it draws with.
+function(kke_use_character_creator TARGET)
+    kke_use_ui(${TARGET})
+    foreach(f creator.rml creator.rcss)
+        engine_copy_runtime_file(${TARGET} ${CMAKE_SOURCE_DIR}/assets/ui/character_creator/${f} assets/ui/character_creator/${f})
+    endforeach()
+    foreach(f makehuman.kkhpack credits.json)
+        engine_copy_runtime_file(${TARGET} ${CMAKE_SOURCE_DIR}/assets/humans/${f} assets/humans/${f})
+    endforeach()
+    foreach(shader cube.vert cube.frag glow.frag shadow.vert shadow.frag model.vert model_instanced.vert shadow_instanced.vert model.frag)
+        engine_add_shader(${TARGET} ${CMAKE_SOURCE_DIR}/shaders/${shader})
+    endforeach()
+endfunction()
+
 function(kke_use_ui TARGET)
     foreach(shader rml_ui.vert rml_ui.frag rml_gradient.frag)
         engine_add_shader(${TARGET} ${CMAKE_SOURCE_DIR}/shaders/${shader})
@@ -1045,6 +1061,10 @@ if(KKE_ENABLE_JOLT AND ENGINE_ENABLE_LUA)
     add_subdirectory(games/pet_companion)
     add_subdirectory(games/platoon)
 endif()
+
+# Character creator: a MakeHuman body made with sliders, saved, and sent
+# as a share code (games/character_creator/README.md, docs/HUMANS.md).
+add_subdirectory(games/character_creator)
 
 # Cloth: fabrics, a bed, nets and a cape on Jolt soft bodies with the
 # engine's clipping protection (games/cloth_demo/README.md, docs/CLOTH.md).

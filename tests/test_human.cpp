@@ -1,4 +1,5 @@
 #include "kke/Human.h"
+#include "kke/HumanLook.h"
 #include "kke/HumanPack.h"
 
 #include <gtest/gtest.h>
@@ -151,6 +152,7 @@ TEST(Human, BakeIsASkinnedModelWhoseRestPoseIsTheShape) {
     EXPECT_EQ(m.bones.size(), 163u);
     EXPECT_TRUE(m.isSkinned());
     EXPECT_GT(m.triangleCount(), 26000u);
+    EXPECT_NEAR(m.boundsMin.y, 0.0f, 1e-5f); // standing on the floor
 
     std::vector<glm::mat4> rest(m.bones.size());
     for (size_t b = 0; b < m.bones.size(); ++b) rest[b] = m.bones[b].localRest;
@@ -197,4 +199,80 @@ TEST(Human, ReshapeMatchesAFreshBake) {
         EXPECT_LT(glm::length(glm::vec3(fresh.model.bones[b].localRest[3] - bake.model.bones[b].localRest[3])), 1e-5f);
     // Fast enough to follow a dragged slider (a debug build, so generous).
     EXPECT_LT(ms, 500.0);
+}
+
+TEST(HumanLook, JsonKeepsEverything) {
+    kke::HumanLook look;
+    look.shape["nose/nose-hump-decr|incr"] = 0.25f;
+    look.shape["macrodetails/Age"] = 0.7f;
+    look.skin = { 0.4f, 0.3f, 0.2f };
+    look.hair = "wavy";
+    look.hairLength = 0.6f;
+    kke::HumanLook back;
+    ASSERT_TRUE(kke::lookFromJson(kke::lookToJson(look), back));
+    EXPECT_EQ(back.shape, look.shape);
+    EXPECT_NEAR(back.skin.r, 0.4f, 0.003f);
+    EXPECT_EQ(back.hair, "wavy");
+    EXPECT_FLOAT_EQ(back.hairLength, 0.6f);
+    std::string error;
+    EXPECT_FALSE(kke::lookFromJson("{\"format\":\"other\"}", back, &error));
+    EXPECT_FALSE(error.empty());
+    EXPECT_FALSE(kke::lookFromJson("not json", back));
+}
+
+TEST(HumanLook, ReadsMakeHumanSaves) {
+    const kke::HumanLook look = kke::lookFromMhm("version v1.1.1\nmodifier nose/nose-hump-decr|incr 0.300000\n"
+                                                 "modifier macrodetails/Gender 1.000000\nskinMaterial skins/default.mhmat\n");
+    EXPECT_FLOAT_EQ(look.shape.at("nose/nose-hump-decr|incr"), 0.3f);
+    EXPECT_FLOAT_EQ(look.shape.at("macrodetails/Gender"), 1.0f);
+    EXPECT_EQ(look.shape.size(), 2u);
+}
+
+TEST(HumanLook, ShareCodeIsShortAndBuildsTheSameBody) {
+    NEED_PACK();
+    kke::Human h(pack());
+    h.set("macrodetails/Gender", 0.83f);
+    h.set("macrodetails/African", 0.6f);
+    h.set("nose/nose-hump-decr|incr", -0.41f);
+    h.set("eyes/r-eye-scale-decr|incr", 0.2f);
+    kke::HumanLook look;
+    kke::takeShape(h, look);
+    look.hair = "afro";
+    const std::string code = kke::shareCode(look, pack());
+    EXPECT_EQ(code.rfind("kh1.", 0), 0u);
+    EXPECT_LT(code.size(), 100u);
+
+    kke::HumanLook theirs;
+    ASSERT_TRUE(kke::fromShareCode(code, pack(), theirs));
+    EXPECT_EQ(theirs.hair, "afro");
+    for (const auto& [k, v] : look.shape) EXPECT_NEAR(theirs.shape.at(k), v, 2.0f / 254.0f + 1e-6f) << k;
+    // The player's own body uses the rounded look too, so both machines
+    // bake exactly the same vertices.
+    const kke::HumanLook mine = kke::quantised(look, pack());
+    kke::Human a(pack()), b(pack());
+    kke::applyLook(a, mine);
+    kke::applyLook(b, theirs);
+    const auto pa = a.shapedPositions(), pb = b.shapedPositions();
+    ASSERT_EQ(pa.size(), pb.size());
+    EXPECT_TRUE(std::equal(pa.begin(), pa.end(), pb.begin()));
+
+    std::string error;
+    EXPECT_FALSE(kke::fromShareCode("kh1.!!", pack(), theirs, &error));
+    EXPECT_FALSE(kke::fromShareCode("kh1." + code.substr(4, 6), pack(), theirs, &error));
+    EXPECT_FALSE(kke::fromShareCode("hello", pack(), theirs, &error));
+}
+
+// A value a hair off the default rounds to the default, so the code read
+// back and coded again is the same code (the creator's CI self-test found
+// two codes for one look).
+TEST(HumanLook, ShareCodeIsTheSameAfterARoundTrip) {
+    NEED_PACK();
+    kke::HumanLook look;
+    look.shape["nose/nose-hump-decr|incr"] = 0.002f;
+    look.shape["macrodetails/Gender"] = 0.7f;
+    const std::string code = kke::shareCode(look, pack());
+    kke::HumanLook back;
+    ASSERT_TRUE(kke::fromShareCode(code, pack(), back));
+    EXPECT_EQ(back.shape.count("nose/nose-hump-decr|incr"), 0u);
+    EXPECT_EQ(kke::shareCode(back, pack()), code);
 }

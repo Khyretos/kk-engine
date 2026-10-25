@@ -1,0 +1,71 @@
+/*
+ * Character creator (kke::CharacterCreatorModule), Kreative Kompas Night
+ * colours (night #0c0917, plum #1c1329, plum-2 #2c1f3f, violet #5c398e,
+ * lilac #cca9ff, neon #bf4eff, orange #f3941f, mist #f4eefc).
+ * Sizes in dp; RmlUi has no default stylesheet, so blocks say display: block.
+ */
+* { font-family: Noto Sans; }
+body { width: 100%; height: 100%; color: #f4eefc; font-size: 14dp; pointer-events: none; }
+div, p, h1, h2 { display: block; }
+h1 { font-size: 20dp; font-weight: bold; color: #f4eefc; margin-bottom: 10dp; }
+h2 { font-size: 15dp; font-weight: bold; color: #cca9ff; margin: 12dp 0 8dp 0; }
+
+button {
+    display: inline-block; padding: 5dp 11dp; margin: 0 6dp 6dp 0;
+    background-color: #2c1f3f; color: #f4eefc; border: 1dp #5c398e; border-radius: 8dp;
+    cursor: pointer; font-size: 13dp; pointer-events: auto;
+}
+button:hover { background-color: #5c398e; }
+button.on { background-color: #5c398e; border-color: #bf4eff; }
+button.primary { background-color: #f3941f; color: #1c1329; border-color: #f3941f; font-weight: bold; }
+button.primary:hover { background-color: #ffb04a; }
+
+.bar { position: absolute; pointer-events: auto; }
+#views { left: 20dp; top: 18dp; }
+#actions { left: 20dp; bottom: 44dp; right: 470dp; }
+
+#panel {
+    position: absolute; right: 16dp; top: 16dp; bottom: 16dp; width: 440dp;
+    padding: 16dp 16dp 8dp 16dp; background-color: #1c1329f2; border: 1dp #5c398e; border-radius: 8dp;
+    pointer-events: auto;
+}
+#tabs { margin-bottom: 10dp; }
+.tab {
+    display: inline-block; padding: 4dp 10dp; margin: 0 5dp 6dp 0; border-radius: 8dp;
+    background-color: #2c1f3f; color: #cca9ff; cursor: pointer; font-size: 13dp;
+}
+.tab:hover { background-color: #3a2a52; }
+.tab.on { background-color: #bf4eff; color: #0c0917; font-weight: bold; }
+.tools { margin-bottom: 4dp; }
+
+#sliders { position: absolute; left: 16dp; right: 8dp; top: 150dp; bottom: 12dp; overflow-y: auto; padding-right: 8dp; }
+.slider { display: block; height: 30dp; }
+.slider .label { display: inline-block; width: 178dp; color: #f4eefc; font-size: 13dp; vertical-align: middle; }
+.slider .value { display: inline-block; width: 40dp; text-align: right; color: #f3941f; font-size: 12dp; }
+.slider button.reset { padding: 0 6dp; margin: 0 0 0 6dp; font-size: 11dp; color: #cca9ff; }
+
+input.range { display: inline-block; width: 118dp; height: 20dp; vertical-align: -5dp; cursor: pointer; }
+input.range slidertrack { display: block; height: 6dp; margin-top: 7dp; background-color: #0c0917; border: 1dp #5c398e; border-radius: 3dp; }
+input.range sliderbar { display: block; width: 16dp; height: 16dp; margin-top: 2dp; background-color: #bf4eff; border: 2dp #f4eefc; border-radius: 8dp; }
+input.range sliderbar:hover { background-color: #cca9ff; }
+input.range sliderarrowdec, input.range sliderarrowinc { display: none; }
+
+scrollbarvertical { width: 10dp; margin-left: 4dp; }
+scrollbarvertical slidertrack { background-color: #0c0917; border-radius: 5dp; }
+scrollbarvertical sliderbar { background-color: #5c398e; border-radius: 5dp; min-height: 24dp; }
+scrollbarvertical sliderarrowdec, scrollbarvertical sliderarrowinc { height: 0; }
+
+.swatches { display: block; }
+.swatch {
+    display: inline-block; width: 38dp; height: 38dp; margin: 0 8dp 8dp 0; border: 2dp #f4eefc; border-radius: 19dp;
+    cursor: pointer;
+}
+.swatch:hover { border-color: #bf4eff; }
+.swatch .tip { display: none; }
+.note { color: #a39cbc; font-size: 12dp; margin-top: 10dp; }
+
+#status {
+    position: absolute; left: 20dp; bottom: 90dp; padding: 6dp 12dp; border-radius: 8dp;
+    background-color: #f3941f; color: #1c1329; font-weight: bold;
+}
+#code { position: absolute; left: 20dp; bottom: 18dp; right: 470dp; color: #a39cbc; font-size: 11dp; }

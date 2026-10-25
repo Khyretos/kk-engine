@@ -25,7 +25,8 @@ namespace kke {
 // ("universal-female-young-averagemuscle-maxweight"), and its weight is
 // how close the sliders are to that body, word by word.
 //
-// Pure CPU, unit-tested in tests/test_human.cpp.
+// Pure CPU, unit-tested in tests/test_human.cpp. Not thread-safe: it
+// keeps the body-type shape between calls (one Human per thread).
 class Human {
 public:
     explicit Human(const HumanPack& pack);
@@ -38,12 +39,16 @@ public:
     void set(const std::string& modifier, float value);
     float get(const std::string& modifier) const; // the default when unset
     void reset(); // everything back to the default body
+    // All sliders at once (the rest at their defaults), each value as it
+    // is but clamped; the ancestry three are scaled to add up to 1 only if
+    // they don't. A loaded look uses this, so it bakes exactly as saved.
+    void setAll(const std::map<std::string, float>& values);
     // Every value that differs from its default, by name (what a save holds).
     std::map<std::string, float> values() const;
 
     // Each target that moves the body now, with its weight.
     std::vector<std::pair<int, float>> targetWeights() const;
-    // Every pack vertex, shaped by the sliders (metres).
+    // Every pack vertex, shaped by the sliders (metres), the soles on y = 0.
     std::vector<glm::vec3> shapedPositions() const;
     // Each joint's position on the shaped body: the centre of its vertices.
     glm::vec3 jointPosition(const std::string& joint, const std::vector<glm::vec3>& shaped) const;
@@ -79,6 +84,10 @@ private:
     const HumanPack* m_pack;
     std::map<std::string, float> m_values;
     std::vector<MacroTarget> m_macroTargets;
+    std::vector<uint32_t> m_bodyVerts; // the skin's vertices, to find the floor
+    // The base mesh plus the body-type targets, for these body-type values.
+    mutable std::vector<float> m_macroKey;
+    mutable std::vector<glm::vec3> m_macroShape;
 };
 
 } // namespace kke
