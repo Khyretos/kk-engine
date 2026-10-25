@@ -369,3 +369,30 @@ TEST(HumanClothes, EveryGarmentHasItsPart) {
     EXPECT_GT(lowest("crop top"), lowest("t-shirt") + 0.05f); // the belly shows
     EXPECT_TRUE(kke::garmentShape(pack(), shaped, "no such garment").verts.empty());
 }
+
+// A game gets the person dressed as one skinned model: a mesh per
+// garment on the body's own bones, in the garment's colour, every vertex
+// outside the skin it covers.
+TEST(HumanClothes, DressedBakeIsOneSkinnedModel) {
+    NEED_PACK();
+    kke::Human h(pack());
+    h.set("macrodetails/Gender", 0.0f);
+    kke::Human::Bake b = h.bake();
+    const size_t bodyMeshes = b.model.meshes.size();
+    const std::vector<kke::HumanLook::Worn> clothes = { { "t-shirt", { 1.0f, 0.0f, 0.0f } }, { "tennis skirt", {} }, { "shoes", {} } };
+    kke::dress(b.model, h, clothes);
+    ASSERT_EQ(b.model.meshes.size(), bodyMeshes + clothes.size());
+    for (size_t i = 0; i < clothes.size(); ++i) {
+        const kke::ModelMesh& m = b.model.meshes[bodyMeshes + i];
+        EXPECT_EQ(m.name, clothes[i].id);
+        EXPECT_TRUE(m.skinned);
+        EXPECT_GT(m.indices.size(), 60u) << m.name;
+        for (const kke::ModelVertex& v : m.vertices) {
+            ASSERT_LT(v.joints.x, b.model.bones.size());
+            ASSERT_NEAR(v.weights.x + v.weights.y + v.weights.z + v.weights.w, 1.0f, 1e-4f) << m.name;
+        }
+    }
+    EXPECT_EQ(b.model.materials[b.model.meshes[bodyMeshes].material].baseColor, glm::vec3(1.0f, 0.0f, 0.0f));
+    kke::dress(b.model, h, {}); // nothing worn: nothing added
+    EXPECT_EQ(b.model.meshes.size(), bodyMeshes + clothes.size());
+}

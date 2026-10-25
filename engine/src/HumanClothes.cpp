@@ -141,4 +141,54 @@ GarmentShape garmentShape(const HumanPack& pack, const std::vector<glm::vec3>& s
     return out;
 }
 
+ModelMesh garmentMesh(const ModelMesh& mesh, const std::vector<uint32_t>& sourceVertex, const GarmentShape& shape,
+                      std::vector<uint32_t>* from) {
+    ModelMesh out;
+    out.skinned = mesh.skinned;
+    const std::set<uint32_t> in(shape.verts.begin(), shape.verts.end());
+    std::map<uint32_t, uint32_t> index;
+    std::vector<uint32_t> source;
+    for (size_t t = 0; t + 2 < mesh.indices.size(); t += 3) {
+        const uint32_t a = mesh.indices[t], b = mesh.indices[t + 1], c = mesh.indices[t + 2];
+        if (!in.count(sourceVertex[a]) || !in.count(sourceVertex[b]) || !in.count(sourceVertex[c])) continue;
+        for (uint32_t v : { a, b, c }) {
+            auto [it, added] = index.emplace(v, static_cast<uint32_t>(out.vertices.size()));
+            if (added) {
+                ModelVertex mv = mesh.vertices[v];
+                mv.position += mv.normal * shape.offset;
+                out.vertices.push_back(mv);
+                source.push_back(v);
+            }
+            out.indices.push_back(it->second);
+        }
+    }
+    if (from) *from = std::move(source);
+    return out;
+}
+
+void dress(ModelData& model, const Human& human, const std::vector<HumanLook::Worn>& clothes, bool skeleton) {
+    if (clothes.empty()) return;
+    Human::BakeOptions options;
+    options.groups = { "helper-tights", "helper-skirt" };
+    options.skeleton = skeleton;
+    const Human::Bake helpers = human.bake(options); // the same bones as any bake of this human
+    const std::vector<glm::vec3> shaped = human.shapedPositions();
+    for (const HumanLook::Worn& worn : clothes) {
+        const GarmentShape shape = garmentShape(human.pack(), shaped, worn.id);
+        for (size_t m = 0; m < helpers.model.meshes.size(); ++m) {
+            if (helpers.model.meshes[m].name != shape.group) continue;
+            ModelMesh mesh = garmentMesh(helpers.model.meshes[m], helpers.sourceVertex[m], shape);
+            if (mesh.indices.empty()) break;
+            ModelMaterial mat;
+            mat.name = "Clothes_" + worn.id;
+            mat.baseColor = worn.colour;
+            mat.roughness = worn.id == "shoes" ? 0.5f : 0.85f;
+            model.materials.push_back(mat);
+            mesh.name = worn.id;
+            mesh.material = static_cast<uint32_t>(model.materials.size() - 1);
+            model.meshes.push_back(std::move(mesh));
+        }
+    }
+}
+
 } // namespace kke

@@ -70,7 +70,8 @@ reads one.
   and a long skirt (docs/HUMANS.md "Clothes"), so they fit every body the
   sliders make. Fitted garments are models that move with the body's
   vertices; skirts are the engine's cloth pinned at the waist. Over the
-  network a garment is its name and colour.
+  network a garment is its name and colour. `bakeSkinned()` hands the
+  game the person dressed, every garment skinned to the body's bones.
 - **Saves** are JSON (`kk-human`, version 1) with MakeHuman's slider
   names, and `lookFromMhm` reads `.mhm` files from the MakeHuman app.
 - **The screen** is RmlUi: `assets/ui/character_creator/creator.rml` and

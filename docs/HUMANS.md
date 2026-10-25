@@ -172,6 +172,13 @@ every slider drag, like the scalp cap) or a `ClothDesc` from the skirt's
 faces. A slider change re-cuts the clothes once it rests, since socks and
 skirts are cut by height.
 
+For the game, `dress(model, human, clothes)` adds the clothes to a
+skinned bake as meshes on the body's own bones (`garmentMesh` keeps the
+suit's skin weights), so a dressed person is one skinned model and costs
+one skinned draw per garment; `CharacterCreatorModule::bakeSkinned()`
+returns it. Skirts come along as skinned meshes there; a game that wants
+them to swing runs them as cloth, as the creator does.
+
 These are plain garments in one colour each: MakeHuman's own `.mhclo`
 clothes (with textures) can't be downloaded from here, and are the next
 step for richer outfits.

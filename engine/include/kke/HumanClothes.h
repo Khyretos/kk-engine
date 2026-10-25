@@ -1,6 +1,9 @@
 #pragma once
 
+#include "kke/Human.h"
+#include "kke/HumanLook.h"
 #include "kke/HumanPack.h"
+#include "kke/ModelAsset.h"
 
 #include <glm/glm.hpp>
 
@@ -43,5 +46,20 @@ struct GarmentShape {
 // shaped: Human::shapedPositions(), for the cuts made by height (a skirt's
 // length, a sock's). Empty verts for an unknown garment.
 GarmentShape garmentShape(const HumanPack& pack, const std::vector<glm::vec3>& shaped, const std::string& id);
+
+// The garment cut from a bake of its group (Human::bake with shape.group
+// among the groups; `mesh` is that group's mesh, sourceVertex its map):
+// its triangles, each vertex `offset` out along its normal, skin weights
+// kept, so a skinned bake gives a skinned garment. from (optional):
+// garment vertex -> bake vertex, to move it again after Human::reshape.
+ModelMesh garmentMesh(const ModelMesh& mesh, const std::vector<uint32_t>& sourceVertex, const GarmentShape& shape,
+                      std::vector<uint32_t>* from = nullptr);
+
+// Adds the clothes to a bake of `human` (Human::bake(), skinned or not):
+// a mesh and a material in the garment's colour each, on the same bones,
+// so the game animates a dressed person as one model. Skirts are added as
+// skinned meshes too (they follow the hips and legs); a game that wants
+// them to swing runs them as cloth instead (garmentShape().cloth).
+void dress(ModelData& model, const Human& human, const std::vector<HumanLook::Worn>& clothes, bool skeleton = true);
 
 } // namespace kke

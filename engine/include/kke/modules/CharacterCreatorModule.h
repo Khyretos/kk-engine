@@ -73,7 +73,7 @@ public:
     std::string shareCode() const;
     void setLook(const HumanLook& look);
     const HumanPack* pack() const { return m_pack.get(); }
-    // The current body as a skinned model (bones and weights), for a game
+    // The current body, dressed, as a skinned model (bones and weights), for a game
     // to add to its ModelModule and animate.
     ModelData bakeSkinned() const;
 

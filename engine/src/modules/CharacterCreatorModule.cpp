@@ -859,6 +859,7 @@ ModelData CharacterCreatorModule::bakeSkinned() const {
     Human::Bake b = h.bake();
     for (ModelMaterial& m : b.model.materials)
         if (m.name == "Human_body") m.baseColor = look().skin;
+    dress(b.model, h, look().clothes);
     return std::move(b.model);
 }
 
@@ -1018,22 +1019,8 @@ void CharacterCreatorModule::dressUp() {
             w->drawn = std::make_unique<DynamicMeshRenderer>(*m_app);
         } else if (suit) {
             // The body suit's triangles that are all this garment.
-            const std::vector<uint32_t>& source = m_tightsBake.sourceVertex[0];
-            ModelMesh mesh;
+            ModelMesh mesh = garmentMesh(*suit, m_tightsBake.sourceVertex[0], shape, &w->from);
             mesh.name = worn.id;
-            std::map<uint32_t, uint32_t> index;
-            for (size_t t = 0; t + 2 < suit->indices.size(); t += 3) {
-                const uint32_t a = suit->indices[t], b = suit->indices[t + 1], c = suit->indices[t + 2];
-                if (!in.count(source[a]) || !in.count(source[b]) || !in.count(source[c])) continue;
-                for (uint32_t v : { a, b, c }) {
-                    auto [it, added] = index.emplace(v, static_cast<uint32_t>(w->from.size()));
-                    if (added) {
-                        w->from.push_back(v);
-                        mesh.vertices.push_back(suit->vertices[v]);
-                    }
-                    mesh.indices.push_back(it->second);
-                }
-            }
             if (mesh.indices.empty()) continue;
             w->data.meshes.push_back(std::move(mesh));
             ModelMaterial m;
