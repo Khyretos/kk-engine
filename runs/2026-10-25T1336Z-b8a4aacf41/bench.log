@@ -1,0 +1,196 @@
+Kreative Kompas Engine benchmark
+
+26 demos, about 15 minutes. Each opens its own window and plays by itself:
+please don't touch the mouse or keyboard, and keep other programs closed.
+Results go to C:\forgejo-runner\work\868e3ddd0b9c3ebe\hostexecutor\results\bench
+
+[1/26] Showcase: the course by autopilot
+    too slow: 4 fps, slowest 1% 2 fps, 1 hitch(es)
+[2/26] Showcase: stress test (300 crates, impacts)
+    too slow: 4 fps, slowest 1% 0 fps, 2 hitch(es)
+[3/26] Physics: rigid bodies and soft bodies
+    hung: normal exit
+[4/26] Melt: particle fluid
+    hung: exited with code 1 (0x00000001)
+[5/26] Jiggle: soft-body characters on tour
+    too slow: 12 fps, slowest 1% 7 fps, 0 hitch(es)
+[6/26] Sea: ocean and floating bodies
+    too slow: 13 fps, slowest 1% 5 fps, 1 hitch(es)
+[7/26] Audio: spatial sound tour
+    too slow: 6 fps, slowest 1% 1 fps, 0 hitch(es)
+[8/26] UI: RmlUi menus
+    too slow: 12 fps, slowest 1% 4 fps, 1 hitch(es)
+[9/26] UI: Dear ImGui panels
+    too slow: 17 fps, slowest 1% 14 fps, 0 hitch(es)
+[10/26] Sandbox: play mode
+    too slow: 17 fps, slowest 1% 7 fps, 1 hitch(es)
+[11/26] Synty scene
+    struggles: 17 fps, slowest 1% 15 fps, 0 hitch(es)
+[12/26] Climb Race: a race with 3 CPU climbers
+    too slow: 7 fps, slowest 1% 7 fps, 0 hitch(es)
+[13/26] Flying: six planes head-on at full speed, every 7 s
+    too slow: 9 fps, slowest 1% 1 fps, 1 hitch(es)
+[14/26] Procedural animation: gaits, look-at, a ragdoll hit
+    too slow: 8 fps, slowest 1% 7 fps, 0 hitch(es)
+[15/26] Cloth: many sheets falling over balls
+    too slow: 6 fps, slowest 1% 6 fps, 0 hitch(es)
+[16/26] Hair: strands in the wind
+    too slow: 0 fps, slowest 1% 0 fps, 0 hitch(es)
+[17/26] Cloth and hair: all six scenes (14 s each)
+    too slow: 7 fps, slowest 1% 5 fps, 0 hitch(es)
+[18/26] Farm: AI animals, farmer on autopilot
+    too slow: 12 fps, slowest 1% 5 fps, 1 hitch(es)
+[19/26] Pet companion: orders demo
+    too slow: 15 fps, slowest 1% 10 fps, 0 hitch(es)
+[20/26] Platoon: squad orders demo
+    too slow: 6 fps, slowest 1% 5 fps, 0 hitch(es)
+[21/26] Duel: two bots fighting
+    too slow: 8 fps, slowest 1% 3 fps, 1 hitch(es)
+[22/26] Goblin horde: crowd AI and ragdolls, bot hero
+    too slow: 8 fps, slowest 1% 5 fps, 0 hitch(es)
+[23/26] Racing: worst case, 24 cars head-on at 108 km/h
+    too slow: 5 fps, slowest 1% 2 fps, 17 hitch(es)
+[24/26] Tennis: busiest case, 100 people, 10 singles matches
+    too slow: 3 fps, slowest 1% 2 fps, 0 hitch(es)
+[25/26] Tennis: busiest case, 100 people, 10 doubles matches
+    too slow: 3 fps, slowest 1% 1 fps, 0 hitch(es)
+[26/26] Cookbook: Lua recipes
+    too slow: 12 fps, slowest 1% 9 fps, 0 hitch(es)
+
+Kreative Kompas Engine benchmark, 2026-10-25 13:26:04
+Engine windows-native (b8a4aacf41), Release build
+
+Machine
+  OS       Windows 10.0.19044
+  CPU      Intel(R) Core(TM) i5-4590 CPU @ 3.30GHz, 4 threads
+  RAM      16312 MB
+  GPU      llvmpipe (LLVM 22.1.8, 256 bits) (cpu (software), 16312 MB)
+  Driver   llvmpipe Mesa 26.2.4 (git-9a0169f2a7) (LLVM 22.1.8), Vulkan 1.4.354
+  Display  1920x1080 @ 60 Hz
+
+Demo                                        Result          FPS     1% low  p99 ms  Hitches  Warnings
+----------------------------------------------------------------------------------------------------
+Showcase: the course by autopilot           too slow        3.8     1.5     647.4   1        0
+Showcase: stress test (300 crates, impacts) too slow        3.6     0.4     2351.6  2        0
+Physics: rigid bodies and soft bodies       hung            2.6     0.3     3053.5  0        0
+Melt: particle fluid                        hung            -       -       -       -        0
+Jiggle: soft-body characters on tour        too slow        11.9    7.3     129.5   0        0
+Sea: ocean and floating bodies              too slow        13.3    4.6     116.3   1        0
+Audio: spatial sound tour                   too slow        6.4     0.5     224.4   0        0
+UI: RmlUi menus                             too slow        11.9    3.8     103.5   1        0
+UI: Dear ImGui panels                       too slow        17.0    13.9    69.4    0        0
+Sandbox: play mode                          too slow        16.9    6.8     74.8    1        0
+Synty scene                                 struggles       17.0    15.2    63.6    0        0
+Climb Race: a race with 3 CPU climbers      too slow        7.0     6.6     152.1   0        0
+Flying: six planes head-on at full speed, e~too slow        9.1     1.3     177.3   1        0
+Procedural animation: gaits, look-at, a rag~too slow        7.6     6.8     141.0   0        0
+Cloth: many sheets falling over balls       too slow        6.2     5.8     170.3   0        0
+Hair: strands in the wind                   too slow        0.1     0.1     8708.2  0        0
+Cloth and hair: all six scenes (14 s each)  too slow        7.0     4.6     175.7   0        0
+Farm: AI animals, farmer on autopilot       too slow        12.1    5.0     91.9    1        0
+Pet companion: orders demo                  too slow        15.0    10.1    82.9    0        0
+Platoon: squad orders demo                  too slow        5.9     5.3     189.0   0        0
+Duel: two bots fighting                     too slow        8.4     3.0     140.7   1        0
+Goblin horde: crowd AI and ragdolls, bot he~too slow        7.5     5.4     182.5   0        0
+Racing: worst case, 24 cars head-on at 108 ~too slow        4.5     1.6     637.3   17       0
+Tennis: busiest case, 100 people, 10 single~too slow        2.5     1.7     582.6   0        0
+Tennis: busiest case, 100 people, 10 double~too slow        2.5     1.3     750.1   0        0
+Cookbook: Lua recipes                       too slow        12.1    9.2     101.1   0        0
+
+Results: smooth = the slowest 1% of frames still >= 55 fps, playable >= 30, struggles >= 15, too slow below.
+The demos run uncapped (no vsync) to show what this machine can do.
+
+Details
+
+* Showcase: the course by autopilot: ok (normal exit)
+    hitch at 14.3 s: 647.4 ms (usually 264.3), present took 582.1 ms (usually 227.8 ms)
+
+* Showcase: stress test (300 crates, impacts): ok (normal exit)
+    hitch at 7.8 s: 2351.6 ms (usually 260.5), present took 2307.2 ms (usually 228.6 ms)
+    hitch at 16.3 s: 623.3 ms (usually 260.5), present took 543.7 ms (usually 271.6 ms)
+
+* Physics: rigid bodies and soft bodies: hung (normal exit)
+    | [2026-10-25 13:28:28.558][engine][Application][Kreative Kompas Engine - Physics Demo][info]: Hardware target: desktop (no specific device recognised); platform backend: desktop
+    | [2026-10-25 13:28:28.558][engine][Application][Kreative Kompas Engine - Physics Demo][info]: UI profile: desktop
+    | [2026-10-25 13:28:28.561][engine][Governor][Kreative Kompas Engine - Physics Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 1.00
+    | [2026-10-25 13:28:28.579][engine][VulkanDevice][Kreative Kompas Engine - Physics Demo][info]: using device: llvmpipe (LLVM 22.1.8, 256 bits)
+    | [2026-10-25 13:28:28.579][engine][VulkanDevice][Kreative Kompas Engine - Physics Demo][info]: inline ray tracing (VK_KHR_ray_query): on
+    | [2026-10-25 13:28:30.042][engine][SwapChain][Kreative Kompas Engine - Physics Demo][info]: colour output: format 50 (8-bit sRGB)
+    | [2026-10-25 13:28:37.628][engine][Application][Kreative Kompas Engine - Physics Demo][info]: Hardware target: software-gpu (the only Vulkan device is a CPU: llvmpipe (LLVM 22.1.8, 256 bits))
+    | [2026-10-25 13:28:37.628][engine][Governor][Kreative Kompas Engine - Physics Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+    | [2026-10-25 13:28:37.628][engine][Application][Kreative Kompas Engine - Physics Demo][info]: MSAA 1x (software rasteriser)
+    | [2026-10-25 13:28:51.568][engine][Application][Kreative Kompas Engine - Physics Demo][info]: mood 'studio' (assets/moods/studio.yaml)
+    | [2026-10-25 13:29:06.856][engine][Benchmark][Kreative Kompas Engine - Physics Demo][info]: benchmark: 3 s warm-up, then 20 s measured, uncapped (no vsync, no frame cap)
+    | [2026-10-25 13:29:19.409][engine][Physics][Kreative Kompas Engine - Physics Demo][info]: Task system: 2 worker(s) (4 usable cores)
+    | [2026-10-25 13:29:19.410][engine][Physics][Kreative Kompas Engine - Physics Demo][info]: FEMFX constraint solver memory: 67.2 MB
+    | [2026-10-25 13:29:19.476][engine][Physics][Kreative Kompas Engine - Physics Demo][info]: FEMFX scene created (ground + 6 object(s), cap=512)
+    | [2026-10-25 13:29:19.534][engine][Audio][Kreative Kompas Engine - Physics Demo][info]: Audio ready: 48000 Hz, 32 voices, output: Speakers (Realtek High Definition Audio) (WASAPI)
+    | [rmlui] Loaded font face 'Noto Sans' [regular] from 'assets/fonts/NotoSans-Regular.ttf'.
+    | [rmlui] Loaded font face 'Noto Sans' [bold] from 'assets/fonts/NotoSans-Bold.ttf'.
+    | [rmlui] Loaded font face 'Noto Sans' [italic] from 'assets/fonts/NotoSans-Italic.ttf'.
+    | [rmlui] Loaded font face 'Noto Color Emoji' [regular] from 'assets/fonts/NotoColorEmoji.ttf'.
+    | [ui] RmlUi initialised with real Vulkan rendering (text via glyph textures, <img>/background-image via stb_image, both real now -- see RmlVulkanRenderInterface.h)
+    | [2026-10-25 13:29:19.576][engine][GameShell][Kreative Kompas Engine - Physics Demo][info]: no settings file at 'settings.json' (using defaults)
+    | [2026-10-25 13:29:19.576][engine][Governor][Kreative Kompas Engine - Physics Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+    | [2026-10-25 13:29:19.586][engine][Governor][Kreative Kompas Engine - Physics Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 0, render scale 0.75
+    | [2026-10-25 13:29:19.588][engine][Input][Kreative Kompas Engine - Physics Demo][info]: touch controls: stick left, button phys.spawn, button phys.scene, button phys.clear, button phys.next, button phys.material, button camera.zoom, pause
+    | [2026-10-25 13:29:29.580][engine][Physics][Kreative Kompas Engine - Physics Demo][info]: perf: 0.1 fps, 0.0 ticks/s, step avg 0.00 ms max 0.00 ms, render prep 0.10 ms, 6 object(s) / 6 piece(s), 6 awake piece(s), 24 faces drawn
+    | [2026-10-25 13:29:36.172][engine][Physics][Kreative Kompas Engine - Physics Demo][info]: perf: 0.2 fps, 0.2 ticks/s, step avg 2071.79 ms max 2071.79 ms, render prep 0.04 ms, 6 object(s) / 6 piece(s), 6 awake piece(s), 24 faces drawn
+    | [2026-10-25 13:29:39.201][engine][Benchmark][Kreative Kompas Engine - Physics Demo][info]: benchmark: 2 screenshot(s) in C:/forgejo-runner/work/868e3ddd0b9c3ebe/hostexecutor/results/bench/run_20261025_132604/reports/shots
+    | [2026-10-25 13:29:39.821][engine][Benchmark][Kreative Kompas Engine - Physics Demo][info]: benchmark: 9 frames, 2.6 fps avg, 0.3 fps 1% low, 0 hitch(es), verdict too slow; report C:\forgejo-runner\work\868e3ddd0b9c3ebe\hostexecutor\results\bench\run_20261025_132604\reports\physics_demo.json
+    | [2026-10-25 13:29:40.266][engine][Physics][Kreative Kompas Engine - Physics Demo][info]: FEMFX scene destroyed
+
+* Melt: particle fluid: hung (exited with code 1 (0x00000001))
+    | [2026-10-25 13:30:18.553][engine][Application][Kreative Kompas Engine - Melt Demo][info]: Hardware target: desktop (no specific device recognised); platform backend: desktop
+    | [2026-10-25 13:30:18.553][engine][Application][Kreative Kompas Engine - Melt Demo][info]: UI profile: desktop
+    | [2026-10-25 13:30:20.081][engine][Governor][Kreative Kompas Engine - Melt Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 1.00
+    | [2026-10-25 13:30:21.892][engine][VulkanDevice][Kreative Kompas Engine - Melt Demo][info]: using device: llvmpipe (LLVM 22.1.8, 256 bits)
+    | [2026-10-25 13:30:22.413][engine][VulkanDevice][Kreative Kompas Engine - Melt Demo][info]: inline ray tracing (VK_KHR_ray_query): on
+    | [2026-10-25 13:30:23.383][engine][SwapChain][Kreative Kompas Engine - Melt Demo][info]: colour output: format 50 (8-bit sRGB)
+    | [2026-10-25 13:30:27.800][engine][Application][Kreative Kompas Engine - Melt Demo][info]: Hardware target: software-gpu (the only Vulkan device is a CPU: llvmpipe (LLVM 22.1.8, 256 bits))
+    | [2026-10-25 13:30:27.801][engine][Governor][Kreative Kompas Engine - Melt Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+    | [2026-10-25 13:30:27.804][engine][Application][Kreative Kompas Engine - Melt Demo][info]: MSAA 1x (software rasteriser)
+    | [2026-10-25 13:31:39.238][engine][Application][Kreative Kompas Engine - Melt Demo][info]: mood 'dusk' (assets/moods/dusk.yaml)
+    | [2026-10-25 13:31:39.244][engine][Benchmark][Kreative Kompas Engine - Melt Demo][info]: benchmark: 3 s warm-up, then 20 s measured, uncapped (no vsync, no frame cap)
+    | [rmlui] Loaded font face 'Noto Sans' [regular] from 'assets/fonts/NotoSans-Regular.ttf'.
+    | [rmlui] Loaded font face 'Noto Sans' [bold] from 'assets/fonts/NotoSans-Bold.ttf'.
+    | [rmlui] Loaded font face 'Noto Sans' [italic] from 'assets/fonts/NotoSans-Italic.ttf'.
+    | [rmlui] Loaded font face 'Noto Color Emoji' [regular] from 'assets/fonts/NotoColorEmoji.ttf'.
+    | [ui] RmlUi initialised with real Vulkan rendering (text via glyph textures, <img>/background-image via stb_image, both real now -- see RmlVulkanRenderInterface.h)
+    | [2026-10-25 13:31:49.003][engine][Audio][Kreative Kompas Engine - Melt Demo][info]: Audio ready: 48000 Hz, 32 voices, output: Speakers (Realtek High Definition Audio) (WASAPI)
+    | [2026-10-25 13:31:50.840][engine][GameShell][Kreative Kompas Engine - Melt Demo][info]: no settings file at 'settings.json' (using defaults)
+    | [2026-10-25 13:31:50.840][engine][Governor][Kreative Kompas Engine - Melt Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+    | [2026-10-25 13:31:50.863][engine][Governor][Kreative Kompas Engine - Melt Demo][info]: budget: 2 worker thread(s), frame cap 0, background cap 0, render scale 0.75
+    | [2026-10-25 13:31:51.815][engine][Input][Kreative Kompas Engine - Melt Demo][info]: touch controls: stick left, button melt.pour, button melt.reset, button melt.smooth, button melt.block, button camera.zoom, pause
+
+* Sea: ocean and floating bodies: ok (normal exit)
+    hitch at 1.0 s: 318.5 ms (usually 94.6), present took 283.7 ms (usually 74.6 ms)
+
+* UI: RmlUi menus: ok (normal exit)
+    hitch at 13.7 s: 413.1 ms (usually 82.7), present took 411.6 ms (usually 81.9 ms)
+
+* Sandbox: play mode: ok (normal exit)
+    hitch at 13.3 s: 277.9 ms (usually 59.0), present took 277.4 ms (usually 58.2 ms)
+
+* Flying: six planes head-on at full speed, every 7 s: ok (normal exit)
+    hitch at 7.6 s: 1394.1 ms (usually 103.5), present took 1332.1 ms (usually 107.4 ms)
+
+* Farm: AI animals, farmer on autopilot: ok (normal exit)
+    hitch at 10.9 s: 295.4 ms (usually 81.2), present took 294.6 ms (usually 80.6 ms)
+
+* Duel: two bots fighting: ok (normal exit)
+    hitch at 18.5 s: 335.7 ms (usually 117.9), present took 334.7 ms (usually 116.5 ms)
+
+* Racing: worst case, 24 cars head-on at 108 km/h: ok (normal exit)
+    hitch at 6.2 s: 347.8 ms (usually 140.4), present took 321.8 ms (usually 107.4 ms)
+    hitch at 7.9 s: 349.5 ms (usually 141.8), present took 332.5 ms (usually 118.0 ms)
+    hitch at 8.2 s: 459.4 ms (usually 141.8), present took 398.1 ms (usually 123.1 ms)
+    hitch at 9.2 s: 616.1 ms (usually 142.5), present took 573.7 ms (usually 129.5 ms)
+    hitch at 10.5 s: 637.3 ms (usually 142.5), present took 595.2 ms (usually 139.6 ms)
+    ... 12 more hitch(es) in the .json
+
+Please send the file kke-benchmark-20261025_132604.json (the .json next to this one) and kke-benchmark-20261025_132604-shots.zip (its screenshots) back.
+
+Done: 24 of 26 demos ran fine.
+Results: C:\forgejo-runner\work\868e3ddd0b9c3ebe\hostexecutor\results\bench\kke-benchmark-20261025_132604.json
+Screenshots: C:\forgejo-runner\work\868e3ddd0b9c3ebe\hostexecutor\results\bench\kke-benchmark-20261025_132604-shots.zip
