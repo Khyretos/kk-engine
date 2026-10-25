@@ -20,6 +20,7 @@
 #include <filesystem>
 #include <mutex>
 #include <stdexcept>
+#include <system_error>
 #include <vector>
 
 namespace kke {
