@@ -81,6 +81,22 @@ struct VoiceDesc {
     glm::vec3 via{0.0f};
     float viaPathLength = 0.0f;
     AudioStreamHandle stream;     // set: plays this live stream (at the mixer's rate) instead of `sound`
+    float pitch = 1.0f;           // playback speed, 0.25..4 (2 = an octave up); streams play at 1
+    float fadeIn = 0.0f;          // seconds from silence to `gain` (0: at once)
+};
+
+// One category ducking another (docs/AUDIO.md "Buses, ducking and
+// snapshots"): while `by` plays louder than `threshold`, `target` drops to
+// `gain`, getting there in about `attack` seconds and coming back in about
+// `release` seconds after `by` goes quiet. Dialogue over music is
+// { Voice, Music, 0.35 }.
+struct DuckRule {
+    SoundCategory by = SoundCategory::Voice;
+    SoundCategory target = SoundCategory::Music;
+    float gain = 0.35f;
+    float attack = 0.08f;
+    float release = 0.6f;
+    float threshold = 0.005f;
 };
 
 // The ears. forward/up need not be normalized.
@@ -158,6 +174,9 @@ public:
     void stopAll();
     bool isPlaying(uint32_t id) const;
     void setPosition(uint32_t id, const glm::vec3& position);
+    // Glides the voice's gain to `gain` (its VoiceDesc::gain is 1x) over
+    // `seconds`; with stopWhenSilent a fade to 0 ends it. 0 seconds: at once.
+    void fade(uint32_t id, float gain, float seconds, bool stopWhenSilent = false);
     // 0..1: how much of the sound gets through to the listener (occlusion).
     void setTransmission(uint32_t id, float transmission);
     // The sound goes around a wall: it is heard from the direction of `via`
@@ -187,7 +206,22 @@ public:
     Listener listener() const;
 
     float masterGain = 1.0f;
+    // The player's volumes (AudioModule::applyVolumes sets them).
     float categoryGain[size_t(SoundCategory::Count)] = {1, 1, 1, 1, 1, 1, 1};
+
+    // Buses: the game's own gain per category, on top of the player's
+    // volumes, gliding to a new value over `seconds` (no clicks). A snapshot
+    // ("paused": music 0.4, effects 0) is several of these at once.
+    void setBusGain(SoundCategory bus, float gain, float seconds = 0.0f);
+    float busGain(SoundCategory bus) const;        // where it is now
+    float busTarget(SoundCategory bus) const;      // where it is going
+    // Ducking: rules apply from the next mixed block, one per (by, target)
+    // pair (adding a pair again replaces it), up to 32. A target ducked by
+    // two rules at once takes the lower gain.
+    void addDuck(const DuckRule& rule);
+    void clearDucks();
+    size_t duckCount() const;
+    float duckGain(SoundCategory c) const;         // 1 = not ducked now
 
     // Writes `frames` stereo frames (2 floats each) to out, overwriting.
     void mix(float* out, int frames);
@@ -246,6 +280,8 @@ private:
         int histIdx = 0;
         float prevDelay[2] = {0.0f, 0.0f};        // binaural: per ear, in samples
         float shelfX[2] = {0.0f, 0.0f}, shelfY[2] = {0.0f, 0.0f};
+        float fade = 1.0f, fadeTarget = 1.0f, fadeRate = 0.0f; // fadeRate: gain per second
+        bool stopWhenSilent = false, faded = false;
     };
     float estimate(const VoiceDesc& d) const;
     void mixEchoes(float* out, int frames);    // under m_mutex, after the voices filled m_send
@@ -277,6 +313,11 @@ private:
     std::vector<float> m_streamBlock;             // this block of a streamed voice
     std::shared_ptr<Spatializer> m_spatializer;
     std::vector<float> m_hrtfBlock;               // one voice's filtered mono block, for the spatializer
+    struct Bus { float gain = 1.0f, target = 1.0f, rate = 0.0f; };
+    Bus m_bus[size_t(SoundCategory::Count)];
+    std::vector<DuckRule> m_ducks;
+    float m_duck[size_t(SoundCategory::Count)] = {1, 1, 1, 1, 1, 1, 1};
+    float m_categoryPeak[size_t(SoundCategory::Count)] = {};  // the last block's, per category
 };
 
 } // namespace kke
