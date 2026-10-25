@@ -179,6 +179,8 @@ set(ENGINE_SOURCES
     src/HairRenderer.cpp
     src/ClothGpu.cpp
     src/FluidGpu.cpp
+    src/MpmWater.cpp
+    src/MpmWaterGpu.cpp
     src/Ocean.cpp
     src/FloatingBodies.cpp
     src/OceanRenderer.cpp
@@ -270,6 +272,8 @@ set(ENGINE_HEADERS
     include/kke/ParticleFluid.h
     include/kke/TaskPool.h
     include/kke/FluidGpu.h
+    include/kke/MpmWater.h
+    include/kke/MpmWaterGpu.h
     include/kke/MeltVolume.h
     include/kke/SphereImpostors.h
     include/kke/Ocean.h
@@ -628,6 +632,6 @@ endif()
 # fracture setup are pure number crunching, 5-20x slower at -O0, and
 # nobody steps through them in a debugger. docs/OPTIMIZATION.md log #15.
 if(NOT MSVC)
-    set_source_files_properties(src/Sky.cpp src/EnvMap.cpp src/Texture.cpp src/TextureMips.cpp src/TextureCompress.cpp src/VoxelTets.cpp src/InteriorColor.cpp src/FracturePattern.cpp src/VoronoiFracture.cpp src/ParticleFluid.cpp src/TaskPool.cpp src/MeltVolume.cpp src/JigglePhysics.cpp src/AutoRig.cpp src/Ocean.cpp src/FloatingBodies.cpp src/ClothSystem.cpp
+    set_source_files_properties(src/Sky.cpp src/EnvMap.cpp src/Texture.cpp src/TextureMips.cpp src/TextureCompress.cpp src/VoxelTets.cpp src/InteriorColor.cpp src/FracturePattern.cpp src/VoronoiFracture.cpp src/ParticleFluid.cpp src/TaskPool.cpp src/MpmWater.cpp src/MeltVolume.cpp src/JigglePhysics.cpp src/AutoRig.cpp src/Ocean.cpp src/FloatingBodies.cpp src/ClothSystem.cpp
         PROPERTIES COMPILE_OPTIONS "$<$<NOT:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>>:-O2>")
 endif()

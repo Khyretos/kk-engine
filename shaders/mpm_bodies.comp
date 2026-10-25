@@ -1,0 +1,36 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+// kke::MpmWater on the GPU, pass 3 of 4: the bodies take the impulses so
+// far and move on (MpmWater::integrateBodies). One thread a body. Run once
+// more after the step's last substep with a substep of 0, for what the
+// particles stopped there.
+layout(local_size_x = 64) in;
+#include "mpm_common.glsl"
+
+void main() {
+    int b = int(gl_GlobalInvocationID.x);
+    if (b >= int(pc.misc2.y)) return;
+    float dt = pc.wallHi.w;
+    vec3 J = vec3(float(impulses[b * 8 + 0]), float(impulses[b * 8 + 1]), float(impulses[b * 8 + 2])) / kImpulseScale;
+    vec3 L = vec3(float(impulses[b * 8 + 4]), float(impulses[b * 8 + 5]), float(impulses[b * 8 + 6])) / kImpulseScale;
+    for (int k = 0; k < 8; ++k) impulses[b * 8 + k] = 0;
+    vec4 q = bodies[b * 8 + 1];
+    vec4 velF = bodies[b * 8 + 3];
+    vec3 vel = velF.xyz, ang = bodies[b * 8 + 4].xyz;
+    float invMass = bodies[b * 8 + 2].w;
+    if (invMass > 0.0) {
+        vec3 dv = J * invMass;
+        mat3 R = quatMatrix(q);
+        vec3 dw = R * (bodies[b * 8 + 5].xyz * (transpose(R) * L));
+        vel += dv + pc.gravity.xyz * dt;
+        ang += dw;
+        bodies[b * 8 + 6].xyz += dv;
+        bodies[b * 8 + 7].xyz += dw;
+    }
+    bodies[b * 8 + 0].xyz += vel * dt;
+    // q += 0.5 dt (0, w) q
+    vec4 spin = vec4(q.w * ang + cross(ang, q.xyz), -dot(ang, q.xyz));
+    bodies[b * 8 + 1] = normalize(q + spin * (0.5 * dt));
+    bodies[b * 8 + 3] = vec4(vel, velF.w);
+    bodies[b * 8 + 4].xyz = ang;
+}
