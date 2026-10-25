@@ -96,18 +96,58 @@ always add up to 1, and setting one scales the other two.
 - `Bake::sourceVertex` maps each model vertex back to the pack vertex it
   came from (a vertex on a UV seam becomes several), which `reshape` uses.
 
+## The creator screen
+
+`kke::CharacterCreatorModule` (`kke/modules/CharacterCreatorModule.h`) is
+the screen, ready for any game: tabs of sliders (body type, shape, torso,
+arms and legs, head and neck, eyes, nose, mouth and jaw, ears, skin),
+mirrored sides, undo and redo, randomise (believable: few sliders, small
+moves), camera views, save and load, and the share code. A game adds it
+next to a `UiModule` and a `ModelModule`, calls `open()`, and hears
+`onDone`:
+
+```cpp
+auto& creator = app.addModule<kke::CharacterCreatorModule>("player1"); // saves player1.kkhuman
+creator.onDone([&](const kke::HumanLook& look) {
+    ModelModule::ModelId id = models.add(creator.bakeSkinned(), "player/me");
+    // Send creator.shareCode() to the others with your game's messages;
+    // they call fromShareCode, applyLook and bake.
+});
+```
+
+In CMake, `kke_use_character_creator(my_game)` copies the screen
+(`assets/ui/character_creator/`) and the human pack next to the game.
+`games/character_creator` is the demo, and its README has the controls.
+
+While a slider moves only vertices move (`Human::reshape` and
+`ModelModule::setDeformedVertices`), so dragging stays smooth on a phone
+GPU too.
+
 ## Multiplayer
 
-A character travels as its slider values, never as a mesh. Every machine
-loads the same pack and bakes the same body from the same values. The
-compact share code that goes in a player's look string comes with the
-creator screen (step 3 of the plan).
+A character travels as its look (`kke/HumanLook.h`), never as a mesh:
+slider values and colours. `shareCode(look, pack)` packs it into a
+URL-safe string, `kh1.` and base64 of the colours, one bit per slider
+(off its default or not) and a byte per moved slider: about 90 letters for
+a few changes, 250 for a random person. `fromShareCode` reads it back. The
+code carries a key of the pack's slider list, so a machine with another
+pack refuses it instead of building someone else.
+
+Every machine loads the same pack and bakes the same body from the same
+values. The player's own body is baked from `quantised(look, pack)`, the
+look rounded exactly as the code rounds it, so the vertices match
+everywhere. A look read back and coded again gives the same code (a CI
+self-test checks this on a random person every run).
+
+Saves are JSON (`lookToJson`, `lookFromJson`: format `kk-human`, version
+1) with MakeHuman's slider names, and `lookFromMhm` reads MakeHuman's own
+`.mhm` saves.
 
 ## What comes next
 
 The plan for the whole creator is in the project's "Character creator
-plan" document. In order: the creator demo screen, animation through
-retargeting (MakeHuman bone names to the engine's canonical ones), skin
-and eyes, strand hair rooted on the scalp, clothes fitted with MakeHuman's
-`.mhclo` files (each clothing vertex rides three body vertices, so clothes
-fit every body), then facial expressions (ENG-F25).
+plan" document. In order: animation through retargeting (MakeHuman bone
+names to the engine's canonical ones), skin and eyes, strand hair rooted
+on the scalp, clothes fitted with MakeHuman's `.mhclo` files (each
+clothing vertex rides three body vertices, so clothes fit every body),
+then facial expressions (ENG-F25).

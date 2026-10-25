@@ -1,0 +1,9 @@
+{
+  "id": "engine.kke.character_creator",
+  "title": "KKE Character Creator",
+  "description": "Make a realistic person with about 300 sliders, from body type and age to the shape of the nose, on MakeHuman's CC0 human. Save it, and share it with other players as a short code: only the slider values travel, and every machine builds the same body.",
+  "version": "0.1.0",
+  "tags": ["demo", "character", "creator", "makehuman"],
+  "engine_version": "0.3",
+  "modules": ["Input", "Models", "UI", "OrbitCamera", "CharacterCreator", "Stats"]
+}

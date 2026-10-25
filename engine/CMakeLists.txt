@@ -50,6 +50,7 @@ set(ENGINE_SOURCES
     src/AnimRig.cpp
     src/BodyShape.cpp
     src/Human.cpp
+    src/HumanLook.cpp
     src/HumanPack.cpp
     src/CharacterIk.cpp
     src/Equipment.cpp
@@ -194,6 +195,7 @@ set(ENGINE_SOURCES
     src/modules/GridModule.cpp
     src/modules/StatsModule.cpp
     src/modules/ParticleModule.cpp
+    src/modules/CharacterCreatorModule.cpp
     src/modules/OrbitCameraModule.cpp
     src/modules/UiModule.cpp
     src/modules/MarketplaceUiModule.cpp
