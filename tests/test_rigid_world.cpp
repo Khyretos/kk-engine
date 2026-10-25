@@ -1,4 +1,5 @@
 #include "kke/RigidWorld.h"
+#include "kke/Terrain.h"
 
 #include <gtest/gtest.h>
 
@@ -62,6 +63,44 @@ TEST(RigidWorld, StaticTriangleMeshCollides) {
     auto ball = w.add(s);
     for (int i = 0; i < 240; ++i) w.step(1.0f / 60.0f);
     EXPECT_NEAR(w.position(ball).y, 0.25f, 0.05f);
+}
+
+TEST(RigidWorld, TerrainHeightFieldMatchesTheTerrain) {
+    kke::RigidWorld w(single());
+    kke::Terrain t(64.0f, 65, glm::vec3(0.0f, 1.0f, 0.0f));
+    kke::Terrain::Noise n;
+    n.seed = 3;
+    n.height = 12.0f;
+    t.generate(n);
+    kke::RigidWorld::BodyDesc d;
+    d.shape = kke::RigidWorld::Shape::HeightField;
+    d.motion = kke::RigidWorld::Motion::Static;
+    d.heights = t.heights();
+    d.heightSamples = uint32_t(t.samples());
+    d.heightSpacing = t.spacing();
+    d.position = t.corner();
+    ASSERT_NE(w.add(d), kke::RigidWorld::kNoBody);
+    // Rays land where Terrain::heightAt says, to a couple of centimetres (heights are packed).
+    for (glm::vec2 p : {glm::vec2(0.3f, 0.7f), glm::vec2(-20.1f, 13.6f), glm::vec2(25.5f, -30.2f), glm::vec2(-7.77f, -7.2f)}) {
+        const auto hit = w.raycast(glm::vec3(p.x, 50.0f, p.y), glm::vec3(0.0f, -1.0f, 0.0f), 100.0f);
+        ASSERT_TRUE(hit.hit) << p.x << "," << p.y;
+        EXPECT_NEAR(hit.point.y, t.heightAt(p.x, p.y), 0.03f) << p.x << "," << p.y;
+    }
+    // A ball comes to rest on it.
+    kke::RigidWorld::BodyDesc s;
+    s.shape = kke::RigidWorld::Shape::Sphere;
+    s.radius = 0.5f;
+    s.position = glm::vec3(0.0f, 30.0f, 0.0f);
+    const auto ball = w.add(s);
+    for (int i = 0; i < 120; ++i) w.step(1.0f / 60.0f);
+    const glm::vec3 at = w.position(ball);
+    EXPECT_GT(at.y, t.heightAt(at.x, at.z) - 0.1f);
+    // Moving height fields and wrong sizes are refused.
+    d.motion = kke::RigidWorld::Motion::Dynamic;
+    EXPECT_EQ(w.add(d), kke::RigidWorld::kNoBody);
+    d.motion = kke::RigidWorld::Motion::Static;
+    d.heightSamples = 10;
+    EXPECT_EQ(w.add(d), kke::RigidWorld::kNoBody);
 }
 
 TEST(RigidWorld, CharacterWalksJumpsAndClimbsAStep) {

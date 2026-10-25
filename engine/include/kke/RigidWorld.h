@@ -36,7 +36,7 @@ public:
     static constexpr BodyId kNoBody = 0xffffffffu;
 
     enum class Motion : uint8_t { Static, Kinematic, Dynamic };
-    enum class Shape : uint8_t { Box, Sphere, Capsule, ConvexHull, Mesh };
+    enum class Shape : uint8_t { Box, Sphere, Capsule, ConvexHull, Mesh, HeightField };
 
     struct BodyDesc {
         Shape shape = Shape::Box;
@@ -45,6 +45,12 @@ public:
         float halfHeight = 0.5f;             // Capsule: half the cylinder part (along Y)
         std::vector<glm::vec3> points;       // ConvexHull points / Mesh vertices (body space)
         std::vector<uint32_t> indices;       // Mesh triangles (Static/Kinematic only)
+        // HeightField (Static only; kke::Terrain): heightSamples^2 heights, row-major
+        // (z * heightSamples + x), sample (x, z) at position + (x * heightSpacing, h, z * heightSpacing).
+        // Each cell splits on the diagonal (x, z)-(x+1, z+1), as Terrain::heightAt does.
+        std::vector<float> heights;
+        uint32_t heightSamples = 0;
+        float heightSpacing = 1.0f;
         Motion motion = Motion::Dynamic;
         glm::vec3 position{0.0f};
         glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f};

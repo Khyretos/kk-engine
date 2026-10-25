@@ -25,6 +25,7 @@ class EventListener;
 namespace kke {
 
 class DynamicMeshRenderer;
+class ScriptTerrain;
 class ParticleEffects;
 class ParticleLibrary;
 
@@ -68,6 +69,9 @@ class ParticleLibrary;
 //   audio.*      impact(pos, material, intensity), materials   (AudioModule)
 //   input.*      define(id, label, key), pressed, held, value  (InputModule)
 //   camera.*     position, forward, target
+//   terrain.*    create, height, normal, slope, ground, raise, lower, smooth,
+//                flatten, paint, layer, info, remove: heightmap ground
+//                (kke/ScriptTerrain.h; collides through RigidBodyModule)
 //   store.*      save, load, add, remove, keys: what outlives the session
 //                (kke/ScriptStore.h; a file by default, see storeUrl)
 //
@@ -110,6 +114,8 @@ public:
     // Or: a store someone else owns (a server's), used instead of storeUrl.
     void useStore(storage::Store* shared) { m_sharedStore = shared; }
     ScriptStore* scriptStore() { return m_store.get(); }
+    // terrain.*: the terrain a script made (kke/ScriptTerrain.h, docs/TERRAIN.md).
+    ScriptTerrain* terrain() { return m_terrain.get(); }
 
     // Whether a script file runs on this machine right now (realms above).
     static bool runsHere(const std::string& path, bool authority);
@@ -176,6 +182,7 @@ private:
     std::unique_ptr<Rml::EventListener> m_clickListener;
     std::vector<Scene> m_scenes;
     ScriptLights m_lights; // light.*: lamps scripts placed (kke/ScriptLights.h)
+    std::unique_ptr<ScriptTerrain> m_terrain; // terrain.*
     // fx.*: one particle pool and library for every script, made on first use.
     static constexpr size_t kFxParticles = 8000;
     std::unique_ptr<ParticleEffects> m_fxEffects;

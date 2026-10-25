@@ -12,6 +12,7 @@
 #include "kke/modules/AudioModule.h"
 #if KKE_ENABLE_JOLT
 #include "kke/modules/RigidBodyModule.h"
+#include "kke/ScriptTerrain.h"
 #endif
 #if KKE_ENABLE_NET
 #include "kke/modules/NetModule.h"
@@ -91,17 +92,29 @@ void ScriptModule::init(Application& app) {
     if (const char* d = dev::env("KKE_SCRIPTS_DIR"); d && *d) m_dir = d;
     m_vm = std::make_unique<ScriptVM>();
     m_vm->printSink = [this](const std::string& src, const std::string& text) { log(src, text); };
-    m_vm->onUnload = [this](const std::string& source) { releaseScript(source); };
+    m_vm->onUnload = [this](const std::string& source) {
+        releaseScript(source);
+        if (m_terrain) m_terrain->release(source);
+    };
     m_vm->onStopped = [this](const std::string& source) {
         for (ScriptFile& f : m_files)
             if (f.path == source) f.ok = false;
     };
     m_batch = std::make_unique<DynamicMeshRenderer>(app);
     m_glass = std::make_unique<DynamicMeshRenderer>(app);
+    RigidWorld* world = nullptr;
+#if KKE_ENABLE_JOLT
+    if (auto* rbm = app.getModule<RigidBodyModule>()) world = &rbm->world();
+#endif
+    m_terrain = std::make_unique<ScriptTerrain>(&app, world);
+    // terrain.create{image = ...}: next to the scripts, then in the game's folder.
+    m_terrain->searchDirs.push_back(m_dir);
+    if (const char* base = SDL_GetBasePath()) m_terrain->searchDirs.push_back(base);
 #if KKE_ENABLE_NET
     if (auto* net = app.getModule<NetModule>()) m_authority = net->authority();
 #endif
     bindAll();
+    m_terrain->bind(*m_vm);
     scanFolder(false);
     log::get(name())->info("{} script(s) from '{}'", m_files.size(), m_dir);
 }
@@ -641,6 +654,7 @@ void ScriptModule::update(const UpdateContext& ctx) {
         m_vm->callHook("InputStyle", std::string(toString(in->promptStyle(0))));
     }
     m_vm->callHook("Think", ctx.dt);
+    m_terrain->update(ctx.dt, m_app->camera().position); // chunks for the camera; collision after sculpting
     // Per-script CPU time this frame, smoothed for the panel.
     for (const auto& [source, total] : m_vm->cpuTimes()) {
         const double ms = (total - m_cpuLast[source]) * 1000.0;
@@ -687,6 +701,7 @@ void ScriptModule::update(const UpdateContext& ctx) {
 
 void ScriptModule::render(const RenderContext& ctx) {
     if (m_batchIndices) m_batch->draw(ctx, glm::mat4(1.0f), 0.0f, 0.6f);
+    m_terrain->render(ctx);
 }
 
 void ScriptModule::renderTranslucent(const RenderContext& ctx) {
@@ -719,6 +734,7 @@ ParticleLibrary& ScriptModule::fxLibrary() {
 
 void ScriptModule::renderShadow(const ShadowRenderContext& ctx) {
     if (m_batchIndices) m_batch->drawShadow(ctx, glm::mat4(1.0f));
+    m_terrain->renderShadow(ctx);
 }
 
 void ScriptModule::renderUi() {
@@ -784,6 +800,7 @@ void ScriptModule::renderUi() {
 void ScriptModule::shutdown() {
     if (m_vm && m_inited) m_vm->callHook("Shutdown");
     if (m_app) releaseAll();
+    m_terrain.reset(); // before the physics world goes
     m_batch.reset();
     m_glass.reset();
 }
