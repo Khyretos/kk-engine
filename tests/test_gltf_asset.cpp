@@ -11,6 +11,7 @@
 #include <stb_image_write.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstring>
 #include <filesystem>
@@ -250,8 +251,12 @@ TEST(GltfAsset, FindsAnExternalBinAndImageWithEscapedNames) {
     EXPECT_EQ(fs::path(m.materials[0].albedoTexture).filename(), "my wood.png");
     EXPECT_TRUE(fs::is_regular_file(m.materials[0].albedoTexture));
     // An author's absolute path that isn't here: found by name, any case,
-    // in the usual texture folders.
-    EXPECT_EQ(fs::path(m.materials[1].albedoTexture).filename(), "moved.png");
+    // in the usual texture folders. (On Windows the file system ignores case,
+    // so the name comes back as the author spelled it: compare without case.)
+    std::string found = fs::path(m.materials[1].albedoTexture).filename().string();
+    std::transform(found.begin(), found.end(), found.begin(), [](unsigned char c) { return char(std::tolower(c)); });
+    EXPECT_EQ(found, "moved.png");
+    EXPECT_TRUE(fs::is_regular_file(m.materials[1].albedoTexture));
     EXPECT_EQ(m.materials[1].albedoTextureOriginal, "C:/Artist/Missing/Moved.png");
     EXPECT_EQ(m.triangleCount(), 2u);
 }
