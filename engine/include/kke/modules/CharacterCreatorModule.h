@@ -187,6 +187,15 @@ private:
     size_t m_hairRoots = 0; // guides buildHair asked for (cornrows have only 6-14)
     std::unique_ptr<HairRenderer> m_hairDrawn;
     std::vector<glm::vec3> m_guides;
+    // The Anime style draws the same guides as locks (kke::hairLocks).
+    ModelModule::ModelId m_lockModel = 0;
+    ModelModule::InstanceId m_locks = 0;
+    size_t m_lockPoints = 0;      // points per guide
+    float m_lockWidth = 0.03f;
+    glm::vec3 m_headCentre{ 0.0f }; // the scalp sphere's centre, at rest
+    uint32_t m_lockSerial = 0;
+    void removeLocks();
+    void moveLocks();      // the locks onto the guides as they are now
     bool m_hairDirty = false; // rebuild once the sliders rest
     float m_yaw = 0.0f;       // the turntable turns the figure, so the hair swings
     glm::mat4 m_figure{ 1.0f };

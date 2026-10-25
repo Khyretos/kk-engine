@@ -634,6 +634,7 @@ void CharacterCreatorModule::applyColours() {
     if (m_body) m_models->setTint(m_body, m_look.skin);
     if (m_irises) m_models->setTint(m_irises, m_look.eyes);
     if (m_brows) m_models->setTint(m_brows, m_look.hairRoot);
+    if (m_locks) m_models->setTint(m_locks, glm::mix(m_look.hairRoot, m_look.hairTip, 0.35f));
     for (auto& w : m_worn) {
         for (const HumanLook::Worn& worn : m_look.clothes)
             if (worn.id == w->id) w->colour = w->fabric.color = worn.colour;
@@ -643,7 +644,8 @@ void CharacterCreatorModule::applyColours() {
         m_models->setVisible(m_cap, !m_look.hair.empty());
         // The skin a shade darker in the hair's shadow: a scalp in the
         // hair's own colour showed as a patch with a hard edge (Kees).
-        m_models->setTint(m_cap, m_look.skin * 0.95f);
+        // Anime hair is solid locks over it: there the hair colour hides any gap.
+        m_models->setTint(m_cap, m_anime ? m_look.hairRoot : m_look.skin * 0.95f);
     }
 }
 
@@ -654,7 +656,7 @@ void CharacterCreatorModule::applyStyle() {
     if (m_human->style() != face) {
         m_human->setStyle(face);
         m_shapeDirty = true;
-        m_hairDirty = true; // regrown on the new head
+        m_hairDirty = true; // regrown on the new head, as strands or locks
     }
     // Outlines on the shapes (body, clothes), none on the small parts
     // (eyes, brows, teeth): a line round each would read as a smudge.
@@ -989,6 +991,7 @@ void CharacterCreatorModule::update(const UpdateContext& ctx) {
     if (m_hairDirty && m_sinceEdit > 0.35f) buildHair();
     if (m_clothesDirty && m_sinceEdit > 0.35f) dressUp(); // after the hair: on the new body collider
     if (m_hair && m_hairDrawn && m_world->hairPositions(m_hair, m_guides)) m_hairDrawn->update(m_guides, m_figure);
+    if (m_hair && m_locks) moveLocks();
     for (auto& w : m_worn) {
         if (!w->cloth || !w->drawn || !m_world->clothPositions(w->cloth, w->positions)) continue;
         clothNormals(w->positions, w->indices, w->normals);
@@ -1038,6 +1041,7 @@ void CharacterCreatorModule::open() {
     if (m_parts) m_models->setVisible(m_parts, true);
     if (m_irises) m_models->setVisible(m_irises, true);
     if (m_brows) m_models->setVisible(m_brows, true);
+    if (m_locks) m_models->setVisible(m_locks, true);
     for (auto& w : m_worn)
         if (w->instance) m_models->setVisible(w->instance, true);
 }
@@ -1049,6 +1053,7 @@ void CharacterCreatorModule::close() {
     if (m_parts) m_models->setVisible(m_parts, false);
     if (m_irises) m_models->setVisible(m_irises, false);
     if (m_brows) m_models->setVisible(m_brows, false);
+    if (m_locks) m_models->setVisible(m_locks, false);
     for (auto& w : m_worn)
         if (w->instance) m_models->setVisible(w->instance, false);
 }
@@ -1128,6 +1133,7 @@ void CharacterCreatorModule::load() {
 
 void CharacterCreatorModule::shutdown() {
     if (m_hairDrawn) m_app->renderer().retire(std::move(m_hairDrawn));
+    removeLocks();
     undress();
     m_world.reset();
     if (m_doc) {
@@ -1149,6 +1155,7 @@ void CharacterCreatorModule::buildHair() {
     if (m_hair) m_world->removeHair(m_hair);
     m_hair = 0;
     if (m_hairDrawn) m_app->renderer().retire(std::move(m_hairDrawn));
+    removeLocks();
     // The body as it is now is what the hair falls on: a mesh only cloth
     // and hair feel, turned with the figure.
     if (m_bodyCollider != RigidWorld::kNoBody) m_world->remove(m_bodyCollider);
@@ -1178,10 +1185,54 @@ void CharacterCreatorModule::buildHair() {
     m_hairRoots = d.roots.size();
     d.wind = 0.0f; // indoors
     d.bindPose = glm::mat4(1.0f); // the shaped body faces +Z at the origin
+    // Anime locks keep their styled shape more (they read as shapes) and
+    // still bounce.
+    if (m_anime) d.style.hold = std::max(d.style.hold, 0.35f);
     m_hair = m_world->addHair(d);
     m_world->setHairJoint(m_hair, m_figure);
-    m_hairDrawn = std::make_unique<HairRenderer>(*m_app);
-    m_hairDrawn->build(d);
+    if (!m_anime) {
+        m_hairDrawn = std::make_unique<HairRenderer>(*m_app);
+        m_hairDrawn->build(d);
+        return;
+    }
+    // The same guides drawn as locks; braids and twists stay as narrow as a braid.
+    m_headCentre = findScalp(*m_pack, m_human->shapedPositions()).centre;
+    m_lockWidth = d.style.plait > 0 ? d.style.plaitRadius * 2.5f : lockWidth(d.roots);
+    if (!m_world->hairPositions(m_hair, m_guides) || d.roots.empty() || m_guides.size() % d.roots.size()) return;
+    m_lockPoints = m_guides.size() / d.roots.size();
+    ModelData locks;
+    locks.meshes.push_back(hairLocks(m_guides, m_lockPoints, glm::vec3(m_figure * glm::vec4(m_headCentre, 1.0f)), m_lockWidth));
+    ModelMaterial mat;
+    mat.name = "Hair_locks";
+    mat.roughness = 0.45f;
+    locks.materials.push_back(mat);
+    locks.boundsMin = m_bodyBake.model.boundsMin - glm::vec3(1.0f);
+    locks.boundsMax = m_bodyBake.model.boundsMax + glm::vec3(1.0f);
+    m_lockModel = m_models->add(locks, "character_creator/hair-locks/" + std::to_string(++m_lockSerial), /*transient=*/true);
+    m_locks = m_models->spawn(m_lockModel);
+    m_models->setTint(m_locks, glm::mix(m_look.hairRoot, m_look.hairTip, 0.35f));
+    m_models->setToon(m_locks, true, 0.0012f);
+    m_models->setVisible(m_locks, m_open);
+}
+
+void CharacterCreatorModule::removeLocks() {
+    if (m_locks) m_models->remove(m_locks);
+    if (m_lockModel) m_models->unload(m_lockModel);
+    m_locks = 0;
+    m_lockModel = 0;
+}
+
+void CharacterCreatorModule::moveLocks() {
+    if (!m_world->hairPositions(m_hair, m_guides) || !m_lockPoints) return;
+    const ModelMesh mesh = hairLocks(m_guides, m_lockPoints, glm::vec3(m_figure * glm::vec4(m_headCentre, 1.0f)), m_lockWidth);
+    std::vector<std::vector<glm::vec3>> pos(1), nrm(1);
+    pos[0].reserve(mesh.vertices.size());
+    nrm[0].reserve(mesh.vertices.size());
+    for (const ModelVertex& v : mesh.vertices) {
+        pos[0].push_back(v.position);
+        nrm[0].push_back(v.normal);
+    }
+    m_models->setDeformedVertices(m_locks, pos, nrm); // world space, like the guides
 }
 
 void CharacterCreatorModule::undress() {

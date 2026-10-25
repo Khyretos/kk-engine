@@ -524,3 +524,24 @@ TEST(HumanStyle, AnimeFaceReshapesWithoutChangingTheLook) {
     h.setStyle({});
     EXPECT_EQ(h.shapedPositions(), real);
 }
+
+// hairLocks: one closed, tapered lock per guide, the same counts for the
+// same guides (so a game copies new positions in each frame), wide at the
+// root and a point at the tip.
+TEST(HumanHair, LocksTaperFromRootToTip) {
+    std::vector<glm::vec3> guides;
+    for (int g = 0; g < 3; ++g)
+        for (int i = 0; i < 5; ++i) guides.emplace_back(0.03f * static_cast<float>(g), 1.7f - 0.04f * static_cast<float>(i), 0.08f);
+    const kke::ModelMesh a = kke::hairLocks(guides, 5, glm::vec3(0.03f, 1.6f, 0.0f), 0.03f);
+    EXPECT_EQ(a.vertices.size(), 3u * 5u * 4u);
+    EXPECT_EQ(a.indices.size(), 3u * 4u * 4u * 6u);
+    const float root = glm::length(a.vertices[0].position - a.vertices[2].position);
+    const float tip = glm::length(a.vertices[16].position - a.vertices[18].position);
+    EXPECT_NEAR(root, 0.03f, 1e-3f);
+    EXPECT_LT(tip, root * 0.1f);
+    guides[4].x += 0.05f; // it swings
+    const kke::ModelMesh b = kke::hairLocks(guides, 5, glm::vec3(0.03f, 1.6f, 0.0f), 0.03f);
+    EXPECT_EQ(b.vertices.size(), a.vertices.size());
+    EXPECT_EQ(b.indices, a.indices);
+    EXPECT_NEAR(kke::lockWidth({ { 0, 0, 0 }, { 0.01f, 0, 0 } }), 0.026f, 1e-4f);
+}

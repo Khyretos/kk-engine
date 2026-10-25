@@ -184,4 +184,59 @@ bool hairOnHuman(HairDesc& desc, const std::string& style, const HumanPack& pack
     return true;
 }
 
+ModelMesh hairLocks(const std::vector<glm::vec3>& guides, size_t perGuide, const glm::vec3& headCentre, float width) {
+    ModelMesh mesh;
+    mesh.name = "hair-locks";
+    if (perGuide < 2) return mesh;
+    const size_t count = guides.size() / perGuide;
+    constexpr uint32_t kSides = 4;
+    mesh.vertices.reserve(count * perGuide * kSides);
+    for (size_t g = 0; g < count; ++g) {
+        const glm::vec3* p = &guides[g * perGuide];
+        glm::vec3 out = p[0] - headCentre;
+        out = glm::length(out) > 1e-6f ? glm::normalize(out) : glm::vec3(0.0f, 1.0f, 0.0f);
+        const auto base = static_cast<uint32_t>(mesh.vertices.size());
+        for (size_t i = 0; i < perGuide; ++i) {
+            const glm::vec3 along = i + 1 < perGuide ? p[i + 1] - p[i] : p[i] - p[i - 1];
+            const glm::vec3 t = glm::length(along) > 1e-7f ? glm::normalize(along) : glm::vec3(0.0f, -1.0f, 0.0f);
+            // The broad side faces away from the head, wherever the lock hangs.
+            glm::vec3 o = out - t * glm::dot(out, t);
+            o = glm::length(o) > 1e-4f ? glm::normalize(o) : glm::normalize(glm::cross(t, std::abs(t.x) < 0.9f ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0)));
+            const glm::vec3 s = glm::cross(t, o);
+            const float f = static_cast<float>(i) / static_cast<float>(perGuide - 1);
+            const float w = 0.5f * width * (1.0f - 0.95f * std::pow(f, 1.6f)); // half width, to a point
+            const float d = w * 0.35f;
+            const glm::vec3 c = p[i] - (i == 0 ? out * 0.004f : glm::vec3(0.0f)); // the root a little into the scalp
+            const glm::vec3 corner[kSides] = { s * w, o * d, -s * w, -o * d * 0.4f };
+            for (const glm::vec3& k : corner) {
+                ModelVertex v;
+                v.position = c + k;
+                v.normal = glm::normalize(k / glm::vec3(std::max(w, 1e-6f)) + o * 0.3f); // rounded, leaning out
+                v.uv = glm::vec2(0.5f, f);
+                mesh.vertices.push_back(v);
+            }
+        }
+        for (uint32_t i = 0; i + 1 < perGuide; ++i)
+            for (uint32_t k = 0; k < kSides; ++k) {
+                const uint32_t a = base + i * kSides + k, b = base + i * kSides + (k + 1) % kSides;
+                const uint32_t c = a + kSides, d = b + kSides;
+                // Seen from outside the lock: a, b down the ring, c, d the next ring.
+                mesh.indices.insert(mesh.indices.end(), { a, c, b, b, c, d });
+            }
+    }
+    return mesh;
+}
+
+float lockWidth(const std::vector<glm::vec3>& roots) {
+    if (roots.size() < 2) return 0.03f;
+    float sum = 0.0f;
+    for (size_t i = 0; i < roots.size(); ++i) {
+        float best = 1e9f;
+        for (size_t j = 0; j < roots.size(); ++j)
+            if (j != i) best = std::min(best, glm::length(roots[i] - roots[j]));
+        sum += best;
+    }
+    return std::clamp(2.6f * sum / static_cast<float>(roots.size()), 0.008f, 0.07f);
+}
+
 } // namespace kke

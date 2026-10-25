@@ -259,12 +259,18 @@ manner of VRM's MToon material:
   shade of its own colour, a little wider far away. The creator gives the
   body 1.2 mm and clothes 1.5 mm, and none to eyes, brows and teeth.
 
+Anime hair is the same simulated guides drawn as locks
+(`kke/HumanHair.h` `hairLocks`): each guide a tapered, flattened
+four-sided spike about 2.6 times the root spacing wide (`lockWidth`), so
+locks overlap, rebuilt from the guides every frame and drawn toon with an
+outline. The physics is the strand hair's, with the style's hold raised
+to 0.35 so locks keep their shape and still bounce; the scalp under them
+takes the hair colour. Braids and twists keep a braid's width.
+
 Toon instances are drawn one at a time (never instanced) and cost one
 more draw per mesh for the outline. The pipelines are made by the first
 `setToon`, so a game without it needn't ship the shaders. Not yet toon:
-the strand hair and cloth skirts (their own renderers), and the face
-keeps realistic proportions; anime faces (bigger eyes, smaller nose and
-mouth) and anime hair are the next steps.
+cloth skirts (their own renderer).
 
 ## Multiplayer
 
