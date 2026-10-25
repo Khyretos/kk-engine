@@ -10,9 +10,14 @@
 namespace kke {
 
 // CPU-side model data loaded from FBX or OBJ (via ufbx) — the art-pack
-// import path, e.g. Synty. No GPU types here: kke::ModelModule turns this
-// into buffers and textures, and this half stays unit-testable
-// (tests/test_model_asset.cpp).
+// import path, e.g. Synty — or from glTF 2.0 (.gltf/.glb, via cgltf;
+// engine/src/GltfAsset.cpp says what it reads). No GPU types here:
+// kke::ModelModule turns this into buffers and textures, and this half
+// stays unit-testable (tests/test_model_asset.cpp, test_gltf_asset.cpp).
+//
+// Texture paths are files the texture loaders read through
+// kke::cooked::readAssetFile: a path on disk, or for an image inside a
+// .glb an in-memory file named "<model path>#image<N>.<ext>".
 //
 // Conventions after loading, whatever the source file used: meters,
 // right-handed, +Y up, counter-clockwise front faces, triangles only.

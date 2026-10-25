@@ -1,5 +1,6 @@
 #include "kke/ModelAsset.h"
 #include "kke/CookedFile.h"
+#include "ModelAssetDetail.h"
 
 #include <ufbx.h>
 
@@ -66,16 +67,7 @@ std::string resolveTexture(const ufbx_texture* tex, const std::vector<fs::path>&
     std::error_code ec;
     if (!original.empty() && fs::is_regular_file(original, ec)) return original;
     const std::string rel(tex->relative_filename.data, tex->relative_filename.length);
-    const std::string name = baseName(!original.empty() ? original : rel);
-    if (name.empty()) return {};
-    std::string found = findInDirs(name, dirs);
-    if (!found.empty()) return found;
-    const std::string stem = fs::path(name).stem().string();
-    for (const char* ext : { ".png", ".tga", ".jpg", ".jpeg", ".bmp" }) {
-        found = findInDirs(stem + ext, dirs);
-        if (!found.empty()) return found;
-    }
-    return {};
+    return detail::findTextureFile(!original.empty() ? original : rel, dirs);
 }
 
 struct CornerKey {
@@ -89,6 +81,77 @@ struct CornerKeyHash {
 };
 
 } // namespace
+
+namespace detail {
+
+std::vector<fs::path> textureSearchDirs(const std::string& modelPath, const ModelLoadOptions& options) {
+    const fs::path modelDir = fs::path(modelPath).parent_path();
+    std::vector<fs::path> dirs = { modelDir, modelDir / "Textures", modelDir / "textures",
+                                   modelDir.parent_path() / "Textures", modelDir.parent_path() / "textures" };
+    for (const std::string& extra : options.textureSearchPaths) dirs.emplace_back(extra);
+    return dirs;
+}
+
+std::string findTextureFile(const std::string& fileName, const std::vector<fs::path>& dirs) {
+    const std::string name = baseName(fileName);
+    if (name.empty()) return {};
+    std::string found = findInDirs(name, dirs);
+    if (!found.empty()) return found;
+    const std::string stem = fs::path(name).stem().string();
+    for (const char* ext : { ".png", ".tga", ".jpg", ".jpeg", ".bmp" }) {
+        found = findInDirs(stem + ext, dirs);
+        if (!found.empty()) return found;
+    }
+    return {};
+}
+
+void applyTextureOptions(ModelMaterial& mat, bool namesTexture, const ModelLoadOptions& options) {
+    if (mat.albedoTexture.empty() && !options.assetTexture.empty()) {
+        // Synty's road points at an artist's missing .psd; its own
+        // road texture is the right one, not the pack atlas.
+        mat.albedoTexture = options.assetTexture;
+        mat.baseColor = glm::vec3(1.0f);
+    }
+    if (!namesTexture && options.textureForMaterial) {
+        mat.albedoTexture = options.textureForMaterial(mat.name);
+        if (!mat.albedoTexture.empty()) mat.baseColor = glm::vec3(1.0f);
+    }
+    const bool neutral = std::max({ mat.baseColor.r, mat.baseColor.g, mat.baseColor.b }) -
+                         std::min({ mat.baseColor.r, mat.baseColor.g, mat.baseColor.b }) < 0.1f;
+    if (mat.albedoTexture.empty() && !options.fallbackTexture.empty() && (namesTexture || (options.atlasForUntextured && neutral))) {
+        mat.albedoTexture = options.fallbackTexture;
+        if (!namesTexture) mat.baseColor = glm::vec3(1.0f);
+    }
+}
+
+void finishModel(ModelData& model, const ModelLoadOptions& options) {
+    bool first = true;
+    auto grow = [&](const glm::vec3& p) {
+        if (first) { model.boundsMin = model.boundsMax = p; first = false; }
+        model.boundsMin = glm::min(model.boundsMin, p);
+        model.boundsMax = glm::max(model.boundsMax, p);
+    };
+    std::vector<glm::mat4> restSkin;
+    if (!model.bones.empty()) {
+        std::vector<glm::mat4> locals(model.bones.size());
+        for (size_t b = 0; b < model.bones.size(); ++b) locals[b] = model.bones[b].localRest;
+        restSkin = computeSkinMatrices(model, locals);
+    }
+    for (const ModelMesh& m : model.meshes) {
+        for (const ModelVertex& v : m.vertices) {
+            if (m.skinned) {
+                glm::vec3 p, n;
+                skinVertex(v, restSkin, p, n);
+                grow(p);
+            } else {
+                grow(v.position);
+            }
+        }
+    }
+    if (options.clipsInPlace) makeClipsInPlace(model);
+}
+
+} // namespace detail
 
 bool ModelData::isSkinned() const {
     return std::any_of(meshes.begin(), meshes.end(), [](const ModelMesh& m) { return m.skinned; });
@@ -108,6 +171,10 @@ size_t ModelData::triangleCount() const {
 }
 
 ModelData loadModel(const std::string& path, const ModelLoadOptions& options) {
+    {
+        const std::string ext = toLower(fs::path(path).extension().string());
+        if (ext == ".gltf" || ext == ".glb") return detail::loadGltfModel(path, options);
+    }
     ufbx_load_opts opts{};
     opts.target_axes = ufbx_axes_right_handed_y_up;
     opts.target_unit_meters = 1.0f;
@@ -138,10 +205,7 @@ ModelData loadModel(const std::string& path, const ModelLoadOptions& options) {
     model.sourcePath = path;
 
     // ---- materials (+ texture resolution)
-    const fs::path modelDir = fs::path(path).parent_path();
-    std::vector<fs::path> searchDirs = { modelDir, modelDir / "Textures", modelDir / "textures",
-                                         modelDir.parent_path() / "Textures", modelDir.parent_path() / "textures" };
-    for (const std::string& extra : options.textureSearchPaths) searchDirs.emplace_back(extra);
+    const std::vector<fs::path> searchDirs = detail::textureSearchDirs(path, options);
 
     std::unordered_map<const ufbx_material*, uint32_t> materialIndex;
     for (size_t i = 0; i < scene->materials.count; ++i) {
@@ -154,9 +218,6 @@ ModelData loadModel(const std::string& path, const ModelLoadOptions& options) {
                                       static_cast<float>(base.value_vec3.z));
         }
         const ufbx_texture* tex = base.texture ? base.texture : src->fbx.diffuse_color.texture;
-        std::vector<fs::path> searchDirs = { modelDir, modelDir / "Textures", modelDir / "textures",
-                                             modelDir.parent_path() / "Textures", modelDir.parent_path() / "textures" };
-        for (const std::string& extra : options.textureSearchPaths) searchDirs.emplace_back(extra);
         // A texture node with no file name is no texture.
         if (tex && tex->filename.length == 0 && tex->relative_filename.length == 0) tex = nullptr;
         if (tex) {
@@ -166,22 +227,7 @@ ModelData loadModel(const std::string& path, const ModelLoadOptions& options) {
             // leave it at mid-grey, which would darken the texture.
             if (!mat.albedoTexture.empty()) mat.baseColor = glm::vec3(1.0f);
         }
-        if (mat.albedoTexture.empty() && !options.assetTexture.empty()) {
-            // Synty's road points at an artist's missing .psd; its own
-            // road texture is the right one, not the pack atlas.
-            mat.albedoTexture = options.assetTexture;
-            mat.baseColor = glm::vec3(1.0f);
-        }
-        if (!tex && options.textureForMaterial) {
-            mat.albedoTexture = options.textureForMaterial(mat.name);
-            if (!mat.albedoTexture.empty()) mat.baseColor = glm::vec3(1.0f);
-        }
-        const bool neutral = std::max({ mat.baseColor.r, mat.baseColor.g, mat.baseColor.b }) -
-                             std::min({ mat.baseColor.r, mat.baseColor.g, mat.baseColor.b }) < 0.1f;
-        if (mat.albedoTexture.empty() && !options.fallbackTexture.empty() && (tex || (options.atlasForUntextured && neutral))) {
-            mat.albedoTexture = options.fallbackTexture;
-            if (!tex) mat.baseColor = glm::vec3(1.0f);
-        }
+        detail::applyTextureOptions(mat, tex != nullptr, options);
         const ufbx_texture* normalTex = src->fbx.normal_map.texture;
         if (normalTex == nullptr && src->pbr.normal_map.texture != src->fbx.bump.texture) {
             normalTex = src->pbr.normal_map.texture;
@@ -378,32 +424,10 @@ ModelData loadModel(const std::string& path, const ModelLoadOptions& options) {
         }
     }
 
-    // ---- bounds (rest pose for skinned meshes)
-    bool first = true;
-    auto grow = [&](const glm::vec3& p) {
-        if (first) { model.boundsMin = model.boundsMax = p; first = false; }
-        model.boundsMin = glm::min(model.boundsMin, p);
-        model.boundsMax = glm::max(model.boundsMax, p);
-    };
-    std::vector<glm::mat4> restSkin;
-    if (!model.bones.empty()) {
-        std::vector<glm::mat4> locals(model.bones.size());
-        for (size_t b = 0; b < model.bones.size(); ++b) locals[b] = model.bones[b].localRest;
-        restSkin = computeSkinMatrices(model, locals);
-    }
-    for (const ModelMesh& m : model.meshes) {
-        for (const ModelVertex& v : m.vertices) {
-            if (m.skinned) {
-                glm::vec3 p, n;
-                skinVertex(v, restSkin, p, n);
-                grow(p);
-            } else {
-                grow(v.position);
-            }
-        }
-    }
-    if (options.clipsInPlace) makeClipsInPlace(model);
-    if (options.fixUnitMismatch && model.bones.empty() && !first && std::abs(scene->settings.unit_meters - 0.01) < 1e-6) {
+    // ---- bounds (rest pose for skinned meshes), clips in place
+    detail::finishModel(model, options);
+    const bool hasVertices = std::any_of(model.meshes.begin(), model.meshes.end(), [](const ModelMesh& m) { return !m.vertices.empty(); });
+    if (options.fixUnitMismatch && model.bones.empty() && hasVertices && std::abs(scene->settings.unit_meters - 0.01) < 1e-6) {
         const glm::vec3 size = model.boundsMax - model.boundsMin;
         if (std::max(size.x, std::max(size.y, size.z)) < options.tinyModel) {
             for (ModelMesh& m : model.meshes)
