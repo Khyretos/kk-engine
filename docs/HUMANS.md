@@ -267,36 +267,10 @@ step for richer outfits.
 
 ## Anime style
 
-One person, two looks: the Realistic and Anime buttons switch how the
-same meshes, bones and materials are drawn, so a look, an outfit and every
-animation work in either (the "Character pipeline: one base, two styles"
-plan). `ModelModule::setToon(instance, true, outline)` draws an instance
-with `shaders/model_toon.frag` in place of model.frag, after the
-manner of VRM's MToon material:
-
-- Two tones, not a gradient: lit, or a cooler darker shade of the same
-  colour, split at a narrow soft edge a little past the side; cast
-  shadows only half way, so a nose or fringe shadow doesn't cut a face.
-- The sky's light flattened, a rim light on the silhouette, and one small
-  hard highlight where a material is really glossy (lips, eyes).
-- No normal map: pores would be noise in this style.
-- An outline: the mesh drawn again pushed out along its normals with only
-  its back faces (`model_outline.vert`/`.frag`), in a dark, more saturated
-  shade of its own colour, a little wider far away. The creator gives the
-  body 1.2 mm and clothes 1.5 mm, and none to eyes, brows and teeth.
-
-Anime hair is the same simulated guides drawn as locks
-(`kke/HumanHair.h` `hairLocks`): each guide a tapered, flattened
-four-sided spike about 2.6 times the root spacing wide (`lockWidth`), so
-locks overlap, rebuilt from the guides every frame and drawn toon with an
-outline. The physics is the strand hair's, with the style's hold raised
-to 0.35 so locks keep their shape and still bounce; the scalp under them
-takes the hair colour. Braids and twists keep a braid's width.
-
-Toon instances are drawn one at a time (never instanced) and cost one
-more draw per mesh for the outline. The pipelines are made by the first
-`setToon`, so a game without it needn't ship the shaders. Not yet toon:
-cloth skirts (their own renderer).
+The creator's Anime button shows a different body, not this one restyled:
+VRoid's CC0 anime avatars, drawn by kke::AnimeRenderer in the gacha style.
+See [ANIME.md](ANIME.md). The two styles share the skeleton's bone names,
+so animations carry over; the sliders and share code are this body's.
 
 ## Multiplayer
 

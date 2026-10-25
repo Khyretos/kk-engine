@@ -5,6 +5,7 @@
 #include "kke/HumanLook.h"
 #include "kke/HumanPack.h"
 #include "kke/Module.h"
+#include "kke/Vrm.h"
 #include "kke/modules/ModelModule.h"
 
 #include <RmlUi/Core/DataModelHandle.h>
@@ -22,10 +23,12 @@ class Event;
 
 namespace kke {
 
+class AnimeRenderer;
 class HairRenderer;
 class OrbitCameraModule;
 class RigidWorld;
 class UiModule;
+class VrmSprings;
 
 // A character creator screen (docs/HUMANS.md "The creator screen"): a
 // MakeHuman body in the middle, tabs of sliders on the right (body type,
@@ -175,7 +178,21 @@ private:
     Rml::String m_hairStyle;
     bool m_mirror = true;
     bool m_turntable = false;
-    bool m_anime = false; // the Anime style: toon shading and outlines (ModelModule::setToon)
+    // The Anime style (docs/ANIME.md): a body of its own, VRoid's CC0
+    // avatar (female or male by the Gender slider), drawn by an
+    // AnimeRenderer, its hair swung by its spring bones. Only the
+    // skeleton's names are shared with the realistic body.
+    bool m_anime = false;
+    std::unique_ptr<VrmAvatar> m_vrm;
+    std::string m_vrmFile;
+    std::unique_ptr<VrmSprings> m_springs;
+    std::unique_ptr<AnimeRenderer> m_animeDrawn;
+    std::vector<float> m_expressions;
+    std::vector<std::vector<ModelVertex>> m_posed;
+    std::vector<glm::mat4> m_vrmLocals, m_vrmWorld;
+    float m_animeTime = 0.0f, m_nextBlink = 2.0f;
+    void showAnimeBody(); // loads the avatar for the Gender slider if it changed
+    void poseAnime(float dt);
     Rml::String m_code, m_codeShort, m_status, m_view = "body";
     float m_statusTime = 0.0f;
 
@@ -187,15 +204,6 @@ private:
     size_t m_hairRoots = 0; // guides buildHair asked for (cornrows have only 6-14)
     std::unique_ptr<HairRenderer> m_hairDrawn;
     std::vector<glm::vec3> m_guides;
-    // The Anime style draws the same guides as locks (kke::hairLocks).
-    ModelModule::ModelId m_lockModel = 0;
-    ModelModule::InstanceId m_locks = 0;
-    size_t m_lockPoints = 0;      // points per guide
-    float m_lockWidth = 0.03f;
-    glm::vec3 m_headCentre{ 0.0f }; // the scalp sphere's centre, at rest
-    uint32_t m_lockSerial = 0;
-    void removeLocks();
-    void moveLocks();      // the locks onto the guides as they are now
     bool m_hairDirty = false; // rebuild once the sliders rest
     float m_yaw = 0.0f;       // the turntable turns the figure, so the hair swings
     glm::mat4 m_figure{ 1.0f };

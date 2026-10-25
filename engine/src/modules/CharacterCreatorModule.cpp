@@ -1,5 +1,6 @@
 #include "kke/modules/CharacterCreatorModule.h"
 
+#include "kke/AnimeRenderer.h"
 #include "kke/Application.h"
 #include "kke/AssetCatalog.h"
 #include "kke/Cloth.h"
@@ -12,6 +13,7 @@
 #include "kke/Outfit.h"
 #include "kke/RigidWorld.h"
 #include "kke/SphereImpostors.h"
+#include "kke/VrmSprings.h"
 #include "kke/modules/OrbitCameraModule.h"
 #include "kke/modules/UiModule.h"
 
@@ -634,40 +636,94 @@ void CharacterCreatorModule::applyColours() {
     if (m_body) m_models->setTint(m_body, m_look.skin);
     if (m_irises) m_models->setTint(m_irises, m_look.eyes);
     if (m_brows) m_models->setTint(m_brows, m_look.hairRoot);
-    if (m_locks) m_models->setTint(m_locks, glm::mix(m_look.hairRoot, m_look.hairTip, 0.35f));
     for (auto& w : m_worn) {
         for (const HumanLook::Worn& worn : m_look.clothes)
             if (worn.id == w->id) w->colour = w->fabric.color = worn.colour;
         if (w->instance) m_models->setTint(w->instance, w->colour);
     }
     if (m_cap) {
-        m_models->setVisible(m_cap, !m_look.hair.empty());
+        m_models->setVisible(m_cap, m_open && !m_anime && !m_look.hair.empty());
         // The skin a shade darker in the hair's shadow: a scalp in the
         // hair's own colour showed as a patch with a hard edge (Kees).
-        // Anime hair is solid locks over it: there the hair colour hides any gap.
-        m_models->setTint(m_cap, m_anime ? m_look.hairRoot : m_look.skin * 0.95f);
+        m_models->setTint(m_cap, m_look.skin * 0.95f);
     }
 }
 
 void CharacterCreatorModule::applyStyle() {
-    // The anime face is a layer over the person's sliders (Human::setStyle):
-    // the look and its share code stay the same in either style.
-    const std::map<std::string, float>& face = m_anime ? Human::animeFace() : std::map<std::string, float>{};
-    if (m_human->style() != face) {
-        m_human->setStyle(face);
-        m_shapeDirty = true;
-        m_hairDirty = true; // regrown on the new head, as strands or locks
-    }
-    // Outlines on the shapes (body, clothes), none on the small parts
-    // (eyes, brows, teeth): a line round each would read as a smudge.
-    for (const auto& [id, outline] : { std::pair{ m_body, 0.0012f }, std::pair{ m_parts, 0.0f }, std::pair{ m_irises, 0.0f },
-                                       std::pair{ m_brows, 0.0f }, std::pair{ m_cap, 0.0f } })
-        if (id) m_models->setToon(id, m_anime, outline);
+    // Realistic: the MakeHuman body. Anime: VRoid's avatar, a body of its
+    // own (docs/ANIME.md). One shows at a time; the sliders and the share
+    // code stay the realistic body's.
+    const bool real = m_open && !m_anime;
+    for (const ModelModule::InstanceId id : { m_body, m_parts, m_irises, m_brows })
+        if (id) m_models->setVisible(id, real);
+    if (m_cap) m_models->setVisible(m_cap, real && !m_look.hair.empty());
     for (auto& w : m_worn)
-        if (w->instance) m_models->setToon(w->instance, m_anime, 0.0015f);
-    // The anime skin: flat, a blush, only a hint of lips (bake_skin.py).
-    const std::string animeSkin = m_humansDir + "/skin_albedo_anime.png";
-    if (m_body && std::filesystem::exists(animeSkin)) m_models->setTextureOverride(m_body, m_anime ? animeSkin : std::string());
+        if (w->instance) m_models->setVisible(w->instance, real);
+    if (m_anime && m_open) showAnimeBody();
+    if (m_animeDrawn) m_animeDrawn->setVisible(m_open && m_anime);
+}
+
+void CharacterCreatorModule::showAnimeBody() {
+    const bool male = m_human->get("macrodetails/Gender") >= 0.5f;
+    // assets/anime sits next to assets/humans (kke_use_character_creator copies both).
+    const std::string file = (std::filesystem::path(m_humansDir).parent_path() / "anime" / (male ? "HairSample_Male.vrm" : "HairSample_Female.vrm")).string();
+    if (m_vrm && file == m_vrmFile) return;
+    try {
+        auto avatar = std::make_unique<VrmAvatar>(loadVrm(file));
+        m_springs.reset();
+        m_vrm = std::move(avatar);
+    } catch (const std::exception& e) {
+        log::get(name())->warn("anime body: {}", e.what());
+        return;
+    }
+    m_vrmFile = file;
+    if (!m_animeDrawn) m_animeDrawn = std::make_unique<AnimeRenderer>(*m_app);
+    m_animeDrawn->build(*m_vrm);
+    m_springs = std::make_unique<VrmSprings>(*m_vrm);
+    m_expressions.assign(m_vrm->expressions.size(), 0.0f);
+    m_vrmLocals = m_vrm->restLocals();
+    // VRoid stands in a T: the arms down to an A like the realistic body.
+    m_vrmWorld = computeRestPose(m_vrm->model);
+    for (const auto& [bone, sign] : { std::pair{ "leftUpperArm", -1.0f }, std::pair{ "rightUpperArm", 1.0f } }) {
+        const int b = m_vrm->bone(bone);
+        if (b < 0) continue;
+        const glm::mat3 world(m_vrmWorld[static_cast<size_t>(b)]);
+        const glm::mat3 inModel = glm::transpose(world) * glm::mat3(glm::rotate(glm::mat4(1.0f), sign * glm::radians(62.0f), glm::vec3(0, 0, 1))) * world;
+        m_vrmLocals[static_cast<size_t>(b)] = m_vrmLocals[static_cast<size_t>(b)] * glm::mat4(inModel);
+    }
+    m_springs->reset(m_vrmLocals, m_figure);
+    m_animeDrawn->setVisible(m_open && m_anime);
+    poseAnime(0.0f);
+}
+
+void CharacterCreatorModule::poseAnime(float dt) {
+    if (!m_vrm || !m_animeDrawn) return;
+    m_animeTime += dt;
+    // Blinks every few seconds, each a fifth of a second.
+    const int blink = m_vrm->expression("blink");
+    if (blink >= 0) {
+        if (m_animeTime > m_nextBlink + 0.2f) m_nextBlink = m_animeTime + 2.0f + 3.0f * std::uniform_real_distribution<float>(0.0f, 1.0f)(m_rng);
+        const float t = (m_animeTime - m_nextBlink) / 0.2f;
+        m_expressions[static_cast<size_t>(blink)] = t > 0.0f && t < 1.0f ? std::sin(t * kPi) : 0.0f;
+    }
+    if (const char* face = dev::env("KKE_CREATOR_EXPRESSION")) { // screenshots: "joy", "angry", ...
+        const int e = m_vrm->expression(face);
+        if (e >= 0) m_expressions[static_cast<size_t>(e)] = 1.0f;
+    }
+    std::vector<glm::mat4> locals = m_vrmLocals;
+    // Breathing: the chest rises a little.
+    if (const int chest = m_vrm->bone("chest"); chest >= 0)
+        locals[static_cast<size_t>(chest)] = locals[static_cast<size_t>(chest)] *
+            glm::rotate(glm::mat4(1.0f), 0.015f * std::sin(m_animeTime * 1.6f), glm::vec3(1, 0, 0));
+    m_springs->step(dt, locals, m_figure);
+    m_vrm->pose(locals, m_vrm->weights(m_expressions), m_posed);
+    // The head bone's model-space transform, for the face's light.
+    const std::vector<ModelBone>& bones = m_vrm->model.bones;
+    m_vrmWorld.resize(bones.size());
+    for (size_t b = 0; b < bones.size(); ++b)
+        m_vrmWorld[b] = (bones[b].parent >= 0 ? m_vrmWorld[static_cast<size_t>(bones[b].parent)] : glm::mat4(1.0f)) * locals[b];
+    const int head = m_vrm->bone("head");
+    m_animeDrawn->update(m_posed, m_figure, head >= 0 ? m_vrmWorld[static_cast<size_t>(head)] : glm::mat4(1.0f));
 }
 
 void CharacterCreatorModule::skinMaterial(ModelData& model) const {
@@ -991,7 +1047,7 @@ void CharacterCreatorModule::update(const UpdateContext& ctx) {
     if (m_hairDirty && m_sinceEdit > 0.35f) buildHair();
     if (m_clothesDirty && m_sinceEdit > 0.35f) dressUp(); // after the hair: on the new body collider
     if (m_hair && m_hairDrawn && m_world->hairPositions(m_hair, m_guides)) m_hairDrawn->update(m_guides, m_figure);
-    if (m_hair && m_locks) moveLocks();
+    if (m_anime) poseAnime(ctx.dt);
     for (auto& w : m_worn) {
         if (!w->cloth || !w->drawn || !m_world->clothPositions(w->cloth, w->positions)) continue;
         clothNormals(w->positions, w->indices, w->normals);
@@ -1041,7 +1097,6 @@ void CharacterCreatorModule::open() {
     if (m_parts) m_models->setVisible(m_parts, true);
     if (m_irises) m_models->setVisible(m_irises, true);
     if (m_brows) m_models->setVisible(m_brows, true);
-    if (m_locks) m_models->setVisible(m_locks, true);
     for (auto& w : m_worn)
         if (w->instance) m_models->setVisible(w->instance, true);
 }
@@ -1053,7 +1108,6 @@ void CharacterCreatorModule::close() {
     if (m_parts) m_models->setVisible(m_parts, false);
     if (m_irises) m_models->setVisible(m_irises, false);
     if (m_brows) m_models->setVisible(m_brows, false);
-    if (m_locks) m_models->setVisible(m_locks, false);
     for (auto& w : m_worn)
         if (w->instance) m_models->setVisible(w->instance, false);
 }
@@ -1083,12 +1137,8 @@ void CharacterCreatorModule::setLook(const HumanLook& look) {
 ModelData CharacterCreatorModule::bakeSkinned() const {
     Human h(*m_pack);
     applyLook(h, look());
-    if (m_anime) h.setStyle(Human::animeFace());
     Human::Bake b = h.bake();
     skinMaterial(b.model);
-    if (m_anime)
-        for (ModelMaterial& m : b.model.materials)
-            if (m.name == "Human_body" && !m.albedoTexture.empty()) m.albedoTexture = m_humansDir + "/skin_albedo_anime.png";
     for (ModelMaterial& m : b.model.materials)
         if (m.name == "Human_body") m.baseColor = look().skin;
     addIrises(b.model, look().eyes);
@@ -1133,7 +1183,8 @@ void CharacterCreatorModule::load() {
 
 void CharacterCreatorModule::shutdown() {
     if (m_hairDrawn) m_app->renderer().retire(std::move(m_hairDrawn));
-    removeLocks();
+    if (m_animeDrawn) m_app->renderer().retire(std::move(m_animeDrawn));
+    m_springs.reset();
     undress();
     m_world.reset();
     if (m_doc) {
@@ -1155,7 +1206,6 @@ void CharacterCreatorModule::buildHair() {
     if (m_hair) m_world->removeHair(m_hair);
     m_hair = 0;
     if (m_hairDrawn) m_app->renderer().retire(std::move(m_hairDrawn));
-    removeLocks();
     // The body as it is now is what the hair falls on: a mesh only cloth
     // and hair feel, turned with the figure.
     if (m_bodyCollider != RigidWorld::kNoBody) m_world->remove(m_bodyCollider);
@@ -1185,54 +1235,10 @@ void CharacterCreatorModule::buildHair() {
     m_hairRoots = d.roots.size();
     d.wind = 0.0f; // indoors
     d.bindPose = glm::mat4(1.0f); // the shaped body faces +Z at the origin
-    // Anime locks keep their styled shape more (they read as shapes) and
-    // still bounce.
-    if (m_anime) d.style.hold = std::max(d.style.hold, 0.35f);
     m_hair = m_world->addHair(d);
     m_world->setHairJoint(m_hair, m_figure);
-    if (!m_anime) {
-        m_hairDrawn = std::make_unique<HairRenderer>(*m_app);
-        m_hairDrawn->build(d);
-        return;
-    }
-    // The same guides drawn as locks; braids and twists stay as narrow as a braid.
-    m_headCentre = findScalp(*m_pack, m_human->shapedPositions()).centre;
-    m_lockWidth = d.style.plait > 0 ? d.style.plaitRadius * 2.5f : lockWidth(d.roots);
-    if (!m_world->hairPositions(m_hair, m_guides) || d.roots.empty() || m_guides.size() % d.roots.size()) return;
-    m_lockPoints = m_guides.size() / d.roots.size();
-    ModelData locks;
-    locks.meshes.push_back(hairLocks(m_guides, m_lockPoints, glm::vec3(m_figure * glm::vec4(m_headCentre, 1.0f)), m_lockWidth));
-    ModelMaterial mat;
-    mat.name = "Hair_locks";
-    mat.roughness = 0.45f;
-    locks.materials.push_back(mat);
-    locks.boundsMin = m_bodyBake.model.boundsMin - glm::vec3(1.0f);
-    locks.boundsMax = m_bodyBake.model.boundsMax + glm::vec3(1.0f);
-    m_lockModel = m_models->add(locks, "character_creator/hair-locks/" + std::to_string(++m_lockSerial), /*transient=*/true);
-    m_locks = m_models->spawn(m_lockModel);
-    m_models->setTint(m_locks, glm::mix(m_look.hairRoot, m_look.hairTip, 0.35f));
-    m_models->setToon(m_locks, true, 0.0012f);
-    m_models->setVisible(m_locks, m_open);
-}
-
-void CharacterCreatorModule::removeLocks() {
-    if (m_locks) m_models->remove(m_locks);
-    if (m_lockModel) m_models->unload(m_lockModel);
-    m_locks = 0;
-    m_lockModel = 0;
-}
-
-void CharacterCreatorModule::moveLocks() {
-    if (!m_world->hairPositions(m_hair, m_guides) || !m_lockPoints) return;
-    const ModelMesh mesh = hairLocks(m_guides, m_lockPoints, glm::vec3(m_figure * glm::vec4(m_headCentre, 1.0f)), m_lockWidth);
-    std::vector<std::vector<glm::vec3>> pos(1), nrm(1);
-    pos[0].reserve(mesh.vertices.size());
-    nrm[0].reserve(mesh.vertices.size());
-    for (const ModelVertex& v : mesh.vertices) {
-        pos[0].push_back(v.position);
-        nrm[0].push_back(v.normal);
-    }
-    m_models->setDeformedVertices(m_locks, pos, nrm); // world space, like the guides
+    m_hairDrawn = std::make_unique<HairRenderer>(*m_app);
+    m_hairDrawn->build(d);
 }
 
 void CharacterCreatorModule::undress() {
@@ -1421,6 +1427,10 @@ void CharacterCreatorModule::compute(VkCommandBuffer cmd) {
 }
 
 void CharacterCreatorModule::render(const RenderContext& ctx) {
+    if (m_anime) {
+        if (m_animeDrawn && m_open) m_animeDrawn->draw(ctx);
+        return;
+    }
     if (m_hairDrawn && m_hair && m_open) m_hairDrawn->draw(ctx);
     if (m_open)
         for (auto& w : m_worn)
@@ -1428,6 +1438,10 @@ void CharacterCreatorModule::render(const RenderContext& ctx) {
 }
 
 void CharacterCreatorModule::renderShadow(const ShadowRenderContext& ctx) {
+    if (m_anime) {
+        if (m_animeDrawn && m_open) m_animeDrawn->drawShadow(ctx);
+        return;
+    }
     if (m_hairDrawn && m_hair && m_open) m_hairDrawn->drawShadow(ctx, -m_app->lighting().lights[0].direction);
     if (m_open)
         for (auto& w : m_worn)

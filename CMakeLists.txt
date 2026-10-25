@@ -882,9 +882,14 @@ function(kke_use_character_creator TARGET)
     foreach(f makehuman.kkhpack credits.json skin_albedo.png skin_albedo_anime.png skin_normal.png skin_roughness.png)
         engine_copy_runtime_file(${TARGET} ${CMAKE_SOURCE_DIR}/assets/humans/${f} assets/humans/${f})
     endforeach()
+    # The anime style's bodies: VRoid's CC0 sample avatars (docs/ANIME.md).
+    foreach(f HairSample_Female.vrm HairSample_Male.vrm)
+        engine_copy_runtime_file(${TARGET} ${CMAKE_SOURCE_DIR}/assets/anime/${f} assets/anime/${f})
+    endforeach()
     foreach(shader cube.vert cube.frag glow.frag shadow.vert shadow.frag model.vert model_instanced.vert shadow_instanced.vert model.frag
                    hair.vert hair.frag hair_shadow.vert hair_points.comp cloth.frag
-                   model_toon.frag model_outline.vert model_outline.frag)
+                   model_toon.frag model_outline.vert model_outline.frag
+                   anime.vert anime.frag anime_outline.vert anime_outline.frag)
         engine_add_shader(${TARGET} ${CMAKE_SOURCE_DIR}/shaders/${shader})
     endforeach()
 endfunction()
