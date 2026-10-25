@@ -21,6 +21,7 @@
 #include "kke/ParticleLibrary.h"
 #include "kke/net/ScriptSpawns.h"
 #include "kke/RmlTextSafety.h"
+#include "kke/modules/AudioModule.h"
 #include "kke/modules/ModelModule.h"
 #include "kke/modules/UiModule.h"
 #if KKE_ENABLE_FEMFX
@@ -832,6 +833,258 @@ void ScriptModule::dispatchNet() {
 }
 
 // ---------------------------------------------------------------- cleanup
+// ---------------------------------------------------------------- audio.* (sounds and music)
+namespace {
+
+// "effects" (impacts), "footsteps", "voice", "ambience", "ui", "music", "alerts".
+bool categoryNamed(const std::string& n, SoundCategory& out) {
+    static const std::pair<const char*, SoundCategory> names[] = {
+        { "effects", SoundCategory::Impact },  { "impact", SoundCategory::Impact }, { "footsteps", SoundCategory::Footstep },
+        { "footstep", SoundCategory::Footstep }, { "voice", SoundCategory::Voice },  { "ambience", SoundCategory::Ambient },
+        { "ambient", SoundCategory::Ambient }, { "ui", SoundCategory::Ui },          { "music", SoundCategory::Music },
+        { "alerts", SoundCategory::Alert },    { "alert", SoundCategory::Alert },
+    };
+    for (const auto& [name, c] : names)
+        if (n == name) {
+            out = c;
+            return true;
+        }
+    return false;
+}
+
+SoundCategory checkCategory(lua_State* L, int index, const char* fn) {
+    const std::string n = luaL_checkstring(L, index);
+    SoundCategory c{};
+    if (!categoryNamed(n, c))
+        luaL_error(L, "%s: '%s' isn't a sound category (effects, footsteps, voice, ambience, ui, music, alerts)", fn, n.c_str());
+    return c;
+}
+
+float finiteField(lua_State* L, int table, const char* key, float fallback) {
+    const float v = ScriptVM::fieldNumber(L, table, key, fallback);
+    return std::isfinite(v) ? v : fallback;
+}
+
+} // namespace
+
+void ScriptModule::bindAudio() {
+    auto* audio = m_app->getModule<AudioModule>();
+    if (!audio) return;
+    ScriptVM& vm = *m_vm;
+
+    // A sound by id (audio.sound) or by its file name, loaded on first use.
+    auto soundArg = [this, audio](lua_State* L, int index, const char* fn, std::string* why) -> SoundHandle {
+        if (lua_isinteger(L, index)) {
+            const lua_Integer id = lua_tointeger(L, index);
+            if (id < 1 || id > lua_Integer(m_soundFiles.size()))
+                luaL_error(L, "%s: %d is not a sound (use audio.sound)", fn, int(id));
+            return m_soundFiles[size_t(id - 1)];
+        }
+        const std::string name = luaL_checkstring(L, index);
+        if (!safeRelativePath(name)) luaL_error(L, "%s: '%s' must be a relative path inside the game's folder", fn, name.c_str());
+        const std::filesystem::path file = std::filesystem::path(baseDir()) / name;
+        std::error_code ec;
+        if (!std::filesystem::is_regular_file(file, ec)) {
+            *why = "'" + name + "' not found in the game's folder";
+            return nullptr;
+        }
+        SoundHandle s = audio->cachedSound(file.string());
+        if (!s) *why = "'" + name + "' isn't a sound file this engine reads (WAV, FLAC or MP3)";
+        return s;
+    };
+    // The voice a script started, or 0 for one that already ended; another
+    // script's (or a made-up) id is an error.
+    auto ownedVoice = [this](lua_State* L, int index, const char* fn) -> uint32_t {
+        const auto id = uint32_t(checkId(L, index, fn));
+        for (const Sound& s : m_sounds)
+            if (s.voice == id) {
+                if (s.source != m_vm->currentSource()) luaL_error(L, "%s: %d is another script's sound", fn, int(id));
+                return id;
+            }
+        luaL_error(L, "%s: %d is not a sound this script played (use audio.play)", fn, int(id));
+        return 0;
+    };
+
+    // audio.sound(file) -> sound id, or nil + reason. The same file is the same id.
+    vm.registerFunction("audio", "sound", [this, soundArg](lua_State* L) {
+        const std::string name = luaL_checkstring(L, 1);
+        if (auto it = m_soundIds.find(name); it != m_soundIds.end()) {
+            lua_pushinteger(L, it->second);
+            return 1;
+        }
+        std::string why;
+        SoundHandle s = soundArg(L, 1, "audio.sound", &why);
+        if (!s) {
+            lua_pushnil(L);
+            lua_pushstring(L, why.c_str());
+            return 2;
+        }
+        if (m_soundFiles.size() >= 1024) return luaL_error(L, "audio.sound: 1024 different sounds are loaded already");
+        m_soundFiles.push_back(s);
+        const int id = int(m_soundFiles.size());
+        m_soundIds.emplace(name, id);
+        lua_pushinteger(L, id);
+        return 1;
+    });
+    // audio.play(sound, {pos, volume, pitch, loop, category, near, range, fade})
+    //   -> voice id, or nil + reason (no such file; dropped: too quiet or too far)
+    vm.registerFunction("audio", "play", [this, audio, soundArg](lua_State* L) {
+        std::string why;
+        SoundHandle s = soundArg(L, 1, "audio.play", &why);
+        if (!s) {
+            lua_pushnil(L);
+            lua_pushstring(L, why.c_str());
+            return 2;
+        }
+        const std::string src = m_vm->currentSource();
+        // Ended sounds stay known (audio.stop on one is fine) until there are many.
+        if (m_sounds.size() > 4096)
+            m_sounds.erase(std::remove_if(m_sounds.begin(), m_sounds.end(), [&](const Sound& o) { return !audio->mixer().isPlaying(o.voice); }),
+                           m_sounds.end());
+        size_t mine = 0;
+        for (const Sound& o : m_sounds) mine += o.source == src && audio->mixer().isPlaying(o.voice);
+        if (mine >= maxSoundsPerScript)
+            return luaL_error(L, "audio.play: this script already plays %d sounds (maxSoundsPerScript)", int(maxSoundsPerScript));
+        VoiceDesc d;
+        d.sound = s;
+        d.spatial = false;
+        float volume = 1.0f; // the voice's fade gain, so audio.volume sets it outright
+        if (lua_istable(L, 2)) {
+            lua_getfield(L, 2, "pos");
+            if (!lua_isnil(L, -1)) {
+                d.spatial = true;
+                d.position = ScriptVM::toVec3(L, -1);
+            }
+            lua_pop(L, 1);
+            volume = std::clamp(finiteField(L, 2, "volume", 1.0f), 0.0f, 4.0f);
+            d.pitch = finiteField(L, 2, "pitch", 1.0f);
+            d.loop = ScriptVM::fieldBool(L, 2, "loop", false);
+            d.minDistance = std::max(0.05f, finiteField(L, 2, "near", 1.0f));
+            d.maxDistance = std::max(d.minDistance + 0.1f, finiteField(L, 2, "range", 60.0f));
+            d.fadeIn = std::max(0.0f, finiteField(L, 2, "fade", 0.0f));
+            if (lua_getfield(L, 2, "category") != LUA_TNIL) d.category = checkCategory(L, -1, "audio.play");
+            else d.category = d.spatial ? SoundCategory::Impact : SoundCategory::Ui;
+            lua_pop(L, 1);
+        } else if (!lua_isnoneornil(L, 2)) {
+            return luaL_error(L, "audio.play: the second argument is a table {pos =, volume =, loop =, ...}");
+        } else {
+            d.category = SoundCategory::Ui;
+        }
+        const uint32_t voice = audio->play(d);
+        if (!voice) {
+            lua_pushnil(L);
+            lua_pushstring(L, "not played: too quiet, too far, or quieter than the 32 sounds playing");
+            return 2;
+        }
+        if (volume != 1.0f || d.fadeIn > 0.0f) audio->mixer().fade(voice, volume, d.fadeIn);
+        m_sounds.push_back({ voice, src });
+        lua_pushinteger(L, lua_Integer(voice));
+        return 1;
+    });
+    // audio.stop(voice [, fade seconds])
+    vm.registerFunction("audio", "stop", [audio, ownedVoice](lua_State* L) {
+        const uint32_t v = ownedVoice(L, 1, "audio.stop");
+        const float fade = float(luaL_optnumber(L, 2, 0.0));
+        if (fade > 0.0f) audio->mixer().fade(v, 0.0f, fade, true);
+        else audio->mixer().stop(v);
+        return 0;
+    });
+    // audio.move(voice, pos): a sound that follows something.
+    vm.registerFunction("audio", "move", [audio, ownedVoice](lua_State* L) {
+        audio->mixer().setPosition(ownedVoice(L, 1, "audio.move"), ScriptVM::toVec3(L, 2));
+        return 0;
+    });
+    // audio.volume(voice, volume [, seconds]): glides there.
+    vm.registerFunction("audio", "volume", [audio, ownedVoice](lua_State* L) {
+        const uint32_t v = ownedVoice(L, 1, "audio.volume");
+        audio->mixer().fade(v, std::clamp(float(luaL_checknumber(L, 2)), 0.0f, 4.0f), float(luaL_optnumber(L, 3, 0.0)));
+        return 0;
+    });
+    vm.registerFunction("audio", "playing", [audio, ownedVoice](lua_State* L) {
+        lua_pushboolean(L, audio->mixer().isPlaying(ownedVoice(L, 1, "audio.playing")));
+        return 1;
+    });
+    // audio.music(sound | nil [, {fade, volume}]): one looping track; a new one crossfades, nil fades out.
+    vm.registerFunction("audio", "music", [this, audio, soundArg](lua_State* L) {
+        float fade = 1.5f, volume = 0.8f;
+        if (lua_istable(L, 2)) {
+            fade = std::max(0.0f, finiteField(L, 2, "fade", fade));
+            volume = finiteField(L, 2, "volume", volume);
+        }
+        if (lua_isnoneornil(L, 1)) {
+            audio->stopMusic(fade);
+            m_musicSource.clear();
+            return 0;
+        }
+        std::string why;
+        SoundHandle s = soundArg(L, 1, "audio.music", &why);
+        if (!s) {
+            lua_pushnil(L);
+            lua_pushstring(L, why.c_str());
+            return 2;
+        }
+        audio->playMusic(s, fade, volume);
+        m_musicSource = m_vm->currentSource();
+        lua_pushboolean(L, 1);
+        return 1;
+    });
+    // audio.bus(category [, volume [, seconds]]) -> its volume now: the game's
+    // own gain per category, on top of the player's volume settings.
+    vm.registerFunction("audio", "bus", [audio](lua_State* L) {
+        const SoundCategory c = checkCategory(L, 1, "audio.bus");
+        if (!lua_isnoneornil(L, 2)) audio->mixer().setBusGain(c, float(luaL_checknumber(L, 2)), float(luaL_optnumber(L, 3, 0.0)));
+        lua_pushnumber(L, audio->mixer().busTarget(c));
+        return 1;
+    });
+    // audio.snapshot({music = 0.4, effects = 0, ...} [, seconds]): several buses at once
+    // (a pause menu, underwater, a cutscene); categories left out go back to 1.
+    vm.registerFunction("audio", "snapshot", [audio](lua_State* L) {
+        luaL_checktype(L, 1, LUA_TTABLE);
+        const float seconds = float(luaL_optnumber(L, 2, 0.5));
+        float gains[size_t(SoundCategory::Count)];
+        std::fill(std::begin(gains), std::end(gains), 1.0f);
+        lua_pushnil(L);
+        while (lua_next(L, 1)) {
+            if (lua_type(L, -2) != LUA_TSTRING) return luaL_error(L, "audio.snapshot: keys are category names");
+            const SoundCategory c = checkCategory(L, -2, "audio.snapshot");
+            if (!lua_isnumber(L, -1)) return luaL_error(L, "audio.snapshot: a category's volume is a number");
+            gains[size_t(c)] = float(lua_tonumber(L, -1));
+            if (c == SoundCategory::Impact) // "effects" is every sound effect
+                for (SoundCategory e : { SoundCategory::Footstep, SoundCategory::Ambient, SoundCategory::Alert }) gains[size_t(e)] = gains[size_t(c)];
+            lua_pop(L, 1);
+        }
+        // Explicit footsteps / ambience / alerts win over what "effects" set.
+        lua_pushnil(L);
+        while (lua_next(L, 1)) {
+            SoundCategory c{};
+            if (categoryNamed(lua_tostring(L, -2), c) && c != SoundCategory::Impact) gains[size_t(c)] = float(lua_tonumber(L, -1));
+            lua_pop(L, 1);
+        }
+        for (size_t c = 0; c < size_t(SoundCategory::Count); ++c) audio->mixer().setBusGain(SoundCategory(c), gains[c], seconds);
+        return 0;
+    });
+    // audio.duck(by, target [, {volume, attack, release}]): while `by` plays, `target` drops
+    // (dialogue over music: audio.duck("voice", "music")). Setting a pair again changes it.
+    vm.registerFunction("audio", "duck", [audio](lua_State* L) {
+        DuckRule r;
+        r.by = checkCategory(L, 1, "audio.duck");
+        r.target = checkCategory(L, 2, "audio.duck");
+        if (r.by == r.target) return luaL_error(L, "audio.duck: a category can't duck itself");
+        if (lua_istable(L, 3)) {
+            r.gain = finiteField(L, 3, "volume", r.gain);
+            r.attack = finiteField(L, 3, "attack", r.attack);
+            r.release = finiteField(L, 3, "release", r.release);
+        }
+        if (audio->mixer().duckCount() >= 32) return luaL_error(L, "audio.duck: 32 duck rules at most");
+        audio->mixer().addDuck(r);
+        return 0;
+    });
+    vm.registerFunction("audio", "clearDucks", [audio](lua_State*) {
+        audio->mixer().clearDucks();
+        return 0;
+    });
+}
+
 void ScriptModule::releaseScript(const std::string& source) {
     if (m_calls) m_calls->release(source);
     if (m_tables) m_tables->release(source);
@@ -877,6 +1130,16 @@ void ScriptModule::releaseScript(const std::string& source) {
 #endif
     m_scenes.erase(std::remove_if(m_scenes.begin(), m_scenes.end(), [&](const Scene& s) { return mine(s.source); }), m_scenes.end());
     m_lights.releaseAll(m_app->lighting(), source);
+    // Its sounds stop (a short fade, no click); so does the music it started.
+    if (auto* audio = m_app->getModule<AudioModule>()) {
+        for (const Sound& snd : m_sounds)
+            if (mine(snd.source)) audio->mixer().fade(snd.voice, 0.0f, 0.05f, true);
+        if (!m_musicSource.empty() && mine(m_musicSource)) {
+            audio->stopMusic(0.5f);
+            m_musicSource.clear();
+        }
+    }
+    m_sounds.erase(std::remove_if(m_sounds.begin(), m_sounds.end(), [&](const Sound& snd) { return mine(snd.source); }), m_sounds.end());
     // Its effects stop emitting; what is already in the air finishes.
     for (ScriptFx::EmitterId id : m_fx.releaseAll(source))
         if (m_fxLibrary) m_fxLibrary->stop(id);
@@ -893,6 +1156,8 @@ void ScriptModule::releaseAll() {
     for (const Document& d : m_documents) add(d.source);
     for (const ClickHandler& h : m_clickHandlers) add(h.source);
     for (const Scene& s : m_scenes) add(s.source);
+    for (const Sound& s : m_sounds) add(s.source);
+    if (!m_musicSource.empty()) add(m_musicSource);
     for (const std::string& s : sources) releaseScript(s);
     m_lights.clear(m_app->lighting());
     m_fx.clear();

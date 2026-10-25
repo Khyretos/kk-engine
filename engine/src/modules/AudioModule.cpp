@@ -670,6 +670,47 @@ SoundHandle AudioModule::loadSound(const std::string& path) {
     return buf;
 }
 
+SoundHandle AudioModule::cachedSound(const std::string& path) {
+    if (auto it = m_soundCache.find(path); it != m_soundCache.end()) return it->second;
+    SoundHandle s = loadSound(path);
+    if (!s) return nullptr;
+    if (m_soundCache.size() >= kMaxCachedSounds) m_soundCache.clear();
+    m_soundCache.emplace(path, s);
+    return s;
+}
+
+uint32_t AudioModule::playMusic(SoundHandle track, float fade, float gain) {
+    if (!m_mixer) return 0;
+    fade = std::isfinite(fade) ? std::max(0.0f, fade) : 0.0f;
+    gain = std::isfinite(gain) ? std::clamp(gain, 0.0f, 2.0f) : 0.8f;
+    // The track's loudness is its fade gain (VoiceDesc::gain stays 1), so a
+    // new gain for the same track is one more glide.
+    if (track && track == m_musicTrack && m_musicVoice && m_mixer->isPlaying(m_musicVoice)) {
+        m_mixer->fade(m_musicVoice, gain, fade);
+        return m_musicVoice;
+    }
+    stopMusic(fade);
+    if (!track) return 0;
+    VoiceDesc d;
+    d.sound = track;
+    d.spatial = false;
+    d.loop = true;
+    d.category = SoundCategory::Music;
+    d.priority = 8.0f; // never the voice a burst of impacts steals
+    d.reverbSend = 0.0f;
+    d.fadeIn = fade;
+    m_musicVoice = m_mixer->play(d);
+    if (m_musicVoice) m_mixer->fade(m_musicVoice, gain, fade);
+    m_musicTrack = m_musicVoice ? track : nullptr;
+    return m_musicVoice;
+}
+
+void AudioModule::stopMusic(float fade) {
+    if (m_mixer && m_musicVoice) m_mixer->fade(m_musicVoice, 0.0f, fade, true);
+    m_musicVoice = 0;
+    m_musicTrack = nullptr;
+}
+
 void AudioModule::renderUi() {
     const float s = ImGui::GetFontSize() / 13.0f;
     ImGui::SetNextWindowSize(ImVec2(300 * s, 0), ImGuiCond_FirstUseEver);

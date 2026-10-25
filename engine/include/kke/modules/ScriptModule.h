@@ -1,6 +1,7 @@
 #pragma once
 
 #include "kke/AssetCatalog.h"
+#include "kke/AudioMixer.h"
 #include "kke/Module.h"
 #include "kke/SceneLoader.h"
 #include "kke/ScriptCalls.h"
@@ -100,6 +101,7 @@ public:
     size_t maxBreakablesPerScript = 64; // FEMFX bodies are expensive (docs/OPTIMIZATION.md)
     size_t maxDocumentsPerScript = 16;
     size_t maxScenesPerScript = 4;
+    size_t maxSoundsPerScript = 64; // playing at once (the mixer has 32 voices; the quietest give way)
 
     // Where store.* keeps what scripts save (docs/STORAGE.md urls), opened
     // on first use; KKE_SCRIPT_STORE overrides it. Set before init.
@@ -135,6 +137,7 @@ private:
     void bindScenes();
     void bindNet();
     void bindStore();
+    void bindAudio(); // audio.sound/play/music/bus/duck (ScriptBindings.cpp)
     // Multiplayer copies of what sv_ scripts spawn (ScriptReplication.cpp).
     void bindReplication();
     void syncNetRole();                    // hosting / joining / leaving changed what's replicated
@@ -175,6 +178,11 @@ private:
     std::vector<std::pair<int, std::string>> m_pendingClicks;
     std::unique_ptr<Rml::EventListener> m_clickListener;
     std::vector<Scene> m_scenes;
+    struct Sound { uint32_t voice; std::string source; };
+    std::vector<Sound> m_sounds;                 // audio.play's voices, by script
+    std::vector<SoundHandle> m_soundFiles;       // audio.sound ids - 1
+    std::unordered_map<std::string, int> m_soundIds;
+    std::string m_musicSource;                   // the script that started the music
     ScriptLights m_lights; // light.*: lamps scripts placed (kke/ScriptLights.h)
     // fx.*: one particle pool and library for every script, made on first use.
     static constexpr size_t kFxParticles = 8000;

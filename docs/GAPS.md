@@ -120,14 +120,14 @@ by area. The goal is parity with the big engines and more.
 | ENG-F39 | Audio | Dynamic, adaptive music | ⬜ |
 | ENG-F40 | Audio | Spatial voice chat (proximity voice exists) | ✅ |
 | ENG-F41 | Audio | Occlusion and diffraction (ray occlusion exists; diffraction missing) | 🟡 |
-| ENG-F42 | Audio | Mixer buses, snapshots, ducking, reverb zones | 🟡 |
+| ENG-F42 | Audio | Mixer buses, snapshots, ducking, reverb zones. Done: buses on top of the player's volumes, gliding snapshots, ducking by what is heard, fades, pitch, and Lua sound files and crossfading music (docs/AUDIO.md). Not yet: authored reverb zones (the ray-traced room covers most). | 🟡 |
 | ENG-F43 | UI | Widgets with drag and drop (RmlUi; inventory drag exists) | 🟡 |
 | ENG-F44 | UI | Data binding (RmlUi data models) | ✅ |
 | ENG-F45 | UI | Animation curves for UI | 🟡 |
 | ENG-F46 | UI | Multi-monitor | ⬜ |
 | ENG-F47 | Input | Gesture recognition beyond pinch, pan and twist | 🟡 |
 | ENG-F48 | Input | Haptics API (rumble on impacts is next in INPUT) | 🟡 |
-| ENG-F49 | Input | Virtual joystick for phones | 🟡 |
+| ENG-F49 | Input | Virtual joystick for phones: on-screen sticks and buttons from the game's actions, player-editable (docs/TOUCH.md) | ✅ |
 | ENG-F50 | Input | Action maps, rebinding, glyphs, per-player devices (docs/INPUT.md) | ✅ |
 | ENG-F51 | Scripting | Visual scripting (node graph; #33 leftovers) | 🟡 |
 | ENG-F52 | Scripting | Hot reload of scripts | ✅ |

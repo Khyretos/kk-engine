@@ -98,6 +98,51 @@ and what's next. Code: `kke/AudioMixer.h`, `kke/ImpactSynth.h`,
   per material (soft, medium, hard) and two stereo files: a knock walking
   around the listener, and the same behind a wood wall.
 
+## Sounds and music from scripts
+
+A game's own sound files (WAV, FLAC or MP3, in the game's folder) play
+from Lua (`audio.*`, [SCRIPTING.md](SCRIPTING.md)):
+
+```lua
+local hit = audio.sound("sounds/hit.wav")            -- loaded once; nil + reason when missing
+audio.play(hit, { pos = enemy.pos, volume = 0.8, pitch = 0.9 + math.random() * 0.2 })
+local hum = audio.play("sounds/engine.wav", { pos = car.pos, loop = true, category = "effects" })
+audio.move(hum, car.pos)                             -- every frame, to follow it
+audio.volume(hum, 0.3, 0.5)                          -- glide to 0.3 in 0.5 s
+audio.stop(hum, 1.0)                                 -- fade out over 1 s
+
+audio.music("music/town.mp3")                        -- loops; a new track crossfades (1.5 s)
+audio.music("music/battle.mp3", { fade = 0.5, volume = 1.0 })
+audio.music(nil)                                     -- fade out
+
+audio.duck("voice", "music")                         -- dialogue pushes the music down to 0.35
+audio.snapshot({ music = 0.4, effects = 0 }, 0.3)    -- the pause menu
+audio.snapshot({})                                   -- back to normal
+audio.bus("ui", 0.5)                                 -- one category's volume
+```
+
+- `audio.play(sound, {...})`: `pos` makes it 3D (heard from there, with
+  occlusion and the room's reverb; without it plays centred), `volume`
+  (0..4), `pitch` (0.25..4, also the speed), `loop`, `near` (full volume
+  inside, 1 m) and `range` (silent beyond, 60 m), `fade` (seconds in),
+  `category`. Returns the voice, or nil and why: a sound that would be the
+  quietest of 32 playing is dropped.
+- **Categories** are the mixer's buses: `effects`, `footsteps`, `voice`,
+  `ambience`, `ui`, `music`, `alerts`. The player's volume settings set
+  them (music, effects); `audio.bus` and `audio.snapshot` are the game's
+  own gain on top, gliding over the seconds given. `effects` in a snapshot
+  also sets footsteps, ambience and alerts unless they're named.
+- **Ducking** (`audio.duck(by, target, {volume, attack, release})`): while
+  `by` plays, `target` drops to `volume` (0.35) in about `attack` (0.08 s)
+  and comes back in about `release` (0.6 s). It listens to what you
+  actually hear, so a far, quiet voice doesn't duck anything.
+- What a script plays stops when the script reloads or unloads (a 50 ms
+  fade, no click), and so does music it started. A script plays at most
+  `ScriptModule::maxSoundsPerScript` (64) at once.
+- C++: `AudioMixer::fade`, `setBusGain`, `addDuck` (`DuckRule`),
+  `VoiceDesc::pitch` and `fadeIn`; `AudioModule::cachedSound`,
+  `playMusic` and `stopMusic`.
+
 ## How it works
 
 ### Output: miniaudio, mixing: ours
@@ -375,7 +420,8 @@ next, with its lowest point at the floor. It sounds like stone.
 
 1. Sliding/rolling loops from resting contacts; Doppler; a sound in
    another room getting that room's reverb (per-source rooms).
-2. Streaming music/ambience from files, per-category ducking.
+2. Streaming music from files (today a track is decoded whole: about
+   11 MB per minute), reverb zones a level author places.
 3. A "describe what I hear" mode (spoken captions).
 4. Lock-free command queue if the mixer lock ever shows up.
 5. A Steam Audio build in CI (today only the default build is tested

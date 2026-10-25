@@ -561,6 +561,7 @@ void ScriptModule::bindAll() {
     bindNet();
     bindReplication();
     bindStore();
+    bindAudio();
 }
 
 void ScriptModule::bindStore() {
