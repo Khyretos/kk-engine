@@ -170,10 +170,12 @@ private:
                 const size_t chars = std::strlen(base64);
                 size_t pad = 0;
                 while (pad < 2 && chars > pad && base64[chars - 1 - pad] == '=') ++pad;
-                const cgltf_size size = chars / 4 * 3 - pad;
+                // Shorter than one 4-character group: nothing to decode
+                // (and chars / 4 * 3 - pad would wrap around).
+                const cgltf_size size = chars >= 4 ? chars / 4 * 3 - pad : 0;
                 void* decoded = nullptr;
                 cgltf_options opts{};
-                if (cgltf_load_buffer_base64(&opts, size, base64, &decoded) == cgltf_result_success) {
+                if (size > 0 && cgltf_load_buffer_base64(&opts, size, base64, &decoded) == cgltf_result_success && decoded) {
                     const auto* b = static_cast<const uint8_t*>(decoded);
                     file = m_path + "#image" + std::to_string(index) + ext;
                     cooked::putMemoryFile(file, std::vector<uint8_t>(b, b + size));
