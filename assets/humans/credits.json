@@ -1,0 +1,16 @@
+{
+  "format": "kk-human-credits",
+  "version": 1,
+  "assets": [
+    {
+      "what": "MakeHuman base mesh, morph targets, skeleton and skin weights",
+      "authors": "MakeHuman Team (Data Collection AB, Joel Palmius, Jonas Hauquier; original targets by Manuel Bastioni)",
+      "licence": "CC0-1.0",
+      "url": "http://www.makehumancommunity.org",
+      "source": {
+        "repo": "https://github.com/makehumancommunity/makehuman",
+        "commit": "a8bc2d54ff0ac92e78ff71431b1023eda42bf482"
+      }
+    }
+  ]
+}
