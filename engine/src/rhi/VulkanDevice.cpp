@@ -162,24 +162,30 @@ VkFormat formatOf(TextureFormat format) {
     switch (format) {
     case TextureFormat::RGBA8: return VK_FORMAT_R8G8B8A8_UNORM;
     case TextureFormat::RGBA16F: return VK_FORMAT_R16G16B16A16_SFLOAT;
+    case TextureFormat::BC7Srgb: return VK_FORMAT_BC7_SRGB_BLOCK;
+    case TextureFormat::BC7: return VK_FORMAT_BC7_UNORM_BLOCK;
     case TextureFormat::RGBA8Srgb: break;
     }
     return VK_FORMAT_R8G8B8A8_SRGB;
 }
 
+// Bytes in one level: texels, or 16-byte blocks of 4x4 for BC7.
+size_t levelBytes(TextureFormat format, uint32_t w, uint32_t h) {
+    if (format == TextureFormat::BC7Srgb || format == TextureFormat::BC7) return static_cast<size_t>((w + 3) / 4) * ((h + 3) / 4) * 16;
+    return static_cast<size_t>(w) * h * (format == TextureFormat::RGBA16F ? 8 : 4);
+}
+
 } // namespace
 
 size_t VulkanTexture::byteSize(const TextureDesc& desc) {
-    const size_t texel = desc.format == TextureFormat::RGBA16F ? 8 : 4;
     size_t bytes = 0;
     for (uint32_t level = 0; level < desc.levels; ++level)
-        bytes += static_cast<size_t>(std::max(1u, desc.width >> level)) * std::max(1u, desc.height >> level) * texel;
+        bytes += levelBytes(desc.format, std::max(1u, desc.width >> level), std::max(1u, desc.height >> level));
     return bytes;
 }
 
 VulkanTexture::VulkanTexture(kke::VulkanDevice& device, const TextureDesc& desc, const void* pixels) : m_device(device) {
     const VkFormat format = formatOf(desc.format);
-    const size_t texel = desc.format == TextureFormat::RGBA16F ? 8 : 4;
     // Every level in one staging buffer, one copy region per level.
     std::vector<VkBufferImageCopy> regions;
     size_t offset = 0;
@@ -190,7 +196,7 @@ VulkanTexture::VulkanTexture(kke::VulkanDevice& device, const TextureDesc& desc,
         r.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, level, 0, 1 };
         r.imageExtent = { w, h, 1 };
         regions.push_back(r);
-        offset += static_cast<size_t>(w) * h * texel;
+        offset += levelBytes(desc.format, w, h);
     }
     kke::Buffer staging(m_device, offset, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
     staging.upload(pixels, offset);

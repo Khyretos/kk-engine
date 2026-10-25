@@ -340,6 +340,18 @@ set_target_properties(kke_monocypher PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_compile_options(kke_monocypher PRIVATE $<$<NOT:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>>:-O2>)
 
 # ---------------------------------------------------------------------------
+# bc7enc — BC7 texture compression and decoding (kke/TextureCompress.h,
+# ENG-F60). MIT or public domain; vendored in external/bc7enc (three
+# files: no pull mirror needed). Optimized in Debug too: kke_texcook and
+# the decode fallback are pure number crunching.
+add_library(kke_bc7enc STATIC external/bc7enc/bc7enc.c external/bc7enc/bc7decomp.cpp)
+target_include_directories(kke_bc7enc SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/bc7enc)
+set_target_properties(kke_bc7enc PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if(NOT MSVC)
+    target_compile_options(kke_bc7enc PRIVATE -w $<$<NOT:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>>:-O2>)
+endif()
+
+# ---------------------------------------------------------------------------
 # yaml-cpp — YAML for data files that also come as JSON (kke/DataFile.h):
 # pack.yml, mods.yml, game.yml work the same as their .json twins. MIT.
 # Only used inside the engine library (PRIVATE), converted to JSON there.
@@ -969,6 +981,7 @@ add_subdirectory(tools/license)
 add_subdirectory(tools/packs)
 add_subdirectory(tools/assets)
 add_subdirectory(tools/cook)
+add_subdirectory(tools/texcook)
 if(KKE_ENABLE_BENCHMARKS)
     add_subdirectory(benchmarks)
 endif()

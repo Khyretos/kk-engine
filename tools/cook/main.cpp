@@ -28,7 +28,7 @@ namespace fs = std::filesystem;
 
 namespace {
 
-const std::set<std::string> kArt = { ".fbx", ".obj", ".gltf", ".glb", ".png", ".tga", ".jpg", ".jpeg", ".bmp", ".psd", ".sk" };
+const std::set<std::string> kArt = { ".fbx", ".obj", ".gltf", ".glb", ".png", ".tga", ".jpg", ".jpeg", ".bmp", ".psd", ".sk", ".ktx2" };
 
 std::string lower(std::string s) {
     for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));

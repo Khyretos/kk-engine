@@ -138,7 +138,7 @@ by area. The goal is parity with the big engines and more.
 | ENG-F57 | Networking | Dedicated servers (docs/SERVER_HOSTING.md) | ✅ |
 | ENG-F58 | Networking | Matchmaking (directory exists; relay and join codes #44) | 🟡 |
 | ENG-F59 | Networking | Cross-platform play | 🟡 |
-| ENG-F60 | Content | Texture compression ASTC/BCn (#39) | ⬜ |
+| ENG-F60 | Content | Texture compression ASTC/BCn (#39): BC7 in KTX2 done (`kke_texcook`, loaded instead of the PNG, decoded where the GPU lacks BC7); ASTC not yet | 🟡 |
 | ENG-F61 | Content | Texture streaming | ⬜ |
 | ENG-F62 | Content | LOD generation | ⬜ |
 | ENG-F63 | Content | Animation compression | ⬜ |

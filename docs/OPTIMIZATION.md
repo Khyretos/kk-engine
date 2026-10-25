@@ -104,7 +104,7 @@ stay under ~500 MB resident. Benchmarks report `peak_rss_mb` for this.
 | Mip mapping | 90s | All textures: less aliasing *and* less bandwidth | ✅ done (log #14); alpha coverage kept per mip (log #32) |
 | Anisotropic filtering | 2000s | All material textures | ✅ done (log #32) |
 | MSAA (forward, no G-buffer) | 2000s | Geometric edges; a setting, off on min-spec | ✅ done (log #36) |
-| Texture compression (BCn/ASTC) | 2000s | Asset cooking step | backlog |
+| Texture compression (BCn/ASTC) | 2000s | Asset cooking step | 🟡 BC7 done (`kke_texcook`, KTX2 twins, ENG-F60); ASTC for phones not yet (they decode BC7 to RGBA8) |
 | Vertex quantization (16-bit) | N64/PS1 | Static meshes: positions as int16 + per-mesh scale, normals as oct-encoded 2×8 bit | backlog |
 | Instanced draws | 2000s | Repeated props (Synty levels are 90% repeats) | backlog |
 | Baked / vertex lighting | PS1/N64 | Optional "retro/min-spec" lighting path | idea |

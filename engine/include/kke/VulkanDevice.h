@@ -61,6 +61,9 @@ public:
     // vkCmdWriteTimestamp results into real time for GPU profiling.
     double timestampPeriodNs() const { return m_timestampPeriodNs; }
     bool largePointsSupported() const { return m_largePointsSupported; }
+    // BC7 textures (KTX2 from kke_texcook) can be sampled as they are;
+    // without it kke::Texture decodes them to RGBA8 on load.
+    bool bc7Supported() const { return m_bc7Supported; }
     // 1.0 when samplerAnisotropy isn't supported (and so not enabled).
     float maxSamplerAnisotropy() const { return m_maxSamplerAnisotropy; }
     // Highest MSAA count both a colour and a depth attachment support.
@@ -134,6 +137,7 @@ private:
 
     double m_timestampPeriodNs = 1.0;
     bool m_largePointsSupported = false;
+    bool m_bc7Supported = false;
     float m_maxSamplerAnisotropy = 1.0f;
     VkSampleCountFlagBits m_maxSampleCount = VK_SAMPLE_COUNT_1_BIT;
     bool m_softwareRasterizer = false;

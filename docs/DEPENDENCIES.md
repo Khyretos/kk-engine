@@ -73,6 +73,7 @@ shown. "Key" is the name the dependency check looks for.
 | yaml-cpp | `yaml_cpp` | yaml-cpp-0.9.0 | YAML versions of every data file (`pack.yml`, `server.yml`, `settings.yml`, ...; kke/DataFile.h, docs/DATA_FILES.md) | MIT | Keep the copyright notice |
 | meshoptimizer | `meshoptimizer` | v1.3 | Crowd LODs: welding and simplifying skinned characters (kke/MeshLod.h, the goblin horde) | MIT | Keep the copyright notice |
 | Monocypher | `monocypher` | 4.0.2 | Signatures and hashing for sealed data, anti-cheat and Kreative DRM | BSD-2-Clause or CC0-1.0 | Nothing under the CC0 option |
+| bc7enc | vendored in `external/bc7enc` | commit f66c2e4 | BC7 texture compression (`kke_texcook`) and its decoder (GPUs without BC7; kke/TextureCompress.h) | MIT or public domain (Unlicense) | Nothing under the public-domain option |
 | miniaudio | `miniaudio` | 0.11.22 | Audio mixing and output | Public domain (Unlicense) or MIT-0 | Nothing |
 | Lua | `lua` | 5.4.7 | Gameplay scripting | MIT | Keep the copyright notice |
 | SQLite | `sqlite` | 3.53.4 | Built-in save and storage database | Public domain | Nothing |

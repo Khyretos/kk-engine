@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 namespace kke {
 
@@ -29,5 +30,11 @@ float alphaCoverage(const uint8_t* rgba, size_t texels, float cutoff);
 // distance (Castano, "Computing Alpha Mipmaps", 2010). This keeps the
 // silhouette solid without any dithering or temporal help.
 void scaleAlphaToCoverage(uint8_t* rgba, size_t texels, float targetCoverage, float cutoff);
+
+// The whole mip chain kke::Texture uploads, level 0 first, one after
+// another in `chain`: colour (`srgb`) averaged in linear light with the
+// cutout fix above, data averaged as stored. Returns the level count.
+// kke_texcook builds the same chain before compressing it.
+uint32_t buildMipChainRgba8(const uint8_t* rgba, uint32_t width, uint32_t height, bool srgb, std::vector<uint8_t>& chain);
 
 } // namespace kke

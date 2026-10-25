@@ -61,8 +61,16 @@ public:
     VkImageView imageView() const;
     VkSampler sampler() const;
 
+    // The cooked twin kke::Texture loads instead of `filePath`: the same
+    // name with .ktx2 (kke_texcook writes it), when it is there and
+    // KKE_TEXTURE_KTX2 isn't 0; "" otherwise. A .ktx2 path is its own.
+    static std::string compressedTwin(const std::string& filePath);
+
 private:
     void loadFile(const std::string& filePath, bool srgb);
+    // False when the file isn't a KTX2 this colour space can use (the
+    // caller falls back to the source image), with the reason.
+    bool loadKtx2(const std::string& ktxPath, bool srgb, std::string& why);
     void createFromPixels(const uint8_t* rgbaPixels, uint32_t width, uint32_t height, bool srgb = true);
 
     VulkanDevice& m_device;
