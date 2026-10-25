@@ -94,6 +94,12 @@ public:
     // Engine debug panels (Physics, Camera, Stats...) hidden behind one
     // toggle (F1) so the sandbox's own UI stays readable.
     void setEnginePanels(std::vector<kke::Module*> panels);
+    // Edit a game's level: `sandbox games/my_game [level]`. Call
+    // before init(). The game's own models/ join the Assets panel (as the
+    // pack "game", like in the game itself) and the level is
+    // <game>/scenes/<level>.scene.json (default "level"), loaded at start
+    // when it exists and saved there. Empty folder = the usual sandbox.
+    void setGame(const std::string& folder, const std::string& level = "");
 
     // Play: the Simple-mode palette only. Build: the full editor.
     enum class Mode { Play, Build };
@@ -399,6 +405,8 @@ private:
     std::string m_filterPack, m_filterCategory;
     std::string m_search;
     std::string m_folderInput;
+    std::string m_gameFolder;          // setGame(): a game whose level this edits ("" = none)
+    std::string m_gameLevel;
     float m_fps = 60.0f;  // smoothed, for the Sandbox panel
     int m_assetPage = 0;
     bool m_keyShift = false; // the on-screen keyboard's next letter is a capital // the Assets panel shows one page of pictures

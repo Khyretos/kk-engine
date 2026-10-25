@@ -64,8 +64,11 @@ def main():
     ap.add_argument("--headless", action="store_true", help="run inside Xvfb even when a desktop is there")
     ap.add_argument("--pad", action="store_true", help="plug in a virtual gamepad that moves its sticks")
     ap.add_argument("--log", help="also save the game's whole log here")
+    ap.add_argument("--arg", action="append", default=[], help="pass this to the game on its command line (repeat for more), e.g. sandbox --arg games/my_game")
     args = ap.parse_args()
 
+    # The game runs in its own folder: a path given here means this one.
+    args.arg = [str(pathlib.Path(a).resolve()) if pathlib.Path(a).exists() else a for a in args.arg]
     binary = pathlib.Path(args.bin) / args.game
     if not binary.exists():
         sys.exit(f"check_game: {binary} not found; build it first: cmake --build build --target {args.game}")
@@ -84,7 +87,7 @@ def main():
         env["KKE_SCRIPTS_DIR"] = str(pathlib.Path(args.scripts).resolve())
     try:
         with tempfile.TemporaryFile(mode="w+") as log:
-            proc = subprocess.Popen([str(binary)], cwd=binary.parent, env=env, stdout=log, stderr=subprocess.STDOUT)
+            proc = subprocess.Popen([str(binary), *args.arg], cwd=binary.parent, env=env, stdout=log, stderr=subprocess.STDOUT)
             started = time.monotonic()
             hung = False
             try:

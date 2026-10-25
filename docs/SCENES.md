@@ -39,6 +39,22 @@ Both are copied next to the executable with the scripts (the template's
 CMakeLists.txt), so a shipped game finds them too. While you develop they
 are read from the game's source folder.
 
+### Building a game's level
+
+The sandbox's Build mode is the level editor for any game. Give it the
+game's folder, and optionally a level name (default `level`):
+
+    ./build/bin/sandbox games/my_game          # games/my_game/scenes/level.scene.json
+    ./build/bin/sandbox games/my_game arena    # games/my_game/scenes/arena.scene.json
+
+It opens in Build mode with the game's own `models/` in the Assets
+panel (next to any installed packs) and loads the level if it exists.
+Place, move, rotate and scale with the gizmo, set the spawn point, mood
+and lights, then Save (Ctrl+S): the level is written to the game's
+`scenes/` (the folder is made if needed), and the game loads it with
+`scene.load("arena")`. See [games/sandbox/README.md](../games/sandbox/README.md)
+"Build mode" for the controls.
+
 ## Getting the packs
 
 `tools/fetch_assets.sh` downloads packs from the asset share and extracts

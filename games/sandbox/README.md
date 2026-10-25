@@ -151,6 +151,12 @@ so the left button is free for the palette and the bat.
 
 ### Build mode (the editor)
 
+`sandbox games/my_game [level]` edits a game's level instead of the
+sandbox's own: it starts in Build mode, the game's `models/` folder is
+in the Assets panel as the pack `game`, and Save writes
+`games/my_game/scenes/<level>.scene.json` (default `level`), which the
+game loads with `scene.load("<level>")` ([docs/SCENES.md](../../docs/SCENES.md)).
+
 On a controller Build mode works like Play: the left stick moves the
 pointer (a ring) and A is its left button, so the panels, the gizmo and
 placing work as with a mouse (`updatePad()` runs in both modes); B, X,
