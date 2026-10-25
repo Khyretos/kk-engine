@@ -52,7 +52,8 @@ class ParticleLibrary;
 // Bindings, each present only when its module is in the game:
 //   kke.*        log, time, dt
 //   physics.*    box/sphere spawn (drawn by this module), remove, position,
-//                velocity, setVelocity, impulse, raycast   (RigidBodyModule)
+//                velocity, setVelocity, impulse, raycast, joint, motor,
+//                jointValue, removeJoint                   (RigidBodyModule)
 //   models.*     load, spawn, move, remove, tint, visible, play, clips,
 //                bounds                                    (ModelModule)
 //   breakable.*  box, ball, remove, broken, pieces, count
@@ -105,6 +106,7 @@ public:
     int maxContactsPerFrame = 32;
     size_t maxBodiesPerScript = 2000; // budget: a spawn loop can't take down the game
     size_t maxModelsPerScript = 2000;
+    size_t maxJointsPerScript = 2000;
     size_t maxBreakablesPerScript = 64; // FEMFX bodies are expensive (docs/OPTIMIZATION.md)
     size_t maxDocumentsPerScript = 16;
     size_t maxScenesPerScript = 4;
@@ -131,6 +133,7 @@ private:
     struct Body { uint32_t id; std::string source; bool sphere; glm::vec3 half; glm::vec3 color; uint16_t netId = 0; std::vector<uint8_t> netDesc{}; uint16_t group = 0;
                   uint8_t look = 0; float cloudy = 0.0f; }; // look: script_net::BodySpawn::Look
     struct ModelInstance { ModelModule::InstanceId id; std::string source; };
+    struct Joint { uint32_t id; std::string source; }; // physics.joint (RigidWorld::JointId)
     struct Breakable { uint32_t handle; std::string source; bool broken = false; uint16_t netId = 0; uint16_t netKind = 0; std::vector<uint8_t> netDesc{}; };
     struct Document { int id; Rml::ElementDocument* doc; std::string source; };
     struct ClickHandler { int document; std::string element; int ref; std::string source; };
@@ -176,6 +179,7 @@ private:
     std::string m_dir;
     std::vector<ScriptFile> m_files;
     std::vector<Body> m_bodies;
+    std::vector<Joint> m_joints;
     std::vector<ModelInstance> m_models;
     std::vector<Breakable> m_breakables;
     std::vector<Document> m_documents;

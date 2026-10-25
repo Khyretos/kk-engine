@@ -27,7 +27,11 @@
 #include <Jolt/Physics/Collision/Shape/OffsetCenterOfMassShape.h>
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
+#include <Jolt/Physics/Constraints/DistanceConstraint.h>
+#include <Jolt/Physics/Constraints/FixedConstraint.h>
 #include <Jolt/Physics/Constraints/HingeConstraint.h>
+#include <Jolt/Physics/Constraints/PointConstraint.h>
+#include <Jolt/Physics/Constraints/SliderConstraint.h>
 #include <Jolt/Physics/Constraints/SwingTwistConstraint.h>
 #include <Jolt/Physics/PhysicsSettings.h>
 #include <Jolt/Physics/PhysicsSystem.h>
@@ -163,6 +167,24 @@ struct RigidWorld::Impl : public JPH::ContactListener {
         JPH::Ref<JPH::GroupFilterTable> filter;
     };
     std::unordered_map<RagdollId, Ragdoll> ragdolls;
+    struct Joint {
+        JPH::Ref<JPH::TwoBodyConstraint> c;
+        JointType type = JointType::Ball;
+        BodyId a = kNoBody, b = kNoBody;
+        glm::vec3 localA{0.0f}, localB{0.0f}; // Spring ends, in each body's space (world point for kNoBody)
+    };
+    std::unordered_map<JointId, Joint> joints;
+    JointId nextJoint = 1;
+    void removeJointsOf(BodyId body) {
+        for (auto it = joints.begin(); it != joints.end();) {
+            if (it->second.a == body || it->second.b == body) {
+                system.RemoveConstraint(it->second.c);
+                it = joints.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
     void applyAssist(Ragdoll& rd, float dt);
     RagdollId nextRagdoll = 1;
     struct Vehicle {
@@ -250,6 +272,8 @@ RigidWorld::~RigidWorld() {
     m->vehicles.clear();
     m->cloth.reset();
     m->characters.clear();
+    for (auto& [id, j] : m->joints) m->system.RemoveConstraint(j.c);
+    m->joints.clear();
     for (auto& [id, rd] : m->ragdolls)
         for (auto& c : rd.joints) m->system.RemoveConstraint(c);
     m->ragdolls.clear();
@@ -335,6 +359,7 @@ RigidWorld::BodyId RigidWorld::add(const BodyDesc& d) {
 void RigidWorld::remove(BodyId body) {
     JPH::BodyID id(body);
     if (body == kNoBody || !m->bodies().IsAdded(id)) return;
+    if (!m->joints.empty()) m->removeJointsOf(body);
     m->bodies().RemoveBody(id);
     m->bodies().DestroyBody(id);
 }
@@ -696,6 +721,147 @@ bool RigidWorld::driveRagdoll(RagdollId id, const RagdollDrive& drive) {
         for (BodyId b : rd.bodies) m->bodies().ActivateBody(JPH::BodyID(b));
     return true;
 }
+
+RigidWorld::JointId RigidWorld::addJoint(const JointDesc& d) {
+    auto known = [&](BodyId b) { return b == kNoBody || m->bodies().IsAdded(JPH::BodyID(b)); };
+    if ((d.a == kNoBody && d.b == kNoBody) || d.a == d.b || !known(d.a) || !known(d.b)) return 0;
+    const bool needsAxis = d.type == JointType::Hinge || d.type == JointType::Slider;
+    if (needsAxis && !(glm::length(d.axis) > 1e-6f)) return 0;
+    const glm::vec3 axis = unitOr(d.axis, glm::vec3(0, 1, 0));
+    const glm::vec3 normal = perpendicular(axis);
+    JPH::Ref<JPH::TwoBodyConstraintSettings> settings;
+    switch (d.type) {
+    case JointType::Fixed: {
+        auto* f = new JPH::FixedConstraintSettings;
+        f->mAutoDetectPoint = true; // they stay as they are now
+        settings = f;
+        break;
+    }
+    case JointType::Ball: {
+        auto* b = new JPH::PointConstraintSettings;
+        b->mSpace = JPH::EConstraintSpace::WorldSpace;
+        b->mPoint1 = b->mPoint2 = toJR(d.anchor);
+        settings = b;
+        break;
+    }
+    case JointType::Hinge: {
+        auto* h = new JPH::HingeConstraintSettings;
+        h->mSpace = JPH::EConstraintSpace::WorldSpace;
+        h->mPoint1 = h->mPoint2 = toJR(d.anchor);
+        h->mHingeAxis1 = h->mHingeAxis2 = toJ(axis);
+        h->mNormalAxis1 = h->mNormalAxis2 = toJ(normal);
+        if (d.limited) {
+            h->mLimitsMin = glm::radians(std::clamp(std::min(d.min, d.max), -180.0f, 0.0f));
+            h->mLimitsMax = glm::radians(std::clamp(std::max(d.min, d.max), 0.0f, 180.0f));
+        }
+        h->mMaxFrictionTorque = std::max(0.0f, d.friction);
+        settings = h;
+        break;
+    }
+    case JointType::Slider: {
+        auto* sl = new JPH::SliderConstraintSettings;
+        sl->mSpace = JPH::EConstraintSpace::WorldSpace;
+        sl->mPoint1 = sl->mPoint2 = toJR(d.anchor);
+        sl->mSliderAxis1 = sl->mSliderAxis2 = toJ(axis);
+        sl->mNormalAxis1 = sl->mNormalAxis2 = toJ(normal);
+        if (d.limited) {
+            // Jolt wants min <= 0 <= max: the start is inside the range.
+            sl->mLimitsMin = std::min(0.0f, std::min(d.min, d.max));
+            sl->mLimitsMax = std::max(0.0f, std::max(d.min, d.max));
+        }
+        sl->mMaxFrictionForce = std::max(0.0f, d.friction);
+        settings = sl;
+        break;
+    }
+    case JointType::Spring: {
+        auto* sp = new JPH::DistanceConstraintSettings;
+        sp->mSpace = JPH::EConstraintSpace::WorldSpace;
+        sp->mPoint1 = toJR(d.anchorB); // body 1 is b (see CreateConstraint below)
+        sp->mPoint2 = toJR(d.anchor);
+        const float length = glm::length(d.anchorB - d.anchor);
+        sp->mMinDistance = d.limited ? std::max(0.0f, std::min(d.min, d.max)) : length;
+        sp->mMaxDistance = d.limited ? std::max(0.0f, std::max(d.min, d.max)) : length;
+        sp->mLimitsSpringSettings = JPH::SpringSettings(JPH::ESpringMode::FrequencyAndDamping, std::max(0.0f, d.frequency), std::max(0.0f, d.damping));
+        settings = sp;
+        break;
+    }
+    }
+    // b first: Jolt measures body 2 against body 1, and a hinge's angle or
+    // a slider's travel is a's. Invalid ids lock nothing: Jolt joins that
+    // side to the world.
+    JPH::TwoBodyConstraint* c = m->bodies().CreateConstraint(settings, d.b == kNoBody ? JPH::BodyID() : JPH::BodyID(d.b),
+                                                             d.a == kNoBody ? JPH::BodyID() : JPH::BodyID(d.a));
+    if (!c) return 0;
+    Impl::Joint j;
+    j.c = c;
+    j.type = d.type;
+    j.a = d.a;
+    j.b = d.b;
+    auto local = [&](BodyId body, const glm::vec3& p) { return body == kNoBody ? p : glm::vec3(glm::inverse(transform(body)) * glm::vec4(p, 1.0f)); };
+    j.localA = local(d.a, d.anchor);
+    j.localB = local(d.b, d.type == JointType::Spring ? d.anchorB : d.anchor);
+    m->system.AddConstraint(c);
+    m->bodies().ActivateConstraint(c);
+    const JointId id = m->nextJoint++;
+    m->joints.emplace(id, std::move(j));
+    return id;
+}
+
+void RigidWorld::removeJoint(JointId id) {
+    auto it = m->joints.find(id);
+    if (it == m->joints.end()) return;
+    m->bodies().ActivateConstraint(it->second.c); // what it held may now fall
+    m->system.RemoveConstraint(it->second.c);
+    m->joints.erase(it);
+}
+
+bool RigidWorld::setJointMotor(JointId id, JointMotor mode, float target, float maxForce) {
+    auto it = m->joints.find(id);
+    if (it == m->joints.end()) return false;
+    const float limit = maxForce > 0.0f ? maxForce : FLT_MAX;
+    const JPH::EMotorState state = mode == JointMotor::Velocity ? JPH::EMotorState::Velocity
+                                   : mode == JointMotor::Position ? JPH::EMotorState::Position
+                                                                  : JPH::EMotorState::Off;
+    // Position motors pull like a 10 Hz spring (Jolt's 2 Hz default sags
+    // 6 cm under gravity): firm, and still well under the 60 Hz step.
+    if (it->second.type == JointType::Hinge) {
+        auto* h = static_cast<JPH::HingeConstraint*>(it->second.c.GetPtr());
+        h->GetMotorSettings().SetTorqueLimit(limit);
+        h->GetMotorSettings().mSpringSettings = JPH::SpringSettings(JPH::ESpringMode::FrequencyAndDamping, 10.0f, 1.0f);
+        if (mode == JointMotor::Velocity) h->SetTargetAngularVelocity(glm::radians(target));
+        if (mode == JointMotor::Position) h->SetTargetAngle(glm::radians(target));
+        h->SetMotorState(state);
+    } else if (it->second.type == JointType::Slider) {
+        auto* sl = static_cast<JPH::SliderConstraint*>(it->second.c.GetPtr());
+        sl->GetMotorSettings().SetForceLimit(limit);
+        sl->GetMotorSettings().mSpringSettings = JPH::SpringSettings(JPH::ESpringMode::FrequencyAndDamping, 10.0f, 1.0f);
+        if (mode == JointMotor::Velocity) sl->SetTargetVelocity(target);
+        if (mode == JointMotor::Position) sl->SetTargetPosition(target);
+        sl->SetMotorState(state);
+    } else {
+        return false;
+    }
+    m->bodies().ActivateConstraint(it->second.c);
+    return true;
+}
+
+float RigidWorld::jointValue(JointId id) const {
+    auto it = m->joints.find(id);
+    if (it == m->joints.end()) return 0.0f;
+    const Impl::Joint& j = it->second;
+    switch (j.type) {
+    case JointType::Hinge: return glm::degrees(static_cast<const JPH::HingeConstraint*>(j.c.GetPtr())->GetCurrentAngle());
+    case JointType::Slider: return static_cast<const JPH::SliderConstraint*>(j.c.GetPtr())->GetCurrentPosition();
+    case JointType::Spring: {
+        auto world = [&](BodyId body, const glm::vec3& p) { return body == kNoBody ? p : glm::vec3(transform(body) * glm::vec4(p, 1.0f)); };
+        return glm::length(world(j.b, j.localB) - world(j.a, j.localA));
+    }
+    default: return 0.0f;
+    }
+}
+
+bool RigidWorld::hasJoint(JointId id) const { return m->joints.count(id) != 0; }
+size_t RigidWorld::jointCount() const { return m->joints.size(); }
 
 namespace {
 // A capsule standing on the origin (the character's position is its feet).

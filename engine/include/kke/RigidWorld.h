@@ -193,6 +193,46 @@ public:
     // id is unknown or the drive doesn't match the ragdoll.
     bool driveRagdoll(RagdollId id, const RagdollDrive& drive);
 
+    // Joints (ENG-F37): two bodies held together, or one held to the
+    // world. Doors and wheels (Hinge), drawers and pistons (Slider), ropes,
+    // chains and bouncy springs (Spring), welds (Fixed) and ball joints
+    // (Ball). Every point and axis is in world space, as the bodies stand
+    // when the joint is made. Removing a body removes its joints.
+    using JointId = uint32_t; // 0 = none
+    enum class JointType : uint8_t { Fixed, Ball, Hinge, Slider, Spring };
+    struct JointDesc {
+        JointType type = JointType::Ball;
+        BodyId a = kNoBody, b = kNoBody;   // one may be kNoBody: held to the world there
+        glm::vec3 anchor{0.0f};            // where they join; Spring: a's end
+        glm::vec3 anchorB{0.0f};           // Spring only: b's end (the world point when b is kNoBody)
+        glm::vec3 axis{0.0f, 1.0f, 0.0f};  // Hinge: turns about it; Slider: slides along it
+        // Limits. Hinge: degrees from where it starts, within -180..180;
+        // Slider: metres along the axis from where it starts. Spring: the
+        // shortest and longest it gets (defaults: its length now for
+        // both, a rigid rod; a rope: 0 to its length).
+        bool limited = false;
+        float min = 0.0f, max = 0.0f;
+        // Spring: how springy within its limits. 0 Hz = rigid at the
+        // limits; 1-5 Hz soft to firm, damping 0 (bounces) to 1 (settles).
+        float frequency = 0.0f, damping = 0.0f;
+        float friction = 0.0f;             // Hinge N*m / Slider N: resists turning or sliding
+    };
+    // 0 if invalid: unknown bodies, both kNoBody, or a zero axis.
+    JointId addJoint(const JointDesc& desc);
+    void removeJoint(JointId id);
+    // A motor on a Hinge (target: deg/s or degrees, maxForce N*m) or a
+    // Slider (m/s or metres, N). maxForce 0 = as strong as needed, which
+    // also pushes a velocity motor through the joint's limits: give one
+    // when the joint has limits.
+    // Spring/Fixed/Ball have no motor: false, as for an unknown id.
+    enum class JointMotor : uint8_t { Off, Velocity, Position };
+    bool setJointMotor(JointId id, JointMotor mode, float target = 0.0f, float maxForce = 0.0f);
+    // Hinge: its angle in degrees; Slider: metres moved along the axis;
+    // Spring: its length now; Fixed/Ball: 0. Measured from where it started.
+    float jointValue(JointId id) const;
+    bool hasJoint(JointId id) const;
+    size_t jointCount() const;
+
     CharacterId addCharacter(const CharacterDesc& desc);
     void removeCharacter(CharacterId id);
     void setCharacterInput(CharacterId id, const CharacterInput& input);
