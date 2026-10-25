@@ -375,6 +375,38 @@ void RigidWorld::remove(BodyId body) {
 
 // Rigid bodies only: characters' cloth colliders and the cloth itself aren't counted.
 size_t RigidWorld::bodyCount() const { return m->system.GetNumBodies() - m->characters.size() - (m->cloth ? m->cloth->count() : 0); }
+size_t RigidWorld::staticTriangles(std::vector<glm::vec3>& vertices, std::vector<uint32_t>& indices, size_t maxTriangles) const {
+    JPH::BodyIDVector ids;
+    m->system.GetBodies(ids);
+    size_t added = 0;
+    constexpr int kBatch = 256;
+    std::vector<JPH::Float3> tri(size_t(kBatch) * 3);
+    for (const JPH::BodyID& id : ids) {
+        if (added >= maxTriangles) break;
+        JPH::BodyLockRead lock(m->system.GetBodyLockInterface(), id);
+        if (!lock.Succeeded()) continue;
+        const JPH::Body& body = lock.GetBody();
+        if (!body.IsStatic() || body.IsSensor() || body.GetObjectLayer() != Layers::kStatic) continue;
+        const JPH::Shape* shape = body.GetShape();
+        JPH::Shape::GetTrianglesContext ctx;
+        shape->GetTrianglesStart(ctx, JPH::AABox::sBiggest(), body.GetCenterOfMassPosition(), body.GetRotation(), JPH::Vec3::sReplicate(1.0f));
+        for (;;) {
+            const int n = shape->GetTrianglesNext(ctx, kBatch, tri.data());
+            if (n <= 0) break;
+            for (int t = 0; t < n && added < maxTriangles; ++t, ++added) {
+                const uint32_t base = uint32_t(vertices.size());
+                for (int k = 0; k < 3; ++k) {
+                    const JPH::Float3& f = tri[size_t(t) * 3 + size_t(k)];
+                    vertices.push_back({ f.x, f.y, f.z });
+                }
+                indices.insert(indices.end(), { base, base + 1, base + 2 });
+            }
+            if (added >= maxTriangles) break;
+        }
+    }
+    return added;
+}
+
 size_t RigidWorld::activeBodyCount() const { return m->system.GetNumActiveBodies(JPH::EBodyType::RigidBody); }
 bool RigidWorld::isActive(BodyId body) const { return m->bodies().IsActive(JPH::BodyID(body)); }
 

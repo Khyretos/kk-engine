@@ -10,6 +10,7 @@
 #include "kke/ScriptStore.h"
 #include "kke/ScriptTables.h"
 #include "kke/ScriptVM.h"
+#include "kke/ai/NavMesh.h"
 #include "kke/modules/ModelModule.h"
 
 #include <filesystem>
@@ -116,6 +117,7 @@ public:
     size_t maxDocumentsPerScript = 16;
     size_t maxScenesPerScript = 4;
     size_t maxSoundsPerScript = 64; // playing at once (the mixer has 32 voices; the quietest give way)
+    size_t maxNavObstaclesPerScript = 256;
 
     // Where store.* keeps what scripts save (docs/STORAGE.md urls), opened
     // on first use; KKE_SCRIPT_STORE overrides it. Set before init.
@@ -128,6 +130,8 @@ public:
     ScriptStore* scriptStore() { return m_store.get(); }
     // terrain.*: the terrain a script made (kke/ScriptTerrain.h, docs/TERRAIN.md).
     ScriptTerrain* terrain() { return m_terrain.get(); }
+    // The navmesh nav.build made (null before it), for a game's own C++ (an AiWorld).
+    ai::NavMesh* navMesh() { return m_nav.get(); }
 
     // Whether a script file runs on this machine right now (realms above).
     static bool runsHere(const std::string& path, bool authority);
@@ -155,6 +159,7 @@ private:
     void bindNet();
     void bindStore();
     void bindAudio(); // audio.sound/play/music/bus/duck (ScriptBindings.cpp)
+    void bindNav(); // nav.* pathfinding (ScriptBindings.cpp)
     // Multiplayer copies of what sv_ scripts spawn (ScriptReplication.cpp).
     void bindReplication();
     void syncNetRole();                    // hosting / joining / leaving changed what's replicated
@@ -201,6 +206,11 @@ private:
     std::vector<SoundHandle> m_soundFiles;       // audio.sound ids - 1
     std::unordered_map<std::string, int> m_soundIds;
     std::string m_musicSource;                   // the script that started the music
+    std::unique_ptr<ai::NavMesh> m_nav;         // nav.build's
+    std::string m_navSource;                    // the script that built it
+    struct NavObstacle { ai::NavMesh::ObstacleId id; std::string source; };
+    std::vector<NavObstacle> m_navObstacles;
+    uint32_t m_navRandom = 0x9E3779B9u;         // nav.random's sequence
     ScriptLights m_lights; // light.*: lamps scripts placed (kke/ScriptLights.h)
     std::unique_ptr<ScriptTerrain> m_terrain; // terrain.*
     // fx.*: one particle pool and library for every script, made on first use.

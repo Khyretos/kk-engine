@@ -196,7 +196,9 @@ nav.update();                                        // every frame: rebuilds a 
 
 Agents on that mesh (`AiWorld::setNavMesh`) find their paths again when it
 changes (`NavMesh::revision()`), so a dog heading for a door that shuts goes
-round by the other one. Box yaw is the engine's (`glm::rotate` about +y).
+round by the other one. From Lua: `nav.build`, `nav.obstacle`
+(docs/SCRIPTING.md "Finding the way"); `RigidWorld::staticTriangles` gives
+the level's collision as triangles to build from. Box yaw is the engine's (`glm::rotate` about +y).
 Queries are the same as a built mesh's; `save()` is empty for a dynamic mesh
 (build it from the level again). Built with DetourTileCache, already part of
 recastnavigation; the tiles' layers are kept uncompressed (a byte or two per
@@ -298,7 +300,8 @@ use a uniform grid (`SpatialGrid`).
 
 - Learning from rewards (reinforcement learning). Teaching by example
   (above) is built.
-- Off-mesh links for jumps and ladders, per-area costs (mud, water), and
-  obstacles from Lua (dynamic navmeshes are built from C++ today).
+- Off-mesh links for jumps and ladders, per-area costs (mud, water). Lua
+  scripts build and query navmeshes with `nav.*` (docs/SCRIPTING.md
+  "Finding the way"); `ai.*` agents for Lua games are next.
 - Crowds of hundreds on one path (DetourCrowd is compiled in; steering and
   separation handle a farm's worth today).

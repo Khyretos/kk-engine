@@ -220,6 +220,7 @@ Vectors: `Vec(x, y, z)` with `+ - * /`, `:length()`, `:normalized()`,
 | `scene` | `list()` → names in the game's own `scenes/` folder and the shared `scenes/`, `load(name, origin)` → scene, missing count (or nil + reason), `unload(scene)`, `spawnPoint(scene)` → pos, yaw |
 | `net` | `role()` (`"offline"`, `"host"`, `"client"`), `isServer()`, `connected()`, `playerId()`, `players()` → `{ {id, name}, ... }`, `send(name, data)`: from a client to the host, from the host to every client; `data` is nil, a boolean, number, string or a table of those (about 500 bytes encoded, one network event); `call(name, data [, function(ok, answer) end])` → sent? and `handle(name, function(data, from) end)`: a question to the host and its answer ("Calls" below); `table(name)` → a synced table (host/server only: `:set(key, row)`, `:get(key)`, `:remove(key)`, `:rows()`, `:count()`, `:clear()`) and `watch(name [, filter] [, function(event, key, row, old) end])` → a view (`:rows()`, `:get(key)`, `:ready()`, `:count()`, `:stop()`) ("Synced tables" below) |
 | `terrain` | Hills and valleys ([TERRAIN.md](TERRAIN.md)): `create{size, resolution, pos, height, seed, ridged, image, flat, layers}` → true, `height(x, z)` → y, on, `ground(pos)`, `normal`, `slope`, `raise/lower(pos, radius, metres)`, `smooth(pos, radius [, strength])`, `flatten(pos, radius [, height, strength])`, `paint(pos, radius, layer [, strength])`, `layer`, `info`, `remove` |
+| `nav` | Pathfinding ("Finding the way" below): `build({radius, height, climb, slope, cell, tile, dynamic})` → true, info, `path(from, to)` → points, partial, `walkable(from, to)`, `nearest(pos [, reach])`, `move(from, to)`, `random(centre, radius)`, `obstacle{pos, size, yaw}` or `{pos, radius, height}` → id, `remove(id)`, `ready()` |
 | `store` | What outlives the session ("Saving" below): `save(name, value)` → true or false, reason; `load(name [, default])`; `add(name [, n])` → new count; `remove(name)`; `keys([prefix])` → names in order |
 
 Everything a script makes (bodies, models, lights, breakables, documents,
@@ -303,6 +304,41 @@ become node graph blocks automatically.
 A table exists only when its module is in the game (no RigidBodyModule,
 no `physics`); `store` is always there. Script bodies are drawn by ScriptModule as one batched
 mesh with shadows.
+
+## Finding the way
+
+`nav.build()` makes a navmesh (docs/AI.md "Navigation") from the level's
+collision: every static body, whether a script made it
+(`physics.box{static = true}`), a scene brought it, or it is terrain. Call
+it again after the level changes shape.
+
+```lua
+local ok, info = nav.build{ radius = 0.4, height = 1.8 }   -- the walker's size
+print(info.polygons, info.ms)                              -- or nil and why
+
+local path = nav.path(goblin.pos, player.pos)   -- corners, start and end included
+local i = 2
+hook.Add("Think", "goblin", function(dt)
+    local corner = path[i]
+    if not corner then return end
+    local to = corner - goblin.pos
+    if to:length() < 0.3 then i = i + 1 return end
+    goblin.pos = nav.move(goblin.pos, goblin.pos + to:normalized() * 3 * dt)  -- slides along walls
+end)
+
+local cart = nav.obstacle{ pos = Vec(4, 0.6, 2), size = Vec(2, 1.2, 1), yaw = 30 }  -- a box, by its middle
+local post = nav.obstacle{ pos = Vec(0, 0, 5), radius = 0.3, height = 2 }          -- a post, standing there
+nav.remove(cart)                                                -- paths go through again
+```
+
+- A path that can't reach its end stops at the closest point it can reach
+  and says so (`partial` is true). Off the mesh is nil and the reason.
+- Obstacles change the mesh from the next frame on (only the tiles they
+  touch are rebuilt). `nav.build{ dynamic = false }` makes a fixed mesh
+  without them, a little faster to query.
+- A script's obstacles go when it unloads, and the navmesh goes with the
+  script that built it. C++ gets it with `ScriptModule::navMesh()` (for an
+  `ai::AiWorld`).
 
 ## Saving
 
