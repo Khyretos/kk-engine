@@ -45,6 +45,7 @@ struct FluidGpu::Impl {
     std::unique_ptr<Buffer> staging, input, out;
     size_t stagingBytes = 0, inputBytes = 0, outBytes = 0;
     std::mutex lock;
+    bool late = false; // a search outlived its second: the GPU still owns the buffers
 
     explicit Impl(VulkanDevice& d) : device(d), dev(d.device()) {}
     ~Impl() {
@@ -196,6 +197,12 @@ bool FluidGpu::search(const Query& q, uint32_t& stride, std::vector<uint32_t>& l
     Impl& g = *m_impl;
     const std::lock_guard<std::mutex> hold(g.lock);
     if (q.count == 0 || q.tableSize == 0) return false;
+    // A late search still running: the CPU searches until it is done
+    // (never waiting on it here, so a hung GPU can't stall the step).
+    if (g.late) {
+        if (vkGetFenceStatus(g.dev, g.fence) != VK_SUCCESS) return false;
+        g.late = false;
+    }
     const size_t n = q.count;
     const size_t cellWords = size_t(q.tableSize) + 1;
     m_words.resize(n * 4 + cellWords);
@@ -232,9 +239,9 @@ bool FluidGpu::search(const Query& q, uint32_t& stride, std::vector<uint32_t>& l
     VK_CHECK(vkResetFences(g.dev, 1, &g.fence));
     VK_CHECK(vkQueueSubmit(g.queue, 1, &si, g.fence));
     // A second is far longer than any search: something is wrong, so the
-    // CPU answers (and waits for the GPU before it is used again).
+    // CPU answers this one, and the GPU is used again once it has finished.
     if (vkWaitForFences(g.dev, 1, &g.fence, VK_TRUE, 1000000000ull) != VK_SUCCESS) {
-        VK_CHECK(vkWaitForFences(g.dev, 1, &g.fence, VK_TRUE, UINT64_MAX));
+        g.late = true;
         return false;
     }
     m_out.resize(1 + n);

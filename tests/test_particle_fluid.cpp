@@ -105,12 +105,15 @@ kke::ParticleFluid makeColumn() {
     return f;
 }
 
+// Everything a caller can read, bit for bit.
 bool sameState(const kke::ParticleFluid& a, const kke::ParticleFluid& b) {
     if (a.size() != b.size()) return false;
     for (size_t i = 0; i < a.size(); ++i) {
         if (std::memcmp(&a.positions()[i], &b.positions()[i], sizeof(glm::vec3)) != 0) return false;
         if (std::memcmp(&a.velocities()[i], &b.velocities()[i], sizeof(glm::vec3)) != 0) return false;
         if (a.temperatures()[i] != b.temperatures()[i]) return false;
+        if (a.densities()[i] != b.densities()[i]) return false;
+        if (a.materials()[i] != b.materials()[i]) return false;
     }
     return true;
 }
