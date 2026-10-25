@@ -23,6 +23,7 @@
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 #include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
+#include <Jolt/Physics/Collision/Shape/HeightFieldShape.h>
 #include <Jolt/Physics/Collision/Shape/MeshShape.h>
 #include <Jolt/Physics/Collision/Shape/OffsetCenterOfMassShape.h>
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
@@ -308,6 +309,14 @@ RigidWorld::BodyId RigidWorld::add(const BodyDesc& d) {
     case Shape::Capsule: {
         JPH::CapsuleShapeSettings s(std::max(0.005f, d.halfHeight), std::max(0.005f, d.radius));
         s.mDensity = d.density;
+        shape = fromSettings(s);
+        break;
+    }
+    case Shape::HeightField: {
+        if (d.motion != Motion::Static || d.heightSamples < 4 || d.heights.size() != size_t(d.heightSamples) * d.heightSamples) return kNoBody;
+        JPH::HeightFieldShapeSettings s(d.heights.data(), JPH::Vec3::sZero(), JPH::Vec3(d.heightSpacing, 1.0f, d.heightSpacing), d.heightSamples);
+        s.mBlockSize = 4;
+        s.mBitsPerSample = 8;
         shape = fromSettings(s);
         break;
     }

@@ -132,6 +132,8 @@ set(ENGINE_SOURCES
     src/JigglePhysics.cpp
     src/AutoRig.cpp
     src/SphereImpostors.cpp
+    src/Terrain.cpp
+    src/ScriptTerrain.cpp
     src/ParticleSim.cpp
     src/ParticleStep.cpp
     src/ParticleMotion.cpp

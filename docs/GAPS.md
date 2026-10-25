@@ -153,9 +153,9 @@ by area. The goal is parity with the big engines and more.
 | ENG-F72 | AI | Utility AI (docs/AI.md) | ✅ |
 | ENG-F73 | AI | Crowds of hundreds of agents (flocking exists) | 🟡 |
 | ENG-F74 | AI | Navmesh baking (Recast) | ✅ |
-| ENG-F75 | World | Terrain sculpting | ⬜ |
-| ENG-F76 | World | Heightmap terrain | ⬜ |
-| ENG-F77 | World | Procedural terrain (ACTION_PLAN 4.1) | ⬜ |
+| ENG-F75 | World | Terrain sculpting. Done: raise, lower, smooth, flatten and paint brushes, from Lua while the game runs (docs/TERRAIN.md). Not yet: an editor tool for them, saving sculpted terrain with the level. | 🟡 |
+| ENG-F76 | World | Heightmap terrain. Done: chunks with distance LOD and skirts, a Jolt height field for collision, four colour layers with rock on slopes, from a seed or a greyscale picture, Lua `terrain.*` (docs/TERRAIN.md). Not yet: textured layers, holes. | 🟡 |
+| ENG-F77 | World | Procedural terrain (ACTION_PLAN 4.1). Done: seeded gradient-noise hills or ridged mountains (docs/TERRAIN.md). Not yet: erosion, rivers, biomes. | 🟡 |
 | ENG-F78 | World | World streaming (ACTION_PLAN 3.6) | ⬜ |
 | ENG-F79 | World | Foliage | ⬜ |
 | ENG-F80 | World | Water with waves (ocean and buoyancy exist) | ✅ |
