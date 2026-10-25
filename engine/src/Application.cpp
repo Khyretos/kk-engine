@@ -60,9 +60,20 @@ namespace {
 // ("shaders/x.spv"), i.e. relative to the working directory. That holds
 // when a game is started from its own folder (build/bin, or a double-click
 // on Windows), but not from a desktop launcher or `./build/bin/kke_demo`
-// in the repo root. When the working directory has no shaders/ folder
+// in the repo root. When the working directory has no compiled shaders
 // and the executable's own folder does, switch to the executable's folder
 // (docs/RELEASES.md). Returns what happened, for the log.
+//
+// "Compiled" counts, not the folder: the repo root has a shaders/ folder
+// too, with the GLSL sources and no .spv, and treating it as the runtime
+// folder disabled the Models, UI and Scripts modules (BUG-093).
+bool hasCompiledShaders(const std::filesystem::path& dir) {
+    std::error_code ec;
+    for (std::filesystem::directory_iterator it(dir / "shaders", ec), end; !ec && it != end; it.increment(ec))
+        if (it->path().extension() == ".spv") return true;
+    return false;
+}
+
 std::string enterRuntimeDirectory() {
     namespace fs = std::filesystem;
     std::error_code ec;
@@ -74,11 +85,11 @@ std::string enterRuntimeDirectory() {
         if (ec) return note + "; could not switch to " + bundled + ": " + ec.message();
         return note;
     }
-    if (fs::is_directory("shaders", ec)) return {};
+    if (hasCompiledShaders(".")) return {};
     const char* base = SDL_GetBasePath();
-    if (!base) return std::string("no shaders/ folder here and the executable's folder is unknown: ") + SDL_GetError();
+    if (!base) return std::string("no compiled shaders here and the executable's folder is unknown: ") + SDL_GetError();
     const fs::path exeDir(reinterpret_cast<const char8_t*>(base));
-    if (!fs::is_directory(exeDir / "shaders", ec)) return "no shaders/ folder here or next to the executable (" + std::string(base) + ")";
+    if (!hasCompiledShaders(exeDir)) return "no compiled shaders (shaders/*.spv) here or next to the executable (" + std::string(base) + ")";
     fs::current_path(exeDir, ec);
     if (ec) return "could not switch to the executable's folder " + std::string(base) + ": " + ec.message();
     return "working directory set to the executable's folder " + std::string(base);

@@ -93,6 +93,21 @@ RmlVulkanRenderInterface::RmlVulkanRenderInterface(VulkanDevice& device, VkRende
     const uint8_t whitePixel[4] = { 255, 255, 255, 255 };
     m_defaultTexture = createTextureFromPixels(whitePixel, 1, 1);
 
+    // A pipeline that fails (a shader file missing: the game started from
+    // a folder without compiled shaders) throws out of this constructor,
+    // so the destructor never runs: free what was made, then rethrow.
+    // Without this the UI module's failed init left the white texture
+    // allocated and VMA asserted at exit (BUG-093).
+    try {
+        createPipelines(renderPass, targetEncoded);
+    } catch (...) {
+        releaseResources();
+        throw;
+    }
+}
+
+void RmlVulkanRenderInterface::createPipelines(VkRenderPass renderPass, bool targetEncoded) {
+    VulkanDevice& device = m_device;
     // --- Pipeline ---
     const rhi::VertexBinding vBinding{ 0, sizeof(Rml::Vertex), false };
     const std::vector<rhi::VertexAttribute> attributes{
@@ -177,7 +192,9 @@ RmlVulkanRenderInterface::RmlVulkanRenderInterface(VulkanDevice& device, VkRende
     }
 }
 
-RmlVulkanRenderInterface::~RmlVulkanRenderInterface() {
+RmlVulkanRenderInterface::~RmlVulkanRenderInterface() { releaseResources(); }
+
+void RmlVulkanRenderInterface::releaseResources() {
     // A real bug in the deferred-deletion fix itself, found the same
     // way as the original bug it fixed — a real run, not assumed
     // correct: pending deletions queued shortly before shutdown never
@@ -214,6 +231,9 @@ RmlVulkanRenderInterface::~RmlVulkanRenderInterface() {
     if (m_sampler) vkDestroySampler(dev, m_sampler, nullptr);
     if (m_descriptorPool) vkDestroyDescriptorPool(dev, m_descriptorPool, nullptr);
     if (m_textureSetLayout) vkDestroyDescriptorSetLayout(dev, m_textureSetLayout, nullptr);
+    m_sampler = VK_NULL_HANDLE;
+    m_descriptorPool = VK_NULL_HANDLE;
+    m_textureSetLayout = VK_NULL_HANDLE;
 }
 
 VkDescriptorSet RmlVulkanRenderInterface::allocateAndWriteDescriptor(VkImageView view) {

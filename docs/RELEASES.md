@@ -83,7 +83,8 @@ show their "assets not found" screen in a download.
 ## Running from any folder
 
 Games open shaders, fonts and manifests by relative path. When the working
-directory has no `shaders/` folder but the executable's folder does,
+directory has no compiled shaders (`shaders/*.spv`) but the executable's
+folder does (the repository root's `shaders/` holds only the GLSL sources),
 `kke::Application` switches to the executable's folder before anything is
 loaded (engine/src/Application.cpp, `enterRuntimeDirectory`), and logs that
 it did. So `./build/bin/kke_demo` from the repository root, a desktop
