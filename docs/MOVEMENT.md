@@ -358,6 +358,29 @@ update for the game to apply. Locomotion clips don't use it (the
 controller moves the capsule, and the blend space follows the measured
 speed); it's for authored moves such as a real vault clip.
 
+**Animation events** (ENG-F28, Unity's animation events, Unreal's
+notifies): a name at a point in a clip, reported on the update that
+passes it, for footstep sounds, the frame a sword hits or a ball leaves
+the hand. `Animator::addEvent(state, fraction, name)` places one at a
+0..1 fraction of a state's cycle, so it also works on blend spaces (a
+step at 0.25 and 0.75 lands with the feet at any speed);
+`Animator::events()` lists what the last `update()` passed, current state
+only (one fading out says nothing), once per pass (a loop every cycle),
+events at 0 on the first update after `play()`. For plain clips on an
+instance, `ModelModule::addClipEvent(model, clip, seconds, name)` and
+`clipEvents()` do the same in seconds; Lua has them as `models.event`
+and the `AnimEvent` hook ([SCRIPTING.md](SCRIPTING.md)). The window maths
+(`kke/AnimEvents.h`) is shared and unit-tested.
+
+```lua
+local hero = models.load("Hero")
+models.event(hero, "Walk_Loop", 0.3, "step")
+models.event(hero, "Walk_Loop", 0.8, "step")
+hook.Add("AnimEvent", "hero.steps", function(e)
+    if e.name == "step" then audio.impact(heroPos, "Stone", 0.3) end
+end)
+```
+
 ## Retargeting between rest poses
 
 `kke::retargetAnimations` and `kke::PoseRetarget` copy each bone's turn

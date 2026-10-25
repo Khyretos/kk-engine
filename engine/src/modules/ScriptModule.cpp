@@ -741,6 +741,23 @@ void ScriptModule::update(const UpdateContext& ctx) {
         }
     }
 #endif
+    // Animation events (models.event) of the models scripts spawned.
+    if (auto* models = m_app->getModule<ModelModule>(); models && !m_models.empty() && m_vm->hookCount("AnimEvent") > 0) {
+        for (const ModelModule::ClipEventHit& hit : models->clipEvents()) {
+            if (std::none_of(m_models.begin(), m_models.end(), [&](const ModelInstance& m) { return m.id == hit.instance; })) continue;
+            const ModelData* d = models->model(models->instanceModel(hit.instance));
+            m_vm->callHookWith("AnimEvent", [&](lua_State* L) {
+                lua_createtable(L, 0, 3);
+                lua_pushinteger(L, lua_Integer(hit.instance));
+                lua_setfield(L, -2, "instance");
+                lua_pushstring(L, d && hit.clip < int(d->animations.size()) ? d->animations[size_t(hit.clip)].name.c_str() : "");
+                lua_setfield(L, -2, "clip");
+                lua_pushstring(L, hit.name.c_str());
+                lua_setfield(L, -2, "name");
+                return 1;
+            });
+        }
+    }
     if (auto* in = m_app->getModule<InputModule>(); in && in->promptSerial() != m_promptSerial) {
         // The player switched devices (or a game forced a style): prompts
         // built as markup need redoing. <prompt> elements redo themselves.
