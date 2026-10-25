@@ -115,6 +115,9 @@ private:
     void setStatus(const std::string& text);
     void applyColours();
     void randomise(bool everything);
+    // A body type: "Average", "Slim", "Athletic", "Strong", "Curvy",
+    // "Heavy" (the build sliders only: gender, age and face stay).
+    void applyPreset(const std::string& preset);
     void save();
     void load();
     void buildWorld();     // the physics world: the body as a collider
@@ -159,6 +162,7 @@ private:
     std::vector<SwatchView> m_skinSwatches, m_eyeSwatches, m_hairSwatches;
     std::vector<HairChoice> m_hairChoices;
     std::vector<GarmentView> m_garments;
+    std::vector<Rml::String> m_presets;
     std::vector<SwatchView> m_clothSwatches;
     Rml::String m_clothSlot = "top", m_clothSlotLabel; // what a colour swatch dyes
     float m_hairLength = 1.0f, m_hairLengthShown = 1.0f;

@@ -29,6 +29,7 @@
 #include <cmath>
 #include <cctype>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -43,6 +44,68 @@ namespace kke {
 namespace {
 
 constexpr float kPi = 3.14159265f;
+
+// Body types: the build sliders each sets (decr|incr sliders run -1..1,
+// the rest 0..1). Every build slider a preset leaves out goes back to its
+// default. MakeHuman's own body-shape targets (bodyshapes-elvs-*) carry
+// most of a silhouette; the measurements and muscles sharpen it.
+struct Preset {
+    const char* name;
+    std::vector<std::pair<const char*, float>> values, female, male; // female/male: added by gender
+};
+const std::vector<Preset>& presets() {
+    static const std::vector<Preset> list = {
+        { "Average", {}, {}, {} },
+        { "Slim",
+          { { "macrodetails-universal/Weight", 0.25f }, { "macrodetails-universal/Muscle", 0.45f },
+            { "measure/measure-waist-circ-decr|incr", -0.4f } },
+          { { "bodyshapes/bodyshapes-elvs-fem-lean-column", 0.7f } },
+          { { "bodyshapes/bodyshapes-elvs-man-lean-column", 0.7f } } },
+        { "Athletic",
+          { { "macrodetails-universal/Weight", 0.4f }, { "macrodetails-universal/Muscle", 0.85f },
+            { "stomach/stomach-tone-decr|incr", 0.8f }, { "torso/torso-vshape-decr|incr", 0.45f },
+            { "measure/measure-waist-circ-decr|incr", -0.45f }, { "armslegs/r-upperleg-muscle-decr|incr", 0.5f },
+            { "armslegs/l-upperleg-muscle-decr|incr", 0.5f }, { "armslegs/r-lowerleg-muscle-decr|incr", 0.5f },
+            { "armslegs/l-lowerleg-muscle-decr|incr", 0.5f }, { "buttocks/buttocks-volume-decr|incr", 0.3f } },
+          { { "bodyshapes/bodyshapes-elvs-fem-neat-hourglass", 0.6f } },
+          { { "bodyshapes/bodyshapes-elvs-man-invert-triangle", 0.6f } } },
+        { "Strong",
+          { { "macrodetails-universal/Weight", 0.62f }, { "macrodetails-universal/Muscle", 1.0f },
+            { "torso/torso-vshape-decr|incr", 0.8f }, { "torso/torso-muscle-pectoral-decr|incr", 0.7f },
+            { "torso/torso-muscle-dorsi-decr|incr", 0.7f }, { "armslegs/r-upperarm-muscle-decr|incr", 0.7f },
+            { "armslegs/l-upperarm-muscle-decr|incr", 0.7f }, { "armslegs/r-upperarm-shoulder-muscle-decr|incr", 0.7f },
+            { "armslegs/l-upperarm-shoulder-muscle-decr|incr", 0.7f }, { "armslegs/r-upperleg-muscle-decr|incr", 0.5f },
+            { "armslegs/l-upperleg-muscle-decr|incr", 0.5f }, { "neck/neck-scale-horiz-decr|incr", 0.5f },
+            { "measure/measure-shoulder-dist-decr|incr", 0.5f }, { "stomach/stomach-tone-decr|incr", 0.6f } },
+          { { "bodyshapes/bodyshapes-elvs-fem-invert-triangle", 0.5f } },
+          { { "bodyshapes/bodyshapes-elvs-man-trapezoid", 1.0f } } },
+        { "Curvy",
+          { { "macrodetails-universal/Weight", 0.6f }, { "macrodetails-universal/Muscle", 0.5f },
+            { "measure/measure-waist-circ-decr|incr", -0.5f }, { "measure/measure-hips-circ-decr|incr", 0.7f },
+            { "buttocks/buttocks-volume-decr|incr", 0.7f }, { "armslegs/r-upperleg-fat-decr|incr", 0.35f },
+            { "armslegs/l-upperleg-fat-decr|incr", 0.35f } },
+          { { "bodyshapes/bodyshapes-elvs-fem-full-hourglass", 1.0f }, { "breast/BreastSize", 0.9f },
+            { "breast/BreastFirmness", 0.75f }, { "measure/measure-bust-circ-decr|incr", 0.5f } },
+          { { "bodyshapes/bodyshapes-elvs-man-triangle", 0.6f } } },
+        { "Heavy",
+          { { "macrodetails-universal/Weight", 1.0f }, { "macrodetails-universal/Muscle", 0.5f },
+            { "stomach/stomach-pregnant-decr|incr", 0.4f }, { "measure/measure-waist-circ-decr|incr", 0.7f },
+            { "measure/measure-hips-circ-decr|incr", 0.5f }, { "neck/neck-double-decr|incr", 0.6f },
+            { "armslegs/r-upperarm-fat-decr|incr", 0.7f }, { "armslegs/l-upperarm-fat-decr|incr", 0.7f },
+            { "armslegs/r-upperleg-fat-decr|incr", 0.7f }, { "armslegs/l-upperleg-fat-decr|incr", 0.7f },
+            { "buttocks/buttocks-volume-decr|incr", 0.4f } },
+          { { "bodyshapes/bodyshapes-elvs-fem-apple", 0.6f }, { "breast/BreastSize", 0.8f } },
+          { { "bodyshapes/bodyshapes-elvs-man-apple", 0.7f } } },
+    };
+    return list;
+}
+// The sliders a body type owns (put back to default before one is applied).
+bool buildSlider(const HumanModifier& m) {
+    if (m.macro == "Muscle" || m.macro == "Weight" || m.macro == "BreastSize" || m.macro == "BreastFirmness") return true;
+    for (const char* g : { "bodyshapes", "measure", "torso", "hip", "stomach", "buttocks" })
+        if (m.group == g) return true;
+    return m.group == "armslegs" && (m.name.find("muscle") != std::string::npos || m.name.find("fat") != std::string::npos);
+}
 
 // Which MakeHuman modifier groups each tab shows, in order. Groups no tab
 // lists (genitals) are left out of the screen.
@@ -263,6 +326,7 @@ void CharacterCreatorModule::init(Application& app) {
     for (const HairColour& c : hairColours())
         m_hairSwatches.push_back({ c.name, cssColour(0.5f * (c.root + c.tip)), c.root.r, c.root.g, c.root.b });
     for (const auto& [id, label] : hairChoices()) m_hairChoices.push_back({ id, label });
+    for (const Preset& p : presets()) m_presets.push_back(p.name);
     for (const NamedColour& c : clothColours()) m_clothSwatches.push_back({ c.name, cssColour(c.rgb), c.rgb.r, c.rgb.g, c.rgb.b });
     m_look.hair = "short"; // a new person; a save replaces it
     m_look.clothes = { { "t-shirt", { 0.92f, 0.92f, 0.9f } }, { "shorts", { 0.16f, 0.18f, 0.24f } },
@@ -287,6 +351,8 @@ void CharacterCreatorModule::init(Application& app) {
         m_look.hair = hair;
         fillSliders();
     }
+    if (const char* gender = dev::env("KKE_CREATOR_GENDER")) m_human->set("macrodetails/Gender", std::strtof(gender, nullptr)); // 0 female, 1 male
+    if (const char* preset = dev::env("KKE_CREATOR_PRESET")) applyPreset(preset); // "Curvy", "Strong"...
     if (const char* clothes = dev::env("KKE_CREATOR_CLOTHES")) { // "t-shirt,tennis skirt,shoes", "" = none
         m_look.clothes.clear();
         std::stringstream list(clothes);
@@ -340,6 +406,10 @@ void CharacterCreatorModule::buildModel() {
     }
     c.RegisterArray<std::vector<GarmentView>>();
     c.Bind("garments", &m_garments);
+    c.Bind("presets", &m_presets);
+    c.BindEventCallback("preset", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList& args) {
+        if (!args.empty()) applyPreset(args[0].Get<Rml::String>());
+    });
     c.Bind("cloth_swatches", &m_clothSwatches);
     c.Bind("cloth_slot", &m_clothSlot);
     c.Bind("cloth_slot_label", &m_clothSlotLabel);
@@ -663,6 +733,21 @@ void CharacterCreatorModule::restore(const std::map<std::string, float>& values)
     fillSliders();
 }
 
+void CharacterCreatorModule::applyPreset(const std::string& name) {
+    const Preset* preset = nullptr;
+    for (const Preset& p : presets())
+        if (name == p.name) preset = &p;
+    if (!preset) return;
+    pushUndo();
+    for (const HumanModifier& m : m_pack->modifiers())
+        if (buildSlider(m)) m_human->set(m.name, m.defaultValue);
+    const bool female = m_human->get("macrodetails/Gender") < 0.5f;
+    for (const auto* list : { &preset->values, female ? &preset->female : &preset->male })
+        for (const auto& [slider, value] : *list) m_human->set(slider, value);
+    m_shapeDirty = true;
+    fillSliders();
+}
+
 void CharacterCreatorModule::randomise(bool everything) {
     pushUndo();
     std::normal_distribution<float> n(0.0f, 1.0f);
@@ -702,6 +787,19 @@ void CharacterCreatorModule::randomise(bool everything) {
             v["macrodetails/Caucasian"] = c / (a + b + c);
             return v;
         }());
+        // Half the time a body type (scaled 50-100%): the sliders alone,
+        // kept near the middle, make everyone look alike.
+        if (u(m_rng) < 0.5f) {
+            const Preset& p = presets()[std::uniform_int_distribution<size_t>(1, presets().size() - 1)(m_rng)];
+            const float amount = 0.5f + 0.5f * u(m_rng);
+            const bool female = m_human->get("macrodetails/Gender") < 0.5f;
+            for (const auto* list : { &p.values, female ? &p.female : &p.male })
+                for (const auto& [slider, value] : *list) {
+                    const int m = m_pack->findModifier(slider);
+                    const float def = m >= 0 ? m_pack->modifiers()[static_cast<size_t>(m)].defaultValue : 0.0f;
+                    m_human->set(slider, def + (value - def) * amount);
+                }
+        }
         if (everything) {
             const auto& tones = skinTones();
             const NamedColour& t = tones[std::uniform_int_distribution<size_t>(0, tones.size() - 1)(m_rng)];

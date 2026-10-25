@@ -26,6 +26,10 @@
             <button data-event-click="reset_tab">Reset tab</button>
         </div>
 
+        <div class="choices presets" data-if="tab == 'body'">
+            <button data-for="p : presets" data-event-click="preset(p)">{{ p }}</button>
+        </div>
+
         <div id="sliders" data-if="tab != 'skin' && tab != 'hair' && tab != 'clothes'">
             <div class="slider" data-for="s, i : sliders">
                 <span class="label">{{ s.label }}</span>

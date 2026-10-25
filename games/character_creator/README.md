@@ -32,7 +32,10 @@ Run it: `cd build/bin && ./character_creator`.
 
 Moving the sliders with a controller is not in yet.
 
-**Random** randomises the tab you are on, **Random person** everything.
+**Body types** on the Body type tab (Slim, Athletic, Strong, Curvy,
+Heavy, Average) set the build sliders at once for the current gender;
+the face, age and ancestry stay. **Random** randomises the tab you are on,
+**Random person** everything, and half the time starts from a body type.
 A random person stays believable: a third of the detail sliders move, and
 only a little, because many sliders far out at once make a face nobody
 has. **Undo** and **Redo** go back up to 100 steps (one step per drag).
@@ -82,7 +85,8 @@ reads one.
 
 For CI and screenshots: `KKE_CREATOR_TAB=nose`, `KKE_CREATOR_VIEW=face`,
 `KKE_CREATOR_HAIR=afro` (a hairstyle, empty for none),
-`KKE_CREATOR_CLOTHES=t-shirt,tennis skirt,shoes` (empty for none), `KKE_CREATOR_TURN=1`
+`KKE_CREATOR_CLOTHES=t-shirt,tennis skirt,shoes` (empty for none),
+`KKE_CREATOR_GENDER=0` (female) or `1`, `KKE_CREATOR_PRESET=Curvy`, `KKE_CREATOR_TURN=1`
 (start turning), and `KKE_CREATOR_SELFTEST=1`, which makes a random
 person, sends it through a share code and back, and logs `creator
 self-test passed` when the code comes back the same, the person stands on
