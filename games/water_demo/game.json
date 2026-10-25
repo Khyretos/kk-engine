@@ -1,0 +1,19 @@
+{
+  "id": "engine.kke.water_demo",
+  "title": "KKE Water Demo",
+  "description": "Break a dam in a tank of water and watch it slosh from wall to wall. Wooden crates float and get carried along, a stone block sinks, a paddle makes waves. MLS-MPM water (on the GPU when there is one) with two-way Jolt coupling, drawn as clear water.",
+  "version": "0.1.0",
+  "tags": ["demo", "fluid", "water", "physics"],
+  "engine_version": "0.3",
+  "modules": [
+    "WaterDemo",
+    "RigidBodies",
+    "OrbitCamera",
+    "DebugControl",
+    "DemoPanel",
+    "GameShell",
+    "Input",
+    "Stats",
+    "UI"
+  ]
+}

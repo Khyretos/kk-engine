@@ -14,7 +14,7 @@ namespace kke {
 namespace {
 
 constexpr size_t kGrain = 512;  // particles per task, at least
-constexpr int kSlab = 4;        // z cells per slab: a slab's particles write 6 node layers, so slabs two apart never meet
+constexpr int kSlab = 3;        // cells a block is wide: its particles write 5 nodes across, so blocks two apart (6 on) never meet
 // Bodies hold the grid half a cell out from their surface, as the walls
 // do: water stops there instead of being pushed out of them every
 // substep, which left a layer of stretched, pressureless water under a
@@ -216,6 +216,56 @@ void MpmWater::stepOnCpu(float dt) {
     m_stats.stepMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
 }
 
+MpmWater::GpuCheck MpmWater::checkGpuStep(float dt) {
+    GpuCheck check;
+    const int n = substepsFor(dt);
+    if (!m_gpu || m_x.empty() || n <= 0) {
+        step(dt);
+        return check;
+    }
+    if (m_gpuOwns) m_gpu->download(*this);
+    m_gpuOwns = false;
+    const std::vector<glm::vec3> x = m_x, v = m_v;
+    const std::vector<glm::mat3> C = m_C;
+    const std::vector<float> J = m_J;
+    const float fastest = m_lastMaxSpeed;
+    auto t0 = std::chrono::steady_clock::now();
+    beginStep();
+    for (int s = 0; s < n; ++s) substep(dt / float(n));
+    auto t1 = std::chrono::steady_clock::now();
+    const std::vector<glm::vec3> cpu = m_x;
+    m_x = x;
+    m_v = v;
+    m_C = C;
+    m_J = J;
+    m_lastMaxSpeed = fastest;
+    m_gpuValid = 0;
+    beginStep();
+    if (m_gpu->step(*this, dt / float(n), n)) {
+        ++m_stats.gpuSteps;
+        m_gpuOwns = true;
+    } else {
+        ++m_stats.gpuLate;
+        return check;
+    }
+    auto t2 = std::chrono::steady_clock::now();
+    endStep();
+    m_stats.substeps = n;
+    m_stats.maxSpeed = m_lastMaxSpeed;
+    check.done = true;
+    check.particles = m_x.size();
+    double sum = 0.0;
+    for (size_t p = 0; p < m_x.size(); ++p) {
+        const float d = glm::length(m_x[p] - cpu[p]);
+        check.maxDifference = std::max(check.maxDifference, d);
+        sum += d;
+    }
+    check.meanDifference = static_cast<float>(sum / double(m_x.size()));
+    check.cpuMs = std::chrono::duration<double, std::milli>(t1 - t0).count();
+    check.gpuMs = std::chrono::duration<double, std::milli>(t2 - t1).count();
+    return check;
+}
+
 void MpmWater::stepCpu(float dt, int substeps) {
     if (m_gpuOwns && m_gpu) m_gpu->download(*this);
     m_gpuOwns = false;
@@ -269,7 +319,7 @@ void MpmWater::substep(float dt) {
         }
     });
 
-    // 2. The nodes it touches, and the particles by z slab.
+    // 2. The nodes it touches, and the particles by slab.
     glm::ivec3 lo(INT32_MAX), hi(INT32_MIN);
     for (size_t p = 0; p < n; ++p) {
         lo = glm::min(lo, m_base[p]);
@@ -280,15 +330,26 @@ void MpmWater::substep(float dt) {
     hi = glm::min(hi, m_dims - 1);
     m_lo = lo;
     m_hi = hi;
-    const int slabs = (hi.z - lo.z) / kSlab + 1;
-    m_slabStart.assign(size_t(slabs) + 1, 0);
-    for (size_t p = 0; p < n; ++p) ++m_slabStart[size_t((m_base[p].z - lo.z) / kSlab) + 1];
-    for (int s = 0; s < slabs; ++s) m_slabStart[size_t(s) + 1] += m_slabStart[size_t(s)];
+    // Blocks of kSlab x kSlab cells across the water's two longest sides
+    // (full height or depth along the third), in four colours by the
+    // parity of their two block coordinates: blocks of one colour write
+    // nodes far apart, so they run side by side.
+    const glm::ivec3 extent = hi - lo;
+    const int axisA = extent.x >= extent.y && extent.x >= extent.z ? 0 : (extent.y >= extent.z ? 1 : 2);
+    const int axisB = axisA == 0 ? (extent.y >= extent.z ? 1 : 2) : (axisA == 1 ? (extent.x >= extent.z ? 0 : 2) : (extent.x >= extent.y ? 0 : 1));
+    const int blocksA = extent[axisA] / kSlab + 1, blocksB = extent[axisB] / kSlab + 1;
+    const int blocks = blocksA * blocksB;
+    auto blockOf = [&](size_t p) {
+        return size_t((m_base[p][axisA] - lo[axisA]) / kSlab) * size_t(blocksB) + size_t((m_base[p][axisB] - lo[axisB]) / kSlab);
+    };
+    m_slabStart.assign(size_t(blocks) + 1, 0);
+    for (size_t p = 0; p < n; ++p) ++m_slabStart[blockOf(p) + 1];
+    for (int s = 0; s < blocks; ++s) m_slabStart[size_t(s) + 1] += m_slabStart[size_t(s)];
     m_order.resize(n);
     {
         std::vector<uint32_t>& cursor = m_slabCursor;
         cursor.assign(m_slabStart.begin(), m_slabStart.end() - 1);
-        for (size_t p = 0; p < n; ++p) m_order[cursor[size_t((m_base[p].z - lo.z) / kSlab)]++] = static_cast<uint32_t>(p);
+        for (size_t p = 0; p < n; ++p) m_order[cursor[blockOf(p)]++] = static_cast<uint32_t>(p);
     }
     const int layers = hi.z - lo.z + 1;
     const size_t rowLen = size_t(hi.x - lo.x + 1);
@@ -300,32 +361,46 @@ void MpmWater::substep(float dt) {
             for (int y = lo.y; y <= hi.y; ++y) std::memset(&m_grid[node(lo.x, y, lo.z + int(l))], 0, rowLen * sizeof(glm::vec4));
     });
 
-    // 4. Particles -> grid: even slabs, then odd ones. Slabs of one parity
-    //    write node layers far apart, so they run side by side, and every
-    //    node sums its particles in the same order on any thread count.
+    // 4. Particles -> grid, one colour of blocks after another; every node
+    //    sums its particles in the same order on any thread count.
     auto scatterSlab = [&](size_t s) {
         for (uint32_t i = m_slabStart[s]; i < m_slabStart[s + 1]; ++i) {
             const uint32_t p = m_order[i];
             const glm::ivec3 base = m_base[p];
             const glm::vec3 fx = (m_x[p] - m_origin) * invDx - glm::vec3(base);
             const glm::vec3 w[3] = { weightsOf(fx.x), weightsOf(fx.y), weightsOf(fx.z) };
-            const glm::vec3 v = m_v[p];
+            // v + A (node - x): A's columns times the node's offset, built
+            // up along the loops instead of a matrix product per node.
             const glm::mat3& A = m_affine[p];
-            for (int c = 0; c < 3; ++c)
-                for (int b = 0; b < 3; ++b)
+            const glm::vec3 v0 = m_v[p] - A * (fx * dx);
+            const glm::vec3 ax = A[0] * dx, ay = A[1] * dx, az = A[2] * dx;
+            const size_t strideY = size_t(m_dims.x), strideZ = size_t(m_dims.x) * size_t(m_dims.y);
+            const size_t first = node(base.x, base.y, base.z);
+            for (int c = 0; c < 3; ++c) {
+                const glm::vec3 vc = v0 + az * float(c);
+                for (int b = 0; b < 3; ++b) {
+                    const glm::vec3 vb = vc + ay * float(b);
+                    const float wbc = w[1][b] * w[2][c];
+                    glm::vec4* row = &m_grid[first + size_t(c) * strideZ + size_t(b) * strideY];
                     for (int a = 0; a < 3; ++a) {
-                        const float weight = w[0][a] * w[1][b] * w[2][c];
-                        const glm::vec3 dpos = (glm::vec3(a, b, c) - fx) * dx;
-                        m_grid[node(base.x + a, base.y + b, base.z + c)] += glm::vec4(weight * (v + A * dpos), weight);
+                        const float weight = w[0][a] * wbc;
+                        row[a] += glm::vec4(weight * (vb + ax * float(a)), weight);
                     }
+                }
+            }
         }
     };
-    for (int parity = 0; parity < 2; ++parity) {
-        const size_t count = size_t((slabs - parity + 1) / 2);
-        if (count == 0) continue;
-        if (m_pool && m_pool->workers() > 1 && count > 1) m_pool->run(count, [&](size_t i) { scatterSlab(size_t(parity) + 2 * i); });
+    std::vector<uint32_t>& colour = m_colourBlocks;
+    for (int c = 0; c < 4; ++c) {
+        colour.clear();
+        for (int a = c & 1; a < blocksA; a += 2)
+            for (int b = c >> 1; b < blocksB; b += 2) {
+                const size_t s = size_t(a) * size_t(blocksB) + size_t(b);
+                if (m_slabStart[s + 1] > m_slabStart[s]) colour.push_back(static_cast<uint32_t>(s));
+            }
+        if (m_pool && m_pool->workers() > 1 && colour.size() > 1) m_pool->run(colour.size(), [&](size_t i) { scatterSlab(colour[i]); });
         else
-            for (size_t i = 0; i < count; ++i) scatterSlab(size_t(parity) + 2 * i);
+            for (uint32_t s : colour) scatterSlab(s);
     }
 
     // 5. Grid velocities: momentum / mass, gravity, then bodies and walls
@@ -412,17 +487,26 @@ void MpmWater::substep(float dt) {
             const glm::ivec3 base = m_base[p];
             const glm::vec3 fx = (m_x[p] - m_origin) * invDx - glm::vec3(base);
             const glm::vec3 w[3] = { weightsOf(fx.x), weightsOf(fx.y), weightsOf(fx.z) };
-            glm::vec3 v(0.0f);
-            glm::mat3 B(0.0f);
+            // B = sum of w gv (node - x)^T = dx (sum of w gv (a, b, c)^T - v fx^T):
+            // three weighted sums instead of an outer product per node.
+            glm::vec3 v(0.0f), sa(0.0f), sb(0.0f), sc(0.0f);
+            const size_t strideY = size_t(m_dims.x), strideZ = size_t(m_dims.x) * size_t(m_dims.y);
+            const size_t first = node(base.x, base.y, base.z);
             for (int c = 0; c < 3; ++c)
-                for (int b = 0; b < 3; ++b)
+                for (int b = 0; b < 3; ++b) {
+                    const float wbc = w[1][b] * w[2][c];
+                    const glm::vec4* row = &m_grid[first + size_t(c) * strideZ + size_t(b) * strideY];
+                    glm::vec3 r(0.0f);
                     for (int a = 0; a < 3; ++a) {
-                        const float weight = w[0][a] * w[1][b] * w[2][c];
-                        const glm::vec3 gv = glm::vec3(m_grid[node(base.x + a, base.y + b, base.z + c)]);
-                        const glm::vec3 dpos = (glm::vec3(a, b, c) - fx) * dx;
-                        v += weight * gv;
-                        B += weight * glm::outerProduct(gv, dpos);
+                        const glm::vec3 wv = (w[0][a] * wbc) * glm::vec3(row[a]);
+                        r += wv;
+                        sa += wv * float(a);
                     }
+                    v += r;
+                    sb += r * float(b);
+                    sc += r * float(c);
+                }
+            const glm::mat3 B = dx * (glm::mat3(sa, sb, sc) - glm::outerProduct(v, fx));
             const glm::mat3 C = (4.0f * invDx * invDx) * B;
             float J = m_J[p] * (1.0f + dt * (C[0][0] + C[1][1] + C[2][2]));
             J = std::clamp(J, jMin, jMax);

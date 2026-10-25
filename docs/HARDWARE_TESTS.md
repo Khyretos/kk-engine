@@ -40,6 +40,27 @@ them): a `.txt` to read and a `.json` for analysis, including your CPU,
 GPU, driver, RAM, OS and build type. Paste either file back instead of
 log lines.
 
+### HW-021 · MLS-MPM water on the GPU (dev box)
+
+docs/OPTIMIZATION.md #46: games/water_demo runs its water (a dam break
+in a tank, with floating crates) on the GPU. The sandbox only has
+lavapipe, where it matches the CPU but can't say how fast it is. On the
+RX 9070 XT:
+
+```bash
+cd build-release/bin
+KKE_BENCHMARK=30 KKE_BENCH_SHOTS=1 ./water_demo 2>&1 | grep -E "MpmWater|water:|fps avg"
+KKE_BENCHMARK=30 KKE_BENCH_SHOTS=0 KKE_MPM_GPU=0 ./water_demo 2>&1 | grep -E "water:|fps avg"
+KKE_WATER_CELL=0.035 KKE_BENCHMARK=30 KKE_BENCH_SHOTS=0 ./water_demo 2>&1 | grep -E "water:|fps avg"
+KKE_BENCHMARK=30 KKE_BENCH_SHOTS=0 KKE_MPM_GPU_CHECK=1 ./water_demo 2>&1 | grep "check:"
+```
+
+Send back: the `water:` lines (particles, ms a step, substeps, GPU or
+CPU, late steps), the fps lines, the last `check:` line, and the
+screenshots from the first run (they show the look).
+
+**Result:** pending.
+
 ### HW-020 · Liquid neighbour search, GPU against CPU (dev box)
 
 docs/OPTIMIZATION.md #44 and #45: the liquid now runs on several threads,

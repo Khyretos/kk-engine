@@ -76,8 +76,8 @@ struct MpmWaterBody {
 // (about 14 a 60 Hz frame at the defaults).
 //
 // On the CPU every pass is split over a TaskPool and the result does not
-// depend on the thread count (particles write the grid in z slabs, even
-// slabs then odd ones). On the GPU (setGpu; kke::MpmWaterGpu) the
+// depend on the thread count (particles write the grid in blocks, four
+// colours of them one after another). On the GPU (setGpu; kke::MpmWaterGpu) the
 // particles stay on the GPU and each step reads back positions and
 // velocities. Pure C++ without a GPU: tests/test_mpm_water.cpp.
 class MpmWater {
@@ -142,6 +142,17 @@ public:
     // result at its next step.
     void stepOnCpu(float dt);
 
+    // KKE_MPM_GPU_CHECK: one step on both, from the same state, keeping
+    // the GPU's. How far apart the particles end up (float rounding and
+    // the GPU's fixed-point sums: well under a millimetre a step).
+    struct GpuCheck {
+        bool done = false;  // false: no GPU (or no water): stepped normally
+        size_t particles = 0;
+        float maxDifference = 0.0f, meanDifference = 0.0f; // m
+        double gpuMs = 0.0, cpuMs = 0.0;
+    };
+    GpuCheck checkGpuStep(float dt);
+
 private:
     friend class MpmWaterGpu;
 
@@ -177,12 +188,11 @@ private:
     // Per substep scratch.
     std::vector<glm::ivec3> m_base;
     std::vector<glm::mat3> m_affine;
-    std::vector<uint32_t> m_order, m_slabStart, m_slabCursor;
+    std::vector<uint32_t> m_order, m_slabStart, m_slabCursor, m_colourBlocks; // particles by block (P2G)
     std::vector<float> m_speed;
     std::vector<int32_t> m_hitBody;     // the body a particle was pushed out of (-1: none), and what it gave it
     std::vector<glm::vec3> m_hitImpulse, m_hitAngular;
-    std::vector<glm::vec4> m_grid;
-    std::vector<float> m_density;       // per node: its mass, or rest density where it is wall or body      // xyz = momentum, then velocity; w = mass (particle masses)
+    std::vector<glm::vec4> m_grid;      // xyz = momentum, then velocity; w = mass (particle masses)
     std::vector<glm::vec3> m_layerImpulse; // per z layer of the box x body: 2 vec3 (linear, angular)
     std::vector<glm::vec3> m_bodyImpulse;  // per body: 2 vec3, summed over the layers
     glm::ivec3 m_lo{0}, m_hi{-1};       // the nodes this substep touches

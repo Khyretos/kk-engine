@@ -50,6 +50,10 @@ demos:
     title: "Jiggle: soft-body characters on tour"
     env: { KKE_JIGGLE_MOVE: "4" }
 
+  - id: water_demo
+    exe: water_demo
+    title: "Water: MLS-MPM tank with floating crates"
+
   - id: sea_demo
     exe: sea_demo
     title: "Sea: ocean and floating bodies"

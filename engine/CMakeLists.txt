@@ -274,6 +274,7 @@ set(ENGINE_HEADERS
     include/kke/FluidGpu.h
     include/kke/MpmWater.h
     include/kke/MpmWaterGpu.h
+    include/kke/WaterBodyLink.h
     include/kke/MeltVolume.h
     include/kke/SphereImpostors.h
     include/kke/Ocean.h
@@ -352,11 +353,11 @@ endif()
 # The startup intro (kke::LogoIntro) and the sky (kke::SkyRenderer) can run
 # in every game, so their shaders and the title font ship with the engine
 # rather than with each game. So do the cloth pair search (kke::ClothGpu),
-# the liquid's neighbour search (kke::FluidGpu),
+# the liquid's neighbour search (kke::FluidGpu), water (kke::MpmWaterGpu),
 # GPU skinning (kke::ModelModule), the UI layers' filters
 # (kke::RmlVulkanRenderInterface), the tone-map pass (kke::Renderer) and
 # particle effects (kke::ParticleEffects: Lua's fx.* works in every game).
-foreach(shader logo.vert logo.frag logo_backdrop.vert logo_backdrop.frag logo_text.vert logo_text.frag sky.vert sky.frag cloth_pairs.comp fluid_neighbours.comp skin.comp
+foreach(shader logo.vert logo.frag logo_backdrop.vert logo_backdrop.frag logo_text.vert logo_text.frag sky.vert sky.frag cloth_pairs.comp fluid_neighbours.comp mpm_p2g.comp mpm_grid.comp mpm_bodies.comp mpm_g2p.comp skin.comp
                rml_fullscreen.vert rml_filter.frag rml_layer.frag tonemap_post.frag screen_gi.comp screen_gi_ms.comp reflect.comp reflect_ms.comp ray_reflect.comp ray_reflect_ms.comp ray_selftest.comp behind.comp behind_ms.comp translucent_refract.frag translucent_refract_rays.frag volumetric_scatter.comp volumetric_integrate.comp smaa_edges.comp smaa_weights.comp smaa_blend.comp taa.comp taa_ms.comp shadow_rays.comp shadow_rays_ms.comp cluster_lights.comp bloom_down.comp bloom_up.comp dof_focus.comp dof_focus_ms.comp dof_half.comp dof_half_ms.comp dof_gather.comp dof_composite.comp dof_composite_ms.comp motion_blur.comp motion_blur_ms.comp effect_step.comp effect_step_ms.comp depth_map.comp depth_map_ms.comp
                effect.vert effect_gpu.vert effect_smoke.frag effect_spark.frag effect_glow.frag effect_flake.frag effect_ring.frag)
     engine_add_shader(kke_engine ${CMAKE_SOURCE_DIR}/shaders/${shader})
@@ -440,7 +441,7 @@ else()
 endif()
 
 if(KKE_ENABLE_JOLT)
-    target_sources(kke_engine PRIVATE src/RigidWorld.cpp src/ClothSystem.cpp src/Cloth.cpp src/Hair.cpp src/Locomotion.cpp src/SceneLoader.cpp src/modules/RigidBodyModule.cpp src/modules/PhysicsBridgeModule.cpp
+    target_sources(kke_engine PRIVATE src/RigidWorld.cpp src/ClothSystem.cpp src/Cloth.cpp src/Hair.cpp src/Locomotion.cpp src/SceneLoader.cpp src/modules/RigidBodyModule.cpp src/modules/PhysicsBridgeModule.cpp src/WaterBodyLink.cpp
         src/net/WorldMoveCheck.cpp src/net/LevelSight.cpp src/net/LocomotionReplay.cpp)
     target_compile_definitions(kke_engine PUBLIC KKE_ENABLE_JOLT=1)
     target_link_libraries(kke_engine PUBLIC Jolt)

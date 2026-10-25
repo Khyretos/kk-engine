@@ -16,7 +16,7 @@ metrics row and the pull request.
 
 | Paper | For | Plan |
 |---|---|---|
-| Hu et al., "A Moving Least Squares Material Point Method with Displacement Discontinuity and Two-Way Rigid Body Coupling", SIGGRAPH 2018 ([PDF](https://yzhu.io/publication/mpmmls2018siggraph/paper.pdf)) | ENG-G12 liquids | A GPU MLS-MPM water solver (compute shaders) with two-way coupling to Jolt rigid bodies: floating crates push the water and the water pushes them. Benchmarked against the current particle fluid. |
+| Hu et al., "A Moving Least Squares Material Point Method with Displacement Discontinuity and Two-Way Rigid Body Coupling", SIGGRAPH 2018 ([PDF](https://yzhu.io/publication/mpmmls2018siggraph/paper.pdf)) | ENG-G12 liquids | A GPU MLS-MPM water solver (compute shaders) with two-way coupling to Jolt rigid bodies: floating crates push the water and the water pushes them. Benchmarked against the current particle fluid. **Done:** `kke::MpmWater` + `kke::MpmWaterGpu` + `kke::WaterBodyLink`, games/water_demo (OPTIMIZATION.md #46). Not taken from the paper: its displacement discontinuity (cutting thin shells), which water against boxes doesn't need. |
 | Hillaire, "Physically Based and Unified Volumetric Rendering in Frostbite", SIGGRAPH 2015 | ENG-F03 volumetric fog | Done: the energy-conserving integration step, without the jitter and the temporal filter (docs/RENDERING_PRINCIPLES.md). |
 | Karis, "Real Shading in Unreal Engine 4", SIGGRAPH 2013 | PBR, reflections | Done: the split-sum environment lighting. |
 | Quilez, "Better Fog" | Height fog | Done: the analytic exponential height fog. |
