@@ -31,7 +31,8 @@ class UiModule;
 // MakeHuman body in the middle, tabs of sliders on the right (body type,
 // shape, torso, arms and legs, head, eyes, nose, mouth, ears, skin,
 // hair: strands grown from the body's own scalp, simulated by the engine's
-// hair physics against the body),
+// hair physics against the body; clothes: tops, shorts, trousers, socks
+// and shoes that fit any body, skirts as the engine's cloth),
 // mirror, undo and redo, randomise, camera views, save, load and the
 // share code other players need to see this character.
 //
@@ -98,6 +99,11 @@ private:
     struct HairChoice {
         Rml::String id, label; // id "" = no hair
     };
+    struct GarmentView {
+        Rml::String id, label, slot;
+        bool worn = false;
+    };
+    struct WornPiece; // a garment on the figure: a model, or cloth and its renderer
 
     void buildModel();
     void loadDocument();
@@ -115,6 +121,11 @@ private:
     void buildHair();      // m_look's hairstyle on the body as it is now
     void placeFigure();    // the body, its collider and the hair's head at m_yaw
     void moveCap();        // the scalp cap onto the body as it is now
+    void dressUp();        // m_look's clothes on the body as it is now
+    void moveClothes();    // the fitted clothes onto the body as it is now (a drag)
+    void undress();
+    void fillClothes();    // the Clothes tab's buttons
+    void wear(const std::string& id); // on, taking off what was in its slot; off if it was on
 
     Application* m_app = nullptr;
     UiModule* m_ui = nullptr;
@@ -143,6 +154,9 @@ private:
     std::vector<SliderView> m_sliders;
     std::vector<SwatchView> m_skinSwatches, m_eyeSwatches, m_hairSwatches;
     std::vector<HairChoice> m_hairChoices;
+    std::vector<GarmentView> m_garments;
+    std::vector<SwatchView> m_clothSwatches;
+    Rml::String m_clothSlot = "top", m_clothSlotLabel; // what a colour swatch dyes
     float m_hairLength = 1.0f, m_hairLengthShown = 1.0f;
     Rml::String m_hairStyle;
     bool m_mirror = true;
@@ -161,6 +175,13 @@ private:
     bool m_hairDirty = false; // rebuild once the sliders rest
     float m_yaw = 0.0f;       // the turntable turns the figure, so the hair swings
     glm::mat4 m_figure{ 1.0f };
+
+    // Clothes (kke/HumanClothes.h): the body suit baked like the body, so
+    // the fitted garments follow every slider; skirts hang in m_world.
+    Human::Bake m_tightsBake;
+    std::vector<std::unique_ptr<WornPiece>> m_worn;
+    bool m_clothesDirty = false; // rebuild once the sliders rest
+    uint32_t m_garmentSerial = 0; // model keys: each fitting is a model of its own
 
     std::vector<std::map<std::string, float>> m_undo, m_redo;
     float m_sinceEdit = 1e9f;

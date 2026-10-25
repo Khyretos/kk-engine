@@ -883,7 +883,7 @@ function(kke_use_character_creator TARGET)
         engine_copy_runtime_file(${TARGET} ${CMAKE_SOURCE_DIR}/assets/humans/${f} assets/humans/${f})
     endforeach()
     foreach(shader cube.vert cube.frag glow.frag shadow.vert shadow.frag model.vert model_instanced.vert shadow_instanced.vert model.frag
-                   hair.vert hair.frag hair_shadow.vert hair_points.comp)
+                   hair.vert hair.frag hair_shadow.vert hair_points.comp cloth.frag)
         engine_add_shader(${TARGET} ${CMAKE_SOURCE_DIR}/shaders/${shader})
     endforeach()
 endfunction()

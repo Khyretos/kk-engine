@@ -1,4 +1,5 @@
 #include "kke/Human.h"
+#include "kke/HumanClothes.h"
 #include "kke/HumanHair.h"
 #include "kke/HumanLook.h"
 #include "kke/HumanPack.h"
@@ -209,8 +210,12 @@ TEST(HumanLook, JsonKeepsEverything) {
     look.skin = { 0.4f, 0.3f, 0.2f };
     look.hair = "wavy";
     look.hairLength = 0.6f;
+    look.clothes = { { "t-shirt", { 1.0f, 0.0f, 0.0f } }, { "tennis skirt", { 1.0f, 1.0f, 1.0f } } };
     kke::HumanLook back;
     ASSERT_TRUE(kke::lookFromJson(kke::lookToJson(look), back));
+    ASSERT_EQ(back.clothes.size(), 2u);
+    EXPECT_EQ(back.clothes[1].id, "tennis skirt");
+    EXPECT_FLOAT_EQ(back.clothes[0].colour.r, 1.0f);
     EXPECT_EQ(back.shape, look.shape);
     EXPECT_NEAR(back.skin.r, 0.4f, 0.003f);
     EXPECT_EQ(back.hair, "wavy");
@@ -239,13 +244,17 @@ TEST(HumanLook, ShareCodeIsShortAndBuildsTheSameBody) {
     kke::HumanLook look;
     kke::takeShape(h, look);
     look.hair = "afro";
+    look.clothes = { { "shorts", { 0.2f, 0.4f, 0.8f } } };
     const std::string code = kke::shareCode(look, pack());
     EXPECT_EQ(code.rfind("kh1.", 0), 0u);
-    EXPECT_LT(code.size(), 100u);
+    EXPECT_LT(code.size(), 110u);
 
     kke::HumanLook theirs;
     ASSERT_TRUE(kke::fromShareCode(code, pack(), theirs));
     EXPECT_EQ(theirs.hair, "afro");
+    ASSERT_EQ(theirs.clothes.size(), 1u);
+    EXPECT_EQ(theirs.clothes[0].id, "shorts");
+    EXPECT_NEAR(theirs.clothes[0].colour.b, 0.8f, 0.003f);
     for (const auto& [k, v] : look.shape) EXPECT_NEAR(theirs.shape.at(k), v, 2.0f / 254.0f + 1e-6f) << k;
     // The player's own body uses the rounded look too, so both machines
     // bake exactly the same vertices.
@@ -328,4 +337,35 @@ TEST(HumanHair, RootsSitOnTheSkin) {
     }
     kke::HairDesc d;
     EXPECT_FALSE(kke::hairOnHuman(d, "no such style", pack(), shaped, 160));
+}
+
+// Clothes are cut from the body suit and the long skirt every body
+// carries: each garment has vertices, a top stays on the torso and arms,
+// shoes on the feet, and a skirt is cloth pinned at its waistband.
+TEST(HumanClothes, EveryGarmentHasItsPart) {
+    NEED_PACK();
+    kke::Human h(pack());
+    const std::vector<glm::vec3> shaped = h.shapedPositions();
+    for (const kke::GarmentInfo& g : kke::garments()) {
+        const kke::GarmentShape s = kke::garmentShape(pack(), shaped, g.id);
+        EXPECT_GT(s.verts.size(), 20u) << g.id;
+        EXPECT_EQ(s.cloth, !s.pinned.empty()) << g.id;
+    }
+    const auto lowest = [&](const char* id) {
+        float y = 1e9f;
+        for (uint32_t v : kke::garmentShape(pack(), shaped, id).verts) y = std::min(y, shaped[v].y);
+        return y;
+    };
+    const auto highest = [&](const char* id) {
+        float y = -1e9f;
+        for (uint32_t v : kke::garmentShape(pack(), shaped, id).verts) y = std::max(y, shaped[v].y);
+        return y;
+    };
+    EXPECT_LT(highest("shoes"), 0.15f);                 // feet
+    EXPECT_GT(lowest("t-shirt"), 0.7f);                 // down to the hips
+    EXPECT_LT(lowest("trousers"), lowest("shorts") - 0.3f);
+    EXPECT_LT(lowest("long skirt"), lowest("tennis skirt") - 0.4f);
+    EXPECT_GT(lowest("tennis skirt"), 0.6f);            // above the knee
+    EXPECT_GT(lowest("crop top"), lowest("t-shirt") + 0.05f); // the belly shows
+    EXPECT_TRUE(kke::garmentShape(pack(), shaped, "no such garment").verts.empty());
 }

@@ -6,7 +6,9 @@ and legs, head and neck, eyes, nose, mouth, jaw and ears, about 300
 sliders in all, a skin tone, and hair: 14 hairstyles from short and long
 to an afro, box braids, cornrows and locs, 11 colours and a length, as
 real strands grown from this head's own scalp and moved by the engine's
-hair physics. The person is MakeHuman's CC0 human
+hair physics, and clothes: four tops, shorts, trousers, three skirts,
+socks and shoes in 12 colours, fitted to any body, the skirts swinging as
+the engine's cloth. The person is MakeHuman's CC0 human
 (docs/HUMANS.md), so every slider is a morph sculpted by artists, and the
 sliders blend the way MakeHuman's do.
 
@@ -24,7 +26,8 @@ Run it: `cd build/bin && ./character_creator`.
 | Move a slider | Drag it |
 | Turn the camera | Left drag beside the panel, or a controller's right stick |
 | Views | Body, Face, Profile, Back |
-| See the hair move | Turn: the figure spins and its hair swings out |
+| See the hair and skirts move | Turn: the figure spins, its hair and skirt swing out |
+| Wear something | Clothes tab: click a garment (again to take it off), then a colour |
 | Both sides at once | Mirror sides (on by default) |
 
 Moving the sliders with a controller is not in yet.
@@ -40,6 +43,8 @@ reads one.
 ![The face view: the head and neck tab](../../website/static/media/character-creator-face.webp)
 
 ![The Hair tab: an afro grown from the head's own scalp](../../website/static/media/character-creator-hair.webp)
+
+![The Clothes tab: a tennis outfit, the skirt swinging as the figure turns](../../website/static/media/character-creator-clothes.webp)
 
 ## How it is built
 
@@ -61,6 +66,11 @@ reads one.
   in a `RigidWorld` where the body is a mesh only hair and cloth feel.
   The scalp is painted the hair's root colour. 160 guide strands, a few
   thousand drawn hairs built on the GPU.
+- **Clothes** are cut from shapes MakeHuman's body carries, a body suit
+  and a long skirt (docs/HUMANS.md "Clothes"), so they fit every body the
+  sliders make. Fitted garments are models that move with the body's
+  vertices; skirts are the engine's cloth pinned at the waist. Over the
+  network a garment is its name and colour.
 - **Saves** are JSON (`kk-human`, version 1) with MakeHuman's slider
   names, and `lookFromMhm` reads `.mhm` files from the MakeHuman app.
 - **The screen** is RmlUi: `assets/ui/character_creator/creator.rml` and
@@ -70,16 +80,16 @@ reads one.
   pack next to a game.
 
 For CI and screenshots: `KKE_CREATOR_TAB=nose`, `KKE_CREATOR_VIEW=face`,
-`KKE_CREATOR_HAIR=afro` (a hairstyle, empty for none), `KKE_CREATOR_TURN=1`
+`KKE_CREATOR_HAIR=afro` (a hairstyle, empty for none),
+`KKE_CREATOR_CLOTHES=t-shirt,tennis skirt,shoes` (empty for none), `KKE_CREATOR_TURN=1`
 (start turning), and `KKE_CREATOR_SELFTEST=1`, which makes a random
 person, sends it through a share code and back, and logs `creator
 self-test passed` when the code comes back the same, the person stands on
-the floor and its hairstyle is on its head.
+the floor, its hairstyle is on its head and every garment is on its body.
 
 ## Not yet
 
 The plan's next steps, in order: animation (MakeHuman's rig onto the
 engine's canonical bone names), skin textures, eye colour and brows,
-clothes fitted with MakeHuman's `.mhclo` files with cloth physics for
-loose garments, a credits screen for CC-BY assets, and facial
+MakeHuman's textured `.mhclo` clothes, a credits screen for CC-BY assets, and facial
 expressions (ENG-F25).

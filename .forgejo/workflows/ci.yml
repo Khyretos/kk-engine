@@ -249,7 +249,8 @@ jobs:
             fi
           done
           # The character creator (docs/HUMANS.md): a random person goes
-          # through a share code and back unchanged, standing on the floor.
+          # through a share code and back unchanged, standing on the floor,
+          # its hairstyle on its head and every random garment on its body.
           set +e
           DISPLAY=:99 SDL_VIDEODRIVER=x11 KKE_TARGET=desktop KKE_CREATOR_SELFTEST=1 timeout 15 ./character_creator > run_creator_selftest.log 2>&1
           set -e

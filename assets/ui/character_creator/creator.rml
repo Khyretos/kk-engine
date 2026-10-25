@@ -20,13 +20,13 @@
             <span class="tab" data-for="t : tabs" data-class-on="tab == t.id" data-event-click="set_tab(t.id)">{{ t.label }}</span>
         </div>
 
-        <div class="tools" data-if="tab != 'skin' && tab != 'hair'">
+        <div class="tools" data-if="tab != 'skin' && tab != 'hair' && tab != 'clothes'">
             <button data-class-on="mirror" data-event-click="toggle_mirror">Mirror sides</button>
             <button data-event-click="randomise('tab')">Random</button>
             <button data-event-click="reset_tab">Reset tab</button>
         </div>
 
-        <div id="sliders" data-if="tab != 'skin' && tab != 'hair'">
+        <div id="sliders" data-if="tab != 'skin' && tab != 'hair' && tab != 'clothes'">
             <div class="slider" data-for="s, i : sliders">
                 <span class="label">{{ s.label }}</span>
                 <input type="range" data-attr-min="s.min" data-attr-max="s.max" step="0.01" data-value="s.value"/>
@@ -58,6 +58,36 @@
                 <span class="value">{{ hair_length | format(2) }}</span>
             </div>
             <p class="note">Every strand grows from this head's own scalp and moves with the engine's hair physics: press Turn to see it swing.</p>
+        </div>
+
+        <div id="clothes" data-if="tab == 'clothes'">
+            <h2>Top</h2>
+            <div class="choices">
+                <span data-for="g : garments"><button data-if="g.slot == 'top'" data-class-on="g.worn" data-event-click="wear(g.id)">{{ g.label }}</button></span>
+            </div>
+            <h2>Bottom</h2>
+            <div class="choices">
+                <span data-for="g : garments"><button data-if="g.slot == 'bottom'" data-class-on="g.worn" data-event-click="wear(g.id)">{{ g.label }}</button></span>
+            </div>
+            <h2>Socks</h2>
+            <div class="choices">
+                <span data-for="g : garments"><button data-if="g.slot == 'socks'" data-class-on="g.worn" data-event-click="wear(g.id)">{{ g.label }}</button></span>
+            </div>
+            <h2>Shoes</h2>
+            <div class="choices">
+                <span data-for="g : garments"><button data-if="g.slot == 'shoes'" data-class-on="g.worn" data-event-click="wear(g.id)">{{ g.label }}</button></span>
+            </div>
+            <h2>{{ cloth_slot_label }}</h2>
+            <div class="choices">
+                <button data-class-on="cloth_slot == 'top'" data-event-click="cloth_slot('top')">Top</button>
+                <button data-class-on="cloth_slot == 'bottom'" data-event-click="cloth_slot('bottom')">Bottom</button>
+                <button data-class-on="cloth_slot == 'socks'" data-event-click="cloth_slot('socks')">Socks</button>
+                <button data-class-on="cloth_slot == 'shoes'" data-event-click="cloth_slot('shoes')">Shoes</button>
+            </div>
+            <div class="swatches">
+                <span class="swatch" data-for="c, i : cloth_swatches" data-style-background-color="c.css" data-event-click="cloth_colour(i)"><span class="tip">{{ c.name }}</span></span>
+            </div>
+            <p class="note">Every garment is cut from shapes the body itself carries, so it fits whatever the sliders do. Skirts are the engine's cloth: press Turn to see them swing. Click a worn garment again to take it off.</p>
         </div>
     </div>
 

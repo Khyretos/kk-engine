@@ -147,10 +147,40 @@ scalp's triangles 2 mm over the skin), so no skin shows between the
 hairs. Turn spins the figure, not the camera, so the hair swings. A
 slider change regrows the hair on the new head once the slider rests.
 
+## Clothes
+
+`kke/HumanClothes.h` cuts clothes from two shapes MakeHuman's base mesh
+carries and every morph target moves along with the skin: a body suit a
+few millimetres over the skin (`helper-tights`) and an ankle-length skirt
+(`helper-skirt`). So a garment is already the size of whatever body the
+sliders made, with no fitting step.
+
+- Fitted garments (T-shirt, tank top, crop top, long sleeve, shorts,
+  trousers, socks, shoes) are the suit's vertices picked by the bone that
+  moves each one and by height: tops end at the waist (the skirt's top),
+  tucked in 3 cm; bottoms start there; socks and shoes by height over the
+  sole. Each is drawn a little further out than the one under it (socks
+  1 mm, bottoms 2, tops 3, shoes 6), so layers never fight.
+- Skirts (tennis skirt, skirt, long skirt: the skirt's top 30%, 55% or
+  all of it) are the engine's cloth (docs/CLOTH.md), pinned at the
+  waistband to the figure and falling against the body collider the hair
+  uses, drawn with the fabric shader.
+
+`garmentShape(pack, shaped, id)` gives a garment's vertices; the creator
+builds a model of the suit's triangles from them (moved with the body on
+every slider drag, like the scalp cap) or a `ClothDesc` from the skirt's
+faces. A slider change re-cuts the clothes once it rests, since socks and
+skirts are cut by height.
+
+These are plain garments in one colour each: MakeHuman's own `.mhclo`
+clothes (with textures) can't be downloaded from here, and are the next
+step for richer outfits.
+
 ## Multiplayer
 
 A character travels as its look (`kke/HumanLook.h`), never as a mesh:
-slider values and colours. `shareCode(look, pack)` packs it into a
+slider values, colours, the hairstyle and the clothes (each a name and a
+colour). `shareCode(look, pack)` packs it into a
 URL-safe string, `kh1.` and base64 of the colours, one bit per slider
 (off its default or not) and a byte per moved slider: about 90 letters for
 a few changes, 250 for a random person. `fromShareCode` reads it back. The
@@ -172,6 +202,6 @@ Saves are JSON (`lookToJson`, `lookFromJson`: format `kk-human`, version
 
 The plan for the whole creator is in the project's "Character creator
 plan" document. In order: animation through retargeting (MakeHuman bone
-names to the engine's canonical ones), skin and eyes, clothes fitted with MakeHuman's `.mhclo` files (each
-clothing vertex rides three body vertices, so clothes fit every body),
+names to the engine's canonical ones), skin and eyes, MakeHuman's textured `.mhclo` clothes (each clothing
+vertex rides three body vertices, so clothes fit every body),
 then facial expressions (ENG-F25).

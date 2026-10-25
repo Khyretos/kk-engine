@@ -2,12 +2,15 @@
 
 #include "kke/Application.h"
 #include "kke/AssetCatalog.h"
+#include "kke/Cloth.h"
 #include "kke/DevTools.h"
 #include "kke/HairRenderer.h"
+#include "kke/HumanClothes.h"
 #include "kke/HumanHair.h"
 #include "kke/Log.h"
 #include "kke/Outfit.h"
 #include "kke/RigidWorld.h"
+#include "kke/SphereImpostors.h"
 #include "kke/modules/OrbitCameraModule.h"
 #include "kke/modules/UiModule.h"
 
@@ -29,6 +32,7 @@
 #include <fstream>
 #include <iterator>
 #include <map>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
@@ -59,6 +63,7 @@ const std::vector<TabDef>& tabDefs() {
         { "ears", "Ears", { "ears" } },
         { "skin", "Skin & eyes", {} },
         { "hair", "Hair", {} },
+        { "clothes", "Clothes", {} },
     };
     return tabs;
 }
@@ -201,6 +206,28 @@ std::string uiRoot() {
 
 } // namespace
 
+// A garment on the figure. Fitted (a T-shirt, shoes): triangles of the
+// body suit's bake, drawn as a model and moved with it on every slider.
+// Cloth (a skirt): a sheet hanging in m_world, drawn every frame from
+// where the solver has it.
+struct CharacterCreatorModule::WornPiece {
+    std::string id;
+    glm::vec3 colour{ 0.9f };
+    float offset = 0.0f;
+    // Fitted.
+    ModelModule::ModelId model = 0;
+    ModelModule::InstanceId instance = 0;
+    std::vector<uint32_t> from; // piece vertex -> body suit bake vertex
+    ModelData data;
+    // Cloth.
+    RigidWorld::ClothId cloth = 0;
+    std::unique_ptr<DynamicMeshRenderer> drawn;
+    Fabric fabric;
+    std::vector<uint32_t> indices;
+    std::vector<glm::vec3> positions, normals;
+    std::vector<Vertex> vertices;
+};
+
 CharacterCreatorModule::CharacterCreatorModule(std::string saveName)
     : m_saveName(std::move(saveName)), m_rng(static_cast<uint32_t>(std::chrono::steady_clock::now().time_since_epoch().count())) {}
 
@@ -235,7 +262,10 @@ void CharacterCreatorModule::init(Application& app) {
     for (const HairColour& c : hairColours())
         m_hairSwatches.push_back({ c.name, cssColour(0.5f * (c.root + c.tip)), c.root.r, c.root.g, c.root.b });
     for (const auto& [id, label] : hairChoices()) m_hairChoices.push_back({ id, label });
+    for (const NamedColour& c : clothColours()) m_clothSwatches.push_back({ c.name, cssColour(c.rgb), c.rgb.r, c.rgb.g, c.rgb.b });
     m_look.hair = "short"; // a new person; a save replaces it
+    m_look.clothes = { { "t-shirt", { 0.92f, 0.92f, 0.9f } }, { "shorts", { 0.16f, 0.18f, 0.24f } },
+                       { "socks", { 0.92f, 0.92f, 0.9f } },   { "shoes", { 0.92f, 0.92f, 0.9f } } };
 
     buildModel();
     loadDocument();
@@ -244,6 +274,7 @@ void CharacterCreatorModule::init(Application& app) {
     // A save from last time, if there is one.
     if (std::filesystem::exists(savePath())) load();
     m_hairDirty = true;
+    m_clothesDirty = true;
     fillSliders();
     setView("body");
     if (const char* tab = dev::env("KKE_CREATOR_TAB")) {
@@ -254,6 +285,12 @@ void CharacterCreatorModule::init(Application& app) {
     if (const char* hair = dev::env("KKE_CREATOR_HAIR")) { // screenshots and CI: "long", "afro", "" = none
         m_look.hair = hair;
         fillSliders();
+    }
+    if (const char* clothes = dev::env("KKE_CREATOR_CLOTHES")) { // "t-shirt,tennis skirt,shoes", "" = none
+        m_look.clothes.clear();
+        std::stringstream list(clothes);
+        for (std::string id; std::getline(list, id, ',');)
+            if (!id.empty()) wear(id);
     }
     if (dev::env("KKE_CREATOR_TURN")) m_turntable = true;
     open();
@@ -294,6 +331,17 @@ void CharacterCreatorModule::buildModel() {
     c.Bind("hair_swatches", &m_hairSwatches);
     c.Bind("hair_style", &m_hairStyle);
     c.Bind("hair_length", &m_hairLength);
+    if (auto g = c.RegisterStruct<GarmentView>()) {
+        g.RegisterMember("id", &GarmentView::id);
+        g.RegisterMember("label", &GarmentView::label);
+        g.RegisterMember("slot", &GarmentView::slot);
+        g.RegisterMember("worn", &GarmentView::worn);
+    }
+    c.RegisterArray<std::vector<GarmentView>>();
+    c.Bind("garments", &m_garments);
+    c.Bind("cloth_swatches", &m_clothSwatches);
+    c.Bind("cloth_slot", &m_clothSlot);
+    c.Bind("cloth_slot_label", &m_clothSlotLabel);
     c.Bind("mirror", &m_mirror);
     c.Bind("turntable", &m_turntable);
     c.Bind("code", &m_codeShort);
@@ -330,6 +378,21 @@ void CharacterCreatorModule::buildModel() {
         m_look.hairRoot = hairColours()[static_cast<size_t>(i)].root;
         m_look.hairTip = hairColours()[static_cast<size_t>(i)].tip;
         buildHair();
+    });
+    c.BindEventCallback("wear", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList& args) {
+        if (!args.empty()) wear(args[0].Get<Rml::String>());
+    });
+    c.BindEventCallback("cloth_slot", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList& args) {
+        if (!args.empty()) m_clothSlot = args[0].Get<Rml::String>();
+        fillClothes();
+    });
+    c.BindEventCallback("cloth_colour", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList& args) {
+        const int i = args.empty() ? -1 : args[0].Get<int>();
+        if (i < 0 || i >= static_cast<int>(m_clothSwatches.size())) return;
+        const glm::vec3 c{ m_clothSwatches[i].r, m_clothSwatches[i].g, m_clothSwatches[i].b };
+        for (HumanLook::Worn& w : m_look.clothes)
+            if (const GarmentInfo* g = findGarment(w.id); g && g->slot == m_clothSlot) w.colour = c;
+        applyColours(); // no new fitting: only the dye
     });
     c.BindEventCallback("skin", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList& args) {
         const int i = args.empty() ? -1 : args[0].Get<int>();
@@ -421,6 +484,10 @@ void CharacterCreatorModule::spawnBody() {
     parts.groups = { "helper-l-eye", "helper-r-eye", "helper-upper-teeth", "helper-lower-teeth", "helper-tongue" };
     parts.skeleton = false;
     m_partsBake = m_human->bake(parts);
+    Human::BakeOptions suit;
+    suit.groups = { "helper-tights" };
+    suit.skeleton = false;
+    m_tightsBake = m_human->bake(suit);
     const ModelModule::ModelId bodyModel = m_models->add(m_bodyBake.model, "character_creator/body");
     const ModelModule::ModelId partsModel = m_models->add(m_partsBake.model, "character_creator/parts");
     m_body = m_models->spawn(bodyModel);
@@ -466,6 +533,11 @@ void CharacterCreatorModule::spawnBody() {
 
 void CharacterCreatorModule::applyColours() {
     if (m_body) m_models->setTint(m_body, m_look.skin);
+    for (auto& w : m_worn) {
+        for (const HumanLook::Worn& worn : m_look.clothes)
+            if (worn.id == w->id) w->colour = w->fabric.color = worn.colour;
+        if (w->instance) m_models->setTint(w->instance, w->colour);
+    }
     if (m_cap) {
         m_models->setVisible(m_cap, !m_look.hair.empty());
         m_models->setTint(m_cap, glm::mix(m_look.skin, m_look.hairRoot, 0.95f));
@@ -491,7 +563,7 @@ void CharacterCreatorModule::moveCap() {
 }
 
 void CharacterCreatorModule::reshape() {
-    for (Human::Bake* bake : { &m_bodyBake, &m_partsBake }) m_human->reshape(*bake);
+    for (Human::Bake* bake : { &m_bodyBake, &m_partsBake, &m_tightsBake }) m_human->reshape(*bake);
     for (auto [bake, inst] : { std::pair{ &m_bodyBake, m_body }, std::pair{ &m_partsBake, m_parts } }) {
         std::vector<std::vector<glm::vec3>> pos, nrm;
         for (const ModelMesh& mesh : bake->model.meshes) {
@@ -505,6 +577,7 @@ void CharacterCreatorModule::reshape() {
         m_models->setDeformedVertices(inst, pos, nrm, /*modelSpace=*/true);
     }
     moveCap();
+    moveClothes();
     m_code = shareCode();
     m_codeShort = m_code.size() > 40 ? m_code.substr(0, 36) + "... (" + std::to_string(m_code.size()) + " letters)" : m_code;
     m_handle.DirtyVariable("code");
@@ -540,6 +613,7 @@ void CharacterCreatorModule::fillSliders() {
     m_handle.DirtyVariable("tab");
     m_handle.DirtyVariable("hair_style");
     m_handle.DirtyVariable("hair_length");
+    fillClothes();
 }
 
 void CharacterCreatorModule::pushUndo() {
@@ -608,6 +682,18 @@ void CharacterCreatorModule::randomise(bool everything) {
             m_look.hairTip = c.tip;
             m_look.hairLength = std::clamp(1.0f + n(m_rng) * 0.15f, 0.7f, 1.3f);
             m_hairDirty = true;
+            // An outfit: a top and a bottom nearly always, socks and shoes mostly.
+            m_look.clothes.clear();
+            const auto& cloth = clothColours();
+            for (const char* slot : { "top", "bottom", "socks", "shoes" }) {
+                std::vector<const GarmentInfo*> in;
+                for (const GarmentInfo& g : garments())
+                    if (g.slot == slot) in.push_back(&g);
+                if (in.empty() || u(m_rng) > (std::string(slot) == "socks" ? 0.7f : 0.95f)) continue;
+                const GarmentInfo* g = in[std::uniform_int_distribution<size_t>(0, in.size() - 1)(m_rng)];
+                m_look.clothes.push_back({ g->id, cloth[std::uniform_int_distribution<size_t>(0, cloth.size() - 1)(m_rng)].rgb });
+            }
+            m_clothesDirty = true;
         }
     }
     m_shapeDirty = true;
@@ -647,6 +733,7 @@ void CharacterCreatorModule::update(const UpdateContext& ctx) {
     if (m_shapeDirty) {
         m_shapeDirty = false;
         m_hairDirty = true; // roots on the new scalp, once the sliders rest
+        m_clothesDirty = true; // socks and skirts are cut by height
         reshape();
         // A new person (random, undo, load) may be a head taller: frame it
         // again. Not while a slider is dragged, so the camera holds still.
@@ -670,11 +757,27 @@ void CharacterCreatorModule::update(const UpdateContext& ctx) {
         // Every guide asked for: a plaited style has only a row or braid each
         // (cornrows 6-14), so a fixed count failed whenever one came up.
         const bool hair = m_look.hair.empty() || (m_hair && m_hairRoots > 0 && m_world->hairStats(m_hair).guides >= m_hairRoots);
-        log::get(name())->info("creator self-test {} (code {}, floor {}, hair '{}' {})", same && floor && hair ? "passed" : "FAILED",
-                               same ? "round-trips" : "differs", floor ? "ok" : "off", m_look.hair, hair ? "ok" : "missing");
+        dressUp(); // and every random garment on the random body
+        bool dressed = m_worn.size() == m_look.clothes.size();
+        std::string clothes;
+        for (const auto& w : m_worn) {
+            dressed = dressed && (w->cloth ? m_world->clothStats(w->cloth).triangles > 20 : w->instance != 0);
+            clothes += (clothes.empty() ? "" : ", ") + w->id;
+        }
+        log::get(name())->info("creator self-test {} (code {}, floor {}, hair '{}' {}, clothes '{}' {})",
+                               same && floor && hair && dressed ? "passed" : "FAILED", same ? "round-trips" : "differs",
+                               floor ? "ok" : "off", m_look.hair, hair ? "ok" : "missing", clothes, dressed ? "ok" : "missing");
     }
     if (m_hairDirty && m_sinceEdit > 0.35f) buildHair();
+    if (m_clothesDirty && m_sinceEdit > 0.35f) dressUp(); // after the hair: on the new body collider
     if (m_hair && m_hairDrawn && m_world->hairPositions(m_hair, m_guides)) m_hairDrawn->update(m_guides, m_figure);
+    for (auto& w : m_worn) {
+        if (!w->cloth || !w->drawn || !m_world->clothPositions(w->cloth, w->positions)) continue;
+        clothNormals(w->positions, w->indices, w->normals);
+        w->vertices.resize(w->positions.size());
+        for (size_t i = 0; i < w->positions.size(); ++i) w->vertices[i] = Vertex{ w->positions[i], w->fabric.color, w->normals[i] };
+        w->drawn->upload(w->vertices, w->indices);
+    }
     if (!m_status.empty() && (m_statusTime -= ctx.dt) <= 0.0f) {
         m_status.clear();
         m_handle.DirtyVariable("status");
@@ -715,6 +818,8 @@ void CharacterCreatorModule::open() {
     if (m_doc) m_doc->Show();
     if (m_body) m_models->setVisible(m_body, true);
     if (m_parts) m_models->setVisible(m_parts, true);
+    for (auto& w : m_worn)
+        if (w->instance) m_models->setVisible(w->instance, true);
 }
 
 void CharacterCreatorModule::close() {
@@ -722,6 +827,8 @@ void CharacterCreatorModule::close() {
     if (m_doc) m_doc->Hide();
     if (m_body) m_models->setVisible(m_body, false);
     if (m_parts) m_models->setVisible(m_parts, false);
+    for (auto& w : m_worn)
+        if (w->instance) m_models->setVisible(w->instance, false);
 }
 
 HumanLook CharacterCreatorModule::look() const {
@@ -742,6 +849,7 @@ void CharacterCreatorModule::setLook(const HumanLook& look) {
     applyColours();
     m_shapeDirty = true;
     m_hairDirty = true;
+    m_clothesDirty = true;
     fillSliders();
 }
 
@@ -785,6 +893,7 @@ void CharacterCreatorModule::load() {
 
 void CharacterCreatorModule::shutdown() {
     if (m_hairDrawn) m_app->renderer().retire(std::move(m_hairDrawn));
+    undress();
     m_world.reset();
     if (m_doc) {
         m_doc->Close();
@@ -840,11 +949,180 @@ void CharacterCreatorModule::buildHair() {
     m_hairDrawn->build(d);
 }
 
+void CharacterCreatorModule::undress() {
+    for (auto& w : m_worn) {
+        if (w->instance) m_models->remove(w->instance);
+        if (w->model) m_models->unload(w->model);
+        if (w->cloth && m_world) m_world->removeCloth(w->cloth);
+        if (w->drawn) m_app->renderer().retire(std::move(w->drawn));
+    }
+    m_worn.clear();
+}
+
+void CharacterCreatorModule::dressUp() {
+    m_clothesDirty = false;
+    undress();
+    const std::vector<glm::vec3> shaped = m_human->shapedPositions();
+    const ModelMesh* suit = m_tightsBake.model.meshes.empty() ? nullptr : &m_tightsBake.model.meshes[0];
+    for (const HumanLook::Worn& worn : m_look.clothes) {
+        const GarmentShape shape = garmentShape(*m_pack, shaped, worn.id);
+        if (shape.verts.empty()) {
+            log::get(name())->warn("clothes: no garment '{}' (kke::garments())", worn.id);
+            continue;
+        }
+        auto w = std::make_unique<WornPiece>();
+        w->id = worn.id;
+        w->colour = worn.colour;
+        w->offset = shape.offset;
+        const std::set<uint32_t> in(shape.verts.begin(), shape.verts.end());
+
+        if (shape.cloth) {
+            if (!m_world) continue;
+            // The skirt's faces whose four corners are in it, as triangles,
+            // where the figure stands now; the waistband pinned to the figure.
+            const int g = m_pack->findGroup(shape.group);
+            if (g < 0) continue;
+            std::map<uint32_t, uint32_t> index;
+            ClothDesc d;
+            auto vertex = [&](uint32_t v) {
+                auto [it, added] = index.emplace(v, static_cast<uint32_t>(d.mesh.positions.size()));
+                if (added) d.mesh.positions.push_back(glm::vec3(m_figure * glm::vec4(shaped[v], 1.0f)));
+                return it->second;
+            };
+            const HumanGroup& group = m_pack->groups()[static_cast<size_t>(g)];
+            for (uint32_t f = group.firstFace; f < group.firstFace + group.faceCount; ++f) {
+                const auto& q = m_pack->quads()[f].verts;
+                if (!in.count(q[0]) || !in.count(q[1]) || !in.count(q[2]) || !in.count(q[3])) continue;
+                const uint32_t a = vertex(q[0]), b = vertex(q[1]), c = vertex(q[2]), e = vertex(q[3]);
+                d.mesh.indices.insert(d.mesh.indices.end(), { a, b, c });
+                if (q[3] != q[2]) d.mesh.indices.insert(d.mesh.indices.end(), { a, c, e });
+            }
+            for (uint32_t v : shape.pinned)
+                if (auto it = index.find(v); it != index.end()) d.pinned.push_back(it->second);
+            if (d.mesh.indices.empty() || d.pinned.empty()) continue;
+            // Cloth coordinates for the weave: round the skirt and down it.
+            for (const glm::vec3& p : d.mesh.positions) {
+                const glm::vec3 local = glm::vec3(glm::inverse(m_figure) * glm::vec4(p, 1.0f));
+                d.mesh.uvs.emplace_back(std::atan2(local.x, local.z) * 0.15f, -local.y);
+            }
+            d.fabric = clothFabric("cotton");
+            d.fabric.color = worn.colour;
+            d.fabric.thickness = 0.004f; // over the hips without a gap
+            d.protection = ClothProtection::Basic; // one layer: the body is what it must not go through
+            d.bindPose = { m_figure };
+            d.wind = 0.0f;
+            w->fabric = d.fabric;
+            w->indices = d.mesh.indices;
+            w->cloth = m_world->addCloth(d);
+            m_world->setClothJoints(w->cloth, { m_figure });
+            w->drawn = std::make_unique<DynamicMeshRenderer>(*m_app);
+        } else if (suit) {
+            // The body suit's triangles that are all this garment.
+            const std::vector<uint32_t>& source = m_tightsBake.sourceVertex[0];
+            ModelMesh mesh;
+            mesh.name = worn.id;
+            std::map<uint32_t, uint32_t> index;
+            for (size_t t = 0; t + 2 < suit->indices.size(); t += 3) {
+                const uint32_t a = suit->indices[t], b = suit->indices[t + 1], c = suit->indices[t + 2];
+                if (!in.count(source[a]) || !in.count(source[b]) || !in.count(source[c])) continue;
+                for (uint32_t v : { a, b, c }) {
+                    auto [it, added] = index.emplace(v, static_cast<uint32_t>(w->from.size()));
+                    if (added) {
+                        w->from.push_back(v);
+                        mesh.vertices.push_back(suit->vertices[v]);
+                    }
+                    mesh.indices.push_back(it->second);
+                }
+            }
+            if (mesh.indices.empty()) continue;
+            w->data.meshes.push_back(std::move(mesh));
+            ModelMaterial m;
+            m.name = worn.id;
+            m.roughness = worn.id == "shoes" ? 0.5f : 0.85f;
+            w->data.materials.push_back(m);
+            // Bounds for culling: the whole body's, since the sliders move it.
+            w->data.boundsMin = m_bodyBake.model.boundsMin - glm::vec3(0.2f);
+            w->data.boundsMax = m_bodyBake.model.boundsMax + glm::vec3(0.2f);
+            m_worn.push_back(std::move(w));
+            WornPiece& piece = *m_worn.back();
+            moveClothes(); // onto the body, offset over the skin
+            piece.model = m_models->add(piece.data, "character_creator/garment/" + std::to_string(++m_garmentSerial), /*transient=*/true);
+            piece.instance = m_models->spawn(piece.model, m_figure);
+            m_models->setTint(piece.instance, piece.colour);
+            m_models->setVisible(piece.instance, m_open);
+            continue;
+        }
+        m_worn.push_back(std::move(w));
+    }
+    moveClothes();
+}
+
+void CharacterCreatorModule::moveClothes() {
+    if (m_tightsBake.model.meshes.empty()) return;
+    const ModelMesh& suit = m_tightsBake.model.meshes[0];
+    for (auto& w : m_worn) {
+        if (w->data.meshes.empty()) continue;
+        ModelMesh& mesh = w->data.meshes[0];
+        for (size_t i = 0; i < w->from.size(); ++i) {
+            const ModelVertex& v = suit.vertices[w->from[i]];
+            mesh.vertices[i].position = v.position + v.normal * w->offset;
+            mesh.vertices[i].normal = v.normal;
+        }
+        if (!w->instance) continue;
+        std::vector<std::vector<glm::vec3>> pos(1), nrm(1);
+        for (const ModelVertex& v : mesh.vertices) {
+            pos[0].push_back(v.position);
+            nrm[0].push_back(v.normal);
+        }
+        m_models->setDeformedVertices(w->instance, pos, nrm, /*modelSpace=*/true);
+    }
+}
+
+void CharacterCreatorModule::wear(const std::string& id) {
+    const GarmentInfo* g = findGarment(id);
+    if (!g) return;
+    auto& clothes = m_look.clothes;
+    const bool wasOn = std::any_of(clothes.begin(), clothes.end(), [&](const HumanLook::Worn& w) { return w.id == id; });
+    glm::vec3 colour = g->slot == "top"    ? glm::vec3(0.35f, 0.65f, 1.0f)  // Sky
+                       : g->slot == "bottom" ? glm::vec3(0.16f, 0.18f, 0.24f) // Night
+                                             : glm::vec3(0.92f, 0.92f, 0.9f); // Snow
+    for (const HumanLook::Worn& w : clothes) // a new skirt keeps the old shorts' colour
+        if (const GarmentInfo* o = findGarment(w.id); o && o->slot == g->slot) colour = w.colour;
+    clothes.erase(std::remove_if(clothes.begin(), clothes.end(),
+                                 [&](const HumanLook::Worn& w) {
+                                     const GarmentInfo* o = findGarment(w.id);
+                                     return !o || o->slot == g->slot;
+                                 }),
+                  clothes.end());
+    if (!wasOn) clothes.push_back({ id, colour });
+    m_clothSlot = g->slot;
+    m_clothesDirty = true;
+    m_sinceEdit = 1e9f; // a click: dress now
+    fillClothes();
+}
+
+void CharacterCreatorModule::fillClothes() {
+    m_garments.clear();
+    for (const GarmentInfo& g : garments()) {
+        GarmentView v{ g.id, g.label, g.slot };
+        v.worn = std::any_of(m_look.clothes.begin(), m_look.clothes.end(), [&](const HumanLook::Worn& w) { return w.id == g.id; });
+        m_garments.push_back(std::move(v));
+    }
+    m_clothSlotLabel = "Colour: nothing worn on this slot";
+    for (const HumanLook::Worn& w : m_look.clothes)
+        if (const GarmentInfo* g = findGarment(w.id); g && g->slot == m_clothSlot) m_clothSlotLabel = "Colour: " + g->label;
+    m_handle.DirtyVariable("garments");
+    m_handle.DirtyVariable("cloth_slot");
+    m_handle.DirtyVariable("cloth_slot_label");
+}
+
 void CharacterCreatorModule::placeFigure() {
     m_figure = glm::rotate(glm::mat4(1.0f), m_yaw, glm::vec3(0, 1, 0));
     if (m_body) m_models->setTransform(m_body, m_figure);
     if (m_parts) m_models->setTransform(m_parts, m_figure);
     if (m_cap) m_models->setTransform(m_cap, m_figure);
+    for (auto& w : m_worn)
+        if (w->instance) m_models->setTransform(w->instance, m_figure);
 }
 
 void CharacterCreatorModule::fixedUpdate(const FixedUpdateContext& ctx) {
@@ -855,6 +1133,8 @@ void CharacterCreatorModule::fixedUpdate(const FixedUpdateContext& ctx) {
     if (m_bodyCollider != RigidWorld::kNoBody && before != m_figure)
         m_world->setTransform(m_bodyCollider, glm::vec3(0.0f), glm::angleAxis(m_yaw, glm::vec3(0, 1, 0)));
     if (m_hair) m_world->setHairJoint(m_hair, m_figure);
+    for (auto& w : m_worn)
+        if (w->cloth) m_world->setClothJoints(w->cloth, { m_figure });
     m_world->step(ctx.fixedDt);
 }
 
@@ -864,10 +1144,16 @@ void CharacterCreatorModule::compute(VkCommandBuffer cmd) {
 
 void CharacterCreatorModule::render(const RenderContext& ctx) {
     if (m_hairDrawn && m_hair && m_open) m_hairDrawn->draw(ctx);
+    if (m_open)
+        for (auto& w : m_worn)
+            if (w->drawn && !w->positions.empty()) w->drawn->drawCloth(ctx, w->fabric);
 }
 
 void CharacterCreatorModule::renderShadow(const ShadowRenderContext& ctx) {
     if (m_hairDrawn && m_hair && m_open) m_hairDrawn->drawShadow(ctx, -m_app->lighting().lights[0].direction);
+    if (m_open)
+        for (auto& w : m_worn)
+            if (w->drawn && !w->positions.empty()) w->drawn->drawShadow(ctx);
 }
 
 } // namespace kke

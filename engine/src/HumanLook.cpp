@@ -99,6 +99,8 @@ std::string lookToJson(const HumanLook& look) {
     j["eyes"] = { { "iris", colourJson(look.eyes) } };
     j["hair"] = { { "style", look.hair }, { "length", look.hairLength }, { "root", colourJson(look.hairRoot) },
                   { "tip", colourJson(look.hairTip) } };
+    j["clothes"] = nlohmann::json::array();
+    for (const HumanLook::Worn& w : look.clothes) j["clothes"].push_back({ { "id", w.id }, { "colour", colourJson(w.colour) } });
     return j.dump(2) + "\n";
 }
 
@@ -123,6 +125,13 @@ bool lookFromJson(const std::string& text, HumanLook& look, std::string* error) 
         if (h->contains("root")) colourFrom((*h)["root"], out.hairRoot);
         if (h->contains("tip")) colourFrom((*h)["tip"], out.hairTip);
     }
+    if (auto c = j.find("clothes"); c != j.end() && c->is_array())
+        for (const auto& w : *c) {
+            if (!w.is_object() || !w.contains("id") || !w["id"].is_string()) continue;
+            HumanLook::Worn worn{ w["id"].get<std::string>() };
+            if (w.contains("colour")) colourFrom(w["colour"], worn.colour);
+            out.clothes.push_back(std::move(worn));
+        }
     look = std::move(out);
     return true;
 }
@@ -164,6 +173,15 @@ std::string shareCode(const HumanLook& look, const HumanPack& pack) {
     const std::string hair = look.hair.substr(0, 32);
     b.push_back(static_cast<uint8_t>(hair.size()));
     b.insert(b.end(), hair.begin(), hair.end());
+    // Clothes: how many, then each one's id (its length first) and colour.
+    const size_t worn = std::min<size_t>(look.clothes.size(), 16);
+    b.push_back(static_cast<uint8_t>(worn));
+    for (size_t i = 0; i < worn; ++i) {
+        const std::string id = look.clothes[i].id.substr(0, 32);
+        b.push_back(static_cast<uint8_t>(id.size()));
+        b.insert(b.end(), id.begin(), id.end());
+        for (int k = 0; k < 3; ++k) b.push_back(colourByte(look.clothes[i].colour[k]));
+    }
     // Which sliders are off their default, one bit each in the pack's
     // order, then their values: a typical person is about 200 letters.
     const size_t n = pack.modifiers().size();
@@ -203,6 +221,17 @@ bool fromShareCode(const std::string& code, const HumanPack& pack, HumanLook& lo
     const size_t hairLen = b[p - 1];
     if (!take(hairLen)) return fail("the code is cut short");
     out.hair.assign(b.begin() + static_cast<long>(p - hairLen), b.begin() + static_cast<long>(p));
+    if (!take(1)) return fail("the code is cut short");
+    const size_t worn = b[p - 1];
+    for (size_t i = 0; i < worn; ++i) {
+        if (!take(1)) return fail("the code is cut short");
+        const size_t len = b[p - 1];
+        if (!take(len + 3)) return fail("the code is cut short");
+        HumanLook::Worn w;
+        w.id.assign(b.begin() + static_cast<long>(p - 3 - len), b.begin() + static_cast<long>(p - 3));
+        for (int k = 0; k < 3; ++k) w.colour[k] = b[p - 3 + static_cast<size_t>(k)] / 255.0f;
+        out.clothes.push_back(std::move(w));
+    }
     const size_t n = pack.modifiers().size();
     if (!take((n + 7) / 8)) return fail("the code is cut short");
     const size_t bits = p - (n + 7) / 8;

@@ -70,4 +70,5 @@ scrollbarvertical sliderarrowdec, scrollbarvertical sliderarrowinc { height: 0; 
 }
 #code { position: absolute; left: 20dp; bottom: 18dp; right: 470dp; color: #a39cbc; font-size: 11dp; }
 .choices button { margin: 0 6dp 6dp 0; }
+#clothes h2 { margin-top: 8dp; }
 #hair .slider input.range { width: 220dp; }
