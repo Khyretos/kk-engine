@@ -10,6 +10,7 @@
 #include "kke/ScriptStore.h"
 #include "kke/ScriptTables.h"
 #include "kke/ScriptVM.h"
+#include "kke/ai/AiWorld.h"
 #include "kke/ai/NavMesh.h"
 #include "kke/modules/ModelModule.h"
 
@@ -132,6 +133,9 @@ public:
     ScriptTerrain* terrain() { return m_terrain.get(); }
     // The navmesh nav.build made (null before it), for a game's own C++ (an AiWorld).
     ai::NavMesh* navMesh() { return m_nav.get(); }
+    // ai.*'s creatures (docs/SCRIPTING.md "Creatures"): a game's C++ adds its
+    // player here as an actor (AiWorld::addActor / setTransform) so they see it.
+    ai::AiWorld& aiWorld() { return *m_ai; }
 
     // Whether a script file runs on this machine right now (realms above).
     static bool runsHere(const std::string& path, bool authority);
@@ -160,6 +164,9 @@ private:
     void bindStore();
     void bindAudio(); // audio.sound/play/music/bus/duck (ScriptBindings.cpp)
     void bindNav(); // nav.* pathfinding (ScriptBindings.cpp)
+    void bindCreatures();  // ai.* over script-spawned models (ScriptBindings.cpp)
+    void stepCreatures(float dt); // moves them, plays their clips, runs the ai hooks
+    void forgetCreature(uint32_t instance);
     // Multiplayer copies of what sv_ scripts spawn (ScriptReplication.cpp).
     void bindReplication();
     void syncNetRole();                    // hosting / joining / leaving changed what's replicated
@@ -211,6 +218,9 @@ private:
     struct NavObstacle { ai::NavMesh::ObstacleId id; std::string source; };
     std::vector<NavObstacle> m_navObstacles;
     uint32_t m_navRandom = 0x9E3779B9u;         // nav.random's sequence
+    std::unique_ptr<ai::AiWorld> m_ai = std::make_unique<ai::AiWorld>(1);
+    struct CreatureClips { std::unordered_map<std::string, int> byAnim; std::string playing; };
+    std::unordered_map<uint32_t, CreatureClips> m_creatureClips; // ai.anims, by model instance
     ScriptLights m_lights; // light.*: lamps scripts placed (kke/ScriptLights.h)
     std::unique_ptr<ScriptTerrain> m_terrain; // terrain.*
     // fx.*: one particle pool and library for every script, made on first use.

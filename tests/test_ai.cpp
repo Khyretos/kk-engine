@@ -441,6 +441,10 @@ TEST(AiWorld, OrdersWinAndReportArrival) {
         for (AiEvent& e : w.takeEvents()) events.push_back(e);
     }
     EXPECT_TRUE(hasEvent(events, AiEvent::Kind::Arrived, 50));
+    // Once, not every frame until the next think picks up the Hold.
+    EXPECT_EQ(std::count_if(events.begin(), events.end(),
+                            [](const AiEvent& e) { return e.kind == AiEvent::Kind::Arrived && e.who == 50; }),
+              1);
     EXPECT_LT(flatDist(w.agent(50)->position, { 8, 0, 0 }), 1.2f);
     EXPECT_EQ(w.agent(50)->order.kind, Order::Kind::Hold);
     // Follow: keeps near the farmer as they walk off.
@@ -460,6 +464,12 @@ TEST(AiWorld, OrdersWinAndReportArrival) {
     }
     EXPECT_TRUE(hasEvent(events, AiEvent::Kind::Arrived, 50, 60)) << w.describe(50);
     EXPECT_EQ(w.agent(50)->order.kind, Order::Kind::None);
+    events.clear();
+    for (int i = 0; i < 60; ++i) {
+        w.update(1.0f / 30.0f);
+        for (AiEvent& e : w.takeEvents()) events.push_back(e);
+    }
+    EXPECT_FALSE(hasEvent(events, AiEvent::Kind::Arrived, 50)); // fired once only
 }
 
 TEST(AiWorld, FollowersKeepOutOfTheLeadersWay) {

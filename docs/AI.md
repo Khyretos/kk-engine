@@ -212,6 +212,10 @@ hills.
 
 `kke::ai::bindAi(vm, world, locate)` binds `ai.*` (`kke/ai/AiScript.h`),
 and `fireAiEvents(vm, world.takeEvents())` runs the hooks.
+Every Lua game has them: `ScriptModule` keeps one `AiWorld` (`aiWorld()`)
+whose agents are the script's models, walking the `nav.build` navmesh and
+playing their clips (docs/SCRIPTING.md "Creatures": `ai.anims`,
+`ai.actor`).
 
 ```lua
 ai.add(me, "sheep")                        -- give a thing a mind
@@ -300,8 +304,6 @@ use a uniform grid (`SpatialGrid`).
 
 - Learning from rewards (reinforcement learning). Teaching by example
   (above) is built.
-- Off-mesh links for jumps and ladders, per-area costs (mud, water). Lua
-  scripts build and query navmeshes with `nav.*` (docs/SCRIPTING.md
-  "Finding the way"); `ai.*` agents for Lua games are next.
+- Off-mesh links for jumps and ladders, per-area costs (mud, water).
 - Crowds of hundreds on one path (DetourCrowd is compiled in; steering and
   separation handle a farm's worth today).

@@ -22,6 +22,7 @@
 #include "kke/net/ScriptSpawns.h"
 #include "kke/RmlTextSafety.h"
 #include "kke/modules/AudioModule.h"
+#include "kke/ai/AiScript.h"
 #include "kke/modules/ModelModule.h"
 #include "kke/modules/UiModule.h"
 #if KKE_ENABLE_FEMFX
@@ -215,8 +216,16 @@ void ScriptModule::bindModels() {
                                              lua_istable(L, 4) ? ScriptVM::toVec3(L, 4, glm::vec3(1.0f)) : glm::vec3(float(luaL_optnumber(L, 4, 1.0)))));
         return 0;
     });
+    // models.position(inst) -> pos, yaw (degrees): where it is now (an ai.* creature moves itself).
+    vm.registerFunction("models", "position", [models, owned](lua_State* L) {
+        const glm::mat4 t = models->transform(owned(L, 1, "models.position"));
+        ScriptVM::pushVec3(L, glm::vec3(t[3]));
+        lua_pushnumber(L, glm::degrees(std::atan2(t[2].x, t[2].z)));
+        return 2;
+    });
     vm.registerFunction("models", "remove", [this, models, owned](lua_State* L) {
         const auto inst = owned(L, 1, "models.remove");
+        forgetCreature(inst);
         models->remove(inst);
         m_models.erase(std::remove_if(m_models.begin(), m_models.end(), [&](const ModelInstance& m) { return m.id == inst; }), m_models.end());
         return 0;
@@ -1179,12 +1188,14 @@ void ScriptModule::bindNav() {
         const bool ok = tris > 0 && (dynamic ? mesh->buildDynamic(v, idx, s, d, &error) : mesh->build(v, idx, s, &error));
         if (!ok) {
             m_nav.reset();
+            m_ai->setNavMesh(nullptr);
             lua_pushnil(L);
             lua_pushstring(L, tris == 0 ? "nothing to walk on: the level has no static bodies" : error.c_str());
             return 2;
         }
         const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
         m_nav = std::move(mesh);
+        m_ai->setNavMesh(m_nav.get());
         m_navSource = m_vm->currentSource();
         lua_pushboolean(L, 1);
         lua_createtable(L, 0, 4);
@@ -1310,6 +1321,122 @@ void ScriptModule::bindNav() {
     });
 }
 
+// ---------------------------------------------------------------- ai.* (creatures on script models)
+void ScriptModule::bindCreatures() {
+    auto* models = m_app->getModule<ModelModule>();
+    // A thing is a model a script spawned (models.spawn), or an actor (ai.actor).
+    ai::bindAi(*m_vm, *m_ai, [this, models](uint32_t thing, glm::vec3& at) {
+        if (!models) return false;
+        for (const ModelInstance& m : m_models)
+            if (m.id == thing) {
+                at = glm::vec3(models->transform(m.id)[3]);
+                return true;
+            }
+        return false;
+    });
+#if KKE_ENABLE_JOLT
+    if (auto* rbm = m_app->getModule<RigidBodyModule>()) {
+        const RigidWorld* world = &rbm->world();
+        auto level = [](RigidWorld::BodyId, RigidWorld::Motion m) { return m == RigidWorld::Motion::Static; };
+        // Off a navmesh, creatures stand on the level's ground ...
+        m_ai->groundHeight = [world, level](float x, float z, float& y) {
+            const RigidWorld::RayHit h = world->raycast({ x, y + 1.5f, z }, { 0, -1, 0 }, 30.0f, level);
+            if (!h.hit) return false;
+            y = h.point.y;
+            return true;
+        };
+        // ... and walls hide what's behind them.
+        m_ai->lineOfSight = [world, level](const glm::vec3& from, const glm::vec3& to) {
+            const glm::vec3 d = to - from;
+            const float len = glm::length(d);
+            if (len < 1e-3f) return true;
+            return !world->raycast(from, d / len, len, level).hit;
+        };
+    }
+#endif
+    ScriptVM& vm = *m_vm;
+    // ai.actor(id, pos [, species = "farmer"] [, velocity]): something creatures see but
+    // don't steer (the player, a car); call it every frame as it moves.
+    // Use ids of your own above 1000000, clear of model ids.
+    vm.registerFunction("ai", "actor", [this](lua_State* L) {
+        const lua_Integer id = luaL_checkinteger(L, 1);
+        if (id < 1000000 || id > 0x7fffffff) return luaL_error(L, "ai.actor: an actor's id is a number from 1000000 up (clear of model ids)");
+        const glm::vec3 pos = ScriptVM::toVec3(L, 2);
+        const glm::vec3 vel = lua_isnoneornil(L, 4) ? glm::vec3(0.0f) : ScriptVM::toVec3(L, 4);
+        if (!m_ai->has(uint32_t(id))) {
+            const std::string species = luaL_optstring(L, 3, "farmer");
+            if (!m_ai->addActor(uint32_t(id), species, pos)) return luaL_error(L, "ai.actor: '%s' isn't a species (ai.species())", species.c_str());
+        }
+        const float yaw = glm::length(glm::vec2(vel.x, vel.z)) > 0.05f ? glm::degrees(std::atan2(vel.x, vel.z)) : 0.0f;
+        m_ai->setTransform(uint32_t(id), pos, vel, yaw);
+        return 0;
+    });
+    // ai.anims(thing, { idle = "Idle", walk = "Walk", run = "Run", attack = "Punch", ... }):
+    // the model's clips for what the creature does. Anything left out plays
+    // the nearest one given (run -> walk -> idle).
+    vm.registerFunction("ai", "anims", [this, models](lua_State* L) {
+        const auto inst = uint32_t(checkId(L, 1, "ai.anims"));
+        luaL_checktype(L, 2, LUA_TTABLE);
+        const ModelData* d = nullptr;
+        for (const ModelInstance& m : m_models)
+            if (m.id == inst && models) d = models->model(models->instanceModel(inst));
+        if (!d) return luaL_error(L, "ai.anims: %d is not a model spawned by a script", int(inst));
+        CreatureClips c;
+        lua_pushnil(L);
+        while (lua_next(L, 2)) {
+            if (lua_type(L, -2) == LUA_TSTRING && lua_type(L, -1) == LUA_TSTRING) {
+                const std::string want = lua_tostring(L, -1);
+                int clip = -1;
+                for (size_t k = 0; k < d->animations.size(); ++k)
+                    if (d->animations[k].name == want) clip = int(k);
+                if (clip < 0) return luaL_error(L, "ai.anims: the model has no clip named '%s' (see models.clips)", want.c_str());
+                c.byAnim[lua_tostring(L, -2)] = clip;
+            }
+            lua_pop(L, 1);
+        }
+        m_creatureClips[inst] = std::move(c);
+        return 0;
+    });
+}
+
+void ScriptModule::forgetCreature(uint32_t instance) {
+    m_ai->remove(instance);
+    m_creatureClips.erase(instance);
+}
+
+void ScriptModule::stepCreatures(float dt) {
+    if (m_ai->agents().empty()) return;
+    m_ai->setNavMesh(m_nav && m_nav->valid() ? m_nav.get() : nullptr);
+    m_ai->update(dt);
+    if (auto* models = m_app->getModule<ModelModule>()) {
+        for (const ai::Agent& a : m_ai->agents()) {
+            if (a.actor) continue;
+            auto own = std::find_if(m_models.begin(), m_models.end(), [&](const ModelInstance& m) { return m.id == a.id; });
+            if (own == m_models.end()) continue;
+            // Where the AI put it, turned to face where it's going, at the model's own scale.
+            const glm::mat4 old = models->transform(a.id);
+            const glm::vec3 scale(glm::length(glm::vec3(old[0])), glm::length(glm::vec3(old[1])), glm::length(glm::vec3(old[2])));
+            glm::mat4 t = glm::translate(glm::mat4(1.0f), a.position);
+            t = glm::rotate(t, glm::radians(a.yaw), glm::vec3(0, 1, 0));
+            models->setTransform(a.id, glm::scale(t, scale));
+            auto clips = m_creatureClips.find(a.id);
+            if (clips == m_creatureClips.end() || clips->second.playing == a.anim) continue;
+            const auto& by = clips->second.byAnim;
+            auto pick = [&](const std::string& anim) -> int {
+                for (const char* name : { anim.c_str(), anim == "run" ? "walk" : "idle", "idle" }) {
+                    auto it = by.find(name);
+                    if (it != by.end()) return it->second;
+                }
+                return -1;
+            };
+            const int clip = pick(a.anim);
+            if (clip >= 0) models->playAnimation(a.id, clip, a.anim != "attack");
+            clips->second.playing = a.anim;
+        }
+    }
+    ai::fireAiEvents(*m_vm, m_ai->takeEvents());
+}
+
 void ScriptModule::releaseScript(const std::string& source) {
     if (m_calls) m_calls->release(source);
     if (m_tables) m_tables->release(source);
@@ -1331,7 +1458,10 @@ void ScriptModule::releaseScript(const std::string& source) {
 
     if (auto* models = m_app->getModule<ModelModule>())
         for (const ModelInstance& m : m_models)
-            if (mine(m.source)) models->remove(m.id);
+            if (mine(m.source)) {
+                forgetCreature(m.id);
+                models->remove(m.id);
+            }
     m_models.erase(std::remove_if(m_models.begin(), m_models.end(), [&](const ModelInstance& m) { return mine(m.source); }), m_models.end());
 
 #if KKE_ENABLE_FEMFX
@@ -1376,6 +1506,7 @@ void ScriptModule::releaseScript(const std::string& source) {
                          m_navObstacles.end());
     if (m_nav && mine(m_navSource)) {
         m_nav.reset();
+        m_ai->setNavMesh(nullptr);
         m_navObstacles.clear();
         m_navSource.clear();
     }
