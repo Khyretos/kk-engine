@@ -246,6 +246,110 @@ TEST(AiNavMesh, RejectsNothingWalkable) {
 
 // ---- The world: farm scenarios
 
+// A wall with a 2 m doorway in the middle: the only way from z < 0 to z > 0.
+void wallWithDoor(std::vector<glm::vec3>& v, std::vector<uint32_t>& idx) {
+    addFloor(v, idx, 20.0f);
+    addBox(v, idx, { -20, 0, -0.3f }, { -1, 2.5f, 0.3f });
+    addBox(v, idx, { 1, 0, -0.3f }, { 20, 2.5f, 0.3f });
+}
+
+float pathLength(const NavMesh::Path& p) {
+    float len = 0.0f;
+    for (size_t i = 1; i < p.points.size(); ++i) len += glm::length(p.points[i] - p.points[i - 1]);
+    return len;
+}
+
+TEST(AiNavMesh, DynamicMeshAnswersLikeABuiltOne) {
+    std::vector<glm::vec3> v;
+    std::vector<uint32_t> idx;
+    wallWithDoor(v, idx);
+    NavMesh built, tiled;
+    std::string error;
+    ASSERT_TRUE(built.build(v, idx, {}, &error)) << error;
+    DynamicNavSettings d;
+    d.tileSize = 8.0f; // 40 m across: 5 x 5 tiles
+    ASSERT_TRUE(tiled.buildDynamic(v, idx, {}, d, &error)) << error;
+    EXPECT_TRUE(tiled.dynamic());
+    EXPECT_FALSE(built.dynamic());
+    EXPECT_EQ(tiled.tileCount(), 25u);
+    NavMesh::Path a, b;
+    ASSERT_TRUE(built.findPath({ -6, 0, -8 }, { 6, 0, 8 }, a));
+    ASSERT_TRUE(tiled.findPath({ -6, 0, -8 }, { 6, 0, 8 }, b));
+    EXPECT_FALSE(b.partial);
+    EXPECT_NEAR(pathLength(a), pathLength(b), 0.5f); // through the door, either way
+    EXPECT_TRUE(tiled.walkable({ -15, 0, -5 }, { 15, 0, -5 }));  // across tile borders
+    EXPECT_FALSE(tiled.walkable({ 5, 0, -5 }, { 5, 0, 5 }));     // not through the wall
+    EXPECT_TRUE(tiled.save().empty());                            // rebuilt, not saved
+}
+
+TEST(AiNavMesh, AnObstacleInTheDoorwayBlocksItUntilRemoved) {
+    std::vector<glm::vec3> v;
+    std::vector<uint32_t> idx;
+    wallWithDoor(v, idx);
+    NavMesh nav;
+    std::string error;
+    ASSERT_TRUE(nav.buildDynamic(v, idx, {}, { 8.0f, 64 }, &error)) << error;
+    NavMesh::Path open;
+    ASSERT_TRUE(nav.findPath({ 0, 0, -5 }, { 0, 0, 5 }, open));
+    EXPECT_FALSE(open.partial);
+
+    const uint32_t before = nav.revision();
+    const NavMesh::ObstacleId crate = nav.addBoxObstacle({ 0, 0.5f, 0 }, { 1.2f, 0.5f, 0.6f }); // fills the doorway
+    ASSERT_NE(crate, 0u);
+    EXPECT_EQ(nav.obstacleCount(), 1u);
+    ASSERT_TRUE(nav.updateAll());
+    EXPECT_GT(nav.revision(), before);
+    NavMesh::Path blocked;
+    ASSERT_TRUE(nav.findPath({ 0, 0, -5 }, { 0, 0, 5 }, blocked));
+    EXPECT_TRUE(blocked.partial); // stops at the crate
+    EXPECT_LT(blocked.points.back().z, 0.0f);
+    EXPECT_FALSE(nav.walkable({ 0, 0, -3 }, { 0, 0, 3 }));
+
+    ASSERT_TRUE(nav.removeObstacle(crate));
+    EXPECT_FALSE(nav.removeObstacle(crate)); // once
+    ASSERT_TRUE(nav.updateAll());
+    EXPECT_EQ(nav.obstacleCount(), 0u);
+    NavMesh::Path again;
+    ASSERT_TRUE(nav.findPath({ 0, 0, -5 }, { 0, 0, 5 }, again));
+    EXPECT_FALSE(again.partial);
+    EXPECT_NEAR(pathLength(again), pathLength(open), 0.2f);
+    // A built (not dynamic) mesh takes no obstacles.
+    NavMesh fixed;
+    ASSERT_TRUE(fixed.build(v, idx, {}, &error));
+    EXPECT_EQ(fixed.addCylinderObstacle({ 0, 0, 0 }, 1, 2), 0u);
+    EXPECT_TRUE(fixed.update());
+}
+
+TEST(AiNavMesh, PathsGoAroundCylindersAndTurnedBoxes) {
+    std::vector<glm::vec3> v;
+    std::vector<uint32_t> idx;
+    addFloor(v, idx, 12.0f);
+    NavMesh nav;
+    std::string error;
+    ASSERT_TRUE(nav.buildDynamic(v, idx, {}, { 8.0f, 64 }, &error)) << error;
+    // A pillar on the straight line: the path bends round it.
+    ASSERT_NE(nav.addCylinderObstacle({ 0, 0, 0 }, 1.5f, 2.0f), 0u);
+    ASSERT_TRUE(nav.updateAll());
+    NavMesh::Path p;
+    ASSERT_TRUE(nav.findPath({ 0, 0, -6 }, { 0, 0, 6 }, p));
+    EXPECT_FALSE(p.partial);
+    EXPECT_GT(pathLength(p), 12.2f);
+    for (const glm::vec3& c : p.points) EXPECT_GT(glm::length(glm::vec2(c.x, c.z)), 1.5f) << c.x << ", " << c.z;
+    // A long thin box turned 45 degrees (the engine's yaw: +x turns towards -z)
+    // blocks the (+x, -z) diagonal, not the (+x, +z) one.
+    ASSERT_NE(nav.addBoxObstacle({ 6, 1, 0 }, { 4.0f, 1.0f, 0.2f }, glm::radians(45.0f)), 0u);
+    ASSERT_TRUE(nav.updateAll());
+    // 2.5 m out along each diagonal from the box's centre, a 3 m walk across it.
+    const glm::vec3 c(6, 0, 0), along(0.7071f, 0, -0.7071f), other(0.7071f, 0, 0.7071f);
+    const glm::vec3 onBox = c + along * 2.5f, offBox = c + other * 2.5f;
+    EXPECT_FALSE(nav.walkable(onBox - other * 1.5f, onBox + other * 1.5f)); // crosses the box
+    EXPECT_TRUE(nav.walkable(offBox - along * 1.5f, offBox + along * 1.5f)); // the other diagonal is clear
+    // Bad obstacles are refused.
+    EXPECT_EQ(nav.addCylinderObstacle({ 0, 0, 0 }, 0.0f, 2.0f), 0u);
+    EXPECT_EQ(nav.addBoxObstacle({ 0, 0, 0 }, { 1, -1, 1 }), 0u);
+    EXPECT_EQ(nav.addBoxObstacle({ NAN, 0, 0 }, { 1, 1, 1 }), 0u);
+}
+
 TEST(AiWorld, SheepRunFromTheDogAndCalmDown) {
     AiWorld w(42);
     // Facing the gate the dog comes through (sheep see almost all round,
@@ -442,6 +546,36 @@ TEST(AiWorld, WalksAroundWallsOnTheNavMesh) {
         EXPECT_FALSE(std::abs(w.agent(50)->position.z) < 0.4f && std::abs(w.agent(50)->position.x) < 6.8f) << "walked through the wall";
     }
     EXPECT_LT(flatDist(w.agent(50)->position, { 0, 0, 6 }), 1.2f) << w.describe(50);
+}
+
+TEST(AiWorld, ADoorClosingSendsTheDogTheLongWayRound) {
+    // Two doorways in a wall: the near one at x = 0, the far one at x = 14.
+    std::vector<glm::vec3> v;
+    std::vector<uint32_t> idx;
+    addFloor(v, idx, 20.0f);
+    addBox(v, idx, { -20, 0, -0.3f }, { -1, 2.5f, 0.3f });
+    addBox(v, idx, { 1, 0, -0.3f }, { 13, 2.5f, 0.3f });
+    addBox(v, idx, { 15, 0, -0.3f }, { 20, 2.5f, 0.3f });
+    NavMesh nav;
+    std::string error;
+    ASSERT_TRUE(nav.buildDynamic(v, idx, {}, { 8.0f, 64 }, &error)) << error;
+    AiWorld w;
+    w.setNavMesh(&nav);
+    ASSERT_TRUE(w.addAgent(50, "dog", { 0, 0, -1.6f }));
+    w.order(50, Order{ Order::Kind::MoveTo, 0, { 0, 0, 8 }, 0.5f, true });
+    for (int i = 0; i < 3; ++i) w.update(1.0f / 30.0f); // on its way to the near door, under a second from it
+    // The near door shuts: the dog finds its way round by the far door.
+    ASSERT_NE(nav.addBoxObstacle({ 0, 1, 0 }, { 1.2f, 1.0f, 0.4f }), 0u);
+    ASSERT_TRUE(nav.updateAll());
+    float furthestX = 0.0f;
+    for (int i = 0; i < 1500 && w.agent(50)->order.kind == Order::Kind::MoveTo; ++i) {
+        w.update(1.0f / 30.0f);
+        nav.update();
+        furthestX = std::max(furthestX, w.agent(50)->position.x);
+        EXPECT_FALSE(std::abs(w.agent(50)->position.z) < 0.4f && std::abs(w.agent(50)->position.x) < 1.2f) << "went through the shut door";
+    }
+    EXPECT_GT(furthestX, 13.0f) << w.describe(50);
+    EXPECT_LT(flatDist(w.agent(50)->position, { 0, 0, 8 }), 1.2f) << w.describe(50);
 }
 
 TEST(AiWorld, SameSeedSameStory) {

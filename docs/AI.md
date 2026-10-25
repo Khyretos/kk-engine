@@ -179,6 +179,29 @@ it next to a level. Not thread-safe per mesh. Built with
 [Recast & Detour](https://github.com/recastnavigation/recastnavigation)
 (zlib), the library Unity, Unreal and Godot's navigation grew from.
 
+### Doors, crates and carts: a navmesh that changes
+
+`NavMesh::buildDynamic(vertices, indices, settings, {tileSize, maxObstacles})`
+builds the same surface as square tiles (16 m by default). Obstacles then
+cut holes in it while the game runs, and only the tiles they touch are
+rebuilt:
+
+```cpp
+nav.buildDynamic(v, idx, settings);                  // instead of build()
+auto door = nav.addBoxObstacle(doorCentre, {1.0f, 1.2f, 0.1f}, doorYaw); // a shut door
+auto post = nav.addCylinderObstacle(base, 0.3f, 1.5f);                   // standing on `base`
+nav.removeObstacle(door);                            // opened again
+nav.update();                                        // every frame: rebuilds a few tiles a call
+```
+
+Agents on that mesh (`AiWorld::setNavMesh`) find their paths again when it
+changes (`NavMesh::revision()`), so a dog heading for a door that shuts goes
+round by the other one. Box yaw is the engine's (`glm::rotate` about +y).
+Queries are the same as a built mesh's; `save()` is empty for a dynamic mesh
+(build it from the level again). Built with DetourTileCache, already part of
+recastnavigation; the tiles' layers are kept uncompressed (a byte or two per
+cell).
+
 Without a navmesh everything still works on open ground (steering only),
 with `addObstacle` circles for trees and posts and `groundHeight` for
 hills.
@@ -275,7 +298,7 @@ use a uniform grid (`SpatialGrid`).
 
 - Learning from rewards (reinforcement learning). Teaching by example
   (above) is built.
-- Tiled / dynamic navmeshes (DetourTileCache is compiled in, not wrapped
-  yet), off-mesh links for jumps and ladders, per-area costs (mud, water).
+- Off-mesh links for jumps and ladders, per-area costs (mud, water), and
+  obstacles from Lua (dynamic navmeshes are built from C++ today).
 - Crowds of hundreds on one path (DetourCrowd is compiled in; steering and
   separation handle a farm's worth today).

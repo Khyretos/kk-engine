@@ -41,6 +41,14 @@ struct NavMeshSettings {
     float detailSampleMaxError = 1.0f;
 };
 
+// A navmesh that changes while the game runs (buildDynamic): the level is
+// cut into square tiles, and an obstacle (a crate pushed into a doorway, a
+// closed door, a parked cart) rebuilds only the tiles it touches.
+struct DynamicNavSettings {
+    float tileSize = 16.0f;   // metres per tile side; smaller = cheaper rebuilds, more tiles
+    int maxObstacles = 256;   // at once
+};
+
 class NavMesh {
 public:
     NavMesh();
@@ -57,7 +65,33 @@ public:
     bool valid() const;
     const NavMeshSettings& settings() const;
 
-    // Detour's own binary (fast to load; cache it next to a level).
+    // The same level as tiles that obstacles can change (DynamicNavSettings).
+    // Queries work as on a built one. False with a reason as build().
+    bool buildDynamic(std::span<const glm::vec3> vertices, std::span<const uint32_t> indices, const NavMeshSettings& settings = {},
+                      const DynamicNavSettings& dynamic = {}, std::string* error = nullptr);
+    bool dynamic() const;
+
+    // Obstacles (dynamic meshes only): agents walk around them once update()
+    // has rebuilt the tiles they touch. 0 when the mesh isn't dynamic, when
+    // maxObstacles are there, or when too many changes wait (call update()).
+    using ObstacleId = uint32_t;
+    // An upright cylinder standing on `base` (its bottom centre).
+    ObstacleId addCylinderObstacle(const glm::vec3& base, float radius, float height);
+    // A box turned `yawRadians` about y; `centre` is its middle.
+    ObstacleId addBoxObstacle(const glm::vec3& centre, const glm::vec3& halfExtents, float yawRadians = 0.0f);
+    bool removeObstacle(ObstacleId id);
+    size_t obstacleCount() const;
+    // Rebuilds what obstacles changed, a few tiles per call (call every
+    // frame). True when the mesh is up to date. updateAll() loops until then.
+    bool update();
+    bool updateAll(int maxSteps = 1000);
+    // Goes up by one whenever the walkable surface changed (an obstacle went
+    // in or out): paths found before may run through something now.
+    uint32_t revision() const;
+    size_t tileCount() const;
+
+    // Detour's own binary (fast to load; cache it next to a level). Built
+    // meshes only: a dynamic one is empty (build it again from the level).
     std::vector<uint8_t> save() const;
     bool load(std::span<const uint8_t> data, std::string* error = nullptr);
 
