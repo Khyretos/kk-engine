@@ -138,14 +138,26 @@ a MakeHuman head, whatever shape the sliders gave it:
   type, `short`, `long`, `4c`...) on that sphere, then sets every root on
   the skin straight under it (a ray against the scalp's faces). Roots with
   no scalp under them are dropped. Loose styles start back from the
-  hairline, since a real face stands out in front of the sphere.
+  hairline, since a real face stands out in front of the sphere. Rows and
+  braids (cornrows) lie on the sphere fitted to the scalp, a row starting
+  in front of the hairline starts further back, and their ends sit on the
+  skin.
 
 The creator puts the body in a `RigidWorld` as a mesh only cloth and hair
 feel, so long hair falls over the shoulders and back without going
-through them, and paints the scalp the hair's root colour (a copy of the
-scalp's triangles 2 mm over the skin), so no skin shows between the
-hairs. Turn spins the figure, not the camera, so the hair swings. A
+through them, and shades the scalp a little darker than the skin (a copy
+of the scalp's triangles 2 mm over the skin, as under real hair; painted
+the hair's colour it showed as a patch with a hard edge). Turn spins the figure, not the camera, so the hair swings. A
 slider change regrows the hair on the new head once the slider rests.
+
+## Eyes
+
+MakeHuman's helper eyes are plain white balls (the iris is a texture the
+pack doesn't carry). `kke/HumanEyes.h` `addIrises(model, colour)` adds a
+pupil, the iris and its darker rim on each eyeball's front, as thin domes
+just over the ball with 32 sides, so they stay round on the coarse
+eyeball, skinned like the eye. The creator tints them the eye colour
+chosen on the Skin & eyes tab; `bakeSkinned()` includes them.
 
 ## Clothes
 

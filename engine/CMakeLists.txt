@@ -53,6 +53,7 @@ set(ENGINE_SOURCES
     src/BodyShape.cpp
     src/Human.cpp
     src/HumanClothes.cpp
+    src/HumanEyes.cpp
     src/HumanHair.cpp
     src/HumanLook.cpp
     src/HumanPack.cpp

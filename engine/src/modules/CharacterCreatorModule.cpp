@@ -6,6 +6,7 @@
 #include "kke/DevTools.h"
 #include "kke/HairRenderer.h"
 #include "kke/HumanClothes.h"
+#include "kke/HumanEyes.h"
 #include "kke/HumanHair.h"
 #include "kke/Log.h"
 #include "kke/Outfit.h"
@@ -492,6 +493,12 @@ void CharacterCreatorModule::spawnBody() {
     const ModelModule::ModelId partsModel = m_models->add(m_partsBake.model, "character_creator/parts");
     m_body = m_models->spawn(bodyModel);
     m_parts = m_models->spawn(partsModel);
+    moveIrises();
+    if (!m_irisModel.meshes.empty()) {
+        m_irisModel.boundsMin = m_bodyBake.model.boundsMin - glm::vec3(0.2f);
+        m_irisModel.boundsMax = m_bodyBake.model.boundsMax + glm::vec3(0.2f);
+        m_irises = m_models->spawn(m_models->add(m_irisModel, "character_creator/irises"));
+    }
 
     // The scalp cap: the body's triangles where hair grows (on the body
     // as it starts; the triangles then follow every slider).
@@ -533,6 +540,7 @@ void CharacterCreatorModule::spawnBody() {
 
 void CharacterCreatorModule::applyColours() {
     if (m_body) m_models->setTint(m_body, m_look.skin);
+    if (m_irises) m_models->setTint(m_irises, m_look.eyes);
     for (auto& w : m_worn) {
         for (const HumanLook::Worn& worn : m_look.clothes)
             if (worn.id == w->id) w->colour = w->fabric.color = worn.colour;
@@ -540,8 +548,34 @@ void CharacterCreatorModule::applyColours() {
     }
     if (m_cap) {
         m_models->setVisible(m_cap, !m_look.hair.empty());
-        m_models->setTint(m_cap, glm::mix(m_look.skin, m_look.hairRoot, 0.95f));
+        // The skin a shade darker in the hair's shadow: a scalp in the
+        // hair's own colour showed as a patch with a hard edge (Kees).
+        m_models->setTint(m_cap, m_look.skin * 0.95f);
     }
+}
+
+void CharacterCreatorModule::moveIrises() {
+    ModelData eyes = m_partsBake.model; // the eyeballs as the sliders have them now
+    const size_t first = eyes.meshes.size();
+    if (!addIrises(eyes, glm::vec3(1.0f))) return;
+    if (m_irisModel.meshes.empty()) {
+        for (size_t m = first; m < eyes.meshes.size(); ++m) {
+            m_irisModel.materials.push_back(eyes.materials[eyes.meshes[m].material]);
+            eyes.meshes[m].material = static_cast<uint32_t>(m_irisModel.materials.size() - 1);
+            m_irisModel.meshes.push_back(std::move(eyes.meshes[m]));
+        }
+        return;
+    }
+    std::vector<std::vector<glm::vec3>> pos, nrm;
+    for (size_t m = first; m < eyes.meshes.size(); ++m) {
+        pos.emplace_back();
+        nrm.emplace_back();
+        for (const ModelVertex& v : eyes.meshes[m].vertices) {
+            pos.back().push_back(v.position);
+            nrm.back().push_back(v.normal);
+        }
+    }
+    if (m_irises) m_models->setDeformedVertices(m_irises, pos, nrm, /*modelSpace=*/true);
 }
 
 void CharacterCreatorModule::moveCap() {
@@ -577,6 +611,7 @@ void CharacterCreatorModule::reshape() {
         m_models->setDeformedVertices(inst, pos, nrm, /*modelSpace=*/true);
     }
     moveCap();
+    moveIrises();
     moveClothes();
     m_code = shareCode();
     m_codeShort = m_code.size() > 40 ? m_code.substr(0, 36) + "... (" + std::to_string(m_code.size()) + " letters)" : m_code;
@@ -818,6 +853,7 @@ void CharacterCreatorModule::open() {
     if (m_doc) m_doc->Show();
     if (m_body) m_models->setVisible(m_body, true);
     if (m_parts) m_models->setVisible(m_parts, true);
+    if (m_irises) m_models->setVisible(m_irises, true);
     for (auto& w : m_worn)
         if (w->instance) m_models->setVisible(w->instance, true);
 }
@@ -827,6 +863,7 @@ void CharacterCreatorModule::close() {
     if (m_doc) m_doc->Hide();
     if (m_body) m_models->setVisible(m_body, false);
     if (m_parts) m_models->setVisible(m_parts, false);
+    if (m_irises) m_models->setVisible(m_irises, false);
     for (auto& w : m_worn)
         if (w->instance) m_models->setVisible(w->instance, false);
 }
@@ -859,6 +896,7 @@ ModelData CharacterCreatorModule::bakeSkinned() const {
     Human::Bake b = h.bake();
     for (ModelMaterial& m : b.model.materials)
         if (m.name == "Human_body") m.baseColor = look().skin;
+    addIrises(b.model, look().eyes);
     dress(b.model, h, look().clothes);
     return std::move(b.model);
 }
@@ -1107,6 +1145,7 @@ void CharacterCreatorModule::placeFigure() {
     m_figure = glm::rotate(glm::mat4(1.0f), m_yaw, glm::vec3(0, 1, 0));
     if (m_body) m_models->setTransform(m_body, m_figure);
     if (m_parts) m_models->setTransform(m_parts, m_figure);
+    if (m_irises) m_models->setTransform(m_irises, m_figure);
     if (m_cap) m_models->setTransform(m_cap, m_figure);
     for (auto& w : m_worn)
         if (w->instance) m_models->setTransform(w->instance, m_figure);

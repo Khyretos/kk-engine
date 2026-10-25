@@ -127,9 +127,8 @@ bool hairOnHuman(HairDesc& desc, const std::string& style, const HumanPack& pack
         tris.push_back({ shaped[q[0]], shaped[q[1]], shaped[q[2]] });
         if (q[3] != q[2]) tris.push_back({ shaped[q[0]], shaped[q[2]], shaped[q[3]] });
     }
-    std::vector<size_t> keep;
-    for (size_t r = 0; r < desc.roots.size(); ++r) {
-        const glm::vec3 d = glm::normalize(desc.roots[r] - scalp.centre);
+    // Distance from the centre to the skin along d (1e9: no scalp there).
+    auto skinAlong = [&](const glm::vec3& d) {
         float best = 1e9f;
         for (const auto& t : tris) { // Moller-Trumbore, either side
             const glm::vec3 e1 = t[1] - t[0], e2 = t[2] - t[0], p = glm::cross(d, e2);
@@ -144,10 +143,32 @@ bool hairOnHuman(HairDesc& desc, const std::string& style, const HumanPack& pack
             const float hit = glm::dot(e2, qv) / det;
             if (hit > 0.0f) best = std::min(best, hit);
         }
+        return best;
+    };
+    // Braids and rows (roots tied to ties) are laid along the head's
+    // sphere: make it the one fitted to the scalp, not the one round it,
+    // or they float a finger's width over the head.
+    const bool tied = !desc.ties.empty();
+    if (tied) {
+        desc.headCenter = scalp.centre;
+        desc.headRadius = scalp.radius;
+    }
+    std::vector<size_t> keep;
+    for (size_t r = 0; r < desc.roots.size(); ++r) {
+        glm::vec3 d = glm::normalize(desc.roots[r] - scalp.centre);
+        float best = skinAlong(d);
+        // A row starting at the temple (in front of the hairline): start it
+        // a little further back, where the scalp is, rather than lose it.
+        for (int step = 0; tied && best > 1e8f && step < 12; ++step) {
+            d = glm::normalize(d - scalp.front * 0.06f); // back along the row, not up: rows would bunch on the crown
+            best = skinAlong(d);
+        }
         if (best > 1e8f) continue;
         desc.roots[r] = scalp.centre + d * (best + 0.0015f); // just over the skin
         keep.push_back(r);
     }
+    for (HairDesc::Tie& t : desc.ties) // the ends onto the skin too
+        if (const glm::vec3 d = glm::normalize(t.at - scalp.centre); skinAlong(d) < 1e8f) t.at = scalp.centre + d * skinAlong(d);
     if (keep.empty()) return false;
     auto pick = [&](auto& list) {
         if (list.size() != desc.roots.size()) return;

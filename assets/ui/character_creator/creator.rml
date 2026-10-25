@@ -40,7 +40,11 @@
             <div class="swatches">
                 <span class="swatch" data-for="c, i : skin_swatches" data-style-background-color="c.css" data-event-click="skin(i)"><span class="tip">{{ c.name }}</span></span>
             </div>
-            <p class="note">Skin textures, eye colour and make-up arrive with the next steps of the creator.</p>
+            <h2>Eye colour</h2>
+            <div class="swatches">
+                <span class="swatch" data-for="c, i : eye_swatches" data-style-background-color="c.css" data-event-click="eyes(i)"><span class="tip">{{ c.name }}</span></span>
+            </div>
+            <p class="note">Skin textures and make-up arrive with the next steps of the creator.</p>
         </div>
 
         <div id="hair" data-if="tab == 'hair'">

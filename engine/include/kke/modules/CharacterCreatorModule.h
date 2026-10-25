@@ -121,6 +121,7 @@ private:
     void buildHair();      // m_look's hairstyle on the body as it is now
     void placeFigure();    // the body, its collider and the hair's head at m_yaw
     void moveCap();        // the scalp cap onto the body as it is now
+    void moveIrises();     // the pupils and irises onto the eyes as they are now
     void dressUp();        // m_look's clothes on the body as it is now
     void moveClothes();    // the fitted clothes onto the body as it is now (a drag)
     void undress();
@@ -142,6 +143,9 @@ private:
     ModelModule::InstanceId m_cap = 0;
     std::vector<uint32_t> m_capFrom; // cap vertex -> body model vertex
     ModelData m_capModel;
+    // Pupils and irises (kke/HumanEyes.h): white, tinted the eye colour.
+    ModelModule::InstanceId m_irises = 0;
+    ModelData m_irisModel;
     bool m_shapeDirty = false;
     bool m_open = false;
     bool m_selfTested = false;

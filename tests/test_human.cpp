@@ -1,5 +1,6 @@
 #include "kke/Human.h"
 #include "kke/HumanClothes.h"
+#include "kke/HumanEyes.h"
 #include "kke/HumanHair.h"
 #include "kke/HumanLook.h"
 #include "kke/HumanPack.h"
@@ -395,4 +396,44 @@ TEST(HumanClothes, DressedBakeIsOneSkinnedModel) {
     EXPECT_EQ(b.model.materials[b.model.meshes[bodyMeshes].material].baseColor, glm::vec3(1.0f, 0.0f, 0.0f));
     kke::dress(b.model, h, {}); // nothing worn: nothing added
     EXPECT_EQ(b.model.meshes.size(), bodyMeshes + clothes.size());
+}
+
+// The helper eyes are white balls: addIrises gives each a pupil, an iris
+// and a rim, on the ball's front, skinned like the eye, and moves them
+// again after a reshape instead of adding more.
+TEST(HumanEyes, IrisesSitOnTheFrontOfEachEye) {
+    NEED_PACK();
+    kke::Human h(pack());
+    kke::Human::Bake b = h.bake();
+    const size_t before = b.model.meshes.size();
+    ASSERT_TRUE(kke::addIrises(b.model, glm::vec3(0.2f, 0.4f, 0.7f)));
+    ASSERT_EQ(b.model.meshes.size(), before + 3);
+    float eyeFront = -1e9f;
+    for (const kke::ModelMesh& m : b.model.meshes)
+        if (m.name == "helper-l-eye")
+            for (const kke::ModelVertex& v : m.vertices) eyeFront = std::max(eyeFront, v.position.z);
+    const kke::ModelMesh& pupil = b.model.meshes[before];
+    EXPECT_EQ(pupil.name, "eye-pupil");
+    EXPECT_TRUE(pupil.skinned);
+    float pupilFront = -1e9f;
+    for (const kke::ModelVertex& v : pupil.vertices) {
+        pupilFront = std::max(pupilFront, v.position.z);
+        EXPECT_NEAR(v.weights.x + v.weights.y + v.weights.z + v.weights.w, 1.0f, 1e-4f);
+    }
+    EXPECT_GT(pupilFront, eyeFront);              // in front of the ball
+    EXPECT_LT(pupilFront, eyeFront + 0.002f);     // but on it
+    EXPECT_LT(b.model.materials[pupil.material].baseColor.b, 0.05f); // near black
+    EXPECT_EQ(b.model.materials[b.model.meshes[before + 1].material].baseColor, glm::vec3(0.2f, 0.4f, 0.7f));
+
+    h.set("macrodetails-height/Height", 1.0f);
+    h.reshape(b);
+    ASSERT_TRUE(kke::addIrises(b.model, glm::vec3(1.0f), /*update=*/true));
+    EXPECT_EQ(b.model.meshes.size(), before + 3);
+    float eyeTop = -1e9f, pupilTop = -1e9f;
+    for (const kke::ModelVertex& v : b.model.meshes[before].vertices) pupilTop = std::max(pupilTop, v.position.y);
+    for (const kke::ModelMesh& m : b.model.meshes)
+        if (m.name == "helper-l-eye" || m.name == "helper-r-eye")
+            for (const kke::ModelVertex& v : m.vertices) eyeTop = std::max(eyeTop, v.position.y);
+    EXPECT_LT(pupilTop, eyeTop); // moved up with the taller body's eyes
+    EXPECT_GT(pupilTop, eyeTop - 0.03f);
 }
