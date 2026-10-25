@@ -27,6 +27,8 @@ public:
     // Reads `size` bytes back from a host-visible buffer (e.g. a
     // GPU_TO_CPU readback target), after the GPU is done writing it.
     void download(void* out, VkDeviceSize size) const;
+    // The same, `size` bytes from `offset`.
+    void downloadAt(VkDeviceSize offset, void* out, VkDeviceSize size) const;
 
     VkBuffer handle() const { return m_buffer; }
     // Its GPU address (needs VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT and a

@@ -63,6 +63,7 @@ float boxDistance(const kke::RigidWorld::BodyBox& b, const glm::vec3& p, glm::ve
 } // namespace
 
 LavaStation::LavaStation(kke::Application& app, const glm::vec3& center) : m_app(app), m_center(center) {
+    m_pool = std::make_unique<kke::TaskPool>(app.resourceBudget().workerThreads);
     m_spheres = std::make_unique<kke::SphereImpostorRenderer>(app);
     m_surface = std::make_unique<kke::FluidSurfaceRenderer>(app);
     m_surface->settings().blurWorldRadius = kRadius * 2.5f;
@@ -93,6 +94,7 @@ void LavaStation::reset() {
     fp.friction = 0.02f;
     fp.substeps = 2; // the 1.5 m drop reaches ~6 m/s: 120 Hz keeps it from tunnelling
     m_fluid = std::make_unique<kke::ParticleFluid>(fp, kMaxParticles);
+    m_fluid->setTaskPool(m_pool.get());
     kke::FluidMaterial lava;
     lava.viscosityHot = 0.03f;
     lava.viscosityCold = 0.15f;

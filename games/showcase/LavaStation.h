@@ -6,6 +6,7 @@
 #include "kke/ParticleFluid.h"
 #include "kke/RigidWorld.h"
 #include "kke/SphereImpostors.h"
+#include "kke/TaskPool.h"
 
 #include <memory>
 #include <vector>
@@ -49,6 +50,7 @@ private:
     void reset();
     kke::Application& m_app;
     glm::vec3 m_center;
+    std::unique_ptr<kke::TaskPool> m_pool; // the liquid's threads (the resource governor's share)
     std::unique_ptr<kke::ParticleFluid> m_fluid;
     std::unique_ptr<kke::MeltVolume> m_block;
     std::unique_ptr<kke::SphereImpostorRenderer> m_spheres;

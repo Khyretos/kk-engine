@@ -3,9 +3,12 @@
 #include "kke/MeltVolume.h"
 #include "kke/Module.h"
 #include "kke/ParticleFluid.h"
+#include "kke/FluidGpu.h"
+#include "kke/TaskPool.h"
 #include "kke/FluidSurface.h"
 #include "kke/SphereImpostors.h"
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -44,6 +47,10 @@ private:
     void readInput();
     void buildPanel();
     kke::Application* m_app = nullptr;
+    // The liquid's threads (the resource governor's share of the cores)
+    // and its neighbour search on the GPU, when the GPU has a queue for it.
+    std::unique_ptr<kke::TaskPool> m_pool;
+    std::shared_ptr<kke::FluidGpu> m_fluidGpu;
     std::unique_ptr<kke::ParticleFluid> m_fluid;
     std::unique_ptr<kke::MeltVolume> m_block;
     std::unique_ptr<kke::SphereImpostorRenderer> m_spheres;
@@ -59,6 +66,9 @@ private:
     float m_emitAccum = 0.0f;
     uint32_t m_rng = 12345;
     double m_fluidMs = 0.0, m_meltMs = 0.0;
+    uint64_t m_loggedChecks = 0;
+    size_t m_fill = 0;     // KKE_MELT_FILL
+    uint64_t m_steps = 0;
     size_t m_meshTris = 0;
 };
 

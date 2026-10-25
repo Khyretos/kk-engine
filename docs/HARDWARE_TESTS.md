@@ -40,6 +40,27 @@ them): a `.txt` to read and a `.json` for analysis, including your CPU,
 GPU, driver, RAM, OS and build type. Paste either file back instead of
 log lines.
 
+### HW-020 · Liquid neighbour search, GPU against CPU (dev box)
+
+docs/OPTIMIZATION.md #44 and #45: the liquid now runs on several threads,
+and its neighbour search can run on the GPU. The sandbox only has
+lavapipe, where the CPU wins (as it should). On the RX 9070 XT:
+
+```bash
+cd build-release/bin
+for n in 3000 8000 27000; do
+  KKE_MELT_FILL=$n KKE_BENCHMARK=30 KKE_BENCH_SHOTS=0 ./melt_demo 2>&1 | grep -E "FluidGpu|liquid:"
+  KKE_MELT_FILL=$n KKE_BENCHMARK=30 KKE_BENCH_SHOTS=0 KKE_FLUID_GPU=0 ./melt_demo 2>&1 | grep "liquid:"
+done
+KKE_MELT_FILL=8000 KKE_BENCHMARK=30 KKE_BENCH_SHOTS=0 KKE_FLUID_GPU_CHECK=1 ./melt_demo 2>&1 | grep "check:"
+```
+
+Send back: the `liquid:` lines (step time, threads, which side found the
+neighbours, both search times) for each size with and without the GPU,
+and the last `check:` line (how many GPU searches differed from the CPU's).
+
+**Result:** (not run yet)
+
 ### HW-019 · Showcase walk on min-spec, with sound (dev box)
 
 The last check left from issue #12. With the Synty packs in place, start

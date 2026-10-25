@@ -1,7 +1,12 @@
 #include "kke/ParticleFluid.h"
 
+#include "kke/TaskPool.h"
+
 #include <algorithm>
+#include <chrono>
+#include <climits>
 #include <cmath>
+#include <cstdint>
 
 namespace kke {
 
@@ -83,39 +88,56 @@ void ParticleFluid::buildGrid(const std::vector<glm::vec3>& p) {
     }
     for (uint32_t k = 0; k < size; ++k) m_cellStart[k + 1] += m_cellStart[k];
     m_sorted.resize(n);
-    // Scatter with a running cursor per cell (reuse m_lambda storage as
-    // cursors would alias floats; keep a local copy of starts instead).
-    static thread_local std::vector<uint32_t> cursor;
-    cursor.assign(m_cellStart.begin(), m_cellStart.end() - 1);
-    for (size_t i = 0; i < n; ++i) m_sorted[cursor[m_cellOf[i]]++] = static_cast<uint32_t>(i);
+    m_cursor.assign(m_cellStart.begin(), m_cellStart.end() - 1);
+    for (size_t i = 0; i < n; ++i) m_sorted[m_cursor[m_cellOf[i]]++] = static_cast<uint32_t>(i);
 }
 
-template <typename F>
-void ParticleFluid::forNeighbours(size_t i, const std::vector<glm::vec3>& p, F&& f) const {
-    const float inv = 1.0f / m_h;
-    const float h2 = m_h * m_h;
-    const glm::ivec3 c = glm::ivec3(glm::floor(p[i] * inv));
+// The 27 cells around `c`, as distinct hash buckets (cells that hash to
+// the same bucket would otherwise be visited twice). Returns how many.
+int ParticleFluid::bucketsAround(const glm::ivec3& c, uint32_t (&out)[27]) const {
     const uint32_t mask = m_tableSize - 1;
-    // Cells hashing to the same bucket would be visited twice; dedupe the
-    // (at most 27) buckets first.
-    uint32_t seen[27];
-    int nSeen = 0;
+    int count = 0;
     for (int dz = -1; dz <= 1; ++dz)
         for (int dy = -1; dy <= 1; ++dy)
             for (int dx = -1; dx <= 1; ++dx) {
                 uint32_t k = hashCell(c.x + dx, c.y + dy, c.z + dz, mask);
+                if (m_cellStart[k] == m_cellStart[k + 1]) continue; // empty: nothing to visit
                 bool dup = false;
-                for (int s = 0; s < nSeen; ++s) if (seen[s] == k) { dup = true; break; }
-                if (dup) continue;
-                seen[nSeen++] = k;
-                for (uint32_t s = m_cellStart[k]; s < m_cellStart[k + 1]; ++s) {
-                    uint32_t j = m_sorted[s];
-                    if (j == i) continue;
-                    glm::vec3 r = p[i] - p[j];
-                    float d2 = glm::dot(r, r);
-                    if (d2 < h2) f(j, r, d2);
-                }
+                for (int s = 0; s < count; ++s) if (out[s] == k) { dup = true; break; }
+                if (!dup) out[count++] = k;
             }
+    return count;
+}
+
+// Neighbour lists for slots [begin, end) of the sorted order, appended to
+// `list`; start[s] / count[s] say where each slot's list is. Slots of one
+// cell are next to each other, so the 27 buckets are worked out once per
+// cell, and the positions read are the sorted copy: contiguous memory.
+void ParticleFluid::findNeighbours(size_t begin, size_t end, std::vector<uint32_t>& list) {
+    const float inv = 1.0f / m_h;
+    const float h2 = m_h * m_h;
+    const glm::vec3* P = m_pred.data();
+    uint32_t buckets[27];
+    int nBuckets = 0;
+    glm::ivec3 lastCell(INT32_MIN);
+    for (size_t s = begin; s < end; ++s) {
+        const glm::vec3 pi = P[s];
+        const glm::ivec3 c = glm::ivec3(glm::floor(pi * inv));
+        if (c != lastCell) {
+            nBuckets = bucketsAround(c, buckets);
+            lastCell = c;
+        }
+        m_nbrStart[s] = static_cast<uint32_t>(list.size());
+        for (int b = 0; b < nBuckets; ++b) {
+            const uint32_t k = buckets[b];
+            for (uint32_t t = m_cellStart[k], e = m_cellStart[k + 1]; t < e; ++t) {
+                if (t == s) continue;
+                glm::vec3 r = pi - P[t];
+                if (glm::dot(r, r) < h2) list.push_back(t);
+            }
+        }
+        m_nbrCount[s] = static_cast<uint32_t>(list.size()) - m_nbrStart[s];
+    }
 }
 
 void ParticleFluid::collide(glm::vec3& p, const glm::vec3& prev) const {
@@ -144,6 +166,114 @@ void ParticleFluid::collide(glm::vec3& p, const glm::vec3& prev) const {
     }
 }
 
+void ParticleFluid::buildNeighbourListsOnCpu() {
+    const size_t n = m_pred.size();
+    m_nbrStart.resize(n);
+    m_nbrCount.resize(n);
+    const size_t workers = m_pool ? static_cast<size_t>(m_pool->workers()) : 1;
+    const size_t chunks = (workers > 1 && n >= 2 * kGrain) ? std::min(n / kGrain, workers * 4) : 1;
+    if (chunks == 1) {
+        m_nbr.clear();
+        findNeighbours(0, n, m_nbr);
+        return;
+    }
+    // Each chunk of slots fills a list of its own, then the lists are
+    // joined: same result as one thread, in the same order.
+    const size_t per = (n + chunks - 1) / chunks;
+    if (m_chunkLists.size() < chunks) m_chunkLists.resize(chunks);
+    m_chunkBase.resize(chunks + 1);
+    m_pool->run(chunks, [&](size_t c) {
+        std::vector<uint32_t>& list = m_chunkLists[c];
+        list.clear();
+        const size_t b = c * per, e = std::min(n, b + per);
+        if (b < e) findNeighbours(b, e, list);
+    });
+    m_chunkBase[0] = 0;
+    for (size_t c = 0; c < chunks; ++c) m_chunkBase[c + 1] = m_chunkBase[c] + static_cast<uint32_t>(m_chunkLists[c].size());
+    m_nbr.resize(m_chunkBase[chunks]);
+    m_pool->run(chunks, [&](size_t c) {
+        const std::vector<uint32_t>& list = m_chunkLists[c];
+        std::copy(list.begin(), list.end(), m_nbr.begin() + m_chunkBase[c]);
+        const size_t b = c * per, e = std::min(n, b + per);
+        for (size_t s = b; s < e; ++s) m_nbrStart[s] += m_chunkBase[c];
+    });
+}
+
+namespace {
+void average(double& avg, double ms) { avg = avg == 0.0 ? ms : avg * 0.9 + ms * 0.1; }
+} // namespace
+
+// Lists from the search set with setNeighbourSearch() (the GPU) while it
+// is the faster, else from the CPU; both give the same lists.
+void ParticleFluid::buildNeighbourLists() {
+    const size_t n = m_pred.size();
+    constexpr size_t kElsewhereFrom = 1024; // below this the CPU always wins (a GPU round trip alone is ~0.1 ms)
+    constexpr uint64_t kTimeCpuEvery = 64;
+    if (!m_search || n < kElsewhereFrom) {
+        buildNeighbourListsOnCpu();
+        return;
+    }
+    using Clock = std::chrono::steady_clock;
+    auto ms = [](Clock::time_point a) { return std::chrono::duration<double, std::milli>(Clock::now() - a).count(); };
+    SearchStats& st = m_searchStats;
+    const bool timeCpu = ++m_searchCalls % kTimeCpuEvery == 1 || st.cpuMs == 0.0;
+    const bool check = m_search->checkAgainstCpu();
+    bool found = false;
+    // Three declines in a row (more neighbours than the GPU's lists can
+    // ever hold, a GPU that keeps timing out): the CPU searches until the
+    // next timing round.
+    const bool backedOff = m_searchDeclinedInARow >= 3 && !timeCpu;
+    if ((!st.onCpu || timeCpu || check) && !backedOff) {
+        FluidNeighbourSearch::Query q;
+        q.positions = m_pred.data();
+        q.count = n;
+        q.cellStart = m_cellStart.data();
+        q.tableSize = m_tableSize;
+        q.invCellSize = 1.0f / m_h;
+        q.radius2 = m_h * m_h;
+        const auto t0 = Clock::now();
+        found = m_search->search(q, m_searchStride, m_nbr, m_nbrCount);
+        if (found) {
+            average(st.elsewhereMs, ms(t0));
+            ++st.elsewhere;
+            m_searchDeclinedInARow = 0;
+            m_nbrStart.resize(n);
+            for (size_t s = 0; s < n; ++s) m_nbrStart[s] = static_cast<uint32_t>(s * m_searchStride);
+        } else {
+            ++st.declined;
+            ++m_searchDeclinedInARow;
+        }
+    }
+    if (!found || timeCpu || check) {
+        if (found) {
+            // Keep the answer; the CPU's own goes to scratch to be timed or compared.
+            m_checkList.swap(m_nbr);
+            m_checkStart.swap(m_nbrStart);
+            m_checkCount.swap(m_nbrCount);
+        }
+        const auto t0 = Clock::now();
+        buildNeighbourListsOnCpu();
+        average(st.cpuMs, ms(t0));
+        if (found) {
+            if (check) {
+                ++st.checks;
+                for (size_t s = 0; s < n; ++s) {
+                    if (m_nbrCount[s] != m_checkCount[s] ||
+                        !std::equal(m_nbr.begin() + m_nbrStart[s], m_nbr.begin() + m_nbrStart[s] + m_nbrCount[s], m_checkList.begin() + m_checkStart[s])) {
+                        ++st.differed;
+                        break;
+                    }
+                }
+            }
+            // Go on with the search's answer: that is the one being timed or checked.
+            m_checkList.swap(m_nbr);
+            m_checkStart.swap(m_nbrStart);
+            m_checkCount.swap(m_nbrCount);
+        }
+    }
+    if (st.elsewhereMs > 0.0 && st.cpuMs > 0.0) st.onCpu = st.cpuMs < st.elsewhereMs;
+}
+
 void ParticleFluid::step(float dt) {
     if (m_pos.empty() || dt <= 0.0f) return;
     // Two substeps at 60 Hz: PBF is stable at large steps, but thin
@@ -163,58 +293,82 @@ void ParticleFluid::step(float dt) {
     const float invRest = 1.0f / m_params.restDensity;
     const float relaxation = 1e-6f * m_params.restDensity; // epsilon in lambda's denominator (CFM)
 
+    // The solver works on copies in cell order ("slots"): particle
+    // m_sorted[s] lives in slot s while a substep runs, so a cell's
+    // particles, and mostly its neighbours', sit side by side in memory.
+    // Galaxy Engine's neighbour search (MIT, docs/RESEARCH.md) does the
+    // same with its sorted entry arrays.
+    m_predIn.resize(n);
     m_pred.resize(n);
+    m_sPos.resize(n);
+    m_sVel.resize(n);
+    m_sTemp.resize(n);
+    m_sMat.resize(n);
     m_delta.resize(n);
+    m_sDensity.resize(n);
     m_density.resize(n);
     m_lambda.resize(n);
+    m_scratchVel.resize(n);
+    m_scratchTemp.resize(n);
 
     FluidMaterial mats[8];
     for (uint8_t m = 0; m < 8; ++m) mats[m] = materialOf(m);
-    auto frozen = [&](size_t i) {
-        const FluidMaterial& m = mats[m_material[i] & 7];
-        return m.solidifyTemperature > -1e8f && m_temp[i] < m.solidifyTemperature;
+    auto frozen = [&](uint8_t material, float temperature) {
+        const FluidMaterial& m = mats[material & 7];
+        return m.solidifyTemperature > -1e8f && temperature < m.solidifyTemperature;
+    };
+    TaskPool* pool = m_pool;
+    auto each = [&](auto&& body) {
+        TaskPool::forRanges(pool, n, kGrain, [&](size_t b, size_t e) {
+            for (size_t i = b; i < e; ++i) body(i);
+        });
+    };
+    auto eachNeighbour = [&](size_t s, auto&& f) {
+        const uint32_t* list = m_nbr.data() + m_nbrStart[s];
+        const uint32_t count = m_nbrCount[s];
+        const glm::vec3 ps = m_pred[s];
+        for (uint32_t k = 0; k < count; ++k) {
+            uint32_t t = list[k];
+            glm::vec3 r = ps - m_pred[t];
+            float dd = glm::dot(r, r);
+            if (dd < h2) f(t, r, dd);
+        }
     };
 
     for (int sub = 0; sub < substeps; ++sub) {
         // 1. Predict.
-        for (size_t i = 0; i < n; ++i) {
+        each([&](size_t i) {
             // Solidified particles (crust) aren't pinned — they'd hang in
             // the air when what's under them melts — they're heavily damped:
             // they sag and settle but no longer flow.
-            if (frozen(i)) m_vel[i] *= 0.92f;
+            if (frozen(m_material[i], m_temp[i])) m_vel[i] *= 0.92f;
             m_vel[i] += m_params.gravity * h;
-            m_pred[i] = m_pos[i] + m_vel[i] * h;
-            collide(m_pred[i], m_pos[i]);
-        }
-        buildGrid(m_pred);
-        // Neighbour lists once per substep (slightly generous radius),
-        // reused by every solver pass below — the grid search runs 1x per
-        // substep instead of 7x. Distances are re-checked on use.
-        m_nbrStart.resize(n + 1);
-        m_nbr.clear();
-        for (size_t i = 0; i < n; ++i) {
-            m_nbrStart[i] = static_cast<uint32_t>(m_nbr.size());
-            forNeighbours(i, m_pred, [&](uint32_t j, const glm::vec3&, float) { m_nbr.push_back(j); });
-        }
-        m_nbrStart[n] = static_cast<uint32_t>(m_nbr.size());
-        auto eachNeighbour = [&](size_t i, auto&& f) {
-            for (uint32_t k = m_nbrStart[i]; k < m_nbrStart[i + 1]; ++k) {
-                uint32_t j = m_nbr[k];
-                glm::vec3 r = m_pred[i] - m_pred[j];
-                float dd = glm::dot(r, r);
-                if (dd < h2) f(j, r, dd);
-            }
-        };
+            m_predIn[i] = m_pos[i] + m_vel[i] * h;
+            collide(m_predIn[i], m_pos[i]);
+        });
+        buildGrid(m_predIn);
+        each([&](size_t s) {
+            const uint32_t i = m_sorted[s];
+            m_pred[s] = m_predIn[i];
+            m_sPos[s] = m_pos[i];
+            m_sVel[s] = m_vel[i];
+            m_sTemp[s] = m_temp[i];
+            m_sMat[s] = m_material[i];
+        });
+        // Neighbour lists once per substep, reused by every solver pass
+        // below — the grid search runs 1x per substep instead of 7x.
+        // Distances are re-checked on use.
+        buildNeighbourLists();
 
         // 2. Density constraints (unilateral: only push apart when
         // compressed, so the free surface doesn't clump — a common game
         // simplification that also removes the need for s_corr).
         for (int it = 0; it < m_params.iterations; ++it) {
-            for (size_t i = 0; i < n; ++i) {
+            each([&](size_t s) {
                 float rho = m_mass * m_poly6 * h2 * h2 * h2; // self contribution
                 glm::vec3 gradI(0.0f);
                 float sumGrad2 = 0.0f;
-                eachNeighbour(i, [&](uint32_t, const glm::vec3& r, float dd) {
+                eachNeighbour(s, [&](uint32_t, const glm::vec3& r, float dd) {
                     float w = h2 - dd;
                     rho += m_mass * m_poly6 * w * w * w;
                     float len = std::sqrt(dd);
@@ -226,70 +380,70 @@ void ParticleFluid::step(float dt) {
                     }
                 });
                 sumGrad2 += glm::dot(gradI, gradI);
-                m_density[i] = rho;
+                m_sDensity[s] = rho;
                 float c = std::max(rho * invRest - 1.0f, 0.0f);
-                m_lambda[i] = -c / (sumGrad2 + relaxation);
-            }
-            for (size_t i = 0; i < n; ++i) {
+                m_lambda[s] = -c / (sumGrad2 + relaxation);
+            });
+            each([&](size_t s) {
                 glm::vec3 dp(0.0f);
-                eachNeighbour(i, [&](uint32_t j, const glm::vec3& r, float dd) {
+                eachNeighbour(s, [&](uint32_t t, const glm::vec3& r, float dd) {
                     float len = std::sqrt(dd);
                     if (len < 1e-9f) return;
                     float x = m_h - len;
-                    dp += (m_lambda[i] + m_lambda[j]) * m_spikyGrad * x * x * (r / len);
+                    dp += (m_lambda[s] + m_lambda[t]) * m_spikyGrad * x * x * (r / len);
                 });
-                m_delta[i] = dp * (m_mass * invRest);
-            }
-            for (size_t i = 0; i < n; ++i) {
-                glm::vec3 before = m_pred[i];
+                m_delta[s] = dp * (m_mass * invRest);
+            });
+            each([&](size_t s) {
+                glm::vec3 before = m_pred[s];
                 // Cap one iteration's correction at half a particle: deep
                 // overlaps resolve over a few iterations instead of launching
                 // the particle (the velocity comes from this displacement).
-                glm::vec3 dp = m_delta[i];
+                glm::vec3 dp = m_delta[s];
                 float len = glm::length(dp);
                 const float maxDp = m_params.radius * 0.5f;
                 if (len > maxDp) dp *= maxDp / len;
-                m_pred[i] += dp;
-                collide(m_pred[i], before);
-            }
+                m_pred[s] += dp;
+                collide(m_pred[s], before);
+            });
         }
 
         // 3. Velocities, XSPH viscosity and heat.
         const float invH = 1.0f / h;
-        m_scratchVel.resize(n);
-        m_scratchTemp.resize(n);
-
-        for (size_t i = 0; i < n; ++i) {
-            m_vel[i] = (m_pred[i] - m_pos[i]) * invH;
-            float sp = glm::length(m_vel[i]);
-            if (sp > m_params.maxSpeed) m_vel[i] *= m_params.maxSpeed / sp;
-        }
-        for (size_t i = 0; i < n; ++i) {
+        each([&](size_t s) {
+            m_sVel[s] = (m_pred[s] - m_sPos[s]) * invH;
+            float sp = glm::length(m_sVel[s]);
+            if (sp > m_params.maxSpeed) m_sVel[s] *= m_params.maxSpeed / sp;
+        });
+        each([&](size_t s) {
             glm::vec3 dv(0.0f);
             float wsum = 0.0f, tsum = 0.0f;
-            eachNeighbour(i, [&](uint32_t j, const glm::vec3&, float dd) {
+            eachNeighbour(s, [&](uint32_t t, const glm::vec3&, float dd) {
                 float w = h2 - dd;
                 w = w * w * w;
-                dv += (m_vel[j] - m_vel[i]) * w;
-                tsum += (m_temp[j] - m_temp[i]) * w;
+                dv += (m_sVel[t] - m_sVel[s]) * w;
+                tsum += (m_sTemp[t] - m_sTemp[s]) * w;
                 wsum += w;
             });
-            const FluidMaterial& mat = mats[m_material[i] & 7];
+            const FluidMaterial& mat = mats[m_sMat[s] & 7];
             const float coldEnd = mat.solidifyTemperature > -1e8f ? mat.solidifyTemperature : m_params.ambientTemperature;
             const float span = std::max(1.0f, mat.hotTemperature - coldEnd);
-            float hot = std::clamp((m_temp[i] - coldEnd) / span, 0.0f, 1.0f);
-            float visc = frozen(i) ? 0.35f : mat.viscosityCold + (mat.viscosityHot - mat.viscosityCold) * hot; // solid: moves with its neighbours
-            m_scratchVel[i] = wsum > 0.0f ? m_vel[i] + dv * (visc / wsum) : m_vel[i];
-            float t = m_temp[i];
-            if (wsum > 0.0f) t += tsum / wsum * std::min(1.0f, m_params.heatDiffusion * h);
-            t -= (t - m_params.ambientTemperature) * std::min(1.0f, m_params.coolingRate * h);
-            m_scratchTemp[i] = t;
-        }
-        for (size_t i = 0; i < n; ++i) {
-            m_vel[i] = m_scratchVel[i];
-            m_temp[i] = m_scratchTemp[i];
-            m_pos[i] = m_pred[i];
-        }
+            float hot = std::clamp((m_sTemp[s] - coldEnd) / span, 0.0f, 1.0f);
+            float visc = frozen(m_sMat[s], m_sTemp[s]) ? 0.35f : mat.viscosityCold + (mat.viscosityHot - mat.viscosityCold) * hot; // solid: moves with its neighbours
+            m_scratchVel[s] = wsum > 0.0f ? m_sVel[s] + dv * (visc / wsum) : m_sVel[s];
+            float temp = m_sTemp[s];
+            if (wsum > 0.0f) temp += tsum / wsum * std::min(1.0f, m_params.heatDiffusion * h);
+            temp -= (temp - m_params.ambientTemperature) * std::min(1.0f, m_params.coolingRate * h);
+            m_scratchTemp[s] = temp;
+        });
+        // Back to the particles' own order (the order callers index).
+        each([&](size_t s) {
+            const uint32_t i = m_sorted[s];
+            m_vel[i] = m_scratchVel[s];
+            m_temp[i] = m_scratchTemp[s];
+            m_pos[i] = m_pred[s];
+            m_density[i] = m_sDensity[s];
+        });
     }
 }
 

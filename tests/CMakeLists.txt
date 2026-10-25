@@ -25,6 +25,7 @@ add_executable(kke_tests
     test_voxel_fracture.cpp
     test_interior_fill.cpp
     test_particle_fluid.cpp
+    test_task_pool.cpp
     test_melt_volume.cpp
     test_particle_library.cpp
     test_voronoi_fracture.cpp
