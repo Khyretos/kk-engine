@@ -131,7 +131,7 @@ by area. The goal is parity with the big engines and more.
 | ENG-F50 | Input | Action maps, rebinding, glyphs, per-player devices (docs/INPUT.md) | ✅ |
 | ENG-F51 | Scripting | Visual scripting (node graph; #33 leftovers) | 🟡 |
 | ENG-F52 | Scripting | Hot reload of scripts | ✅ |
-| ENG-F53 | Gameplay | Save and load: versioned files, slots, cloud hook | 🟡 |
+| ENG-F53 | Gameplay | Save and load: versioned files, slots, cloud hook. Done: save slots with titles, play time, versions and Lua migrations, self-checking files, and a cloud hook that keeps the newer save (docs/SAVING.md). | ✅ |
 | ENG-F54 | Gameplay | Replays of game sessions | 🟡 |
 | ENG-F55 | Networking | Rollback networking for fighting games (GGPO-style) | ⬜ |
 | ENG-F56 | Networking | Client-side prediction | ✅ |

@@ -84,6 +84,7 @@ add_executable(kke_tests
     test_synced_tables.cpp
     test_voice.cpp
     test_storage.cpp
+    test_save_slots.cpp
     test_input_map.cpp
     test_button_prompts.cpp
     test_ui_profile.cpp
