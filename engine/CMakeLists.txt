@@ -51,6 +51,7 @@ set(ENGINE_SOURCES
     src/AnimRig.cpp
     src/BodyShape.cpp
     src/Human.cpp
+    src/HumanHair.cpp
     src/HumanLook.cpp
     src/HumanPack.cpp
     src/CharacterIk.cpp

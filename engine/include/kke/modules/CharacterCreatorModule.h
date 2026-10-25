@@ -1,5 +1,6 @@
 #pragma once
 
+#include "kke/Hair.h"
 #include "kke/Human.h"
 #include "kke/HumanLook.h"
 #include "kke/HumanPack.h"
@@ -21,12 +22,16 @@ class Event;
 
 namespace kke {
 
+class HairRenderer;
 class OrbitCameraModule;
+class RigidWorld;
 class UiModule;
 
 // A character creator screen (docs/HUMANS.md "The creator screen"): a
 // MakeHuman body in the middle, tabs of sliders on the right (body type,
-// shape, torso, arms and legs, head, eyes, nose, mouth, ears, skin),
+// shape, torso, arms and legs, head, eyes, nose, mouth, ears, skin,
+// hair: strands grown from the body's own scalp, simulated by the engine's
+// hair physics against the body),
 // mirror, undo and redo, randomise, camera views, save, load and the
 // share code other players need to see this character.
 //
@@ -48,6 +53,10 @@ public:
 
     void init(Application& app) override;
     void update(const UpdateContext& ctx) override;
+    void fixedUpdate(const FixedUpdateContext& ctx) override;
+    void compute(VkCommandBuffer cmd) override;
+    void render(const RenderContext& ctx) override;
+    void renderShadow(const ShadowRenderContext& ctx) override;
     void shutdown() override;
 
     void open();
@@ -86,6 +95,9 @@ private:
         Rml::String name, css;
         float r = 0, g = 0, b = 0;
     };
+    struct HairChoice {
+        Rml::String id, label; // id "" = no hair
+    };
 
     void buildModel();
     void loadDocument();
@@ -99,6 +111,10 @@ private:
     void randomise(bool everything);
     void save();
     void load();
+    void buildWorld();     // the physics world: the body as a collider
+    void buildHair();      // m_look's hairstyle on the body as it is now
+    void placeFigure();    // the body, its collider and the hair's head at m_yaw
+    void moveCap();        // the scalp cap onto the body as it is now
 
     Application* m_app = nullptr;
     UiModule* m_ui = nullptr;
@@ -110,6 +126,11 @@ private:
     HumanLook m_look;
     Human::Bake m_bodyBake, m_partsBake;
     ModelModule::InstanceId m_body = 0, m_parts = 0;
+    // The scalp painted the hair's root colour, so no skin shows between
+    // the hairs (docs/HAIR.md): the skin's scalp triangles, a hair over it.
+    ModelModule::InstanceId m_cap = 0;
+    std::vector<uint32_t> m_capFrom; // cap vertex -> body model vertex
+    ModelData m_capModel;
     bool m_shapeDirty = false;
     bool m_open = false;
     bool m_selfTested = false;
@@ -120,11 +141,25 @@ private:
     std::vector<TabView> m_tabs;
     Rml::String m_tab = "body";
     std::vector<SliderView> m_sliders;
-    std::vector<SwatchView> m_skinSwatches, m_eyeSwatches;
+    std::vector<SwatchView> m_skinSwatches, m_eyeSwatches, m_hairSwatches;
+    std::vector<HairChoice> m_hairChoices;
+    float m_hairLength = 1.0f, m_hairLengthShown = 1.0f;
+    Rml::String m_hairStyle;
     bool m_mirror = true;
     bool m_turntable = false;
     Rml::String m_code, m_codeShort, m_status, m_view = "body";
     float m_statusTime = 0.0f;
+
+    // Hair: a world of its own (the body is a still collider in it), the
+    // strands simulated there and drawn by a HairRenderer.
+    std::unique_ptr<RigidWorld> m_world;
+    uint32_t m_bodyCollider = 0xffffffffu;
+    uint32_t m_hair = 0;
+    std::unique_ptr<HairRenderer> m_hairDrawn;
+    std::vector<glm::vec3> m_guides;
+    bool m_hairDirty = false; // rebuild once the sliders rest
+    float m_yaw = 0.0f;       // the turntable turns the figure, so the hair swings
+    glm::mat4 m_figure{ 1.0f };
 
     std::vector<std::map<std::string, float>> m_undo, m_redo;
     float m_sinceEdit = 1e9f;

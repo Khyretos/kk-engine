@@ -20,13 +20,13 @@
             <span class="tab" data-for="t : tabs" data-class-on="tab == t.id" data-event-click="set_tab(t.id)">{{ t.label }}</span>
         </div>
 
-        <div class="tools" data-if="tab != 'skin'">
+        <div class="tools" data-if="tab != 'skin' && tab != 'hair'">
             <button data-class-on="mirror" data-event-click="toggle_mirror">Mirror sides</button>
             <button data-event-click="randomise('tab')">Random</button>
             <button data-event-click="reset_tab">Reset tab</button>
         </div>
 
-        <div id="sliders" data-if="tab != 'skin'">
+        <div id="sliders" data-if="tab != 'skin' && tab != 'hair'">
             <div class="slider" data-for="s, i : sliders">
                 <span class="label">{{ s.label }}</span>
                 <input type="range" data-attr-min="s.min" data-attr-max="s.max" step="0.01" data-value="s.value"/>
@@ -40,7 +40,24 @@
             <div class="swatches">
                 <span class="swatch" data-for="c, i : skin_swatches" data-style-background-color="c.css" data-event-click="skin(i)"><span class="tip">{{ c.name }}</span></span>
             </div>
-            <p class="note">Skin textures, eye colour, make-up and hair arrive with the next steps of the creator.</p>
+            <p class="note">Skin textures, eye colour and make-up arrive with the next steps of the creator.</p>
+        </div>
+
+        <div id="hair" data-if="tab == 'hair'">
+            <h2>Hairstyle</h2>
+            <div class="choices">
+                <button data-for="h : hair_choices" data-class-on="hair_style == h.id" data-event-click="hair_style(h.id)">{{ h.label }}</button>
+            </div>
+            <h2>Colour</h2>
+            <div class="swatches">
+                <span class="swatch" data-for="c, i : hair_swatches" data-style-background-color="c.css" data-event-click="hair_colour(i)"><span class="tip">{{ c.name }}</span></span>
+            </div>
+            <h2>Length</h2>
+            <div class="slider">
+                <input type="range" min="0.4" max="1.8" step="0.05" data-value="hair_length"/>
+                <span class="value">{{ hair_length | format(2) }}</span>
+            </div>
+            <p class="note">Every strand grows from this head's own scalp and moves with the engine's hair physics: press Turn to see it swing.</p>
         </div>
     </div>
 
