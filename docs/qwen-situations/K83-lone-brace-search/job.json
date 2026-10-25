@@ -1,16 +1,14 @@
 [
- {
-  "mode": "patch",
-  "focus": [
-   "^\\}$"
-  ],
-  "name": "f02k-sphereimpo3",
-  "role": "worker/cpp-games",
-  "out": "engine/src/SphereImpostors.cpp",
-  "prompt": "Kreative Kompas Engine (C++20, Vulkan, forward renderer): ENG-F02 part 3 adds ray-traced reflections with inline ray queries: models and meshes add themselves to a kke::RayScene each frame (skinned parts refitted from their skinned vertices), a hit is shaded from its vertices' normal and colour; classic traces every triangle for every smooth pixel, KKE marches on screen first and traces rays that leave it through stand-ins with a tenth of the triangles, within a budget.  Make these 1 edits in engine/src/SphereImpostors.cpp, each its own SEARCH/REPLACE block.\nEdit 1. Your SEARCH block is exactly these lines:\n```\n}\n\nvoid DynamicMeshRenderer::bindAndDraw(const RenderContext& ctx, Pipeline& pipeline, const glm::mat4& model, float metallic, float roughness) {\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n    if (m_app.recordingRays() && ctx.viewIndex == 0) m_app.recordRayDraw(this, model);\n}\n\nvoid DynamicMeshRenderer::bindAndDraw(const RenderContext& ctx, Pipeline& pipeline, const glm::mat4& model, float metallic, float roughness) {\n```\nChange nothing else; do not copy or move any other line.\n",
-  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g09.py f02ksphereimpo3",
-  "precheck": false,
-  "context": [],
-  "max_tokens": 800
- }
+  {
+    "mode": "patch",
+    "focus": ["^\\}$"],
+    "name": "f02k-sphereimpo3",
+    "role": "worker/cpp-games",
+    "out": "engine/src/SphereImpostors.cpp",
+    "prompt": "Kreative Kompas Engine (C++20, Vulkan, forward renderer): ENG-F02 part 3 adds ray-traced reflections with inline ray queries: models and meshes add themselves to a kke::RayScene each frame (skinned parts refitted from their skinned vertices), a hit is shaded from its vertices' normal and colour; classic traces every triangle for every smooth pixel, KKE marches on screen first and traces rays that leave it through stand-ins with a tenth of the triangles, within a budget.  Make these 1 edits in engine/src/SphereImpostors.cpp, each its own SEARCH/REPLACE block.\nEdit 1. Your SEARCH block is exactly these lines:\n```\n}\n\nvoid DynamicMeshRenderer::bindAndDraw(const RenderContext& ctx, Pipeline& pipeline, const glm::mat4& model, float metallic, float roughness) {\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n    if (m_app.recordingRays() && ctx.viewIndex == 0) m_app.recordRayDraw(this, model);\n}\n\nvoid DynamicMeshRenderer::bindAndDraw(const RenderContext& ctx, Pipeline& pipeline, const glm::mat4& model, float metallic, float roughness) {\n```\nChange nothing else; do not copy or move any other line.\n",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g09.py f02ksphereimpo3",
+    "precheck": false,
+    "context": [],
+    "max_tokens": 800
+  }
 ]
