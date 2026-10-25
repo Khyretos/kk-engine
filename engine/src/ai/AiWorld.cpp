@@ -981,7 +981,11 @@ void AiWorld::act(Agent& a, float dt) {
         const float radius = std::min(a.order.distance, 1.0f);
         speed = a.order.run ? s.runSpeed : s.walkSpeed;
         if (a.order.run) anim = "run";
-        if (flatDistance(a.position, a.order.position) <= radius) {
+        if (a.order.kind != Order::Kind::MoveTo) {
+            // Arrived already: the order is Hold now, until the next think picks that.
+            steer = brake();
+            anim = "idle";
+        } else if (flatDistance(a.position, a.order.position) <= radius) {
             emit({ AiEvent::Kind::Arrived, a.id, 0, a.order.position, {} });
             const glm::vec3 at = a.order.position;
             a.order = {};
@@ -1039,7 +1043,10 @@ void AiWorld::act(Agent& a, float dt) {
         if (attacking) anim = "attack";
     } else if (behavior == "interact") {
         glm::vec3 target;
-        if (focusPos(a.order.target, target)) {
+        if (a.order.kind != Order::Kind::Interact) {
+            steer = brake(); // arrived already (once): the order ended
+            anim = "idle";
+        } else if (focusPos(a.order.target, target)) {
             speed = a.order.run ? s.runSpeed : s.walkSpeed;
             if (a.order.run) anim = "run";
             const Species* ts = speciesOf(a.order.target);

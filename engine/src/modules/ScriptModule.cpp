@@ -562,6 +562,7 @@ void ScriptModule::bindAll() {
     bindReplication();
     bindStore();
     bindNav();
+    bindCreatures();
 }
 
 void ScriptModule::bindStore() {
@@ -643,6 +644,7 @@ void ScriptModule::update(const UpdateContext& ctx) {
     }
     m_vm->callHook("Think", ctx.dt);
     if (m_nav && m_nav->dynamic()) m_nav->update(); // obstacles nav.obstacle added or removed
+    stepCreatures(ctx.dt);
     // Per-script CPU time this frame, smoothed for the panel.
     for (const auto& [source, total] : m_vm->cpuTimes()) {
         const double ms = (total - m_cpuLast[source]) * 1000.0;

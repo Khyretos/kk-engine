@@ -213,12 +213,13 @@ Vectors: `Vec(x, y, z)` with `+ - * /`, `:length()`, `:normalized()`,
 | `fx` | Particle effects by name ([effects.lua](cookbook/recipes/effects.lua), [the list](PARTICLE_EFFECTS.md)): `play(name, pos, opts)` → true, or nil and the reason (an unknown name); `start(name, pos, opts)` → id (keeps going), `move(id, pos, opts)`, `stop(id)` (what's in the air finishes), `count()` → this script's running effects, `names()`, `define(name, effect)` → true, or nil and what's wrong (an effect as a Lua table, the fields of the YAML), `wind(vec)` (m/s; smoke and flakes drift); `opts`: `normal`, `velocity`, `scale`, `floor`. 8000 particles for all scripts together; the oldest go first |
 | `decal` | Marks laid onto surfaces ([DECALS.md](DECALS.md)): `place(texture, pos, opts)` → id, or nil and the reason (a built-in, `textures()` lists them, or `assets/decals/<name>.png`); `opts`: `normal` (out of the surface, default up), `size` (m, default 1), `depth`, `angle` (radians), `color`, `opacity`, `roughness` (0.05 wet, -1 keeps the surface's), `life` and `fade` (s; 0 stays); `remove(id)` → true if it was there, `clear()`, `count()`. 1024 at once; the oldest go first |
 | `light` | Lamps ([lamps.lua](cookbook/recipes/lamps.lua)): `point{pos, color, intensity, range, shadows}` → id, or nil and the reason when every light is in use (16 in all: light 0 is the sun, and a game's own lights take slots too); `range` in metres (default 10; 0 = reaches everywhere); `shadows = true` casts shadows (the first 4 lights that ask); `move(id, pos)`, `set(id, {color, intensity, range, shadows, on})` (missing fields stay as they are), `remove(id)`, `count()` → this script's lights |
-| `models` | `load(name)` → model (an asset name from an installed pack, e.g. `"SM_Prop_Crate_01"`, or a path inside the game's folder; nil + reason if missing), `spawn(model, {pos, yaw, scale, tint})` → instance, `move(inst, pos [, yaw, scale])`, `remove(inst)`, `tint(inst, Vec)`, `visible(inst, bool)`, `play(inst, clip [, loop, speed])` (clip name or number; nil stops), `clips(model)` → names, `bounds(model)` → min, max |
+| `models` | `load(name)` → model (an asset name from an installed pack, e.g. `"SM_Prop_Crate_01"`, or a path inside the game's folder; nil + reason if missing), `spawn(model, {pos, yaw, scale, tint})` → instance, `move(inst, pos [, yaw, scale])`, `remove(inst)`, `tint(inst, Vec)`, `visible(inst, bool)`, `play(inst, clip [, loop, speed])` (clip name or number; nil stops), `clips(model)` → names, `bounds(model)` → min, max, `position(inst)` → pos, yaw |
 | `breakable` | FEMFX objects that really break. `box{pos, size, material, pattern, cells, chunk, velocity, arm}` → id (material `glass`, `stone`, `wood`, `ice`, `iron`; pattern `shards`, `voronoi`, `splinters`, `radial`, `solid`, default by material), `ball{pos, radius, velocity, material}` → id (iron by default: a projectile), `remove(id)`, `broken(id)`, `pieces(id)`, `count()`. The `Break` hook says when one breaks. |
 | `ui` | RmlUi documents. `open(rml)` / `load("file.rml")` (next to the scripts) → doc, `text(doc, id, text)` (plain text, shown as typed), `rml(doc, id, markup)`, `class(doc, id, name, on)`, `property(doc, id, name, value)`, `show(doc, bool)`, `close(doc)`, `onClick(doc, id, fn)`, `profile()` → `"phone"`, `"desktop"` or `"console"` (the kind of screen, [INPUT.md](INPUT.md) "Phone, PC and console"; every document's body also has the class `kke-phone`/`kke-desktop`/`kke-console` and `kke-portrait`/`kke-landscape` for RCSS) |
 | `scene` | `list()` → names in `scenes/`, `load(name, origin)` → scene, missing count (or nil + reason), `unload(scene)`, `spawnPoint(scene)` → pos, yaw |
 | `net` | `role()` (`"offline"`, `"host"`, `"client"`), `isServer()`, `connected()`, `playerId()`, `players()` → `{ {id, name}, ... }`, `send(name, data)`: from a client to the host, from the host to every client; `data` is nil, a boolean, number, string or a table of those (about 500 bytes encoded, one network event); `call(name, data [, function(ok, answer) end])` → sent? and `handle(name, function(data, from) end)`: a question to the host and its answer ("Calls" below); `table(name)` → a synced table (host/server only: `:set(key, row)`, `:get(key)`, `:remove(key)`, `:rows()`, `:count()`, `:clear()`) and `watch(name [, filter] [, function(event, key, row, old) end])` → a view (`:rows()`, `:get(key)`, `:ready()`, `:count()`, `:stop()`) ("Synced tables" below) |
 | `nav` | Pathfinding ("Finding the way" below): `build({radius, height, climb, slope, cell, tile, dynamic})` → true, info, `path(from, to)` → points, partial, `walkable(from, to)`, `nearest(pos [, reach])`, `move(from, to)`, `random(centre, radius)`, `obstacle{pos, size, yaw}` or `{pos, radius, height}` → id, `remove(id)`, `ready()` |
+| `ai` | Creatures with a mind ("Creatures" below, docs/AI.md "Lua"): `add(inst, species)`, orders `goTo/follow/attack/hold/flee/fetch/free`, `anims(inst, {idle, walk, run, ...})`, `actor(id, pos [, species, velocity])`, `doing`, `need`, `knows`, `noise`, ... |
 | `store` | What outlives the session ("Saving" below): `save(name, value)` → true or false, reason; `load(name [, default])`; `add(name [, n])` → new count; `remove(name)`; `keys([prefix])` → names in order |
 
 Everything a script makes (bodies, models, lights, breakables, documents,
@@ -302,6 +303,37 @@ nav.remove(cart)                                                -- paths go thro
 - A script's obstacles go when it unloads, and the navmesh goes with the
   script that built it. C++ gets it with `ScriptModule::navMesh()` (for an
   `ai::AiWorld`).
+
+## Creatures
+
+`ai.add` gives a model a mind: it walks the navmesh (when `nav.build` made
+one), turns where it goes and plays its walk, run and idle clips by itself.
+What it is and what it wants come from its species (docs/AI.md).
+
+```lua
+nav.build()
+local wolfModel = models.load("Wolf")
+local wolf = models.spawn(wolfModel, { pos = Vec(0, 0, -10) })
+ai.add(wolf, "dog")                                         -- a species: dog, sheep, cow, ...
+ai.anims(wolf, { idle = "Idle", walk = "Walk", run = "Gallop", attack = "Bite" })
+ai.goTo(wolf, Vec(4, 0, 6))                                 -- or follow, attack, flee, fetch
+
+ai.actor(1000001, player.pos, "farmer")                     -- someone without a model: the player
+hook.Add("Think", "me", function() ai.actor(1000001, player.pos) end)   -- keep it where they are
+
+hook.Add("Arrived", "wolf", function(e) print(e.who, "is at", e.at) end)  -- once per order
+hook.Add("Attacks", "wolf", function(e) hurt(e.target, 10) end)          -- the game deals the damage
+local pos, yaw = models.position(wolf)
+```
+
+- A clip name per thing it does (`idle`, `walk`, `run`, `attack`, `alert`,
+  `eat`, `sleep`, ...). A missing clip is fine: running falls back to the
+  walk clip, anything else to idle. Attacks play once, the rest loop.
+- Height comes from the ground under it (the level's collision), and it
+  only sees what isn't behind a wall.
+- `ai.actor` ids start at 1,000,000 so they never meet a model's number.
+  Removing a model (`models.remove`) or unloading the script takes its
+  mind away too.
 
 ## Saving
 
