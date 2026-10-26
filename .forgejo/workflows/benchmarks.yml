@@ -90,20 +90,91 @@ env:
   GIT_CONFIG_VALUE_25: https://gitlab.freedesktop.org/wayland/wayland.git
 
 jobs:
+  # Two jobs because Forgejo fills in runs-on before it knows the event
+  # (an expression on github.event_name there always picked soucouyant,
+  # 2026-10-26), so each job sets its runner and the `if` picks one.
+  #
+  # Pull requests: the quick pass on any free worker. It checks for crashes,
+  # missing reports and warnings, and prints a comparison that never fails,
+  # so another machine's numbers can't break it. Pinned to soucouyant, PRs
+  # waited whenever that PC was off or busy.
   benchmarks:
-    # The numbers recorded on main come from soucouyant alone, so the
-    # history compares like with like. A PR's quick pass is only a crash and
-    # warnings check plus a comparison that never fails, so it goes to any
-    # free worker: pinned to soucouyant, PRs waited whenever that PC was off
-    # or busy (2026-10-26).
-    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'soucouyant' }}
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      KKE_JOBS: "3" # a worker may have only 3 CPUs and 6 GB (a WSL VM), as in ci.yml's shipping-build
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+
+      - name: Configure (Release, warnings are errors)
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DKKE_WARNINGS_AS_ERRORS=ON -DKKE_ENABLE_TESTS=OFF -DKKE_ENABLE_VALIDATION=OFF
+
+      - name: Build kke_bench and the showcase
+        run: cmake --build build -j "$KKE_JOBS" --target kke_bench kke_demo
+
+      - name: kke_bench (headless CPU suite)
+        run: ./build/bin/kke_bench --quick --out "$PWD/bench-out"
+
+      - name: Stress test (showcase, Xvfb + lavapipe)
+        run: |
+          # The X server's own keymap chatter (keysyms its xkb data lacks)
+          # goes to xvfb.log, uploaded with the reports.
+          Xvfb :99 -screen 0 1280x720x24 > "$GITHUB_WORKSPACE/bench-out-xvfb.log" 2>&1 &
+          sleep 2
+          cd build/bin
+          rm -f imgui.ini
+          set +e
+          DISPLAY=:99 SDL_VIDEODRIVER=x11 KKE_SKIP_INTRO=1 KKE_AUDIO=off KKE_STRESS_TEST=1 KKE_BENCH_DIR="$GITHUB_WORKSPACE/bench-out" \
+            timeout 300 ./kke_demo > stress.log 2>&1
+          code=$?
+          set -e
+          tail -5 stress.log
+          if [ "$code" -ne 0 ] || grep -qi "Fatal error" stress.log; then
+            echo "stress test failed (exit $code)"; tail -60 stress.log; exit 1
+          fi
+          ls "$GITHUB_WORKSPACE"/bench-out/stress_*.json > /dev/null || { echo "stress test wrote no report"; tail -60 stress.log; exit 1; }
+
+      # The history lives on its own branch so these commits never touch
+      # main (seven people and agents push to main; a bot commit per push
+      # there would be noise and merge churn).
+      - name: Fetch the benchmark history
+        run: |
+          if git -c http.extraHeader="Authorization: token ${{ github.token }}" fetch --depth=1 \
+              "${{ github.server_url }}/${{ github.repository }}" benchmark-data 2>/dev/null; then
+            git worktree add history FETCH_HEAD
+          else
+            mkdir history
+          fi
+
+      - name: Compare
+        run: |
+          python3 benchmarks/track.py --dry-run --history history --commit "${{ github.sha }}" \
+            --date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --ref "${{ github.ref }}" bench-out/*.json | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
+
+      - name: Upload the reports
+        if: always()
+        uses: https://code.forgejo.org/forgejo/upload-artifact@v4
+        with:
+          name: benchmark-reports
+          path: |
+            bench-out/
+            build/bin/stress.log
+            bench-out-xvfb.log
+
+  # Main (nightly) and runs by hand: on soucouyant alone, so the recorded
+  # history compares like with like.
+  benchmarks-soucouyant:
+    if: github.event_name != 'pull_request'
+    runs-on: soucouyant
     env:
-      # soucouyant has 32 GB of RAM; another worker may have only 3 CPUs and
-      # 6 GB (a WSL VM), as in ci.yml's shipping-build.
-      KKE_JOBS: ${{ github.event_name == 'pull_request' && '3' || '8' }}
+      KKE_JOBS: "8" # soucouyant has 32 GB of RAM
+    container:
+      image: git.kreative-kompas.com/khyretos/kke-ci:1
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
