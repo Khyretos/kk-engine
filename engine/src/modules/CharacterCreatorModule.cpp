@@ -667,7 +667,9 @@ void CharacterCreatorModule::update(const UpdateContext& ctx) {
         const bool same = parsed && shareCode() == code;
         const bool floor = std::abs(m_bodyBake.model.boundsMin.y) < 1e-3f;
         buildHair(); // the random hairstyle on the random head
-        const bool hair = m_look.hair.empty() || (m_hair && m_world->hairStats(m_hair).guides > 40);
+        // Every guide asked for: a plaited style has only a row or braid each
+        // (cornrows 6-14), so a fixed count failed whenever one came up.
+        const bool hair = m_look.hair.empty() || (m_hair && m_hairRoots > 0 && m_world->hairStats(m_hair).guides >= m_hairRoots);
         log::get(name())->info("creator self-test {} (code {}, floor {}, hair '{}' {})", same && floor && hair ? "passed" : "FAILED",
                                same ? "round-trips" : "differs", floor ? "ok" : "off", m_look.hair, hair ? "ok" : "missing");
     }
@@ -829,6 +831,7 @@ void CharacterCreatorModule::buildHair() {
         return;
     }
     d.style.length *= std::clamp(m_look.hairLength, 0.3f, 2.0f);
+    m_hairRoots = d.roots.size();
     d.wind = 0.0f; // indoors
     d.bindPose = glm::mat4(1.0f); // the shaped body faces +Z at the origin
     m_hair = m_world->addHair(d);

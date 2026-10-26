@@ -155,6 +155,7 @@ private:
     std::unique_ptr<RigidWorld> m_world;
     uint32_t m_bodyCollider = 0xffffffffu;
     uint32_t m_hair = 0;
+    size_t m_hairRoots = 0; // guides buildHair asked for (cornrows have only 6-14)
     std::unique_ptr<HairRenderer> m_hairDrawn;
     std::vector<glm::vec3> m_guides;
     bool m_hairDirty = false; // rebuild once the sliders rest
