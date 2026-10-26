@@ -3,7 +3,7 @@ name: Benchmarks
 # Forgejo port of the former .github/workflows/benchmarks.yml (Forgejo is the
 # main repository now; a branch GitHub pushed itself would be overwritten by
 # the push mirror). Runs on soucouyant in the CI image (docker/ci.Dockerfile),
-# so the numbers come from one fixed machine. Nightly and by hand, like ci.yml:
+# so the recorded numbers come from one fixed machine. Nightly and by hand, like ci.yml:
 # main is pushed too often to build every commit here.
 #
 # The headless benchmark suite (docs/BENCHMARKS.md): kke_bench's CPU cases
@@ -20,8 +20,8 @@ on:
   schedule:
     - cron: "0 2 * * *"
   workflow_dispatch:
-  # PRs run the quick set and only print the comparison (required check).
-  pull_request:
+  # Pull requests run the quick set on any free worker instead:
+  # benchmarks-pr.yml.
 
 # One run per ref at a time. On main the history is appended in commit
 # order, so a newer push waits instead of cancelling a run mid-write.

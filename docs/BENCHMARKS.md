@@ -156,7 +156,9 @@ appends the results to the
 `history.jsonl` holds every run, and its README shows a table and a trend
 chart per number (Forgejo's push mirror copies the branch to GitHub). A run
 started by hand on another branch does a quick pass and prints a comparison
-without being recorded. The history samples main once a night rather than
+without being recorded, and pull requests do the same quick pass on any free
+CI worker (`.forgejo/workflows/benchmarks-pr.yml`; its numbers aren't
+soucouyant's, which is why they only print). The history samples main once a night rather than
 listing every commit; runs before 2026-10-04 came from GitHub's shared
 runners, so expect one step in each chart where the machine changed.
 

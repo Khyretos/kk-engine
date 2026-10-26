@@ -110,7 +110,7 @@ concurrency:
 jobs:
   # Runners (2026-10-19, Kees): every job here goes to any free worker
   # (ubuntu-latest); the tests draw on lavapipe, so none needs a GPU. Kees picks
-  # which PCs take shared jobs on the CI queue page. Only the benchmarks (one
+  # which PCs take shared jobs on the CI queue page. Only main's benchmarks (one
   # machine, comparable numbers) and the VM tests (KVM) stay on soucouyant.
   #
   # Every third-party library, tool, image, font and action must be listed,
