@@ -8,6 +8,7 @@
 #endif
 
 #include <cstdlib>
+#include <string>
 #include <cstring>
 #include <iostream>
 #include <set>
@@ -373,6 +374,15 @@ void VulkanDevice::createLogicalDevice(bool enableValidation) {
     deviceFeatures.largePoints = supportedFeatures.largePoints;   // particle point-sprites use gl_PointSize > 1.0
     deviceFeatures.wideLines = supportedFeatures.wideLines;       // handy for future debug-line rendering
     m_largePointsSupported = (supportedFeatures.largePoints == VK_TRUE);
+    // Block-compressed textures (ENG-F60): desktop GPUs have them; phones
+    // usually don't (KKE_TEXTURE_BC=0 tries the decode path anywhere).
+    if (supportedFeatures.textureCompressionBC == VK_TRUE) {
+        VkFormatProperties bc7{};
+        vkGetPhysicalDeviceFormatProperties(m_physicalDevice, VK_FORMAT_BC7_SRGB_BLOCK, &bc7);
+        const char* off = std::getenv("KKE_TEXTURE_BC");
+        m_bc7Supported = (bc7.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT) && !(off && std::string(off) == "0");
+        deviceFeatures.textureCompressionBC = m_bc7Supported ? VK_TRUE : VK_FALSE;
+    }
     deviceFeatures.samplerAnisotropy = supportedFeatures.samplerAnisotropy; // kke::Texture's sampler
     if (supportedFeatures.samplerAnisotropy == VK_TRUE) {
         VkPhysicalDeviceProperties props{};

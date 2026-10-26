@@ -103,4 +103,31 @@ void scaleAlphaToCoverage(uint8_t* rgba, size_t texels, float targetCoverage, fl
     }
 }
 
+uint32_t buildMipChainRgba8(const uint8_t* rgba, uint32_t width, uint32_t height, bool srgb, std::vector<uint8_t>& chain) {
+    uint32_t mipLevels = 1;
+    for (uint32_t m = std::max(width, height); m > 1; m >>= 1) ++mipLevels;
+    uint32_t w = width, h = height;
+    chain.assign(rgba, rgba + static_cast<size_t>(w) * h * 4);
+    size_t offset = 0;
+    // Cutout textures keep the base level's alpha-test coverage in
+    // every mip, so foliage doesn't thin out with distance (see
+    // scaleAlphaToCoverage). 0.5 is model.frag's cutoff.
+    constexpr float kAlphaCutoff = 0.5f;
+    const size_t baseTexels = static_cast<size_t>(w) * h;
+    const bool cutout = srgb && hasTransparentTexels(chain.data(), baseTexels);
+    const float baseCoverage = cutout ? alphaCoverage(chain.data(), baseTexels, kAlphaCutoff) : 1.0f;
+    for (uint32_t level = 0; level + 1 < mipLevels; ++level) {
+        const uint32_t nw = std::max(1u, w / 2), nh = std::max(1u, h / 2);
+        const size_t next = offset + static_cast<size_t>(w) * h * 4;
+        chain.resize(next + static_cast<size_t>(nw) * nh * 4);
+        if (srgb) downsampleRgba8Srgb(chain.data() + offset, w, h, chain.data() + next, nw, nh);
+        else downsampleRgba8Linear(chain.data() + offset, w, h, chain.data() + next, nw, nh);
+        if (cutout) scaleAlphaToCoverage(chain.data() + next, static_cast<size_t>(nw) * nh, baseCoverage, kAlphaCutoff);
+        offset = next;
+        w = nw;
+        h = nh;
+    }
+    return mipLevels;
+}
+
 } // namespace kke

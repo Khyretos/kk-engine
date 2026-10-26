@@ -1,5 +1,7 @@
 #include "kke/Texture.h"
 #include "kke/CookedFile.h"
+#include "kke/Ktx2.h"
+#include "kke/TextureCompress.h"
 #include "kke/TextureMips.h"
 #include "kke/VulkanDevice.h"
 #include "kke/Log.h"
@@ -12,13 +14,76 @@
 #include <stb_image.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
+#include <cstdlib>
+#include <filesystem>
+#include <mutex>
 #include <stdexcept>
+#include <system_error>
 #include <vector>
 
 namespace kke {
 
+std::string Texture::compressedTwin(const std::string& filePath) {
+    std::filesystem::path p(filePath);
+    std::string ext = p.extension().string();
+    for (char& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    if (ext == ".ktx2") return filePath;
+    if (const char* off = std::getenv("KKE_TEXTURE_KTX2"); off && std::string(off) == "0") return {};
+    p.replace_extension(".ktx2");
+    const std::string twin = p.string();
+    std::error_code ec;
+    return std::filesystem::is_regular_file(twin, ec) ? twin : std::string();
+}
+
+bool Texture::loadKtx2(const std::string& ktxPath, bool srgb, std::string& why) {
+    std::vector<uint8_t> bytes;
+    if (!cooked::readAssetFile(ktxPath, bytes, &why)) return false;
+    ktx2::Image image;
+    if (!ktx2::read(bytes.data(), bytes.size(), image, &why)) return false;
+    if (ktx2::isSrgb(image.vkFormat) != srgb) {
+        why = srgb ? "cooked as data (kke_texcook --linear), used as colour" : "cooked as colour, used as data (normal, roughness or metallic map)";
+        return false;
+    }
+    // Sampled through a full chain or none: the GPU wants every level down
+    // to 1x1 for trilinear filtering, as createFromPixels makes.
+    rhi::TextureDesc desc;
+    desc.width = image.width;
+    desc.height = image.height;
+    desc.levels = static_cast<uint32_t>(image.levels.size());
+    desc.anisotropic = true;
+    const bool bc7 = image.vkFormat == ktx2::kBc7Srgb || image.vkFormat == ktx2::kBc7Unorm;
+    if (bc7) {
+        static std::once_flag said;
+        std::call_once(said, [&] {
+            log::get("Texture")->info(m_device.bc7Supported() ? "compressed textures (.ktx2): BC7, sampled as they are"
+                                                              : "compressed textures (.ktx2): no BC7 on this GPU, decoded to RGBA8 on load");
+        });
+    }
+    std::vector<uint8_t> data;
+    if (bc7 && m_device.bc7Supported()) {
+        desc.format = srgb ? rhi::TextureFormat::BC7Srgb : rhi::TextureFormat::BC7;
+        for (const std::vector<uint8_t>& level : image.levels) data.insert(data.end(), level.begin(), level.end());
+    } else {
+        // No BC on this GPU (most phones): decoded once here, so the game
+        // still runs, at RGBA8's memory cost.
+        desc.format = srgb ? rhi::TextureFormat::RGBA8Srgb : rhi::TextureFormat::RGBA8;
+        data = toRgba8Chain(image);
+    }
+    m_gpu = rhi::VulkanGpuDevice(m_device).createTexture(desc, data.data());
+    return true;
+}
+
 void Texture::loadFile(const std::string& filePath, bool srgb) {
+    // A cooked twin (kke_texcook) first: smaller on disk and in VRAM, and
+    // its mips are already made.
+    if (const std::string twin = compressedTwin(filePath); !twin.empty()) {
+        std::string why;
+        if (loadKtx2(twin, srgb, why)) return;
+        if (twin == filePath) throw std::runtime_error("kke::Texture: '" + filePath + "': " + why);
+        log::get("Texture")->warn("'{}' not used ({}): loading '{}' instead", twin, why, filePath);
+    }
     int width = 0, height = 0, channels = 0;
     // Forcing 4 channels (RGBA), same reasoning as
     // RmlVulkanRenderInterface::LoadTexture: matches this class's own
@@ -50,32 +115,8 @@ Texture::Texture(VulkanDevice& device, const uint8_t* rgbaPixels, uint32_t width
 
 void Texture::createFromPixels(const uint8_t* rgbaPixels, uint32_t width, uint32_t height, bool srgb) {
     // The whole mip chain, level after level, for the device to upload.
-    uint32_t mipLevels = 1;
-    for (uint32_t m = std::max(width, height); m > 1; m >>= 1) ++mipLevels;
     std::vector<uint8_t> chain;
-    {
-        uint32_t w = width, h = height;
-        chain.assign(rgbaPixels, rgbaPixels + static_cast<size_t>(w) * h * 4);
-        size_t offset = 0;
-        // Cutout textures keep the base level's alpha-test coverage in
-        // every mip, so foliage doesn't thin out with distance (see
-        // scaleAlphaToCoverage). 0.5 is model.frag's cutoff.
-        constexpr float kAlphaCutoff = 0.5f;
-        const size_t baseTexels = static_cast<size_t>(w) * h;
-        const bool cutout = srgb && hasTransparentTexels(chain.data(), baseTexels);
-        const float baseCoverage = cutout ? alphaCoverage(chain.data(), baseTexels, kAlphaCutoff) : 1.0f;
-        for (uint32_t level = 0; level + 1 < mipLevels; ++level) {
-            uint32_t nw = std::max(1u, w / 2), nh = std::max(1u, h / 2);
-            size_t next = offset + static_cast<size_t>(w) * h * 4;
-            chain.resize(next + static_cast<size_t>(nw) * nh * 4);
-            if (srgb) downsampleRgba8Srgb(chain.data() + offset, w, h, chain.data() + next, nw, nh);
-            else downsampleRgba8Linear(chain.data() + offset, w, h, chain.data() + next, nw, nh);
-            if (cutout) scaleAlphaToCoverage(chain.data() + next, static_cast<size_t>(nw) * nh, baseCoverage, kAlphaCutoff);
-            offset = next;
-            w = nw;
-            h = nh;
-        }
-    }
+    const uint32_t mipLevels = buildMipChainRgba8(rgbaPixels, width, height, srgb, chain);
     // LINEAR + REPEAT, trilinear and anisotropic where the GPU has it: floors and walls
     // seen at a glancing angle stay sharp (docs/RENDERING_PRINCIPLES.md).
     rhi::TextureDesc desc;

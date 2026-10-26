@@ -81,6 +81,7 @@ fi
 
 # Code and assets kept in this repository.
 add "AMD FEMFX" "$repo/external/FEMFX"
+add "bc7enc" "$repo/external/bc7enc"
 add "cgltf" "$repo/external/cgltf"
 add "Noto fonts (assets/fonts)" "$repo/assets/fonts"
 add "Xelu's Free Controller & Key Prompts (assets/prompts/xelu, CC0)" "$repo/assets/prompts/xelu"

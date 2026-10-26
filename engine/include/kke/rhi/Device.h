@@ -65,7 +65,9 @@ struct BindingWrite {
 };
 
 // A sampled 2D texture's pixels (R1e): 8-bit colour (sRGB or linear data) or half-float light.
-enum class TextureFormat : uint8_t { RGBA8Srgb, RGBA8, RGBA16F };
+// BC7: 4x4 blocks of 16 bytes (kke/TextureCompress.h), only where the
+// GPU samples them (VulkanDevice::bc7Supported).
+enum class TextureFormat : uint8_t { RGBA8Srgb, RGBA8, RGBA16F, BC7Srgb, BC7 };
 // How it repeats: Repeat both ways (a material), or around the horizon only (an equirectangular sky).
 enum class Wrap : uint8_t { Repeat, RepeatAroundOnly };
 

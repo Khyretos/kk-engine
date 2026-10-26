@@ -147,6 +147,35 @@ map replaces its number.
 A texture variant such as `_Texture_02` replaces only the colour
 texture, and that model is then drawn without its other maps.
 
+## Compressed textures
+
+`kke_texcook` writes a BC7-compressed copy of each texture next to it,
+in a KTX2 file of the same name (`Wall.png` -> `Wall.ktx2`):
+
+    ./build/bin/kke_texcook games/my_game/models     # every image under the folder
+    ./build/bin/kke_texcook --linear Rock_Normal.png # data, not colour (see below)
+
+The engine then loads `Wall.ktx2` wherever it would have loaded
+`Wall.png`: a quarter of the GPU memory and bandwidth (8 bits a texel
+instead of 32), a smaller file, and no mips to make at load (they are
+cooked in, made the same way the loader makes them, cutout fix
+included). A 2048 x 2048 colour texture goes from 21.3 MB to 5.3 MB and
+cooks in about a second on 4 cores. Files already up to date are
+skipped; `--force` cooks them again.
+
+- **Colour or data.** Colour textures are compressed in sRGB, normal,
+  roughness and metallic maps as plain numbers. Without `--colour` or
+  `--linear` the name decides (`normal`, `nrm`, `rough`, `metal`,
+  `_orm` mean data). A wrong guess only costs the copy: the engine
+  checks, warns and loads the original image instead.
+- **GPUs without BC7** (most phones; `KKE_TEXTURE_BC=0` forces it) still
+  load the `.ktx2`: it is decoded to RGBA8 once at load.
+- `KKE_TEXTURE_KTX2=0` ignores every `.ktx2` twin (to compare).
+- `kke_cook` encrypts `.ktx2` files like any other art
+  ([COOKED_ART.md](COOKED_ART.md)).
+- Only BC7 and plain RGBA8 KTX2 files load (no ASTC or Basis
+  supercompression yet).
+
 ## Sprites in menus and HUDs
 
 Any RmlUi document (menus, HUDs, the settings panel) shows a sprite by

@@ -194,7 +194,9 @@ set(ENGINE_SOURCES
     src/ScriptLights.cpp
     src/ScriptFx.cpp
     src/Texture.cpp
+    src/TextureCompress.cpp
     src/TextureMips.cpp
+    src/Ktx2.cpp
     src/MarketplaceIndex.cpp
     src/RmlTextSafety.cpp
     src/Log.cpp
@@ -409,6 +411,7 @@ target_link_libraries(kke_engine PUBLIC
     spdlog::spdlog
     kke_miniaudio
     kke_monocypher
+    kke_bc7enc
 )
 
 target_compile_definitions(kke_engine PUBLIC
@@ -622,6 +625,6 @@ endif()
 # fracture setup are pure number crunching, 5-20x slower at -O0, and
 # nobody steps through them in a debugger. docs/OPTIMIZATION.md log #15.
 if(NOT MSVC)
-    set_source_files_properties(src/Sky.cpp src/EnvMap.cpp src/Texture.cpp src/TextureMips.cpp src/VoxelTets.cpp src/InteriorColor.cpp src/FracturePattern.cpp src/VoronoiFracture.cpp src/ParticleFluid.cpp src/TaskPool.cpp src/MeltVolume.cpp src/JigglePhysics.cpp src/AutoRig.cpp src/Ocean.cpp src/FloatingBodies.cpp src/ClothSystem.cpp
+    set_source_files_properties(src/Sky.cpp src/EnvMap.cpp src/Texture.cpp src/TextureMips.cpp src/TextureCompress.cpp src/VoxelTets.cpp src/InteriorColor.cpp src/FracturePattern.cpp src/VoronoiFracture.cpp src/ParticleFluid.cpp src/TaskPool.cpp src/MeltVolume.cpp src/JigglePhysics.cpp src/AutoRig.cpp src/Ocean.cpp src/FloatingBodies.cpp src/ClothSystem.cpp
         PROPERTIES COMPILE_OPTIONS "$<$<NOT:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>>:-O2>")
 endif()

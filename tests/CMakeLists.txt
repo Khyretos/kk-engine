@@ -97,6 +97,7 @@ add_executable(kke_tests
     test_spatializer.cpp
     test_thumbnails.cpp
     test_logo_mesh.cpp
+    test_texture_compress.cpp
     test_texture_mips.cpp
     test_shadow_projection.cpp
     test_lights.cpp
