@@ -2,8 +2,9 @@ name: Benchmarks
 
 # Forgejo port of the former .github/workflows/benchmarks.yml (Forgejo is the
 # main repository now; a branch GitHub pushed itself would be overwritten by
-# the push mirror). Runs on soucouyant in the CI image (docker/ci.Dockerfile),
-# so the numbers come from one fixed machine. Nightly and by hand, like ci.yml:
+# the push mirror). Main's runs are on soucouyant in the CI image
+# (docker/ci.Dockerfile), so the recorded numbers come from one fixed machine;
+# PRs take any free worker. Nightly and by hand, like ci.yml:
 # main is pushed too often to build every commit here.
 #
 # The headless benchmark suite (docs/BENCHMARKS.md): kke_bench's CPU cases
@@ -87,14 +88,22 @@ env:
   GIT_CONFIG_VALUE_24: https://github.com/zeux/volk.git
   GIT_CONFIG_KEY_25: url.https://git.kreative-kompas.com/khyretos/mirror-wayland.git.insteadOf
   GIT_CONFIG_VALUE_25: https://gitlab.freedesktop.org/wayland/wayland.git
-  KKE_JOBS: "8"   # soucouyant has 32 GB of RAM; see ci.yml
 
 jobs:
   benchmarks:
-    runs-on: soucouyant
+    # The numbers recorded on main come from soucouyant alone, so the
+    # history compares like with like. A PR's quick pass is only a crash and
+    # warnings check plus a comparison that never fails, so it goes to any
+    # free worker: pinned to soucouyant, PRs waited whenever that PC was off
+    # or busy (2026-10-26).
+    runs-on: ${{ github.event_name == 'pull_request' && 'ubuntu-latest' || 'soucouyant' }}
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     timeout-minutes: 60
+    env:
+      # soucouyant has 32 GB of RAM; another worker may have only 3 CPUs and
+      # 6 GB (a WSL VM), as in ci.yml's shipping-build.
+      KKE_JOBS: ${{ github.event_name == 'pull_request' && '3' || '8' }}
     steps:
       - uses: actions/checkout@v4
 
