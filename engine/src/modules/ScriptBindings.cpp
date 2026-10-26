@@ -22,6 +22,7 @@
 #include "kke/net/ScriptSpawns.h"
 #include "kke/RmlTextSafety.h"
 #include "kke/modules/AudioModule.h"
+#include "kke/ai/AiScript.h"
 #include "kke/modules/ModelModule.h"
 #include "kke/modules/UiModule.h"
 #if KKE_ENABLE_FEMFX
@@ -34,6 +35,8 @@
 #if KKE_ENABLE_NET
 #include "kke/modules/NetModule.h"
 #endif
+
+#include <chrono>
 
 #include <RmlUi/Core/Context.h>
 #include <RmlUi/Core/Element.h>
@@ -213,8 +216,16 @@ void ScriptModule::bindModels() {
                                              lua_istable(L, 4) ? ScriptVM::toVec3(L, 4, glm::vec3(1.0f)) : glm::vec3(float(luaL_optnumber(L, 4, 1.0)))));
         return 0;
     });
+    // models.position(inst) -> pos, yaw (degrees): where it is now (an ai.* creature moves itself).
+    vm.registerFunction("models", "position", [models, owned](lua_State* L) {
+        const glm::mat4 t = models->transform(owned(L, 1, "models.position"));
+        ScriptVM::pushVec3(L, glm::vec3(t[3]));
+        lua_pushnumber(L, glm::degrees(std::atan2(t[2].x, t[2].z)));
+        return 2;
+    });
     vm.registerFunction("models", "remove", [this, models, owned](lua_State* L) {
         const auto inst = owned(L, 1, "models.remove");
+        forgetCreature(inst);
         models->remove(inst);
         m_models.erase(std::remove_if(m_models.begin(), m_models.end(), [&](const ModelInstance& m) { return m.id == inst; }), m_models.end());
         return 0;
@@ -1133,6 +1144,299 @@ void ScriptModule::bindAudio() {
     });
 }
 
+// ---------------------------------------------------------------- nav.* (pathfinding)
+void ScriptModule::bindNav() {
+    ScriptVM& vm = *m_vm;
+    auto need = [this](lua_State* L, const char* fn) -> ai::NavMesh& {
+        if (!m_nav || !m_nav->valid()) luaL_error(L, "%s: there's no navmesh yet (call nav.build first)", fn);
+        return *m_nav;
+    };
+
+    // nav.build({radius, height, climb, slope, cell, tile, dynamic}) -> true, info; or nil, reason.
+    // From the level's collision: every static body (physics.box{static = true}, scenes, terrain).
+    vm.registerFunction("nav", "build", [this](lua_State* L) {
+#if KKE_ENABLE_JOLT
+        auto* rbm = m_app->getModule<RigidBodyModule>();
+        if (!rbm) return luaL_error(L, "nav.build: this game has no physics world to build from");
+        ai::NavMeshSettings s;
+        ai::DynamicNavSettings d;
+        bool dynamic = true;
+        if (lua_istable(L, 1)) {
+            auto field = [L](const char* k, float fallback, float lo, float hi) {
+                const float v = ScriptVM::fieldNumber(L, 1, k, fallback);
+                return std::isfinite(v) ? std::clamp(v, lo, hi) : fallback;
+            };
+            s.agentRadius = field("radius", s.agentRadius, 0.05f, 5.0f);
+            s.agentHeight = field("height", s.agentHeight, 0.2f, 10.0f);
+            s.agentMaxClimb = field("climb", s.agentMaxClimb, 0.0f, 3.0f);
+            s.agentMaxSlope = field("slope", s.agentMaxSlope, 0.0f, 85.0f);
+            s.cellSize = field("cell", s.cellSize, 0.05f, 2.0f);
+            s.cellHeight = std::min(s.cellHeight, s.cellSize);
+            d.tileSize = field("tile", d.tileSize, 4.0f, 256.0f);
+            dynamic = ScriptVM::fieldBool(L, 1, "dynamic", true);
+        } else if (!lua_isnoneornil(L, 1)) {
+            return luaL_error(L, "nav.build: the argument is a table {radius =, height =, climb =, ...}");
+        }
+        std::vector<glm::vec3> v;
+        std::vector<uint32_t> idx;
+        const auto t0 = std::chrono::steady_clock::now();
+        const size_t tris = rbm->world().staticTriangles(v, idx);
+        // The old mesh's obstacles go with it.
+        m_navObstacles.clear();
+        auto mesh = std::make_unique<ai::NavMesh>();
+        std::string error;
+        const bool ok = tris > 0 && (dynamic ? mesh->buildDynamic(v, idx, s, d, &error) : mesh->build(v, idx, s, &error));
+        if (!ok) {
+            m_nav.reset();
+            m_ai->setNavMesh(nullptr);
+            lua_pushnil(L);
+            lua_pushstring(L, tris == 0 ? "nothing to walk on: the level has no static bodies" : error.c_str());
+            return 2;
+        }
+        const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        m_nav = std::move(mesh);
+        m_ai->setNavMesh(m_nav.get());
+        m_navSource = m_vm->currentSource();
+        lua_pushboolean(L, 1);
+        lua_createtable(L, 0, 4);
+        lua_pushinteger(L, lua_Integer(m_nav->polygonCount()));
+        lua_setfield(L, -2, "polygons");
+        lua_pushinteger(L, lua_Integer(tris));
+        lua_setfield(L, -2, "triangles");
+        lua_pushinteger(L, lua_Integer(m_nav->tileCount()));
+        lua_setfield(L, -2, "tiles");
+        lua_pushnumber(L, ms);
+        lua_setfield(L, -2, "ms");
+        return 2;
+#else
+        lua_pushnil(L);
+        lua_pushstring(L, "this build has no physics (Jolt) to build a navmesh from");
+        return 2;
+#endif
+    });
+    vm.registerFunction("nav", "ready", [this](lua_State* L) {
+        lua_pushboolean(L, m_nav && m_nav->valid());
+        return 1;
+    });
+    // nav.path(from, to) -> { Vec, ... }, partial; or nil when either end is off the mesh.
+    vm.registerFunction("nav", "path", [need](lua_State* L) {
+        ai::NavMesh& nav = need(L, "nav.path");
+        ai::NavMesh::Path p;
+        if (!nav.findPath(ScriptVM::toVec3(L, 1), ScriptVM::toVec3(L, 2), p)) {
+            lua_pushnil(L);
+            lua_pushstring(L, "off the navmesh");
+            return 2;
+        }
+        lua_createtable(L, int(p.points.size()), 0);
+        for (size_t i = 0; i < p.points.size(); ++i) {
+            ScriptVM::pushVec3(L, p.points[i]);
+            lua_rawseti(L, -2, lua_Integer(i + 1));
+        }
+        lua_pushboolean(L, p.partial);
+        return 2;
+    });
+    // nav.walkable(from, to) -> clear, fraction (how far the straight line gets).
+    vm.registerFunction("nav", "walkable", [need](lua_State* L) {
+        float t = 0.0f;
+        const bool clear = need(L, "nav.walkable").walkable(ScriptVM::toVec3(L, 1), ScriptVM::toVec3(L, 2), &t);
+        lua_pushboolean(L, clear);
+        lua_pushnumber(L, t);
+        return 2;
+    });
+    // nav.nearest(pos [, reach]) -> the closest point on the mesh, or nil.
+    vm.registerFunction("nav", "nearest", [need](lua_State* L) {
+        ai::NavMesh& nav = need(L, "nav.nearest");
+        const float reach = std::clamp(float(luaL_optnumber(L, 2, 2.0)), 0.1f, 100.0f);
+        glm::vec3 out;
+        if (!nav.nearestPoint(ScriptVM::toVec3(L, 1), out, { reach, reach * 2.0f, reach })) {
+            lua_pushnil(L);
+            return 1;
+        }
+        ScriptVM::pushVec3(L, out);
+        return 1;
+    });
+    // nav.move(from, to) -> where sliding along the ground from `from` towards `to` ends.
+    vm.registerFunction("nav", "move", [need](lua_State* L) {
+        ScriptVM::pushVec3(L, need(L, "nav.move").moveAlongSurface(ScriptVM::toVec3(L, 1), ScriptVM::toVec3(L, 2)));
+        return 1;
+    });
+    // nav.random(centre, radius) -> a reachable point about that far, or nil.
+    vm.registerFunction("nav", "random", [this, need](lua_State* L) {
+        ai::NavMesh& nav = need(L, "nav.random");
+        const float radius = std::clamp(float(luaL_checknumber(L, 2)), 0.1f, 500.0f);
+        auto next = [this] {
+            m_navRandom ^= m_navRandom << 13; // xorshift32: the same points every run
+            m_navRandom ^= m_navRandom >> 17;
+            m_navRandom ^= m_navRandom << 5;
+            return float(m_navRandom >> 8) / float(1u << 24);
+        };
+        glm::vec3 out;
+        if (!nav.randomPointNear(ScriptVM::toVec3(L, 1), radius, next, out)) {
+            lua_pushnil(L);
+            return 1;
+        }
+        ScriptVM::pushVec3(L, out);
+        return 1;
+    });
+    // nav.obstacle{pos, size, yaw} (a box; pos is its middle) or {pos, radius, height}
+    // (a post standing on pos) -> id, or nil + reason. Paths go round it from the next frame.
+    vm.registerFunction("nav", "obstacle", [this, need](lua_State* L) {
+        ai::NavMesh& nav = need(L, "nav.obstacle");
+        luaL_checktype(L, 1, LUA_TTABLE);
+        if (!nav.dynamic()) return luaL_error(L, "nav.obstacle: this navmesh was built with dynamic = false");
+        const std::string src = m_vm->currentSource();
+        size_t mine = 0;
+        for (const NavObstacle& o : m_navObstacles) mine += o.source == src;
+        if (mine >= maxNavObstaclesPerScript)
+            return luaL_error(L, "nav.obstacle: this script already has %d obstacles (maxNavObstaclesPerScript)", int(maxNavObstaclesPerScript));
+        const glm::vec3 pos = ScriptVM::fieldVec3(L, 1, "pos", glm::vec3(0.0f));
+        ai::NavMesh::ObstacleId id = 0;
+        lua_getfield(L, 1, "size");
+        const bool box = !lua_isnil(L, -1);
+        lua_pop(L, 1);
+        if (box) {
+            const glm::vec3 size = ScriptVM::fieldVec3(L, 1, "size", glm::vec3(1.0f));
+            id = nav.addBoxObstacle(pos, size * 0.5f, glm::radians(ScriptVM::fieldNumber(L, 1, "yaw", 0.0f)));
+        } else {
+            id = nav.addCylinderObstacle(pos, ScriptVM::fieldNumber(L, 1, "radius", 0.5f), ScriptVM::fieldNumber(L, 1, "height", 2.0f));
+        }
+        if (!id) {
+            lua_pushnil(L);
+            lua_pushstring(L, "refused: a size or radius that isn't above 0, or too many obstacles waiting (try next frame)");
+            return 2;
+        }
+        m_navObstacles.push_back({ id, src });
+        lua_pushinteger(L, lua_Integer(id));
+        return 1;
+    });
+    vm.registerFunction("nav", "remove", [this, need](lua_State* L) {
+        ai::NavMesh& nav = need(L, "nav.remove");
+        const auto id = ai::NavMesh::ObstacleId(checkId(L, 1, "nav.remove"));
+        auto it = std::find_if(m_navObstacles.begin(), m_navObstacles.end(), [&](const NavObstacle& o) { return o.id == id; });
+        if (it == m_navObstacles.end() || it->source != m_vm->currentSource())
+            return luaL_error(L, "nav.remove: %d is not an obstacle this script added", int(id));
+        nav.removeObstacle(id);
+        m_navObstacles.erase(it);
+        return 0;
+    });
+}
+
+// ---------------------------------------------------------------- ai.* (creatures on script models)
+void ScriptModule::bindCreatures() {
+    auto* models = m_app->getModule<ModelModule>();
+    // A thing is a model a script spawned (models.spawn), or an actor (ai.actor).
+    ai::bindAi(*m_vm, *m_ai, [this, models](uint32_t thing, glm::vec3& at) {
+        if (!models) return false;
+        for (const ModelInstance& m : m_models)
+            if (m.id == thing) {
+                at = glm::vec3(models->transform(m.id)[3]);
+                return true;
+            }
+        return false;
+    });
+#if KKE_ENABLE_JOLT
+    if (auto* rbm = m_app->getModule<RigidBodyModule>()) {
+        const RigidWorld* world = &rbm->world();
+        auto level = [](RigidWorld::BodyId, RigidWorld::Motion m) { return m == RigidWorld::Motion::Static; };
+        // Off a navmesh, creatures stand on the level's ground ...
+        m_ai->groundHeight = [world, level](float x, float z, float& y) {
+            const RigidWorld::RayHit h = world->raycast({ x, y + 1.5f, z }, { 0, -1, 0 }, 30.0f, level);
+            if (!h.hit) return false;
+            y = h.point.y;
+            return true;
+        };
+        // ... and walls hide what's behind them.
+        m_ai->lineOfSight = [world, level](const glm::vec3& from, const glm::vec3& to) {
+            const glm::vec3 d = to - from;
+            const float len = glm::length(d);
+            if (len < 1e-3f) return true;
+            return !world->raycast(from, d / len, len, level).hit;
+        };
+    }
+#endif
+    ScriptVM& vm = *m_vm;
+    // ai.actor(id, pos [, species = "farmer"] [, velocity]): something creatures see but
+    // don't steer (the player, a car); call it every frame as it moves.
+    // Use ids of your own above 1000000, clear of model ids.
+    vm.registerFunction("ai", "actor", [this](lua_State* L) {
+        const lua_Integer id = luaL_checkinteger(L, 1);
+        if (id < 1000000 || id > 0x7fffffff) return luaL_error(L, "ai.actor: an actor's id is a number from 1000000 up (clear of model ids)");
+        const glm::vec3 pos = ScriptVM::toVec3(L, 2);
+        const glm::vec3 vel = lua_isnoneornil(L, 4) ? glm::vec3(0.0f) : ScriptVM::toVec3(L, 4);
+        if (!m_ai->has(uint32_t(id))) {
+            const std::string species = luaL_optstring(L, 3, "farmer");
+            if (!m_ai->addActor(uint32_t(id), species, pos)) return luaL_error(L, "ai.actor: '%s' isn't a species (ai.species())", species.c_str());
+        }
+        const float yaw = glm::length(glm::vec2(vel.x, vel.z)) > 0.05f ? glm::degrees(std::atan2(vel.x, vel.z)) : 0.0f;
+        m_ai->setTransform(uint32_t(id), pos, vel, yaw);
+        return 0;
+    });
+    // ai.anims(thing, { idle = "Idle", walk = "Walk", run = "Run", attack = "Punch", ... }):
+    // the model's clips for what the creature does. Anything left out plays
+    // the nearest one given (run -> walk -> idle).
+    vm.registerFunction("ai", "anims", [this, models](lua_State* L) {
+        const auto inst = uint32_t(checkId(L, 1, "ai.anims"));
+        luaL_checktype(L, 2, LUA_TTABLE);
+        const ModelData* d = nullptr;
+        for (const ModelInstance& m : m_models)
+            if (m.id == inst && models) d = models->model(models->instanceModel(inst));
+        if (!d) return luaL_error(L, "ai.anims: %d is not a model spawned by a script", int(inst));
+        CreatureClips c;
+        lua_pushnil(L);
+        while (lua_next(L, 2)) {
+            if (lua_type(L, -2) == LUA_TSTRING && lua_type(L, -1) == LUA_TSTRING) {
+                const std::string want = lua_tostring(L, -1);
+                int clip = -1;
+                for (size_t k = 0; k < d->animations.size(); ++k)
+                    if (d->animations[k].name == want) clip = int(k);
+                if (clip < 0) return luaL_error(L, "ai.anims: the model has no clip named '%s' (see models.clips)", want.c_str());
+                c.byAnim[lua_tostring(L, -2)] = clip;
+            }
+            lua_pop(L, 1);
+        }
+        m_creatureClips[inst] = std::move(c);
+        return 0;
+    });
+}
+
+void ScriptModule::forgetCreature(uint32_t instance) {
+    m_ai->remove(instance);
+    m_creatureClips.erase(instance);
+}
+
+void ScriptModule::stepCreatures(float dt) {
+    if (m_ai->agents().empty()) return;
+    m_ai->setNavMesh(m_nav && m_nav->valid() ? m_nav.get() : nullptr);
+    m_ai->update(dt);
+    if (auto* models = m_app->getModule<ModelModule>()) {
+        for (const ai::Agent& a : m_ai->agents()) {
+            if (a.actor) continue;
+            auto own = std::find_if(m_models.begin(), m_models.end(), [&](const ModelInstance& m) { return m.id == a.id; });
+            if (own == m_models.end()) continue;
+            // Where the AI put it, turned to face where it's going, at the model's own scale.
+            const glm::mat4 old = models->transform(a.id);
+            const glm::vec3 scale(glm::length(glm::vec3(old[0])), glm::length(glm::vec3(old[1])), glm::length(glm::vec3(old[2])));
+            glm::mat4 t = glm::translate(glm::mat4(1.0f), a.position);
+            t = glm::rotate(t, glm::radians(a.yaw), glm::vec3(0, 1, 0));
+            models->setTransform(a.id, glm::scale(t, scale));
+            auto clips = m_creatureClips.find(a.id);
+            if (clips == m_creatureClips.end() || clips->second.playing == a.anim) continue;
+            const auto& by = clips->second.byAnim;
+            auto pick = [&](const std::string& anim) -> int {
+                for (const char* name : { anim.c_str(), anim == "run" ? "walk" : "idle", "idle" }) {
+                    auto it = by.find(name);
+                    if (it != by.end()) return it->second;
+                }
+                return -1;
+            };
+            const int clip = pick(a.anim);
+            if (clip >= 0) models->playAnimation(a.id, clip, a.anim != "attack");
+            clips->second.playing = a.anim;
+        }
+    }
+    ai::fireAiEvents(*m_vm, m_ai->takeEvents());
+}
+
 void ScriptModule::releaseScript(const std::string& source) {
     if (m_calls) m_calls->release(source);
     if (m_tables) m_tables->release(source);
@@ -1154,7 +1458,10 @@ void ScriptModule::releaseScript(const std::string& source) {
 
     if (auto* models = m_app->getModule<ModelModule>())
         for (const ModelInstance& m : m_models)
-            if (mine(m.source)) models->remove(m.id);
+            if (mine(m.source)) {
+                forgetCreature(m.id);
+                models->remove(m.id);
+            }
     m_models.erase(std::remove_if(m_models.begin(), m_models.end(), [&](const ModelInstance& m) { return mine(m.source); }), m_models.end());
 
 #if KKE_ENABLE_FEMFX
@@ -1191,6 +1498,18 @@ void ScriptModule::releaseScript(const std::string& source) {
         }
     }
     m_sounds.erase(std::remove_if(m_sounds.begin(), m_sounds.end(), [&](const Sound& snd) { return mine(snd.source); }), m_sounds.end());
+    // Its obstacles; the navmesh with the script that built it.
+    if (m_nav)
+        for (const NavObstacle& o : m_navObstacles)
+            if (mine(o.source)) m_nav->removeObstacle(o.id);
+    m_navObstacles.erase(std::remove_if(m_navObstacles.begin(), m_navObstacles.end(), [&](const NavObstacle& o) { return mine(o.source); }),
+                         m_navObstacles.end());
+    if (m_nav && mine(m_navSource)) {
+        m_nav.reset();
+        m_ai->setNavMesh(nullptr);
+        m_navObstacles.clear();
+        m_navSource.clear();
+    }
     // Its effects stop emitting; what is already in the air finishes.
     for (ScriptFx::EmitterId id : m_fx.releaseAll(source))
         if (m_fxLibrary) m_fxLibrary->stop(id);
@@ -1209,6 +1528,8 @@ void ScriptModule::releaseAll() {
     for (const Scene& s : m_scenes) add(s.source);
     for (const Sound& s : m_sounds) add(s.source);
     if (!m_musicSource.empty()) add(m_musicSource);
+    for (const NavObstacle& o : m_navObstacles) add(o.source);
+    if (!m_navSource.empty()) add(m_navSource);
     for (const std::string& s : sources) releaseScript(s);
     m_lights.clear(m_app->lighting());
     m_fx.clear();

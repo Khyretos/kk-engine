@@ -131,6 +131,11 @@ public:
     BodyId add(const BodyDesc& desc);
     void remove(BodyId body);
     size_t bodyCount() const;
+    // The level's collision as triangles, world space, wound counter-clockwise
+    // seen from outside: every Static body's shape (boxes, meshes, hulls,
+    // terrain), not cloth-only ones. What a navmesh is built from
+    // (Lua nav.build). Appends; returns the triangles added, at most `maxTriangles`.
+    size_t staticTriangles(std::vector<glm::vec3>& vertices, std::vector<uint32_t>& indices, size_t maxTriangles = 4'000'000) const;
     size_t activeBodyCount() const;
     bool isActive(BodyId body) const;
 

@@ -148,7 +148,7 @@ by area. The goal is parity with the big engines and more.
 | ENG-F67 | Tooling | Runtime CPU/GPU/memory profiler with capture files (frame stats exist) | 🟡 |
 | ENG-F68 | Tooling | Opt-in crash reporting | ⬜ |
 | ENG-F69 | Tooling | Game test harness: input playback, screenshot compare (virtual input and check_game exist) | 🟡 |
-| ENG-F70 | AI | Pathfinding around dynamic obstacles. Done: tiled navmeshes with box and cylinder obstacles (DetourTileCache), agents re-path when it changes (docs/AI.md). Not yet: off-mesh links, area costs, obstacles from Lua. | 🟡 |
+| ENG-F70 | AI | Pathfinding around dynamic obstacles. Done: tiled navmeshes with box and cylinder obstacles (DetourTileCache), agents re-path when it changes (docs/AI.md); Lua `nav.*` builds one from the level's collision and finds paths, and Lua `ai.*` creatures walk it with their clips. Not yet: off-mesh links, area costs. | 🟡 |
 | ENG-F71 | AI | Behaviour trees | ⬜ |
 | ENG-F72 | AI | Utility AI (docs/AI.md) | ✅ |
 | ENG-F73 | AI | Crowds of hundreds of agents (flocking exists) | 🟡 |
