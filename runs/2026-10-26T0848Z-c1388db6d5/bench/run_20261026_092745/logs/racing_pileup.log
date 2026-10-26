@@ -1,0 +1,141 @@
+[2026-10-26 09:38:36.963][engine][Application][Racing][info]: Hardware target: desktop (no specific device recognised); platform backend: desktop
+[2026-10-26 09:38:36.963][engine][Application][Racing][info]: UI profile: desktop
+[2026-10-26 09:38:36.966][engine][Governor][Racing][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 1.00
+[2026-10-26 09:38:36.971][engine][VulkanDevice][Racing][info]: using device: llvmpipe (LLVM 22.1.8, 256 bits)
+[2026-10-26 09:38:36.971][engine][VulkanDevice][Racing][info]: inline ray tracing (VK_KHR_ray_query): on
+[2026-10-26 09:38:37.047][engine][SwapChain][Racing][info]: colour output: format 50 (8-bit sRGB)
+[2026-10-26 09:38:37.051][engine][Application][Racing][info]: Hardware target: software-gpu (the only Vulkan device is a CPU: llvmpipe (LLVM 22.1.8, 256 bits))
+[2026-10-26 09:38:37.052][engine][Governor][Racing][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+[2026-10-26 09:38:37.052][engine][Application][Racing][info]: MSAA 1x (software rasteriser)
+[2026-10-26 09:38:37.161][engine][Application][Racing][info]: mood 'golden_hour' (assets/moods/golden_hour.yaml)
+[2026-10-26 09:38:37.179][engine][Benchmark][Racing][info]: benchmark: 3 s warm-up, then 20 s measured, uncapped (no vsync, no frame cap)
+[2026-10-26 09:38:37.180][engine][Settings][Racing][info]: no settings file at 'settings.json' (using defaults)
+[2026-10-26 09:38:37.180][engine][Governor][Racing][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+[2026-10-26 09:38:37.231][engine][ClothGpu][Racing][info]: no compute queue of its own on this GPU: cloth pairs are searched on the CPU (KKE_CLOTH_GPU=shared to try the graphics queue)
+[2026-10-26 09:38:37.231][engine][RigidBodies][Racing][info]: Jolt rigid-body world ready (65536 max bodies)
+[2026-10-26 09:38:37.232][engine][Physics][Racing][info]: Task system: 2 worker(s) (4 usable cores)
+[2026-10-26 09:38:37.233][engine][Physics][Racing][info]: FEMFX constraint solver memory: 67.2 MB
+[2026-10-26 09:38:37.308][engine][Physics][Racing][info]: FEMFX scene created (ground + 0 object(s), cap=512)
+[rmlui] Loaded font face 'Noto Sans' [regular] from 'assets/fonts/NotoSans-Regular.ttf'.
+[rmlui] Loaded font face 'Noto Sans' [bold] from 'assets/fonts/NotoSans-Bold.ttf'.
+[rmlui] Loaded font face 'Noto Sans' [italic] from 'assets/fonts/NotoSans-Italic.ttf'.
+[rmlui] Loaded font face 'Noto Color Emoji' [regular] from 'assets/fonts/NotoColorEmoji.ttf'.
+[ui] RmlUi initialised with real Vulkan rendering (text via glyph textures, <img>/background-image via stb_image, both real now -- see RmlVulkanRenderInterface.h)
+[2026-10-26 09:38:37.588][engine][Audio][Racing][info]: Audio ready: 48000 Hz, 32 voices, output: Speakers (Realtek High Definition Audio) (WASAPI)
+[2026-10-26 09:38:37.609][engine][Racing][Racing][info]: POLYGON Street Racer not found (assets/synty or KKE_ASSETS_DIR): block cars and a bare track
+[2026-10-26 09:38:37.614][engine][Racing][Racing][info]: 5 tracks in C:/forgejo-runner/work/d23ee484b29712c7/tmp/kke-run/pkg/tracks
+[2026-10-26 09:38:37.709][engine][Application][Racing][info]: mood 'sunset' (assets/moods/sunset.yaml)
+[2026-10-26 09:38:37.755][engine][Racing][Racing][info]: track Scrapyard Bowl (Destruction derby): 180 m, 18 m wide, 90 wall boxes, 0 props
+[2026-10-26 09:38:37.755][engine][Models][Racing][info]: loaded 'racing/block/muscle/0/body': 3 mesh part(s), 1176 triangles, 3 material(s), 0 bone(s), 0 animation(s), bounds (-1.00,0.30,-2.84)..(1.00,1.35,2.84)
+[2026-10-26 09:38:37.756][engine][Models][Racing][info]: loaded 'racing/block/muscle/0/wheel_l': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.756][engine][Models][Racing][info]: loaded 'racing/block/muscle/0/wheel_r': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.762][engine][Models][Racing][info]: loaded 'racing/block/sedan/23/body': 3 mesh part(s), 1176 triangles, 3 material(s), 0 bone(s), 0 animation(s), bounds (-1.05,0.30,-2.79)..(1.05,1.50,2.79)
+[2026-10-26 09:38:37.762][engine][Models][Racing][info]: loaded 'racing/block/sedan/23/wheel_l': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.763][engine][Models][Racing][info]: loaded 'racing/block/sedan/23/wheel_r': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.765][engine][Models][Racing][info]: loaded 'racing/block/ute/12/body': 3 mesh part(s), 1176 triangles, 3 material(s), 0 bone(s), 0 animation(s), bounds (-0.95,0.30,-2.69)..(0.95,1.70,2.69)
+[2026-10-26 09:38:37.765][engine][Models][Racing][info]: loaded 'racing/block/ute/12/wheel_l': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.766][engine][Models][Racing][info]: loaded 'racing/block/ute/12/wheel_r': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.768][engine][Models][Racing][info]: loaded 'racing/block/ute/20/body': 3 mesh part(s), 1176 triangles, 3 material(s), 0 bone(s), 0 animation(s), bounds (-0.95,0.30,-2.69)..(0.95,1.70,2.69)
+[2026-10-26 09:38:37.768][engine][Models][Racing][info]: loaded 'racing/block/ute/20/wheel_l': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.769][engine][Models][Racing][info]: loaded 'racing/block/ute/20/wheel_r': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.771][engine][Models][Racing][info]: loaded 'racing/block/muscle/4/body': 3 mesh part(s), 1176 triangles, 3 material(s), 0 bone(s), 0 animation(s), bounds (-1.00,0.30,-2.84)..(1.00,1.35,2.84)
+[2026-10-26 09:38:37.771][engine][Models][Racing][info]: loaded 'racing/block/muscle/4/wheel_l': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.772][engine][Models][Racing][info]: loaded 'racing/block/muscle/4/wheel_r': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.774][engine][Models][Racing][info]: loaded 'racing/block/muscle/14/body': 3 mesh part(s), 1176 triangles, 3 material(s), 0 bone(s), 0 animation(s), bounds (-1.00,0.30,-2.84)..(1.00,1.35,2.84)
+[2026-10-26 09:38:37.774][engine][Models][Racing][info]: loaded 'racing/block/muscle/14/wheel_l': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.775][engine][Models][Racing][info]: loaded 'racing/block/muscle/14/wheel_r': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.777][engine][Models][Racing][info]: loaded 'racing/block/sedan/9/body': 3 mesh part(s), 1176 triangles, 3 material(s), 0 bone(s), 0 animation(s), bounds (-1.05,0.30,-2.79)..(1.05,1.50,2.79)
+[2026-10-26 09:38:37.777][engine][Models][Racing][info]: loaded 'racing/block/sedan/9/wheel_l': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.777][engine][Models][Racing][info]: loaded 'racing/block/sedan/9/wheel_r': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.779][engine][Models][Racing][info]: loaded 'racing/block/ute/18/body': 3 mesh part(s), 1176 triangles, 3 material(s), 0 bone(s), 0 animation(s), bounds (-0.95,0.30,-2.69)..(0.95,1.70,2.69)
+[2026-10-26 09:38:37.780][engine][Models][Racing][info]: loaded 'racing/block/ute/18/wheel_l': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.780][engine][Models][Racing][info]: loaded 'racing/block/ute/18/wheel_r': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.782][engine][Models][Racing][info]: loaded 'racing/block/sedan/21/body': 3 mesh part(s), 1176 triangles, 3 material(s), 0 bone(s), 0 animation(s), bounds (-1.05,0.30,-2.79)..(1.05,1.50,2.79)
+[2026-10-26 09:38:37.783][engine][Models][Racing][info]: loaded 'racing/block/sedan/21/wheel_l': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.783][engine][Models][Racing][info]: loaded 'racing/block/sedan/21/wheel_r': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.785][engine][Models][Racing][info]: loaded 'racing/block/ute/5/body': 3 mesh part(s), 1176 triangles, 3 material(s), 0 bone(s), 0 animation(s), bounds (-0.95,0.30,-2.69)..(0.95,1.70,2.69)
+[2026-10-26 09:38:37.786][engine][Models][Racing][info]: loaded 'racing/block/ute/5/wheel_l': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.786][engine][Models][Racing][info]: loaded 'racing/block/ute/5/wheel_r': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.788][engine][Models][Racing][info]: loaded 'racing/block/sedan/6/body': 3 mesh part(s), 1176 triangles, 3 material(s), 0 bone(s), 0 animation(s), bounds (-1.05,0.30,-2.79)..(1.05,1.50,2.79)
+[2026-10-26 09:38:37.789][engine][Models][Racing][info]: loaded 'racing/block/sedan/6/wheel_l': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.789][engine][Models][Racing][info]: loaded 'racing/block/sedan/6/wheel_r': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.791][engine][Models][Racing][info]: loaded 'racing/block/sedan/1/body': 3 mesh part(s), 1176 triangles, 3 material(s), 0 bone(s), 0 animation(s), bounds (-1.05,0.30,-2.79)..(1.05,1.50,2.79)
+[2026-10-26 09:38:37.792][engine][Models][Racing][info]: loaded 'racing/block/sedan/1/wheel_l': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.792][engine][Models][Racing][info]: loaded 'racing/block/sedan/1/wheel_r': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.794][engine][Models][Racing][info]: loaded 'racing/block/sedan/2/body': 3 mesh part(s), 1176 triangles, 3 material(s), 0 bone(s), 0 animation(s), bounds (-1.05,0.30,-2.79)..(1.05,1.50,2.79)
+[2026-10-26 09:38:37.795][engine][Models][Racing][info]: loaded 'racing/block/sedan/2/wheel_l': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.795][engine][Models][Racing][info]: loaded 'racing/block/sedan/2/wheel_r': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.798][engine][Models][Racing][info]: loaded 'racing/block/ute/19/body': 3 mesh part(s), 1176 triangles, 3 material(s), 0 bone(s), 0 animation(s), bounds (-0.95,0.30,-2.69)..(0.95,1.70,2.69)
+[2026-10-26 09:38:37.798][engine][Models][Racing][info]: loaded 'racing/block/ute/19/wheel_l': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.798][engine][Models][Racing][info]: loaded 'racing/block/ute/19/wheel_r': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.800][engine][Models][Racing][info]: loaded 'racing/block/ute/22/body': 3 mesh part(s), 1176 triangles, 3 material(s), 0 bone(s), 0 animation(s), bounds (-0.95,0.30,-2.69)..(0.95,1.70,2.69)
+[2026-10-26 09:38:37.801][engine][Models][Racing][info]: loaded 'racing/block/ute/22/wheel_l': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.801][engine][Models][Racing][info]: loaded 'racing/block/ute/22/wheel_r': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.803][engine][Models][Racing][info]: loaded 'racing/block/sedan/3/body': 3 mesh part(s), 1176 triangles, 3 material(s), 0 bone(s), 0 animation(s), bounds (-1.05,0.30,-2.79)..(1.05,1.50,2.79)
+[2026-10-26 09:38:37.804][engine][Models][Racing][info]: loaded 'racing/block/sedan/3/wheel_l': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.804][engine][Models][Racing][info]: loaded 'racing/block/sedan/3/wheel_r': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.806][engine][Models][Racing][info]: loaded 'racing/block/sedan/7/body': 3 mesh part(s), 1176 triangles, 3 material(s), 0 bone(s), 0 animation(s), bounds (-1.05,0.30,-2.79)..(1.05,1.50,2.79)
+[2026-10-26 09:38:37.807][engine][Models][Racing][info]: loaded 'racing/block/sedan/7/wheel_l': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.807][engine][Models][Racing][info]: loaded 'racing/block/sedan/7/wheel_r': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.809][engine][Models][Racing][info]: loaded 'racing/block/sedan/8/body': 3 mesh part(s), 1176 triangles, 3 material(s), 0 bone(s), 0 animation(s), bounds (-1.05,0.30,-2.79)..(1.05,1.50,2.79)
+[2026-10-26 09:38:37.810][engine][Models][Racing][info]: loaded 'racing/block/sedan/8/wheel_l': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.810][engine][Models][Racing][info]: loaded 'racing/block/sedan/8/wheel_r': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.812][engine][Models][Racing][info]: loaded 'racing/block/sedan/10/body': 3 mesh part(s), 1176 triangles, 3 material(s), 0 bone(s), 0 animation(s), bounds (-1.05,0.30,-2.79)..(1.05,1.50,2.79)
+[2026-10-26 09:38:37.813][engine][Models][Racing][info]: loaded 'racing/block/sedan/10/wheel_l': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.813][engine][Models][Racing][info]: loaded 'racing/block/sedan/10/wheel_r': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.815][engine][Models][Racing][info]: loaded 'racing/block/sedan/11/body': 3 mesh part(s), 1176 triangles, 3 material(s), 0 bone(s), 0 animation(s), bounds (-1.05,0.30,-2.79)..(1.05,1.50,2.79)
+[2026-10-26 09:38:37.816][engine][Models][Racing][info]: loaded 'racing/block/sedan/11/wheel_l': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.816][engine][Models][Racing][info]: loaded 'racing/block/sedan/11/wheel_r': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.818][engine][Models][Racing][info]: loaded 'racing/block/ute/13/body': 3 mesh part(s), 1176 triangles, 3 material(s), 0 bone(s), 0 animation(s), bounds (-0.95,0.30,-2.69)..(0.95,1.70,2.69)
+[2026-10-26 09:38:37.818][engine][Models][Racing][info]: loaded 'racing/block/ute/13/wheel_l': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.819][engine][Models][Racing][info]: loaded 'racing/block/ute/13/wheel_r': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.821][engine][Models][Racing][info]: loaded 'racing/block/sedan/15/body': 3 mesh part(s), 1176 triangles, 3 material(s), 0 bone(s), 0 animation(s), bounds (-1.05,0.30,-2.79)..(1.05,1.50,2.79)
+[2026-10-26 09:38:37.821][engine][Models][Racing][info]: loaded 'racing/block/sedan/15/wheel_l': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.822][engine][Models][Racing][info]: loaded 'racing/block/sedan/15/wheel_r': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.824][engine][Models][Racing][info]: loaded 'racing/block/sedan/16/body': 3 mesh part(s), 1176 triangles, 3 material(s), 0 bone(s), 0 animation(s), bounds (-1.05,0.30,-2.79)..(1.05,1.50,2.79)
+[2026-10-26 09:38:37.824][engine][Models][Racing][info]: loaded 'racing/block/sedan/16/wheel_l': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.825][engine][Models][Racing][info]: loaded 'racing/block/sedan/16/wheel_r': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.827][engine][Models][Racing][info]: loaded 'racing/block/sedan/17/body': 3 mesh part(s), 1176 triangles, 3 material(s), 0 bone(s), 0 animation(s), bounds (-1.05,0.30,-2.79)..(1.05,1.50,2.79)
+[2026-10-26 09:38:37.827][engine][Models][Racing][info]: loaded 'racing/block/sedan/17/wheel_l': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.828][engine][Models][Racing][info]: loaded 'racing/block/sedan/17/wheel_r': 2 mesh part(s), 64 triangles, 2 material(s), 0 bone(s), 0 animation(s), bounds (-0.14,-0.34,-0.34)..(0.14,0.34,0.34)
+[2026-10-26 09:38:37.845][engine][Racing][Racing][info]: race 1: Destruction derby on Scrapyard Bowl, 24 cars (1 here, 23 CPU, 0 online), 1 laps, damage brutal
+[2026-10-26 09:38:37.901][engine][Racing][Racing][info]: race 2: Destruction derby on Scrapyard Bowl, 24 cars (1 here, 23 CPU, 0 online), 1 laps, damage brutal
+[2026-10-26 09:38:37.901][engine][Governor][Racing][info]: budget: 2 worker thread(s), frame cap 0, background cap 0, render scale 0.75
+[2026-10-26 09:38:37.903][engine][Input][Racing][info]: touch controls: stick left, look look, button throttle, button brake, button handbrake, button reset.car, button camera, button look.back, pause
+[2026-10-26 09:38:41.953][engine][Physics][Racing][info]: perf: 0.4 fps, 0.2 ticks/s, step avg 23.38 ms max 23.38 ms, render prep 0.24 ms, 24 object(s) / 24 piece(s), 24 awake piece(s), 0 faces drawn
+[2026-10-26 09:38:42.956][engine][Physics][Racing][info]: perf: 7.0 fps, 7.0 ticks/s, step avg 29.12 ms max 32.13 ms, render prep 0.23 ms, 24 object(s) / 24 piece(s), 24 awake piece(s), 0 faces drawn
+[2026-10-26 09:38:43.981][engine][Physics][Racing][info]: perf: 6.8 fps, 6.8 ticks/s, step avg 31.01 ms max 31.58 ms, render prep 0.29 ms, 24 object(s) / 24 piece(s), 24 awake piece(s), 0 faces drawn
+[2026-10-26 09:38:44.995][engine][Physics][Racing][info]: perf: 6.9 fps, 6.9 ticks/s, step avg 30.21 ms max 30.76 ms, render prep 0.23 ms, 24 object(s) / 24 piece(s), 24 awake piece(s), 0 faces drawn
+[2026-10-26 09:38:46.052][engine][Physics][Racing][info]: perf: 8.5 fps, 15.1 ticks/s, step avg 4.29 ms max 37.85 ms, render prep 0.03 ms, 24 object(s) / 24 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-26 09:38:47.154][engine][Physics][Racing][info]: perf: 9.1 fps, 18.2 ticks/s, step avg 0.07 ms max 0.09 ms, render prep 0.01 ms, 24 object(s) / 24 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-26 09:38:47.373][engine][Racing][Racing][info]: pile-up 1: 24 cars at 108 km/h into the middle
+[2026-10-26 09:38:48.377][engine][Physics][Racing][info]: perf: 6.5 fps, 13.1 ticks/s, step avg 0.07 ms max 0.09 ms, render prep 0.01 ms, 24 object(s) / 24 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-26 09:38:49.411][engine][Physics][Racing][info]: perf: 5.8 fps, 11.6 ticks/s, step avg 0.07 ms max 0.09 ms, render prep 0.01 ms, 24 object(s) / 24 piece(s), 0 awake piece(s), 0 faces drawn
+[2026-10-26 09:38:50.470][engine][Physics][Racing][info]: perf: 2.8 fps, 5.7 ticks/s, step avg 1.44 ms max 4.31 ms, render prep 0.02 ms, 24 object(s) / 24 piece(s), 4 awake piece(s), 0 faces drawn
+[2026-10-26 09:38:51.598][engine][Physics][Racing][info]: perf: 1.8 fps, 1.8 ticks/s, step avg 14.94 ms max 15.22 ms, render prep 0.15 ms, 24 object(s) / 24 piece(s), 16 awake piece(s), 0 faces drawn
+[2026-10-26 09:38:52.225][engine][Racing][Racing][info]: Faye (CPU) is totalled (4 hits, the last at 91 km/h)
+[2026-10-26 09:38:52.225][engine][Racing][Racing][info]: Tess (CPU) is totalled (4 hits, the last at 91 km/h)
+[2026-10-26 09:38:52.845][engine][Physics][Racing][info]: perf: 1.6 fps, 1.6 ticks/s, step avg 20.95 ms max 23.78 ms, render prep 0.19 ms, 24 object(s) / 24 piece(s), 23 awake piece(s), 0 faces drawn
+[2026-10-26 09:38:53.401][engine][Racing][Racing][info]: Nell (CPU) is totalled (3 hits, the last at 72 km/h)
+[2026-10-26 09:38:53.401][engine][Racing][Racing][info]: Cruz (CPU) is totalled (3 hits, the last at 72 km/h)
+[2026-10-26 09:38:53.880][engine][Racing][Racing][info]: Yuki (CPU) is totalled (4 hits, the last at 50 km/h)
+[2026-10-26 09:38:53.887][engine][Physics][Racing][info]: perf: 1.9 fps, 1.9 ticks/s, step avg 24.85 ms max 25.23 ms, render prep 0.23 ms, 24 object(s) / 24 piece(s), 24 awake piece(s), 0 faces drawn
+[2026-10-26 09:38:54.725][engine][Racing][Racing][info]: Hana (CPU) is totalled (6 hits, the last at 169 km/h)
+[2026-10-26 09:38:54.725][engine][Racing][Racing][info]: Xan (CPU) is totalled (5 hits, the last at 125 km/h)
+[2026-10-26 09:38:55.121][engine][Racing][Racing][info]: Enzo (CPU) is totalled (4 hits, the last at 124 km/h)
+[2026-10-26 09:38:55.121][engine][Racing][Racing][info]: Kira (CPU) lost a wheel (2)
+[2026-10-26 09:38:55.121][engine][Racing][Racing][info]: Kira (CPU) is totalled (5 hits, the last at 124 km/h)
+[2026-10-26 09:38:55.124][engine][Physics][Racing][info]: perf: 2.4 fps, 2.4 ticks/s, step avg 25.28 ms max 26.22 ms, render prep 0.23 ms, 24 object(s) / 24 piece(s), 24 awake piece(s), 0 faces drawn
+[2026-10-26 09:38:55.888][engine][Racing][Racing][info]: Vi (CPU) is totalled (3 hits, the last at 178 km/h)
+[2026-10-26 09:38:56.289][engine][Physics][Racing][info]: perf: 2.6 fps, 2.6 ticks/s, step avg 25.33 ms max 25.92 ms, render prep 0.23 ms, 24 object(s) / 24 piece(s), 24 awake piece(s), 0 faces drawn
+[2026-10-26 09:38:56.679][engine][Racing][Racing][info]: Wes (CPU) lost a wheel (2)
+[2026-10-26 09:38:57.435][engine][Racing][Racing][info]: Ivo (CPU) is totalled (6 hits, the last at 33 km/h)
+[2026-10-26 09:38:57.438][engine][Physics][Racing][info]: perf: 2.6 fps, 2.6 ticks/s, step avg 25.75 ms max 26.14 ms, render prep 0.24 ms, 24 object(s) / 24 piece(s), 24 awake piece(s), 0 faces drawn
+[2026-10-26 09:38:58.546][engine][Physics][Racing][info]: perf: 2.7 fps, 2.7 ticks/s, step avg 25.50 ms max 25.89 ms, render prep 0.24 ms, 24 object(s) / 24 piece(s), 24 awake piece(s), 0 faces drawn
+[2026-10-26 09:38:59.799][engine][Physics][Racing][info]: perf: 3.2 fps, 3.2 ticks/s, step avg 25.48 ms max 25.64 ms, render prep 0.23 ms, 24 object(s) / 24 piece(s), 24 awake piece(s), 0 faces drawn
+[2026-10-26 09:39:00.990][engine][Physics][Racing][info]: perf: 3.4 fps, 3.4 ticks/s, step avg 24.87 ms max 25.13 ms, render prep 0.22 ms, 24 object(s) / 24 piece(s), 22 awake piece(s), 0 faces drawn
+[2026-10-26 09:39:02.151][engine][Physics][Racing][info]: perf: 3.4 fps, 3.4 ticks/s, step avg 20.10 ms max 22.19 ms, render prep 0.16 ms, 24 object(s) / 24 piece(s), 12 awake piece(s), 0 faces drawn
+[2026-10-26 09:39:02.531][engine][Benchmark][Racing][info]: benchmark: 6 screenshot(s) in C:/forgejo-runner/work/d23ee484b29712c7/hostexecutor/results/bench/run_20261026_092745/reports/shots
+[2026-10-26 09:39:02.534][engine][Benchmark][Racing][info]: benchmark: 66 frames, 4.5 fps avg, 1.6 fps 1% low, 24 hitch(es), verdict too slow; report C:\forgejo-runner\work\d23ee484b29712c7\hostexecutor\results\bench\run_20261026_092745\reports\racing_pileup.json
+[2026-10-26 09:39:02.536][engine][Audio][Racing][info]: Audio: 196 impacts played, 267 skipped (cooldown/cap), 0 breaks, 0 footsteps, voices dropped 61 stolen 1205; room RT60 0.50 s wet 0.00
+[2026-10-26 09:39:02.568][engine][Physics][Racing][info]: FEMFX scene destroyed
