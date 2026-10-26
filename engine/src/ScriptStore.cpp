@@ -197,7 +197,7 @@ void ScriptStore::bindSaves(ScriptVM& vm) {
     };
 
     // saves.version([n]) -> the version saves.write stamps (sets it when given).
-    vm.registerFunction("saves", "version", [this, open](lua_State* L) {
+    vm.registerFunction("saves", "version", [open](lua_State* L) {
         SaveSlots& s = open(L, "version");
         if (!lua_isnoneornil(L, 1)) {
             const lua_Integer v = luaL_checkinteger(L, 1);
