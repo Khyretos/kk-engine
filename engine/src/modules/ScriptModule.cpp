@@ -12,6 +12,7 @@
 #include "kke/modules/AudioModule.h"
 #if KKE_ENABLE_JOLT
 #include "kke/modules/RigidBodyModule.h"
+#include "kke/ScriptClock.h"
 #include "kke/ScriptTerrain.h"
 #endif
 #if KKE_ENABLE_NET
@@ -95,6 +96,7 @@ void ScriptModule::init(Application& app) {
     m_vm->onUnload = [this](const std::string& source) {
         releaseScript(source);
         if (m_terrain) m_terrain->release(source);
+        if (m_clock) m_clock->release(source);
     };
     m_vm->onStopped = [this](const std::string& source) {
         for (ScriptFile& f : m_files)
@@ -115,6 +117,8 @@ void ScriptModule::init(Application& app) {
 #endif
     bindAll();
     m_terrain->bind(*m_vm);
+    m_clock = std::make_unique<ScriptClock>(&app);
+    m_clock->bind(*m_vm);
     scanFolder(false);
     log::get(name())->info("{} script(s) from '{}'", m_files.size(), m_dir);
 }
@@ -771,6 +775,7 @@ void ScriptModule::update(const UpdateContext& ctx) {
     m_terrain->update(ctx.dt, m_app->camera().position); // chunks for the camera; collision after sculpting
     if (m_nav && m_nav->dynamic()) m_nav->update(); // obstacles nav.obstacle added or removed
     stepCreatures(ctx.dt);
+    m_clock->update(ctx.dt, *m_vm);                         // time of day: the sun, the sky, Dawn/Dusk/Hour hooks
     // Per-script CPU time this frame, smoothed for the panel.
     for (const auto& [source, total] : m_vm->cpuTimes()) {
         const double ms = (total - m_cpuLast[source]) * 1000.0;

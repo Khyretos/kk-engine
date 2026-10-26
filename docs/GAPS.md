@@ -160,7 +160,7 @@ by area. The goal is parity with the big engines and more.
 | ENG-F79 | World | Foliage | ⬜ |
 | ENG-F80 | World | Water with waves (ocean and buoyancy exist) | ✅ |
 | ENG-F81 | World | Snow and weather | ⬜ |
-| ENG-F82 | World | Day/night cycle (moods exist, no clock) | 🟡 |
+| ENG-F82 | World | Day/night cycle. Done: a clock that moves the sun, sky, light and exposure through dusk to moonlight, Lua `clock.*` with Dawn/Dusk/Hour hooks (docs/MOODS.md "Time of day"). Not yet: stars and moon in the sky, multiplayer clock sync. | 🟡 |
 | ENG-F83 | World | Biomes | ⬜ |
 | ENG-F84 | Localization | String tables, plurals, font fallback, RTL, language switch | ⬜ |
 | ENG-F85 | Accessibility | Subtitles, colour-blind modes, UI scale, remapping, screen-reader hooks (captions and remapping exist) | 🟡 |
