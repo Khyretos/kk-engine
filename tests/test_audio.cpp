@@ -309,3 +309,120 @@ TEST(SoundVisualizer, SettingsRoundTrip) {
     EXPECT_NEAR(w.settings.color[int(SoundCategory::Impact)].y, 0.2f, 1e-6);
     std::remove(path.c_str());
 }
+
+// ---------------------------------------------------------------- fades, pitch, buses, ducking (ENG-F42)
+
+namespace {
+
+// RMS of one mixed block (both ears).
+double blockRms(AudioMixer& m, int frames = 480) {
+    const Energy e = mixEnergy(m, frames);
+    return std::sqrt((e.left + e.right) / (2.0 * frames));
+}
+
+VoiceDesc centred(SoundHandle s, SoundCategory c) {
+    VoiceDesc d;
+    d.sound = std::move(s);
+    d.spatial = false;
+    d.loop = true;
+    d.category = c;
+    d.reverbSend = 0.0f;
+    return d;
+}
+
+} // namespace
+
+TEST(AudioMixer, FadesGlideAndCanEndAVoice) {
+    AudioMixer m;
+    const uint32_t id = m.play(centred(sine(300, 0.5f), SoundCategory::Music));
+    const double full = blockRms(m);
+    ASSERT_GT(full, 0.05);
+    m.fade(id, 0.5f, 0.1f); // half the gain in 0.1 s (ten 10 ms blocks)
+    const double first = blockRms(m);
+    EXPECT_LT(first, full);
+    EXPECT_GT(first, full * 0.85); // a glide, not a jump
+    for (int i = 0; i < 12; ++i) blockRms(m);
+    EXPECT_NEAR(blockRms(m) / full, 0.5, 0.02);
+    m.fade(id, 0.0f, 0.05f, true);
+    for (int i = 0; i < 8; ++i) blockRms(m);
+    EXPECT_FALSE(m.isPlaying(id));
+    // A fade-in starts silent and arrives.
+    VoiceDesc in = centred(sine(300, 0.5f), SoundCategory::Music);
+    in.fadeIn = 0.2f;
+    const uint32_t b = m.play(in);
+    EXPECT_LT(blockRms(m), full * 0.1);
+    for (int i = 0; i < 25; ++i) blockRms(m);
+    EXPECT_NEAR(blockRms(m) / full, 1.0, 0.02);
+    m.fade(b, 0.25f, 0.0f); // 0 s: at once
+    blockRms(m);
+    EXPECT_NEAR(blockRms(m) / full, 0.25, 0.02);
+}
+
+TEST(AudioMixer, PitchChangesSpeed) {
+    AudioMixer m(48000);
+    VoiceDesc d;
+    d.sound = sine(440, 0.5f);
+    d.spatial = false;
+    d.pitch = 2.0f; // twice as fast: done in 0.25 s
+    const uint32_t id = m.play(d);
+    std::vector<float> out(4800 * 2);
+    for (int i = 0; i < 2; ++i) m.mix(out.data(), 4800);
+    EXPECT_TRUE(m.isPlaying(id));
+    m.mix(out.data(), 4800);
+    EXPECT_FALSE(m.isPlaying(id)); // 0.3 s in
+    d.pitch = 100.0f; // clamped to 4
+    const uint32_t fast = m.play(d);
+    m.mix(out.data(), 4800);
+    EXPECT_TRUE(m.isPlaying(fast)); // 0.1 s in: a quarter of the way at 4x would end at 0.125 s
+    m.mix(out.data(), 4800);
+    EXPECT_FALSE(m.isPlaying(fast));
+}
+
+TEST(AudioMixer, BusesGlideOnTopOfThePlayersVolume) {
+    AudioMixer m;
+    m.play(centred(sine(300, 0.5f), SoundCategory::Music));
+    const double full = blockRms(m);
+    m.categoryGain[size_t(SoundCategory::Music)] = 0.5f; // the player's music volume
+    m.setBusGain(SoundCategory::Music, 0.5f, 0.2f);      // the game's pause menu
+    EXPECT_FLOAT_EQ(m.busTarget(SoundCategory::Music), 0.5f);
+    for (int i = 0; i < 25; ++i) blockRms(m);
+    EXPECT_NEAR(m.busGain(SoundCategory::Music), 0.5f, 1e-4f);
+    EXPECT_NEAR(blockRms(m) / full, 0.25, 0.02); // both multiply
+    m.setBusGain(SoundCategory::Music, 1.0f); // at once
+    EXPECT_FLOAT_EQ(m.busGain(SoundCategory::Music), 1.0f);
+    m.setBusGain(SoundCategory::Ui, -3.0f);
+    EXPECT_FLOAT_EQ(m.busTarget(SoundCategory::Ui), 0.0f); // clamped
+}
+
+TEST(AudioMixer, VoiceDucksMusicAndItComesBack) {
+    AudioMixer m;
+    DuckRule r; // voice over music, to 0.35
+    m.addDuck(r);
+    m.addDuck(r); // the same pair again replaces it
+    EXPECT_EQ(m.duckCount(), 1u);
+    m.play(centred(sine(200, 0.5f), SoundCategory::Music)); // whole periods per 10 ms block: steady RMS
+    const double music = blockRms(m);
+    VoiceDesc line = centred(sine(500, 0.6f), SoundCategory::Voice);
+    line.loop = false;
+    const uint32_t v = m.play(line);
+    for (int i = 0; i < 40; ++i) blockRms(m); // 0.4 s in: ducked
+    EXPECT_NEAR(m.duckGain(SoundCategory::Music), 0.35f, 0.01f);
+    EXPECT_FLOAT_EQ(m.duckGain(SoundCategory::Voice), 1.0f); // the voice itself isn't ducked
+    m.stop(v);
+    blockRms(m);
+    EXPECT_LT(m.duckGain(SoundCategory::Music), 0.5f); // comes back slowly (release 0.6 s) ...
+    for (int i = 0; i < 300; ++i) blockRms(m);
+    EXPECT_NEAR(m.duckGain(SoundCategory::Music), 1.0f, 1e-3f); // ... all the way
+    EXPECT_NEAR(blockRms(m) / music, 1.0, 0.02);
+    // A far, quiet voice under the threshold doesn't duck.
+    VoiceDesc far = line;
+    far.spatial = true;
+    far.position = glm::vec3(0, 0, -59.0f);
+    far.loop = true;
+    far.gain = 0.01f;
+    m.play(far);
+    for (int i = 0; i < 40; ++i) blockRms(m);
+    EXPECT_FLOAT_EQ(m.duckGain(SoundCategory::Music), 1.0f);
+    m.clearDucks();
+    EXPECT_EQ(m.duckCount(), 0u);
+}

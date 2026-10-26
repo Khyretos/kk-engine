@@ -143,6 +143,20 @@ public:
     // Decodes WAV / FLAC / MP3 (miniaudio) to mono at the mixer's rate.
     // Null on failure (logged).
     SoundHandle loadSound(const std::string& path);
+    // The same, kept: the second call for a path returns the first one's
+    // sound (failures are not kept). At most kMaxCachedSounds; past that
+    // the cache is emptied (sounds that play keep their buffer).
+    SoundHandle cachedSound(const std::string& path);
+    static constexpr size_t kMaxCachedSounds = 256;
+    size_t cachedSoundCount() const { return m_soundCache.size(); }
+
+    // Music (docs/AUDIO.md "Sounds and music from scripts"): one track loops at a time, centred, in
+    // the Music category. A new track crossfades: the old one fades out over
+    // `fade` seconds while the new one fades in. The same sound again only
+    // changes its gain. Returns the track's voice (0 when it didn't start).
+    uint32_t playMusic(SoundHandle track, float fade = 1.5f, float gain = 0.8f);
+    void stopMusic(float fade = 1.5f);
+    uint32_t musicVoice() const { return m_musicVoice; }
 
     // Records everything the mixer outputs (device or silent) until
     // stopRecording(), which writes it to `path` as a 16-bit stereo WAV.
@@ -191,6 +205,9 @@ private:
     // The mood's looping background sound (Mood::ambience).
     std::string m_ambienceName;
     uint32_t m_ambienceVoice = 0;
+    std::unordered_map<std::string, SoundHandle> m_soundCache;
+    uint32_t m_musicVoice = 0;
+    SoundHandle m_musicTrack;
     bool m_ambienceFailed = false; // no file / can't load: don't retry every frame
     AudioMaterialTable m_materials;
     std::unique_ptr<ImpactBank> m_bank;

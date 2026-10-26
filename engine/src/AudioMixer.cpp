@@ -121,6 +121,11 @@ uint32_t AudioMixer::play(const VoiceDesc& desc) {
     v.viaActive = desc.viaOpening;
     v.via = desc.via;
     v.pathLength = std::max(0.0f, desc.viaPathLength);
+    v.desc.pitch = std::isfinite(desc.pitch) ? std::clamp(desc.pitch, 0.25f, 4.0f) : 1.0f;
+    if (desc.fadeIn > 0.0f && std::isfinite(desc.fadeIn)) {
+        v.fade = 0.0f;
+        v.fadeRate = 1.0f / desc.fadeIn;
+    }
     if (int(m_voices.size()) >= m_maxVoices) {
         size_t quietest = 0;
         float q = 1e30f;
@@ -143,6 +148,85 @@ void AudioMixer::stop(uint32_t id) {
     std::lock_guard<std::mutex> lock(m_mutex);
     if (m_spatializer) m_spatializer->release(id);
     m_voices.erase(std::remove_if(m_voices.begin(), m_voices.end(), [&](const Voice& v) { return v.id == id; }), m_voices.end());
+}
+
+void AudioMixer::fade(uint32_t id, float gain, float seconds, bool stopWhenSilent) {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    gain = std::isfinite(gain) ? std::max(0.0f, gain) : 0.0f;
+    for (Voice& v : m_voices)
+        if (v.id == id) {
+            v.fadeTarget = gain;
+            v.stopWhenSilent = stopWhenSilent;
+            if (!(seconds > 0.0f)) {
+                v.fade = gain;
+                v.fadeRate = 0.0f;
+            } else {
+                v.fadeRate = std::fabs(gain - v.fade) / seconds;
+            }
+        }
+}
+
+namespace {
+// Moves `x` toward `target` by at most `rate * dt`.
+float approach(float x, float target, float rate, float dt) {
+    if (rate <= 0.0f) return target;
+    const float step = rate * dt;
+    return x < target ? std::min(target, x + step) : std::max(target, x - step);
+}
+} // namespace
+
+void AudioMixer::setBusGain(SoundCategory bus, float gain, float seconds) {
+    if (bus >= SoundCategory::Count) return;
+    std::lock_guard<std::mutex> lock(m_mutex);
+    Bus& b = m_bus[size_t(bus)];
+    b.target = std::isfinite(gain) ? std::clamp(gain, 0.0f, 4.0f) : 1.0f;
+    if (!(seconds > 0.0f)) {
+        b.gain = b.target;
+        b.rate = 0.0f;
+    } else {
+        b.rate = std::fabs(b.target - b.gain) / seconds;
+    }
+}
+
+float AudioMixer::busGain(SoundCategory bus) const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return bus < SoundCategory::Count ? m_bus[size_t(bus)].gain : 1.0f;
+}
+
+float AudioMixer::busTarget(SoundCategory bus) const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return bus < SoundCategory::Count ? m_bus[size_t(bus)].target : 1.0f;
+}
+
+void AudioMixer::addDuck(const DuckRule& rule) {
+    if (rule.by >= SoundCategory::Count || rule.target >= SoundCategory::Count) return;
+    DuckRule r = rule;
+    r.gain = std::isfinite(r.gain) ? std::clamp(r.gain, 0.0f, 1.0f) : 1.0f;
+    r.attack = std::isfinite(r.attack) ? std::max(0.001f, r.attack) : 0.08f;
+    r.release = std::isfinite(r.release) ? std::max(0.001f, r.release) : 0.6f;
+    r.threshold = std::isfinite(r.threshold) ? std::max(0.0f, r.threshold) : 0.005f;
+    std::lock_guard<std::mutex> lock(m_mutex);
+    for (DuckRule& d : m_ducks)
+        if (d.by == r.by && d.target == r.target) {
+            d = r; // one rule per pair: setting it again (a reloaded script) changes it
+            return;
+        }
+    if (m_ducks.size() < 32) m_ducks.push_back(r);
+}
+
+void AudioMixer::clearDucks() {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_ducks.clear();
+}
+
+size_t AudioMixer::duckCount() const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return m_ducks.size();
+}
+
+float AudioMixer::duckGain(SoundCategory c) const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    return c < SoundCategory::Count ? m_duck[size_t(c)] : 1.0f;
 }
 
 void AudioMixer::stopAll() {
@@ -291,14 +375,37 @@ void AudioMixer::mix(float* out, int frames) {
     if (useHrtf && m_hrtfBlock.size() < size_t(frames)) m_hrtfBlock.resize(size_t(frames));
     const float invFrames = 1.0f / float(frames);
     static const SoundBuffer kSilence{ { 0.0f }, 48000 };
+    // Buses glide, ducks follow the last block's loudness of what ducks them.
+    const float blockSeconds = float(frames) / float(m_sampleRate);
+    for (size_t c = 0; c < size_t(SoundCategory::Count); ++c) {
+        Bus& b = m_bus[c];
+        b.gain = approach(b.gain, b.target, b.rate, blockSeconds);
+        float want = 1.0f, attack = 0.08f, release = 0.0f;
+        for (const DuckRule& r : m_ducks)
+            if (size_t(r.target) == c) {
+                if (m_categoryPeak[size_t(r.by)] > r.threshold && r.gain < want) {
+                    want = r.gain;
+                    attack = r.attack;
+                }
+                release = std::max(release, r.release);
+            }
+        if (release <= 0.0f) release = 0.6f; // no rule left: come back at the default pace
+        const float tc = (want < m_duck[c] ? attack : release) / 3.0f; // ~95% of the way in attack / release seconds
+        m_duck[c] += (want - m_duck[c]) * (1.0f - std::exp(-blockSeconds / tc));
+        if (std::fabs(m_duck[c] - want) < 1e-4f) m_duck[c] = want;
+    }
+    std::fill(std::begin(m_categoryPeak), std::end(m_categoryPeak), 0.0f);
     for (Voice& v : m_voices) {
+        v.fade = approach(v.fade, v.fadeTarget, v.fadeRate, blockSeconds);
+        if (v.stopWhenSilent && v.fade <= 0.0f && v.fadeTarget <= 0.0f) v.faded = true;
         const bool streamed = v.desc.stream != nullptr;
         const SoundBuffer& buf = streamed ? kSilence : *v.desc.sound;
         if (streamed) {
             if (m_streamBlock.size() < size_t(frames)) m_streamBlock.resize(size_t(frames));
             v.desc.stream->read(m_streamBlock.data(), size_t(frames));
         }
-        float gain = v.desc.gain * masterGain * categoryGain[size_t(v.desc.category)];
+        const size_t cat = size_t(v.desc.category);
+        float gain = v.desc.gain * v.fade * masterGain * categoryGain[cat] * m_bus[cat].gain * m_duck[cat];
         float pan = 0.0f, azimuth = 0.0f, distanceGain = 1.0f, distance = 0.0f;
         bool behind = false;
         if (v.desc.spatial) {
@@ -349,7 +456,7 @@ void AudioMixer::mix(float* out, int frames) {
             v.started = true;
         }
 
-        const double step = double(buf.sampleRate) / double(m_sampleRate);
+        const double step = double(buf.sampleRate) / double(m_sampleRate) * double(v.desc.pitch);
         const size_t n = buf.samples.size();
         double pos = double(v.cursor) / 65536.0;
         float peak = 0.0f;
@@ -422,11 +529,14 @@ void AudioMixer::mix(float* out, int frames) {
         v.prevDelay[0] = delay[0];
         v.prevDelay[1] = delay[1];
         v.lastPeak = peak;
+        // What ducks others: its loudness before any duck of its own.
+        const float unducked = m_duck[cat] > 1e-6f ? peak / m_duck[cat] : peak;
+        m_categoryPeak[cat] = std::max(m_categoryPeak[cat], unducked);
     }
     m_voices.erase(std::remove_if(m_voices.begin(), m_voices.end(),
                                   [this](const Voice& v) {
-                                      const bool done = v.desc.stream ? v.desc.stream->finished()
-                                                                      : !v.desc.loop && double(v.cursor) / 65536.0 >= double(v.desc.sound->samples.size());
+                                      const bool done = v.faded || (v.desc.stream ? v.desc.stream->finished()
+                                                                      : !v.desc.loop && double(v.cursor) / 65536.0 >= double(v.desc.sound->samples.size()));
                                       if (done && m_spatializer) m_spatializer->release(v.id);
                                       return done;
                                   }),
