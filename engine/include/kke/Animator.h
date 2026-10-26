@@ -1,5 +1,6 @@
 #pragma once
 
+#include "kke/AnimEvents.h"
 #include "kke/ModelAsset.h"
 
 #include <glm/glm.hpp>
@@ -134,6 +135,18 @@ public:
     // unless the set has root motion.
     glm::vec3 rootMotion() const { return m_rootDelta; }
 
+    // Animation events (kke/AnimEvents.h): `name` at `fraction` (0..1) of
+    // a state's cycle, so it works for blend spaces too (a footstep at
+    // 0.25 and 0.75 of a walk/jog blend). Several per state, any order.
+    void addEvent(int state, float fraction, const std::string& name);
+    // What the last update() passed, in time order: only the current
+    // state's (one that is fading out reports nothing), each once per
+    // pass (a looping state again every cycle), events at 0 on the first
+    // update after play(). setProgress() forward reports what it skips
+    // over; backward reports nothing.
+    struct FiredEvent { int state; std::string name; };
+    const std::vector<FiredEvent>& events() const { return m_fired; }
+
 private:
     struct State {
         std::string name;
@@ -142,6 +155,7 @@ private:
         BlendSpace2D space2; // used when it has points
         bool loop = true;
         float speed = 1.0f;
+        std::vector<AnimEvent> events; // at = fraction of the cycle
     };
     void evaluate(const State& s, float time, float& phase, Pose& out) const;
     float stateDuration(const State& s) const;
@@ -156,6 +170,10 @@ private:
     glm::vec2 m_param2{0.0f};
     mutable std::vector<float> m_weights; // a 2D space's, this update
     bool m_held = false; // setProgress() since the last update()
+    bool m_started = false; // play() since the last update(): events at 0 fire
+    float m_eventPhase = 0.0f; // the current state's phase at the last update (events)
+    std::vector<FiredEvent> m_fired;
+    std::vector<const AnimEvent*> m_passed;
     glm::vec3 m_rootDelta{0.0f};
     Pose m_pose, m_scratchA, m_scratchB;
 };

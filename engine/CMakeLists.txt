@@ -47,6 +47,7 @@ set(ENGINE_SOURCES
     src/FracturePattern.cpp
     src/VoronoiFracture.cpp
     src/BreakGraph.cpp
+    src/AnimEvents.cpp
     src/Animator.cpp
     src/AnimRig.cpp
     src/BodyShape.cpp

@@ -492,6 +492,7 @@ void ModelModule::playAnimation(InstanceId id, int clip, bool loop, float speed)
     inst.clipTime = 0.0f;
     inst.clipLoop = loop;
     inst.clipSpeed = speed;
+    inst.clipStarted = inst.clip >= 0;
     if (inst.clip < 0) {
         for (size_t b = 0; b < data.bones.size(); ++b) inst.locals[b] = data.bones[b].localRest;
     }
@@ -549,12 +550,37 @@ void ModelModule::update(const UpdateContext& ctx) {
     }
 }
 
+void ModelModule::addClipEvent(ModelId model, int clip, float seconds, const std::string& name) {
+    auto it = m_models.find(model);
+    if (it == m_models.end() || clip < 0 || clip >= static_cast<int>(it->second->data.animations.size())) return;
+    LoadedModel& lm = *it->second;
+    if (lm.clipEvents.size() < lm.data.animations.size()) lm.clipEvents.resize(lm.data.animations.size());
+    addAnimEvent(lm.clipEvents[static_cast<size_t>(clip)], std::max(0.0f, seconds), name);
+}
+
+void ModelModule::clearClipEvents(ModelId model, int clip) {
+    auto it = m_models.find(model);
+    if (it == m_models.end()) return;
+    std::vector<std::vector<AnimEvent>>& events = it->second->clipEvents;
+    if (clip < 0) events.clear();
+    else if (clip < static_cast<int>(events.size())) events[static_cast<size_t>(clip)].clear();
+}
+
 void ModelModule::advanceClips(const UpdateContext& ctx) {
+    m_clipEvents.clear();
     // Clips keep playing under a world override: a stand-up blends the
     // override from the ragdoll pose to boneLocals(), which has to move.
     for (auto& [id, inst] : m_instances) {
         if (inst.clip < 0) continue;
-        const ModelAnimation& anim = m_models[inst.model]->data.animations[inst.clip];
+        const LoadedModel& lm = *m_models[inst.model];
+        const ModelAnimation& anim = lm.data.animations[inst.clip];
+        if (static_cast<size_t>(inst.clip) < lm.clipEvents.size() && !lm.clipEvents[static_cast<size_t>(inst.clip)].empty()) {
+            m_passedEvents.clear();
+            passedEvents(lm.clipEvents[static_cast<size_t>(inst.clip)], inst.clipTime, std::max(0.0f, ctx.dt * inst.clipSpeed), anim.duration,
+                         inst.clipLoop, inst.clipStarted, m_passedEvents);
+            for (const AnimEvent* e : m_passedEvents) m_clipEvents.push_back({id, inst.clip, e->name});
+        }
+        inst.clipStarted = false;
         inst.clipTime += ctx.dt * inst.clipSpeed;
         if (inst.clipTime > anim.duration) inst.clipTime = inst.clipLoop && anim.duration > 0.0f ? std::fmod(inst.clipTime, anim.duration) : anim.duration;
         // Linear blend between the two nearest sampled frames.

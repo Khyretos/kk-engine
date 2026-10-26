@@ -55,7 +55,7 @@ class ParticleLibrary;
 //   physics.*    box/sphere spawn (drawn by this module), remove, position,
 //                velocity, setVelocity, impulse, raycast, joint, motor,
 //                jointValue, removeJoint                   (RigidBodyModule)
-//   models.*     load, spawn, move, remove, tint, visible, play, clips,
+//   models.*     load, spawn, move, remove, tint, visible, play, event, clips,
 //                bounds                                    (ModelModule)
 //   breakable.*  box, ball, remove, broken, pieces, count
 //                                                          (PhysicsModule, FEMFX)

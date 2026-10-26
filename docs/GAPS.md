@@ -106,7 +106,7 @@ by area. The goal is parity with the big engines and more.
 | ENG-F25 | Animation | Facial animation, blend shapes | ⬜ |
 | ENG-F26 | Animation | Retargeting between skeletons (by bone name, with rest-pose matching, ENG-G19) | ✅ |
 | ENG-F27 | Animation | Runtime sequencer and cutscenes from Lua or the node scripter | ⬜ |
-| ENG-F28 | Animation | State machine with events and root motion (crossfading state machine and root motion exist; events missing) | 🟡 |
+| ENG-F28 | Animation | State machine with events and root motion (crossfading state machine, root motion, and animation events in `Animator`, `ModelModule` and Lua `models.event` + the `AnimEvent` hook) | ✅ |
 | ENG-F29 | Physics | Soft bodies: cloth and jelly (docs/CLOTH.md, docs/JIGGLE.md) | ✅ |
 | ENG-F30 | Physics | Fluid simulation (PBF liquids; G12 leftovers) | 🟡 |
 | ENG-F31 | Physics | Vehicle physics (docs/VEHICLES.md, racing) | ✅ |

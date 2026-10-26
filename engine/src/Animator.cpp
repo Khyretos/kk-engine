@@ -247,6 +247,13 @@ void Animator::play(int state, float fade, bool restart) {
     m_phase = 0.0f;
     m_fadeLength = m_previous >= 0 ? std::max(0.0f, fade) : 0.0f;
     m_fade = 0.0f;
+    m_started = true;
+    m_eventPhase = 0.0f;
+}
+
+void Animator::addEvent(int state, float fraction, const std::string& name) {
+    if (state < 0 || state >= static_cast<int>(m_states.size())) return;
+    addAnimEvent(m_states[state].events, std::clamp(fraction, 0.0f, 1.0f), name);
 }
 
 void Animator::setProgress(float fraction) {
@@ -329,6 +336,7 @@ void Animator::evaluate(const State& s, float time, float& phase, Pose& out) con
 }
 
 void Animator::update(float dt) {
+    m_fired.clear();
     if (m_current < 0) { m_pose = m_set->restPose(); return; }
     auto advance = [&](const State& s, float& time, float& phase) {
         time += dt;
@@ -343,8 +351,25 @@ void Animator::update(float dt) {
         return s.clip >= 0 ? m_set->rootTravel(s.clip, before * s.speed, after * s.speed, s.loop) : glm::vec3(0.0f);
     };
     const float curBefore = m_time;
-    if (!m_held) advance(cur, m_time, m_phase);
+    // Events: how far the phase moved this update. Advancing, by dt over
+    // the cycle (so a loop that wrapped counts its passes); held by
+    // setProgress(), the jump it made, forward only.
+    float eventAdvance = 0.0f;
+    if (!m_held) {
+        const float d = stateDuration(cur);
+        eventAdvance = d > 0.0f ? std::max(0.0f, dt) / d : 0.0f;
+        advance(cur, m_time, m_phase);
+    } else {
+        eventAdvance = std::max(0.0f, m_phase - m_eventPhase);
+    }
     m_held = false;
+    if (!cur.events.empty()) {
+        m_passed.clear();
+        passedEvents(cur.events, m_eventPhase, eventAdvance, 1.0f, cur.loop, m_started, m_passed);
+        for (const AnimEvent* e : m_passed) m_fired.push_back({m_current, e->name});
+    }
+    m_started = false;
+    m_eventPhase = m_phase;
     m_rootDelta = travel(cur, curBefore, m_time);
     evaluate(cur, m_time, m_phase, m_scratchA);
     if (m_previous >= 0 && m_fade < m_fadeLength) {

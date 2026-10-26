@@ -226,27 +226,52 @@ void ScriptModule::bindModels() {
         models->setVisible(owned(L, 1, "models.visible"), lua_toboolean(L, 2));
         return 0;
     });
-    // models.play(instance, clip [, loop=true, speed=1]): clip by name, or
-    // its number (1-based) in models.clips(); nil stops.
-    vm.registerFunction("models", "play", [models, owned](lua_State* L) {
-        const auto inst = owned(L, 1, "models.play");
+    // A clip argument: its name, or its number (1-based) in models.clips();
+    // -1 for nil when `allowNil`.
+    auto clipArg = [](lua_State* L, int idx, const ModelData* d, const char* what, bool allowNil) -> int {
         int clip = -1;
-        if (lua_isinteger(L, 2)) {
-            clip = int(lua_tointeger(L, 2)) - 1;
-        } else if (lua_isstring(L, 2)) {
-            const std::string want = lua_tostring(L, 2);
-            const ModelData* d = models->model(models->instanceModel(inst));
+        if (lua_isinteger(L, idx)) {
+            clip = int(lua_tointeger(L, idx)) - 1;
+        } else if (lua_isstring(L, idx)) {
+            const std::string want = lua_tostring(L, idx);
             if (d)
                 for (size_t k = 0; k < d->animations.size(); ++k)
                     if (d->animations[k].name == want) clip = int(k);
-            if (clip < 0) return luaL_error(L, "models.play: the model has no clip named '%s' (see models.clips)", want.c_str());
-        } else if (!lua_isnoneornil(L, 2)) {
-            return luaL_error(L, "models.play: clip must be a name, a number or nil");
+            if (clip < 0) return luaL_error(L, "%s: the model has no clip named '%s' (see models.clips)", what, want.c_str());
+            return clip;
+        } else if (!allowNil || !lua_isnoneornil(L, idx)) {
+            return luaL_error(L, allowNil ? "%s: clip must be a name, a number or nil" : "%s: clip must be a name or a number", what);
         }
-        const ModelData* d = models->model(models->instanceModel(inst));
         if (clip >= 0 && (!d || clip >= int(d->animations.size())))
-            return luaL_error(L, "models.play: clip %d doesn't exist (the model has %d)", clip + 1, d ? int(d->animations.size()) : 0);
+            return luaL_error(L, "%s: clip %d doesn't exist (the model has %d)", what, clip + 1, d ? int(d->animations.size()) : 0);
+        return clip;
+    };
+    // models.play(instance, clip [, loop=true, speed=1]): clip by name, or
+    // its number (1-based) in models.clips(); nil stops.
+    vm.registerFunction("models", "play", [models, owned, clipArg](lua_State* L) {
+        const auto inst = owned(L, 1, "models.play");
+        const int clip = clipArg(L, 2, models->model(models->instanceModel(inst)), "models.play", true);
         models->playAnimation(inst, clip, lua_isnoneornil(L, 3) ? true : bool(lua_toboolean(L, 3)), float(luaL_optnumber(L, 4, 1.0)));
+        return 0;
+    });
+    // models.event(model, clip, seconds, name): an animation event, the
+    // "AnimEvent" hook for every script model of `model` playing `clip`.
+    // models.event(model, clip, nil) removes that clip's events.
+    vm.registerFunction("models", "event", [models, clipArg](lua_State* L) {
+        const auto model = ModelModule::ModelId(checkId(L, 1, "models.event"));
+        const ModelData* d = models->model(model);
+        if (!d) return luaL_error(L, "models.event: %d is not a loaded model (use models.load)", int(model));
+        const int clip = clipArg(L, 2, d, "models.event", false);
+        if (clip < 0) return luaL_error(L, "models.event: clip numbers start at 1");
+        if (lua_isnoneornil(L, 3)) {
+            models->clearClipEvents(model, clip);
+            return 0;
+        }
+        const float seconds = float(luaL_checknumber(L, 3));
+        const std::string name = luaL_checkstring(L, 4);
+        if (!(seconds >= 0.0f) || seconds > d->animations[size_t(clip)].duration + 1e-4f)
+            return luaL_error(L, "models.event: %f s is outside the clip (0 to %f s)", double(seconds), double(d->animations[size_t(clip)].duration));
+        models->addClipEvent(model, clip, seconds, name);
         return 0;
     });
     // models.clips(model) -> { "Idle", "Walk", ... }

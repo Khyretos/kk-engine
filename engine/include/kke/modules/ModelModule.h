@@ -1,5 +1,6 @@
 #pragma once
 
+#include "kke/AnimEvents.h"
 #include "kke/Capabilities.h"
 #include "kke/Module.h"
 #include "kke/Buffer.h"
@@ -105,6 +106,16 @@ public:
     // Plays one of the model's clips (ModelData::animations); -1 stops and
     // returns to the rest pose.
     void playAnimation(InstanceId instance, int clip, bool loop = true, float speed = 1.0f);
+    // Animation events (kke/AnimEvents.h) on a model's clip: `name` at
+    // `seconds` into clip `clip`, for every instance that plays it.
+    // clearClipEvents(model, -1) removes all of the model's.
+    void addClipEvent(ModelId model, int clip, float seconds, const std::string& name);
+    void clearClipEvents(ModelId model, int clip = -1);
+    // What playing clips passed during the last update(), each
+    // instance's in time order (once per pass: a looping clip every cycle;
+    // events at 0 on the first update after playAnimation()).
+    struct ClipEventHit { InstanceId instance; int clip; std::string name; };
+    const std::vector<ClipEventHit>& clipEvents() const { return m_clipEvents; }
     // Local (parent-relative) transform of every bone, starting at the rest
     // pose. Edit and the next frame is skinned from it. Ignored while an
     // animation is playing or a world override is set.
@@ -189,6 +200,7 @@ private:
         ModelData data;
         std::vector<GpuMesh> meshes;
         std::vector<GpuMaterial> materials;
+        std::vector<std::vector<AnimEvent>> clipEvents; // per clip (addClipEvent), seconds
     };
     struct SkinnedBuffers {
         std::unique_ptr<rhi::Buffer> vertices[Renderer::kMaxFramesInFlight];
@@ -234,6 +246,7 @@ private:
         int clip = -1;
         float clipTime = 0.0f, clipSpeed = 1.0f;
         bool clipLoop = true;
+        bool clipStarted = false; // playAnimation() since the last update: events at 0 fire
         uint64_t skinnedFrame = ~0ull;
         uint64_t batchedFrame = ~0ull; // drawn instanced in this view this frame (see render())
         mutable uint64_t occlusionPass = ~0ull; // the draw `occluded` was worked out for (ENG-F13)
@@ -296,6 +309,8 @@ private:
     bool m_rayClassic = false;
     RayScene* m_standInScene = nullptr; // the scene m_standIns' geometry lives in
     void advanceClips(const UpdateContext& ctx);
+    std::vector<ClipEventHit> m_clipEvents;
+    std::vector<const AnimEvent*> m_passedEvents;
     // False only when the instance certainly can't be seen through `f`.
     bool mightBeVisible(const Instance& inst, const struct Frustum& f) const;
 
