@@ -24,7 +24,7 @@ metrics row and the pull request.
 ## Engines we learn from
 
 Read for techniques, not taken as dependencies (reviewed 2026-10-25,
-Kees's ask; review page https://claude.ai/artifact/AJXnSvsvhYnsTr3GUAeiN1).
+Kees's ask; review page <https://claude.ai/artifact/AJXnSvsvhYnsTr3GUAeiN1>).
 No code is copied from them; copying any would need Kees's OK first.
 
 | Project | Licence | What we took | Still to try |

@@ -164,6 +164,7 @@ everywhere. A look read back and coded again gives the same code (a CI
 self-test checks this on a random person every run).
 
 Saves are JSON (`lookToJson`, `lookFromJson`: format `kk-human`, version
+
 1) with MakeHuman's slider names, and `lookFromMhm` reads MakeHuman's own
 `.mhm` saves.
 
