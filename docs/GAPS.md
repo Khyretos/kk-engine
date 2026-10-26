@@ -157,7 +157,7 @@ by area. The goal is parity with the big engines and more.
 | ENG-F76 | World | Heightmap terrain. Done: chunks with distance LOD and skirts, a Jolt height field for collision, four colour layers with rock on slopes, from a seed or a greyscale picture, Lua `terrain.*` (docs/TERRAIN.md). Not yet: textured layers, holes. | 🟡 |
 | ENG-F77 | World | Procedural terrain (ACTION_PLAN 4.1). Done: seeded gradient-noise hills or ridged mountains (docs/TERRAIN.md). Not yet: erosion, rivers, biomes. | 🟡 |
 | ENG-F78 | World | World streaming (ACTION_PLAN 3.6) | ⬜ |
-| ENG-F79 | World | Foliage | ⬜ |
+| ENG-F79 | World | Foliage. Done: trees, rocks and bushes scattered on the terrain by layer, slope and height, solid trunks, kept on the ground when sculpted (Lua `terrain.scatter`, docs/TERRAIN.md). Not yet: GPU grass, wind sway. | 🟡 |
 | ENG-F80 | World | Water with waves (ocean and buoyancy exist) | ✅ |
 | ENG-F81 | World | Snow and weather | ⬜ |
 | ENG-F82 | World | Day/night cycle. Done: a clock that moves the sun, sky, light and exposure through dusk to moonlight, Lua `clock.*` with Dawn/Dusk/Hour hooks (docs/MOODS.md "Time of day"). Not yet: stars and moon in the sky, multiplayer clock sync. | 🟡 |

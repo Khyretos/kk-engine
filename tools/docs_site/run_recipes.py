@@ -42,6 +42,7 @@ SPECIAL = {
     "play": {"skip": "runs in kke_tests (Cookbook.*)"},
     "maze.lua": {"camera": ("-2 14 22", "-10 0 12"), "shot": 4},
     "terrain.lua": {"camera": ("-3 10 -2", "10 0 12"), "shot": 4},
+    "valley.lua": {"camera": ("-26 24 -30", "30 2 50"), "shot": 3},
     "astar.lua": {"camera": ("0 17 14", "0 0 5.5"), "shot": 6},
     "flocking.lua": {"camera": ("0 18 16", "0 0 2"), "shot": 8},
     "ik_arm.lua": {"camera": ("2.4 2.4 2.6", "0 1.7 0.3"), "shot": 5},

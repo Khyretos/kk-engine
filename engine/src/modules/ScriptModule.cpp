@@ -116,6 +116,7 @@ void ScriptModule::init(Application& app) {
     if (auto* net = app.getModule<NetModule>()) m_authority = net->authority();
 #endif
     bindAll();
+    m_terrain->setModels(app.getModule<ModelModule>()); // terrain.scatter
     m_terrain->bind(*m_vm);
     m_clock = std::make_unique<ScriptClock>(&app);
     m_clock->bind(*m_vm);

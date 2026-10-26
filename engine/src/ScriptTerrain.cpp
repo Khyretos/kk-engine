@@ -5,6 +5,7 @@
 #include "kke/Picking.h"
 #include "kke/ScriptVM.h"
 #include "kke/SphereImpostors.h"
+#include "kke/modules/ModelModule.h"
 #if KKE_ENABLE_JOLT
 #include "kke/RigidWorld.h"
 #endif
@@ -14,6 +15,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <string>
 #include <system_error>
 
@@ -53,7 +55,64 @@ ScriptTerrain::ScriptTerrain(Application* app, RigidWorld* world) : m_app(app), 
 
 ScriptTerrain::~ScriptTerrain() { clear(); }
 
+size_t ScriptTerrain::scatteredCount() const {
+    size_t n = 0;
+    for (const ScatterGroup& g : m_groups) n += g.placed.size();
+    return n;
+}
+
+void ScriptTerrain::removeGroup(ScatterGroup& g) {
+    if (m_models)
+        for (uint32_t i : g.instances) m_models->remove(i);
+#if KKE_ENABLE_JOLT
+    if (m_world)
+        for (uint32_t b : g.bodies) m_world->remove(b);
+#endif
+    g.instances.clear();
+    g.bodies.clear();
+    g.placed.clear();
+}
+
+void ScriptTerrain::addBody(ScatterGroup& g, const Terrain::Placement& p) {
+#if KKE_ENABLE_JOLT
+    if (!m_world || g.solidRadius <= 0.0f) return;
+    RigidWorld::BodyDesc d;
+    d.shape = RigidWorld::Shape::Capsule;
+    d.motion = RigidWorld::Motion::Static;
+    d.radius = g.solidRadius * p.scale;
+    d.halfHeight = std::max(0.01f, g.solidHalfHeight * p.scale - d.radius);
+    d.position = p.position + glm::vec3(0.0f, g.solidHalfHeight * p.scale, 0.0f);
+    g.bodies.push_back(m_world->add(d));
+#else
+    (void)g;
+    (void)p;
+#endif
+}
+
+void ScriptTerrain::reground(const Terrain::Rect& r) {
+    if (r.empty() || !m_terrain) return;
+    const float s = m_terrain->spacing();
+    const glm::vec3 c = m_terrain->corner();
+    // The rectangle in world x/z, one sample wider (a cell's height depends on both corners).
+    const float x0 = c.x + float(r.x0 - 1) * s, x1 = c.x + float(r.x1 + 1) * s;
+    const float z0 = c.z + float(r.z0 - 1) * s, z1 = c.z + float(r.z1 + 1) * s;
+    for (ScatterGroup& g : m_groups)
+        for (size_t i = 0; i < g.placed.size(); ++i) {
+            Terrain::Placement& p = g.placed[i];
+            if (p.position.x < x0 || p.position.x > x1 || p.position.z < z0 || p.position.z > z1) continue;
+            p.position.y = m_terrain->heightAt(p.position.x, p.position.z);
+            if (g.align) p.up = m_terrain->normalAt(p.position.x, p.position.z);
+            if (m_models && i < g.instances.size()) m_models->setTransform(g.instances[i], p.transform());
+#if KKE_ENABLE_JOLT
+            if (m_world && i < g.bodies.size())
+                m_world->setTransform(g.bodies[i], p.position + glm::vec3(0.0f, g.solidHalfHeight * p.scale, 0.0f), glm::quat(1.0f, 0.0f, 0.0f, 0.0f));
+#endif
+        }
+}
+
 void ScriptTerrain::clear() {
+    for (ScatterGroup& g : m_groups) removeGroup(g);
+    m_groups.clear();
 #if KKE_ENABLE_JOLT
     if (m_world && m_body != kNoBody) m_world->remove(m_body);
 #endif
@@ -74,6 +133,7 @@ void ScriptTerrain::release(const std::string& source) {
 void ScriptTerrain::touched(const Terrain::Rect& r) {
     if (r.empty() || !m_chunks) return;
     m_chunks->touch(r);
+    reground(r);
     m_collisionDirty = true;
     m_sinceEdit = 0.0f;
 }
@@ -323,6 +383,100 @@ void ScriptTerrain::bind(ScriptVM& vm) {
         t.layers[size_t(layer)].color = ScriptVM::fieldVec3(L, 2, "color", t.layers[size_t(layer)].color);
         if (m_chunks) m_chunks->touchAll();
         return 0;
+    });
+    // terrain.scatter{model, layer, density, maxSlope, minHeight, maxHeight, scale,
+    // align, seed, pos, radius, max, solid} -> group, count
+    vm.registerFunction("terrain", "scatter", [this, mine](lua_State* L) {
+        Terrain& t = mine(L, "terrain.scatter");
+        luaL_checktype(L, 1, LUA_TTABLE);
+        if (!m_models) return luaL_error(L, "terrain.scatter: this game has no models module");
+        lua_getfield(L, 1, "model");
+        if (!lua_isinteger(L, -1)) return luaL_error(L, "terrain.scatter: model must be a model from models.load");
+        const auto model = ModelModule::ModelId(lua_tointeger(L, -1));
+        lua_pop(L, 1);
+        const ModelData* data = m_models->model(model);
+        if (!data) return luaL_error(L, "terrain.scatter: %d is not a loaded model (use models.load)", int(model));
+        Terrain::ScatterRule rule;
+        rule.density = std::clamp(ScriptVM::fieldNumber(L, 1, "density", 1.0f), 0.0f, 10000.0f);
+        lua_getfield(L, 1, "layer");
+        if (!lua_isnil(L, -1)) rule.layer = layerArg(L, lua_gettop(L), t, "terrain.scatter");
+        lua_pop(L, 1);
+        rule.minWeight = std::clamp(ScriptVM::fieldNumber(L, 1, "minWeight", 0.5f), 0.01f, 1.0f);
+        rule.maxSlope = ScriptVM::fieldNumber(L, 1, "maxSlope", 30.0f);
+        rule.minHeight = ScriptVM::fieldNumber(L, 1, "minHeight", -1e30f);
+        rule.maxHeight = ScriptVM::fieldNumber(L, 1, "maxHeight", 1e30f);
+        lua_getfield(L, 1, "scale");
+        if (lua_istable(L, -1)) {
+            lua_rawgeti(L, -1, 1);
+            lua_rawgeti(L, -2, 2);
+            rule.minScale = float(luaL_optnumber(L, -2, 0.8));
+            rule.maxScale = float(luaL_optnumber(L, -1, rule.minScale));
+            lua_pop(L, 2);
+        } else if (lua_isnumber(L, -1)) {
+            rule.minScale = rule.maxScale = float(lua_tonumber(L, -1));
+        }
+        lua_pop(L, 1);
+        rule.minScale = std::clamp(rule.minScale, 0.01f, 100.0f);
+        rule.maxScale = std::clamp(rule.maxScale, rule.minScale, 100.0f);
+        rule.alignToSlope = ScriptVM::fieldBool(L, 1, "align", false);
+        rule.seed = uint32_t(ScriptVM::fieldNumber(L, 1, "seed", float(m_nextGroup)));
+        const float radius = ScriptVM::fieldNumber(L, 1, "radius", 0.0f);
+        if (radius > 0.0f) {
+            const glm::vec3 at = ScriptVM::fieldVec3(L, 1, "pos", glm::vec3(0.0f));
+            rule.centre = {at.x, at.z};
+            rule.radius = radius;
+        }
+        // clear = { {pos = Vec, radius = r}, ... }: left empty
+        lua_getfield(L, 1, "clear");
+        if (lua_istable(L, -1)) {
+            const int list = lua_gettop(L);
+            for (lua_Integer i = 1; i <= 256; ++i) {
+                lua_rawgeti(L, list, i);
+                if (!lua_istable(L, -1)) {
+                    lua_pop(L, 1);
+                    break;
+                }
+                const glm::vec3 at = ScriptVM::fieldVec3(L, lua_gettop(L), "pos", glm::vec3(0.0f));
+                rule.keepClear.push_back({at.x, at.z, std::max(0.0f, ScriptVM::fieldNumber(L, lua_gettop(L), "radius", 5.0f))});
+                lua_pop(L, 1);
+            }
+        }
+        lua_pop(L, 1);
+        const size_t room = maxScattered > scatteredCount() ? maxScattered - scatteredCount() : 0;
+        rule.maxCount = std::min(room, size_t(std::max(0.0f, ScriptVM::fieldNumber(L, 1, "max", 5000.0f))));
+        ScatterGroup g;
+        g.id = m_nextGroup++;
+        g.align = rule.alignToSlope;
+        const float solid = ScriptVM::fieldNumber(L, 1, "solid", 0.0f);
+        if (solid > 0.0f) {
+            g.solidRadius = solid;
+            g.solidHalfHeight = std::max(solid, (data->boundsMax.y - std::min(0.0f, data->boundsMin.y)) * 0.5f);
+        }
+        g.placed = t.scatter(rule);
+        for (const Terrain::Placement& p : g.placed) {
+            g.instances.push_back(m_models->spawn(model, p.transform()));
+            addBody(g, p);
+        }
+        lua_pushinteger(L, g.id);
+        lua_pushinteger(L, lua_Integer(g.placed.size()));
+        m_groups.push_back(std::move(g));
+        return 2;
+    });
+    // terrain.unscatter(group): takes those things away again
+    vm.registerFunction("terrain", "unscatter", [this, mine](lua_State* L) {
+        mine(L, "terrain.unscatter");
+        const lua_Integer id = luaL_checkinteger(L, 1);
+        for (size_t i = 0; i < m_groups.size(); ++i)
+            if (m_groups[i].id == id) {
+                removeGroup(m_groups[i]);
+                m_groups.erase(m_groups.begin() + std::ptrdiff_t(i));
+                return 0;
+            }
+        return luaL_error(L, "terrain.unscatter: %d is not a scatter group", int(id));
+    });
+    vm.registerFunction("terrain", "scattered", [this](lua_State* L) {
+        lua_pushinteger(L, lua_Integer(scatteredCount()));
+        return 1;
     });
     vm.registerFunction("terrain", "remove", [this, mine](lua_State* L) {
         mine(L, "terrain.remove");

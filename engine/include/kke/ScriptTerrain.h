@@ -13,6 +13,7 @@ namespace kke {
 
 class Application;
 class DynamicMeshRenderer;
+class ModelModule;
 class RigidWorld;
 class ScriptVM;
 struct RenderContext;
@@ -32,6 +33,8 @@ public:
     ScriptTerrain& operator=(const ScriptTerrain&) = delete;
 
     void bind(ScriptVM& vm);
+    // Where terrain.scatter's models are spawned (none: scatter is an error).
+    void setModels(ModelModule* models) { m_models = models; }
     // Chunk meshes for the camera at `camera`, and the collision when it's due.
     void update(float dt, const glm::vec3& camera);
     void render(const RenderContext& ctx);
@@ -56,10 +59,28 @@ public:
     // least this often while one goes on: 4 x the delay).
     float collisionDelay = 0.25f;
     size_t chunkBuildsPerFrame = 8;
+    // terrain.scatter: at most this many things on the terrain in all.
+    size_t maxScattered = 50000;
+    size_t scatteredCount() const;
 
 private:
     void touched(const Terrain::Rect& r);
     void rebuildCollision();
+    // Things scattered on the terrain (terrain.scatter), kept on the ground when it's sculpted.
+    struct ScatterGroup {
+        int id = 0;
+        std::vector<Terrain::Placement> placed;
+        std::vector<uint32_t> instances; // ModelModule instances, one per placement
+        std::vector<uint32_t> bodies;    // RigidWorld bodies when solid (else empty)
+        float solidRadius = 0.0f, solidHalfHeight = 0.0f;
+        bool align = false;
+    };
+    void removeGroup(ScatterGroup& g);
+    void addBody(ScatterGroup& g, const Terrain::Placement& p);
+    void reground(const Terrain::Rect& r);
+    ModelModule* m_models = nullptr;
+    std::vector<ScatterGroup> m_groups;
+    int m_nextGroup = 1;
     Application* m_app;
     RigidWorld* m_world;
     std::unique_ptr<Terrain> m_terrain;
