@@ -224,6 +224,7 @@ Vectors: `Vec(x, y, z)` with `+ - * /`, `:length()`, `:normalized()`,
 | `nav` | Pathfinding ("Finding the way" below): `build({radius, height, climb, slope, cell, tile, dynamic})` → true, info, `path(from, to)` → points, partial, `walkable(from, to)`, `nearest(pos [, reach])`, `move(from, to)`, `random(centre, radius)`, `obstacle{pos, size, yaw}` or `{pos, radius, height}` → id, `remove(id)`, `ready()` |
 | `ai` | Creatures with a mind ("Creatures" below, docs/AI.md "Lua"): `add(inst, species)`, orders `goTo/follow/attack/hold/flee/fetch/free`, `anims(inst, {idle, walk, run, ...})`, `actor(id, pos [, species, velocity])`, `doing`, `need`, `knows`, `noise`, ... |
 | `store` | What outlives the session ("Saving" below): `save(name, value)` → true or false, reason; `load(name [, default])`; `add(name [, n])` → new count; `remove(name)`; `keys([prefix])` → names in order |
+| `saves` | Save slots for a "Load game" menu ([SAVING.md](SAVING.md)): `write(slot, data [, {title, playtime}])`, `read(slot)` → data, info, `list()` newest first, `exists`, `remove`, `version([n])`, `migrate(from, fn)` |
 
 Everything a script makes (bodies, models, lights, breakables, documents,
 scenes, click handlers) belongs to it: reloading, unloading or stopping
@@ -400,6 +401,8 @@ for _, key in ipairs(store.keys("player.")) do print(key) end   -- names startin
   save the shared world there; scripts on a player's machine save that
   player's own things there.
 - break-the-targets (games/first_lua_game) keeps its best score this way.
+- A whole game's state, with a slot menu, versions and migrations: `saves.*`
+  ([SAVING.md](SAVING.md)).
 
 ## Safety and limits
 

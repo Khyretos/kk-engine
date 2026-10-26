@@ -8,9 +8,10 @@
 
 namespace kke {
 
-ScriptStore::ScriptStore(std::string url, const std::string& game) : m_url(std::move(url)), m_collection(collectionFor(game)) {}
+ScriptStore::ScriptStore(std::string url, const std::string& game) : m_url(std::move(url)), m_collection(collectionFor(game)), m_game(game) {}
 
-ScriptStore::ScriptStore(storage::Store& shared, const std::string& game) : m_collection(collectionFor(game)), m_store(&shared), m_tried(true) {}
+ScriptStore::ScriptStore(storage::Store& shared, const std::string& game)
+    : m_collection(collectionFor(game)), m_store(&shared), m_tried(true), m_game(game) {}
 
 ScriptStore::~ScriptStore() = default;
 
@@ -32,6 +33,12 @@ storage::Store* ScriptStore::store() {
         m_store = m_owned.get();
     }
     return m_store;
+}
+
+SaveSlots* ScriptStore::saveSlots() {
+    if (!m_saves)
+        if (storage::Store* s = store()) m_saves = std::make_unique<SaveSlots>(*s, m_game);
+    return m_saves.get();
 }
 
 namespace {
@@ -146,6 +153,163 @@ void ScriptStore::bind(ScriptVM& vm) {
         });
         if (!ok) return luaL_error(L, "store.add('%s'): %s", key.c_str(), problem.empty() ? s.lastError().c_str() : problem.c_str());
         return 1; // the new count, left by the transaction
+    });
+    bindSaves(vm);
+}
+
+namespace {
+
+constexpr const char* kMigrations = "kke.saves.migrations";
+
+std::string checkSlot(lua_State* L, int index, const char* fn) {
+    size_t len = 0;
+    const char* p = nullptr;
+    if (lua_type(L, index) == LUA_TNUMBER) p = lua_tolstring(L, index, &len); // saves.read(1) is slot "1"
+    else p = luaL_checklstring(L, index, &len);
+    std::string slot(p, len);
+    if (!SaveSlots::validSlot(slot)) luaL_error(L, "saves.%s: a slot name is 1-64 letters, digits, spaces, _ - or .", fn);
+    return slot;
+}
+
+void pushInfo(lua_State* L, const SaveInfo& info) {
+    lua_createtable(L, 0, 6);
+    lua_pushlstring(L, info.slot.data(), info.slot.size());
+    lua_setfield(L, -2, "slot");
+    lua_pushlstring(L, info.title.data(), info.title.size());
+    lua_setfield(L, -2, "title");
+    lua_pushinteger(L, lua_Integer(info.savedAtMs / 1000));
+    lua_setfield(L, -2, "time");
+    lua_pushinteger(L, lua_Integer(info.version));
+    lua_setfield(L, -2, "version");
+    lua_pushnumber(L, info.playSeconds);
+    lua_setfield(L, -2, "playtime");
+    lua_pushinteger(L, lua_Integer(info.dataBytes));
+    lua_setfield(L, -2, "bytes");
+}
+
+} // namespace
+
+void ScriptStore::bindSaves(ScriptVM& vm) {
+    auto open = [this](lua_State* L, const char* fn) -> SaveSlots& {
+        SaveSlots* s = saveSlots();
+        if (!s) luaL_error(L, "saves.%s: can't open the save (%s): %s", fn, m_url.c_str(), m_error.c_str());
+        return *s;
+    };
+
+    // saves.version([n]) -> the version saves.write stamps (sets it when given).
+    vm.registerFunction("saves", "version", [open](lua_State* L) {
+        SaveSlots& s = open(L, "version");
+        if (!lua_isnoneornil(L, 1)) {
+            const lua_Integer v = luaL_checkinteger(L, 1);
+            if (v < 1 || v > 1000000) return luaL_error(L, "saves.version: a version is a whole number from 1");
+            s.setVersion(uint32_t(v));
+        }
+        lua_pushinteger(L, lua_Integer(s.version()));
+        return 1;
+    });
+    // saves.migrate(from, fn): fn(data) brings a version-`from` save to from + 1
+    // (it returns the new data, or changes the table and returns nothing).
+    vm.registerFunction("saves", "migrate", [](lua_State* L) {
+        const lua_Integer from = luaL_checkinteger(L, 1);
+        if (from < 1) return luaL_error(L, "saves.migrate: the version it starts from is a whole number from 1");
+        luaL_checktype(L, 2, LUA_TFUNCTION);
+        if (lua_getfield(L, LUA_REGISTRYINDEX, kMigrations) != LUA_TTABLE) {
+            lua_pop(L, 1);
+            lua_newtable(L);
+            lua_pushvalue(L, -1);
+            lua_setfield(L, LUA_REGISTRYINDEX, kMigrations);
+        }
+        lua_pushvalue(L, 2);
+        lua_rawseti(L, -2, from);
+        lua_pop(L, 1);
+        return 0;
+    });
+    // saves.write(slot, data [, {title =, playtime =}]) -> true, or false and why.
+    vm.registerFunction("saves", "write", [open](lua_State* L) {
+        const std::string slot = checkSlot(L, 1, "write");
+        if (lua_isnoneornil(L, 2)) return luaL_error(L, "saves.write('%s'): nothing to save (saves.remove clears a slot)", slot.c_str());
+        std::string title;
+        double play = 0.0;
+        if (lua_istable(L, 3)) {
+            if (lua_getfield(L, 3, "title") == LUA_TSTRING) title = lua_tostring(L, -1);
+            lua_pop(L, 1);
+            if (lua_getfield(L, 3, "playtime") == LUA_TNUMBER) play = lua_tonumber(L, -1);
+            lua_pop(L, 1);
+        } else if (!lua_isnoneornil(L, 3)) {
+            return luaL_error(L, "saves.write('%s'): the third argument is a table { title =, playtime = }", slot.c_str());
+        }
+        std::string bytes, err;
+        if (!ScriptVM::encodeValue(L, 2, bytes, err, kMaxSaveBytes)) return luaL_error(L, "saves.write('%s'): %s", slot.c_str(), err.c_str());
+        SaveSlots& s = open(L, "write");
+        if (s.write(slot, bytes, title, play, &err)) {
+            lua_pushboolean(L, 1);
+            return 1;
+        }
+        lua_pushboolean(L, 0);
+        lua_pushstring(L, err.c_str());
+        return 2;
+    });
+    // saves.read(slot) -> data, info; or nil and why. An older save is brought
+    // up to date by the saves.migrate steps; a newer one is refused.
+    vm.registerFunction("saves", "read", [open](lua_State* L) {
+        const std::string slot = checkSlot(L, 1, "read");
+        SaveSlots& s = open(L, "read");
+        auto none = [L](const std::string& why) {
+            lua_pushnil(L);
+            lua_pushstring(L, why.c_str());
+            return 2;
+        };
+        std::string err;
+        std::optional<SaveFile> f = s.read(slot, &err);
+        if (!f) return none(err);
+        if (f->info.version > s.version())
+            return none("'" + slot + "' was saved by a newer version of the game (save version " + std::to_string(f->info.version) +
+                        ", this game " + std::to_string(s.version()) + ")");
+        lua_settop(L, 1);
+        if (!ScriptVM::decodeValue(L, f->data, err)) return none("'" + slot + "' is damaged: " + err);
+        for (uint32_t v = f->info.version; v < s.version(); ++v) {
+            const int data = lua_gettop(L);
+            if (lua_getfield(L, LUA_REGISTRYINDEX, kMigrations) != LUA_TTABLE || lua_rawgeti(L, -1, v) != LUA_TFUNCTION) {
+                lua_settop(L, 1);
+                return none("'" + slot + "' is a version " + std::to_string(f->info.version) + " save and there's no saves.migrate(" +
+                            std::to_string(v) + ", ...) to bring it to version " + std::to_string(s.version()));
+            }
+            lua_pushvalue(L, data);
+            lua_call(L, 1, 1); // a migration's error is the script's error, naming its line
+            if (lua_isnil(L, -1)) lua_pop(L, 1);
+            else lua_replace(L, data);
+            lua_settop(L, data);
+        }
+        pushInfo(L, f->info);
+        return 2;
+    });
+    // saves.list() -> every slot's info, newest first.
+    vm.registerFunction("saves", "list", [open](lua_State* L) {
+        SaveSlots& s = open(L, "list");
+        const std::vector<SaveInfo> all = s.list();
+        lua_createtable(L, int(all.size()), 0);
+        for (size_t i = 0; i < all.size(); ++i) {
+            pushInfo(L, all[i]);
+            lua_rawseti(L, -2, lua_Integer(i + 1));
+        }
+        return 1;
+    });
+    vm.registerFunction("saves", "exists", [open](lua_State* L) {
+        const std::string slot = checkSlot(L, 1, "exists");
+        lua_pushboolean(L, open(L, "exists").exists(slot));
+        return 1;
+    });
+    // saves.remove(slot) -> true, or false and why (an empty slot is fine).
+    vm.registerFunction("saves", "remove", [open](lua_State* L) {
+        const std::string slot = checkSlot(L, 1, "remove");
+        std::string err;
+        if (open(L, "remove").remove(slot, &err)) {
+            lua_pushboolean(L, 1);
+            return 1;
+        }
+        lua_pushboolean(L, 0);
+        lua_pushstring(L, err.c_str());
+        return 2;
     });
 }
 
