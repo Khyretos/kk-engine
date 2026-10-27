@@ -214,9 +214,67 @@ lips are what the `oris*` mouth ring bones move, the lids
 `levator02-04`, the ears `temporalis02`). The height loses its slow swell
 (that is the mesh's job) before it becomes the normal map.
 
-So the realistic body keeps MakeHuman's 13,000 vertices and every slider;
-the detail is three texture reads in the normal model shader, no extra
-pass. The baked maps are the project's own (MIT).
+That bake is the skin of the MakeHuman body (`makehuman.kkhpack`, which
+the creator falls back to, and `KKE_HUMAN_BODY=makehuman` forces). The
+creator's default body is now Vitruvian's own mesh, below. The baked maps
+are the project's own (MIT).
+
+## The Vitruvian body
+
+MakeHuman's 13,000 vertex face and body read as a caveman's however the
+sliders are set: a nose, lips and eyelids made of a few dozen vertices.
+CharMorph's Vitruvian (CC0) has the real thing, so the creator's realistic
+body is now its skin mesh (26,000 vertices, with a real nose, lips, eyelids,
+ears, fingers and toes) with its own 4K skin maps. `assets/humans/vitruvian.kkhpack`
+is a pack in the same format as MakeHuman's (`kke::HumanPack`), so the sliders,
+the rig, the clothes, the hair, the eyes and the share codes work on it unchanged.
+
+`tools/makehuman/vitruvian_pack.py` makes it (numpy, scipy, OpenEXR, Pillow;
+under a minute):
+
+```bash
+python -I tools/makehuman/vitruvian_export.py CharMorph-Vitruvian/char.blend vit.npz   # with bpy
+python -I tools/makehuman/vitruvian_pack.py assets/humans/makehuman.kkhpack CharMorph-Vitruvian vit.npz assets/humans
+```
+
+1. Vitruvian is moved into MakeHuman's pose and size by a thin-plate spline
+   through 42 points both bodies have. Only that: its face and body keep
+   their own shape. A second, surface fit (six refits, as the skin bake above)
+   is used only to find which MakeHuman triangle lies under each Vitruvian
+   vertex (median 0.5 mm, 99% under 6 mm).
+2. Through that, every MakeHuman morph target, skin weight and joint is
+   carried to the Vitruvian vertices (barycentric over that triangle). The
+   rest shape is chosen so that the default sliders land on Vitruvian's own
+   body: MakeHuman's default body-type sliders move its base mesh 30 mm on
+   average, and that is subtracted (the macro blending is ported from
+   `Human.cpp`). Female and Male are then MakeHuman's offsets on Vitruvian's
+   neutral body.
+3. MakeHuman's helper meshes (the body suit and skirt the clothes are cut
+   from, eyes, teeth, tongue, lashes, the joint markers) ride a smooth,
+   low-frequency field from MakeHuman's default skin to Vitruvian's: a field
+   that followed every bump of the finer skin made lumpy clothes and ragged
+   hems. Each eyeball is fitted to Vitruvian's own (centre and radius):
+   brows and lashes are placed from the eyes.
+4. The skin maps are Vitruvian's own UDIM tiles repacked as one 2x2 atlas
+   (4096 square, UVs remapped): `vitruvian_skin_albedo.jpg` (its colour over
+   its median tone, so the player's skin colour still sets the tone),
+   `vitruvian_skin_normal.jpg` (its height as a tangent-space normal map,
+   plus fine pores) and `vitruvian_skin_roughness.jpg`. JPEG keeps the three
+   at 12 MB; the PNGs were 52.
+
+The pack is 20 MB: the vertices lie on a Z-order curve so neighbours carry
+similar offsets, and the body-type targets (5 of the 6 million offsets) are
+in steps of 0.4 mm, the detail targets in 0.1 mm. The body-type targets are
+also smoothed with a Gaussian (sigma 18 mm, `--smooth`) over the skin:
+MakeHuman's carry fine detail of their own (nipples, the groin, the ribs)
+that does not line up with Vitruvian's, and on the finer body it showed as
+creased chests and a swell on the flanks at 8 mm. Vitruvian's own detail is
+in the rest shape and is not smoothed. Vertices are 32,000 (26,000
+skin, 5,800 helpers), under the pack's 65,535.
+
+What does not carry over: MakeHuman's own face targets move MakeHuman's
+vertices, so an extreme face slider on the finer body is the same shape
+change, smoother. `KKE_HUMAN_BODY=makehuman` brings the old body back.
 
 `tools/makehuman/bake_skin.py` still makes the anime style's
 `skin_albedo_anime.png`, and the procedural set when Vitruvian isn't at

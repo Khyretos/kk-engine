@@ -146,6 +146,7 @@ private:
     std::string m_saveName;
     std::unique_ptr<HumanPack> m_pack;
     std::string m_humansDir; // assets/humans: the pack and the skin maps
+    std::string m_skinPrefix; // "vitruvian_" for the Vitruvian body's maps, "" for MakeHuman's
     void skinMaterial(ModelData& model) const; // the skin maps on "Human_body"
     std::unique_ptr<Human> m_human;
     HumanLook m_look;

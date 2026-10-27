@@ -331,7 +331,12 @@ void CharacterCreatorModule::init(Application& app) {
     const std::string dir = findAssetFolder("assets/humans", { "KKE_HUMANS_DIR" }, base ? base : "", &searched);
     if (dir.empty()) throw std::runtime_error("CharacterCreatorModule: assets/humans/makehuman.kkhpack not found (docs/HUMANS.md)");
     m_humansDir = dir;
-    m_pack = std::make_unique<HumanPack>(HumanPack::load(dir + "/makehuman.kkhpack"));
+    // CharMorph's Vitruvian body (docs/HUMANS.md) when the pack is there, MakeHuman's own base mesh when not
+    // (or KKE_HUMAN_BODY=makehuman): the same sliders, rig and helper meshes on a finer, better-formed body.
+    const bool makehuman = std::string(dev::env("KKE_HUMAN_BODY") ? dev::env("KKE_HUMAN_BODY") : "") == "makehuman";
+    const bool vitruvian = !makehuman && std::filesystem::exists(dir + "/vitruvian.kkhpack");
+    m_skinPrefix = vitruvian ? "vitruvian_" : "";
+    m_pack = std::make_unique<HumanPack>(HumanPack::load(dir + (vitruvian ? "/vitruvian.kkhpack" : "/makehuman.kkhpack")));
     m_human = std::make_unique<Human>(*m_pack);
     m_human->set("macrodetails/Gender", 0.0f); // a new person is a woman or a man, not half way: Female / Male buttons
     setBodyType("Average");
@@ -788,14 +793,20 @@ void CharacterCreatorModule::skinMaterial(ModelData& model) const {
     // tools/makehuman/bake_skin.py: lips, blush, lids, pores, gloss, in the
     // body's UV layout; the albedo is a near-white multiplier on the tint.
     namespace fs = std::filesystem;
-    const std::string albedo = m_humansDir + "/skin_albedo.png";
+    // A map is a .jpg (Vitruvian's 4096 atlas: small files) or a .png (the MakeHuman bake).
+    auto map = [&](const char* name) {
+        for (const char* ext : { ".jpg", ".png" })
+            if (const std::string f = m_humansDir + "/" + m_skinPrefix + name + ext; fs::exists(f)) return f;
+        return std::string();
+    };
+    const std::string albedo = map("skin_albedo");
     for (ModelMaterial& m : model.materials) {
         if (m.name != "Human_body") continue;
         m.roughness = 0.55f;
-        if (!fs::exists(albedo)) continue; // a pack without the maps: the plain colour
+        if (albedo.empty()) continue; // a pack without the maps: the plain colour
         m.albedoTexture = albedo;
-        m.normalTexture = m_humansDir + "/skin_normal.png";
-        m.roughnessTexture = m_humansDir + "/skin_roughness.png";
+        m.normalTexture = map("skin_normal");
+        m.roughnessTexture = map("skin_roughness");
         m.roughness = 1.0f; // the map holds it
     }
 }
@@ -1324,6 +1335,12 @@ void CharacterCreatorModule::buildHair() {
         return;
     }
     d.style.shine = std::min(d.style.shine, 0.3f); // thin strands under a bright light read as white scratches
+    // Fuller: a head has 100,000 hairs and the guides stand for clumps of them; with 320 guides, 24 drawn hairs
+    // round each let the scalp show between strings of hair.
+    d.style.hairsPerGuide = std::clamp(static_cast<int>(static_cast<float>(d.style.hairsPerGuide) * 2.5f), 24, 90);
+    d.style.hairWidth *= 1.25f;
+    d.style.spread = std::max(d.style.spread, 2.0f); // neighbouring clumps overlap: no scalp between bunches
+    d.style.clump *= 0.5f;
     d.style.length *= std::clamp(m_look.hairLength, 0.3f, 2.0f);
     m_hairRoots = d.roots.size();
     d.wind = 0.0f; // indoors

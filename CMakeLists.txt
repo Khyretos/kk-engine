@@ -885,7 +885,8 @@ function(kke_use_character_creator TARGET)
     foreach(f ${creator_thumbs})
         engine_copy_runtime_file(${TARGET} ${CMAKE_SOURCE_DIR}/assets/ui/character_creator/${f} assets/ui/character_creator/${f})
     endforeach()
-    foreach(f makehuman.kkhpack credits.json skin_albedo.png skin_albedo_anime.png skin_normal.png skin_roughness.png)
+    foreach(f makehuman.kkhpack vitruvian.kkhpack credits.json skin_albedo.png skin_albedo_anime.png skin_normal.png skin_roughness.png
+             vitruvian_skin_albedo.jpg vitruvian_skin_normal.jpg vitruvian_skin_roughness.jpg)
         engine_copy_runtime_file(${TARGET} ${CMAKE_SOURCE_DIR}/assets/humans/${f} assets/humans/${f})
     endforeach()
     # The anime style's bodies: VRoid's CC0 sample avatars (docs/ANIME.md).

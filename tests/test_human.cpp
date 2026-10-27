@@ -12,6 +12,7 @@
 #include <chrono>
 #include <cmath>
 #include <filesystem>
+#include <set>
 #include <stdexcept>
 
 // MakeHuman's CC0 human (assets/humans/makehuman.kkhpack, cooked by
@@ -677,6 +678,127 @@ TEST(HumanClothes, OpenNecklinesRecordTheirLift) {
         }
     }
     EXPECT_TRUE(kke::garmentPieces(pack(), shaped, "turtleneck")[0].neckLift.empty());
+}
+
+// CharMorph's Vitruvian body on MakeHuman's terms (assets/humans/vitruvian.kkhpack,
+// tools/makehuman/vitruvian_pack.py): the same sliders, rig, helper meshes and
+// groups, so everything that reads a pack works on the finer body.
+namespace {
+const kke::HumanPack& vitPack() {
+    static const kke::HumanPack p = [] {
+        namespace fs = std::filesystem;
+        const fs::path path = fs::path(KKE_SOURCE_DIR) / "assets/humans/vitruvian.kkhpack";
+        return fs::exists(path) ? kke::HumanPack::load(path.string()) : kke::HumanPack{};
+    }();
+    return p;
+}
+} // namespace
+#define NEED_VIT_PACK()                                                                                                \
+    if (vitPack().positions().empty()) GTEST_SKIP() << "assets/humans/vitruvian.kkhpack missing"
+
+TEST(VitruvianBody, HasMakeHumansSlidersAndRigOnAFinerBody) {
+    NEED_VIT_PACK();
+    NEED_PACK();
+    const kke::HumanPack& v = vitPack();
+    EXPECT_EQ(v.targets().size(), pack().targets().size());
+    EXPECT_EQ(v.modifiers().size(), pack().modifiers().size());
+    EXPECT_EQ(v.bones().size(), pack().bones().size());
+    EXPECT_EQ(v.joints().size(), pack().joints().size());
+    ASSERT_EQ(v.groups().size(), pack().groups().size());
+    for (size_t g = 0; g < v.groups().size(); ++g) EXPECT_EQ(v.groups()[g].name, pack().groups()[g].name);
+    // A body twice as fine: its skin has far more faces than MakeHuman's.
+    const int body = v.findGroup("body");
+    ASSERT_GE(body, 0);
+    EXPECT_GT(v.groups()[static_cast<size_t>(body)].faceCount, 40000u);
+    EXPECT_NE(v.licence().find("Vitruvian"), std::string::npos);
+    // Skin UVs are one atlas: nothing outside 0..1.
+    for (const auto& uv : v.uvs()) {
+        EXPECT_GE(uv.x, -1e-4f);
+        EXPECT_LE(uv.x, 1.0001f);
+        EXPECT_GE(uv.y, -1e-4f);
+        EXPECT_LE(uv.y, 1.0001f);
+    }
+}
+
+TEST(VitruvianBody, DefaultSlidersGiveAPersonAndTheArchetypesDiffer) {
+    NEED_VIT_PACK();
+    kke::Human h(vitPack());
+    const kke::Human::Bake mid = h.bake();
+    const float tall = mid.model.boundsMax.y - mid.model.boundsMin.y;
+    EXPECT_GT(tall, 1.55f);
+    EXPECT_LT(tall, 1.85f);
+    EXPECT_NEAR(mid.model.boundsMin.y, 0.0f, 0.01f); // feet on the floor
+    auto build = [&](float gender) {
+        kke::Human b(vitPack());
+        b.set("macrodetails/Gender", gender);
+        const auto shaped = b.shapedPositions();
+        const glm::vec3 l = b.jointPosition("upperarm01.L____head", shaped), r = b.jointPosition("upperarm01.R____head", shaped);
+        return std::pair<float, float>(std::abs(l.x - r.x), b.jointPosition("head____head", shaped).y);
+    };
+    const auto female = build(0.0f), male = build(1.0f);
+    EXPECT_GT(male.first, female.first + 0.03f) << "a man's shoulders are wider";
+    EXPECT_GT(male.second, female.second) << "and he stands taller";
+    // The rig is on it: every skinned vertex has weights that add up.
+    for (const kke::ModelMesh& m : mid.model.meshes)
+        for (const kke::ModelVertex& vtx : m.vertices)
+            ASSERT_NEAR(vtx.weights.x + vtx.weights.y + vtx.weights.z + vtx.weights.w, 1.0f, 1e-3f) << m.name;
+}
+
+TEST(VitruvianBody, EyesBrowsAndHairSitOnTheFace) {
+    NEED_VIT_PACK();
+    kke::Human h(vitPack());
+    kke::Human::Bake b = h.bake();
+    kke::ModelMesh skin;
+    glm::vec3 eyeMin(1e9f), eyeMax(-1e9f);
+    for (const kke::ModelMesh& m : b.model.meshes) {
+        if (m.name == "body") skin = m;
+        if (m.name == "helper-l-eye" || m.name == "helper-r-eye")
+            for (const kke::ModelVertex& v : m.vertices) {
+                eyeMin = glm::min(eyeMin, v.position);
+                eyeMax = glm::max(eyeMax, v.position);
+            }
+    }
+    // The eyeballs were fitted to Vitruvian's own: round, about 2.4 cm.
+    const float eyeHeight = eyeMax.y - eyeMin.y;
+    EXPECT_GT(eyeHeight, 0.018f);
+    EXPECT_LT(eyeHeight, 0.032f);
+    const size_t before = b.model.meshes.size();
+    ASSERT_TRUE(kke::addBrows(b.model, skin, glm::vec3(0.3f, 0.2f, 0.1f)));
+    for (const kke::ModelVertex& v : b.model.meshes[before].vertices) {
+        EXPECT_GT(v.position.y, eyeMax.y - 0.002f);
+        EXPECT_LT(v.position.y, eyeMax.y + 0.04f);
+    }
+    const auto shaped = h.shapedPositions();
+    const kke::HumanScalp scalp = kke::findScalp(vitPack(), shaped);
+    ASSERT_GT(scalp.verts.size(), 200u);
+    EXPECT_GT(scalp.radius, 0.06f);
+    EXPECT_LT(scalp.radius, 0.14f);
+    for (const char* style : { "short", "long", "afro", "cornrows" }) {
+        kke::HairDesc d;
+        ASSERT_TRUE(kke::hairOnHuman(d, style, vitPack(), shaped, 160)) << style;
+        kke::HairDesc sphere; // the same style on the scalp's sphere: most roots have skin under them
+        ASSERT_TRUE(kke::hairstyleOnHead(sphere, style, scalp.centre, scalp.radius, 160, scalp.up, scalp.front, 1.3f));
+        EXPECT_GE(d.roots.size(), sphere.roots.size() * 6 / 10) << style;
+        EXPECT_GT(d.roots.size(), 5u) << style;
+    }
+}
+
+TEST(VitruvianBody, EveryGarmentFitsIt) {
+    NEED_VIT_PACK();
+    kke::Human h(vitPack());
+    const auto shaped = h.shapedPositions();
+    for (const kke::GarmentInfo& g : kke::garments()) {
+        const auto pieces = kke::garmentPieces(vitPack(), shaped, g.id);
+        ASSERT_FALSE(pieces.empty()) << g.id;
+        for (const kke::GarmentShape& piece : pieces) {
+            EXPECT_FALSE(piece.verts.empty()) << g.id;
+            for (uint32_t v : piece.verts) ASSERT_LT(v, shaped.size()) << g.id;
+        }
+    }
+    // Trousers still reach the groin: the suit was carried onto the finer skin, not recut.
+    EXPECT_FALSE(kke::garmentPieces(vitPack(), shaped, "jeans")[0].verts.empty());
+    const kke::Human::Bake dressed = h.bake();
+    EXPECT_GT(dressed.model.meshes.size(), 3u);
 }
 
 // The clothes browser (assets/ui/character_creator/thumbs, made by
