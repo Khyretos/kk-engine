@@ -82,7 +82,7 @@ void WaterDemoModule::init(kke::Application& app) {
     kke::FluidSurfaceRenderer::Settings& s = m_surface->settings();
     s.clearWater = true;
     s.particleVolume = m_cell * m_cell * m_cell / 8.0f;
-    s.blurWorldRadius = m_cell * 1.2f;
+    s.blurWorldRadius = m_cell * m_smoothing;
     s.depthFalloff = m_cell * 1.5f;
     // A tank is shallow: far more colour per metre than real water (whose
     // blue needs metres) so 30 cm of it reads as a pool's cyan.
@@ -144,6 +144,8 @@ void WaterDemoModule::reset() {
     p.boundsMax = glm::vec3(kTankMax.x, kWaterTop, kTankMax.z);
     p.cellSize = m_cell;
     p.viscosity = m_viscosity;
+    p.soundSpeed = m_stiffness;
+    p.tension = m_cohesion;
     m_water = std::make_unique<kke::MpmWater>(p);
     m_water->setTaskPool(m_pool.get());
     m_water->setGpu(m_gpu);
@@ -309,6 +311,11 @@ void WaterDemoModule::buildPanel() {
     s.button("Break the dam again", [this] { reset(); });
     s.toggle("Clear water", &m_smoothSurface);
     s.slider("Thickness (viscosity)", &m_viscosity, 0.0f, 0.02f, "%.3f m2/s", [this] { m_water->setViscosity(m_viscosity); }, 0.001f);
+    s.slider("Stiffness (sound speed)", &m_stiffness, 8.0f, 40.0f, "%.0f m/s", [this] { m_water->setSoundSpeed(m_stiffness); }, 1.0f);
+    s.slider("Cohesion (pull)", &m_cohesion, 0.0f, 0.03f, "%.3f", [this] { m_water->setTension(m_cohesion); }, 0.001f);
+    s.slider("Surface smoothing", &m_smoothing, 0.3f, 2.0f, "%.2f cells",
+             [this] { if (m_surface) m_surface->settings().blurWorldRadius = m_cell * m_smoothing; }, 0.05f)
+        .showIf([this] { return m_smoothSurface; });
     s.slider("Murk (red)", kke::DemoPanelModule::Ref<float>([this] { return m_surface ? &m_surface->settings().absorption.x : nullptr; }), 0.0f, 3.0f,
              "%.2f /m", {}, 0.05f)
         .showIf([this] { return m_smoothSurface; });
