@@ -879,6 +879,12 @@ function(kke_use_character_creator TARGET)
     foreach(f creator.rml creator.rcss)
         engine_copy_runtime_file(${TARGET} ${CMAKE_SOURCE_DIR}/assets/ui/character_creator/${f} assets/ui/character_creator/${f})
     endforeach()
+    # The clothes browser's pictures (tools/garment_thumbs makes them).
+    file(GLOB creator_thumbs RELATIVE ${CMAKE_SOURCE_DIR}/assets/ui/character_creator CONFIGURE_DEPENDS
+         ${CMAKE_SOURCE_DIR}/assets/ui/character_creator/thumbs/*.png)
+    foreach(f ${creator_thumbs})
+        engine_copy_runtime_file(${TARGET} ${CMAKE_SOURCE_DIR}/assets/ui/character_creator/${f} assets/ui/character_creator/${f})
+    endforeach()
     foreach(f makehuman.kkhpack credits.json skin_albedo.png skin_albedo_anime.png skin_normal.png skin_roughness.png)
         engine_copy_runtime_file(${TARGET} ${CMAKE_SOURCE_DIR}/assets/humans/${f} assets/humans/${f})
     endforeach()
@@ -982,6 +988,7 @@ add_subdirectory(engine)
 # here — this tool is what lets that be measured honestly on whatever
 # hardware actually has more than one.
 add_subdirectory(tools/model_info)
+add_subdirectory(tools/garment_thumbs)
 add_subdirectory(tools/seal)
 add_subdirectory(tools/license)
 add_subdirectory(tools/packs)

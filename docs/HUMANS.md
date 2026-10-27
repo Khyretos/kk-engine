@@ -286,6 +286,19 @@ one skinned draw per garment; `CharacterCreatorModule::bakeSkinned()`
 returns it. Skirts come along as skinned meshes there; a game that wants
 them to swing runs them as cloth, as the creator does.
 
+The creator's clothes tab is a grid: a row of slot buttons, the dye swatches
+and a scrolling grid of cards, each a picture and a name. The pictures,
+`assets/ui/character_creator/thumbs/<id>.png`, are drawn by
+`tools/garment_thumbs` (a small software rasteriser: each garment cut for the
+default body, from the front, in its own colour); run it again after the
+wardrobe changes (a test fails until you do). Open necklines (crew, scoop, V,
+deep V) are one curve round the base of the neck (`Anatomy::collarY`), not a
+cut by bone weights, which tore the collar wherever neck and torso weights
+alternate.
+
+On a VRoid avatar the same cuts run on its own skin: see docs/ANIME.md
+"Clothes".
+
 These are plain garments in one colour each, with the fabric's weave and
 sheen but no printed texture: MakeHuman's own `.mhclo` clothes (with
 textures) can't be downloaded from here, and are the next step for

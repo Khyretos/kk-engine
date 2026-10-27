@@ -62,6 +62,28 @@ struct GarmentShape {
 // Human::shapedPositions(), for the cuts made by height (a skirt's
 // length, a sock's). Empty for an unknown garment.
 std::vector<GarmentShape> garmentPieces(const HumanPack& pack, const std::vector<glm::vec3>& shaped, const std::string& id);
+// Any other skinned body (a VRoid avatar, docs/ANIME.md): the same cuts on
+// its skin. `bone` names each vertex's bone in MakeHuman's words ("spine03",
+// "upperarm01", "lowerarm01", "wrist", "finger1-2", "upperleg01", "foot",
+// "toe", "neck01", "clavicle", "pelvis"), the way the cuts tell an arm from
+// a leg; the landmarks are heights in the body's own space (+Y up, +Z
+// front). A body held in a T has no use for height on its arms: armT (0 at
+// the shoulder, 1 at the elbow, for upper-arm vertices) and armDist (m from
+// the wrist) say the same along the arm. Cloth pieces are not cut (they
+// need the long skirt): garmentSkirt() gives their length.
+struct GarmentBody {
+    std::vector<glm::vec3> positions;
+    std::vector<std::string> bone;
+    std::vector<uint32_t> skin; // the vertices a garment may be cut from
+    std::vector<float> armT, armDist;
+    float sole = 0.0f, waist = 0.0f, wristTop = 0.0f, neckY = 0.0f, neckZ = 0.0f;
+};
+std::vector<GarmentShape> garmentPiecesOn(const GarmentBody& body, const std::string& id);
+// A skirt, a dress's or a coat's tails: how much of the leg they cover
+// (0.3 a tennis skirt .. 1 the ankles) and how far over the body they hang.
+// False for a garment without one.
+bool garmentSkirt(const std::string& id, float* reach, float* offset);
+
 // The garment's first piece (empty verts for an unknown garment).
 GarmentShape garmentShape(const HumanPack& pack, const std::vector<glm::vec3>& shaped, const std::string& id);
 

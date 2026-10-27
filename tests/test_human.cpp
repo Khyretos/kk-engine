@@ -593,3 +593,54 @@ TEST(HumanHair, LocksTaperFromRootToTip) {
     EXPECT_EQ(b.indices, a.indices);
     EXPECT_NEAR(kke::lockWidth({ { 0, 0, 0 }, { 0.01f, 0, 0 } }), 0.026f, 1e-4f);
 }
+
+// Open necklines are curves round the base of the neck, not whatever bone each
+// vertex leans on: a crew sits at the neck, scoops and Vs drop in front, and
+// none of them leaves a torn collar (a vertex above the curve inside it).
+TEST(HumanClothes, NecklinesAreCurvesRoundTheNeck) {
+    NEED_PACK();
+    for (float gender : { 0.0f, 1.0f }) {
+        kke::Human h(pack());
+        h.set("macrodetails/Gender", gender);
+        const auto shaped = h.shapedPositions();
+        const glm::vec3 neck = h.jointPosition("neck01____head", shaped);
+        auto topFront = [&](const char* id, size_t* count) { // the neckline: the highest cloth in front, in the middle
+            float top = -1e9f;
+            *count = 0;
+            for (const kke::GarmentShape& piece : kke::garmentPieces(pack(), shaped, id))
+                for (uint32_t v : piece.verts) {
+                    const glm::vec3& p = shaped[v];
+                    if (std::abs(p.x) > 0.2f) continue; // the arms
+                    ++*count;
+                    // Nothing of the cloth stands over the base of the neck.
+                    EXPECT_LE(p.y, neck.y + 0.0125f) << id;
+                    if (p.z > neck.z && std::abs(p.x) < 0.02f) top = std::max(top, p.y);
+                }
+            return top;
+        };
+        size_t crewN = 0, scoopN = 0, vN = 0, deepN = 0;
+        const float crew = topFront("t-shirt", &crewN), scoop = topFront("scoop tee", &scoopN);
+        const float v = topFront("v-neck tee", &vN), deep = topFront("deep-v tee", &deepN);
+        // Crew at the neck, scoop lower, V lower, deep V lowest.
+        EXPECT_GT(crew, scoop - 1e-4f);
+        EXPECT_GT(scoop, v - 0.02f);
+        EXPECT_GT(v, deep + 0.02f);
+        EXPECT_GT(crew - deep, 0.1f) << "a deep V opens at least a hand's width below a crew";
+        EXPECT_GT(crewN, scoopN);
+        EXPECT_GT(scoopN, deepN);
+        EXPECT_GT(crewN, vN);
+    }
+}
+
+// The clothes browser (assets/ui/character_creator/thumbs, made by
+// tools/garment_thumbs) shows a picture of every garment: add a garment and
+// the pictures have to be made again.
+TEST(HumanClothes, EveryGarmentHasAThumbnail) {
+    namespace fs = std::filesystem;
+    const fs::path dir = fs::path(KKE_SOURCE_DIR) / "assets/ui/character_creator/thumbs";
+    for (const kke::GarmentInfo& g : kke::garments()) {
+        std::string file = g.id;
+        std::replace(file.begin(), file.end(), ' ', '_');
+        EXPECT_TRUE(fs::exists(dir / (file + ".png"))) << g.id << ": run kke_garment_thumbs (see tools/garment_thumbs/main.cpp)";
+    }
+}

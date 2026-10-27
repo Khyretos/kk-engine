@@ -1,14 +1,16 @@
 # Character creator
 
-Make a realistic person with sliders: body type (gender, age, ancestry,
-muscle, weight, height, proportions), then the shape of the torso, arms
+Make a realistic person with sliders: a woman or a man (an archetype, two
+buttons, not a slider), a body type (Average, Petite, Model, Slim, Athletic,
+Strong, Curvy, Heavy), then age, ancestry, muscle, weight, height, proportions, then the shape of the torso, arms
 and legs, head and neck, eyes, nose, mouth, jaw and ears, about 300
 sliders in all, a skin tone, and hair: 14 hairstyles from short and long
 to an afro, box braids, cornrows and locs, 11 colours and a length, as
 real strands grown from this head's own scalp and moved by the engine's
-hair physics, and clothes: four tops, shorts, trousers, three skirts,
-socks and shoes in 12 colours, fitted to any body, the skirts swinging as
-the engine's cloth. The person is MakeHuman's CC0 human
+hair physics, and clothes: 113 garments in 7 slots (tops, outerwear,
+bottoms, dresses, socks, shoes, gloves) in 12 colours, fitted to any body, the
+skirts swinging as the engine's cloth, browsed as a scrolling grid of
+pictures, on the realistic body and on the anime one. The person is MakeHuman's CC0 human
 (docs/HUMANS.md), so every slider is a morph sculpted by artists, and the
 sliders blend the way MakeHuman's do.
 
@@ -28,14 +30,18 @@ Run it: `cd build/bin && ./character_creator`.
 | Views | Body, Face, Profile, Back |
 | See the hair and skirts move | Turn: the figure spins, its hair and skirt swing out |
 | Style | Realistic (MakeHuman body, scanned skin detail) or Anime (VRoid's CC0 avatars in the gacha style, docs/ANIME.md) |
-| Wear something | Clothes tab: click a garment (again to take it off), then a colour |
+| Wear something | Clothes tab: pick a slot, click a garment's picture (again to take it off), pick a colour |
 | Both sides at once | Mirror sides (on by default) |
 
 Moving the sliders with a controller is not in yet.
 
-**Body types** on the Body type tab (Slim, Athletic, Strong, Curvy,
-Heavy, Average) set the build sliders at once for the current gender;
-the face, age and ancestry stay. **Random** randomises the tab you are on,
+**Female / Male** on the Body type tab pick the archetype, a whole woman
+or a whole man, not a point between them; **body types** (Average, Petite,
+Model, Slim, Athletic, Strong, Curvy, Heavy) set the build sliders, height
+and proportions at once, cut for the archetype (switch archetype and the
+build follows); the face, age and ancestry stay. Proportions start at 0.7,
+a little towards MakeHuman's "ideal" (longer legs, smaller head) from the
+heavy-headed middle of its slider. **Random** randomises the tab you are on,
 **Random person** everything, and half the time starts from a body type.
 A random person stays believable: a third of the detail sliders move, and
 only a little, because many sliders far out at once make a face nobody

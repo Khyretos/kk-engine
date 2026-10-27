@@ -6,6 +6,7 @@
 #include "kke/HumanPack.h"
 #include "kke/Module.h"
 #include "kke/Vrm.h"
+#include "kke/VrmClothes.h"
 #include "kke/modules/ModelModule.h"
 
 #include <RmlUi/Core/DataModelHandle.h>
@@ -103,7 +104,7 @@ private:
         Rml::String id, label; // id "" = no hair
     };
     struct GarmentView {
-        Rml::String id, label, slot;
+        Rml::String id, label, slot, thumb;
         bool worn = false;
     };
     struct WornPiece; // a garment on the figure: a model, or cloth and its renderer
@@ -122,6 +123,8 @@ private:
     // A body type: "Average", "Slim", "Athletic", "Strong", "Curvy",
     // "Heavy" (the build sliders only: gender, age and face stay).
     void applyPreset(const std::string& preset);
+    void setBodyType(const std::string& name); // the build sliders and the archetype's extras, no undo step
+    void applyArchetype(bool male);          // Female / Male: the gender, with the body type cut for it
     void save();
     void load();
     void buildWorld();     // the physics world: the body as a collider
@@ -172,6 +175,7 @@ private:
     std::vector<HairChoice> m_hairChoices;
     std::vector<GarmentView> m_garments;
     std::vector<Rml::String> m_presets;
+    Rml::String m_archetype = "female", m_bodyType = "Average";
     std::vector<SwatchView> m_clothSwatches;
     Rml::String m_clothSlot = "top", m_clothSlotLabel; // what a colour swatch dyes
     float m_hairLength = 1.0f, m_hairLengthShown = 1.0f;
@@ -191,7 +195,11 @@ private:
     std::vector<std::vector<ModelVertex>> m_posed;
     std::vector<glm::mat4> m_vrmLocals, m_vrmWorld;
     float m_animeTime = 0.0f, m_nextBlink = 2.0f;
-    void showAnimeBody(); // loads the avatar for the Gender slider if it changed
+    void showAnimeBody(); // loads the avatar for the archetype if it changed
+    void dressAnime();    // the avatar in m_look's clothes (VrmClothes.h), if it is not already
+    std::string outfitKey() const;
+    VrmStock m_vrmStock;
+    std::string m_animeOutfit; // outfitKey() of what the avatar wears
     void poseAnime(float dt);
     Rml::String m_code, m_codeShort, m_status, m_view = "body";
     float m_statusTime = 0.0f;

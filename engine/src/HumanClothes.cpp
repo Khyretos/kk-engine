@@ -238,16 +238,45 @@ bool startsWith(const std::string& s, const char* prefix) { return s.rfind(prefi
 
 // The body's landmarks the cuts are made from.
 struct Anatomy {
-    const HumanPack& pack;
     const std::vector<glm::vec3>& shaped;
     std::vector<std::string> bone;
+    // The vertices the cuts choose from: the body suit, the long skirt, the
+    // skin (gloves). A body that is not a MakeHuman one (GarmentBody) lends
+    // its whole skin as the suit.
+    std::vector<uint32_t> suit, skirt, skin;
+    // Optional, per vertex (a body whose arms are not held down): how far
+    // along its arm bone it is (0 the joint, 1 the next), and its distance
+    // from the wrist. Sleeves and gloves go by these when they are there,
+    // by height when not.
+    std::vector<float> armT, armDist;
     float sole = 1e9f, waist = -1e9f, wristTop = -1e9f;
+    float neckY = 0.0f, neckZ = 0.0f; // where the neck meets the shoulders (the base of the neck bone)
 
-    Anatomy(const HumanPack& p, const std::vector<glm::vec3>& s) : pack(p), shaped(s), bone(mainBone(p)) {
+    explicit Anatomy(const GarmentBody& b)
+        : shaped(b.positions), bone(b.bone), suit(b.skin), skin(b.skin), armT(b.armT), armDist(b.armDist) {
+        sole = b.sole;
+        waist = b.waist;
+        wristTop = b.wristTop;
+        neckY = b.neckY;
+        neckZ = b.neckZ;
+    }
+
+    Anatomy(const HumanPack& pack, const std::vector<glm::vec3>& s) : shaped(s), bone(mainBone(pack)) {
+        suit = groupVerts(pack, "helper-tights");
+        skirt = groupVerts(pack, "helper-skirt");
+        skin = groupVerts(pack, "body");
+        if (auto it = pack.joints().find("neck01____head"); it != pack.joints().end() && !it->second.empty()) {
+            for (uint32_t v : it->second) {
+                neckY += shaped[v].y;
+                neckZ += shaped[v].z;
+            }
+            neckY /= static_cast<float>(it->second.size());
+            neckZ /= static_cast<float>(it->second.size());
+        }
         // The waist is the skirt's top: the bones alone can't say it
         // (spine05 carries the belly and the groin).
-        for (uint32_t v : groupVerts(pack, "helper-skirt")) waist = std::max(waist, shaped[v].y);
-        for (uint32_t v : groupVerts(pack, "helper-tights")) {
+        for (uint32_t v : skirt) waist = std::max(waist, shaped[v].y);
+        for (uint32_t v : suit) {
             if (foot(v)) sole = std::min(sole, shaped[v].y);
             if (startsWith(bone[v], "wrist")) wristTop = std::max(wristTop, shaped[v].y);
         }
@@ -268,6 +297,32 @@ struct Anatomy {
     bool foot(uint32_t v) const { return startsWith(bone[v], "foot") || startsWith(bone[v], "toe"); }
     // Below the waist and not an arm or a foot: the legs and the hips.
     bool below(uint32_t v) const { return !arm(v) && !foot(v) && !torso(v) && !shoulder(v) && !neck(v) && shaped[v].y < waist + 0.04f; }
+    // The height of an open neckline at ax (m from the middle), front or
+    // back: the cloth lies below it. A crew sits just over the base of the
+    // neck; scoops and Vs drop in front, V's straight-sided.
+    float collarY(Neck n, float ax, bool front) const {
+        float width = 0.075f, drop = 0.018f;
+        bool straight = false;
+        switch (n) {
+        case Neck::Scoop: width = 0.115f, drop = 0.07f; break;
+        case Neck::V: width = 0.10f, drop = 0.14f, straight = true; break;
+        case Neck::DeepV: width = 0.13f, drop = 0.24f, straight = true; break;
+        default: break;
+        }
+        if (!front) drop = n == Neck::Crew ? 0.004f : 0.02f; // a back neckline barely dips
+        const float u = std::min(ax / width, 1.0f);
+        const float shape = straight && front ? 1.0f - u : 1.0f - u * u;
+        return neckY + 0.012f - drop * shape;
+    }
+    // The cap sleeve's reach: the shoulder end of the upper arm.
+    bool capArm(uint32_t v) const {
+        if (!armT.empty()) return upperArm(v) && armT[v] < 0.34f;
+        return startsWith(bone[v], "upperarm01") && shaped[v].y > waist + 0.33f;
+    }
+    // Is this arm vertex within `reach` metres of the wrist (a glove's cuff)?
+    bool withinReachOfWrist(uint32_t v, float reach) const {
+        return armDist.empty() ? shaped[v].y < wristTop + reach : armDist[v] < reach;
+    }
     // A fraction of the leg, from the sole (0) to the waist (1), as a height.
     float legY(float reach) const { return sole + reach * (waist - sole); }
 };
@@ -280,23 +335,24 @@ bool wearsTop(const Anatomy& a, const Cut& c, uint32_t v) {
     if (p.y <= a.waist + c.hem) return false;
     const float chest = a.waist + 0.30f; // the top of the chest, where necklines start
     const float ax = std::abs(p.x);
-    if (neck) {
+    // Open necklines are one smooth curve round the base of the neck, not
+    // whatever bone each vertex happens to lean on (that tore the collar
+    // wherever neck and torso weights alternate).
+    const bool collar = c.neck == Neck::Crew || c.neck == Neck::V || c.neck == Neck::DeepV || c.neck == Neck::Scoop;
+    if (collar && a.neckY > 0.0f) {
+        if (p.y > a.collarY(c.neck, ax, p.z > a.neckZ) && !arm) return false;
+        if (neck) return true;
+    } else if (neck) {
         if (c.neck == Neck::Turtle) return true;
         if (c.neck == Neck::Halter) return ax < 0.035f && p.z > 0.0f; // the strap, up the front
         return false;
     }
     switch (c.neck) {
     case Neck::Crew:
-    case Neck::Turtle: break;
+    case Neck::Turtle:
     case Neck::V:
-        if (p.z > 0.0f && p.y > chest && ax < (p.y - chest) * 0.6f) return false;
-        break;
     case Neck::DeepV:
-        if (p.z > 0.0f && p.y > chest - 0.08f && ax < (p.y - chest + 0.08f) * 0.5f) return false;
-        break;
-    case Neck::Scoop:
-        if (p.z > 0.0f && p.y > chest + 0.04f && ax < 0.075f) return false;
-        break;
+    case Neck::Scoop: break;
     case Neck::Bare: // off the shoulders: nothing above the chest, all round
         if (p.y > chest) return false;
         break;
@@ -308,7 +364,7 @@ bool wearsTop(const Anatomy& a, const Cut& c, uint32_t v) {
     if (arm) {
         switch (c.sleeve) {
         case Sleeve::None: return false;
-        case Sleeve::Cap: return startsWith(a.bone[v], "upperarm01") && p.y > chest + 0.03f;
+        case Sleeve::Cap: return a.capArm(v);
         case Sleeve::Short: return startsWith(a.bone[v], "upperarm01");
         case Sleeve::Elbow: return a.upperArm(v) || startsWith(a.bone[v], "lowerarm01");
         case Sleeve::Long: return true;
@@ -321,7 +377,7 @@ GarmentShape suitPiece(const Anatomy& a, float offset, const std::function<bool(
     GarmentShape out;
     out.group = "helper-tights";
     out.offset = offset;
-    for (uint32_t v : groupVerts(a.pack, out.group))
+    for (uint32_t v : a.suit)
         if (wears(v)) out.verts.push_back(v);
     return out;
 }
@@ -332,7 +388,7 @@ GarmentShape skirtPiece(const Anatomy& a, float length, float offset) {
     out.group = "helper-skirt";
     out.cloth = true;
     out.offset = offset;
-    const std::vector<uint32_t> all = groupVerts(a.pack, out.group);
+    const std::vector<uint32_t>& all = a.skirt;
     if (all.empty()) return out;
     float top = -1e9f, bottom = 1e9f;
     for (uint32_t v : all) {
@@ -353,14 +409,14 @@ GarmentShape glovePiece(const Anatomy& a, const Cut& c) {
     GarmentShape out;
     out.group = "body";
     out.offset = c.offset;
-    for (uint32_t v : groupVerts(a.pack, out.group)) {
+    for (uint32_t v : a.skin) {
         const std::string& b = a.bone[v];
         bool on = false;
         if (a.hand(v)) {
             on = c.hands;
             if (c.fingerless && (b.find("-2.") != std::string::npos || b.find("-3.") != std::string::npos)) on = false;
         } else if (c.reach > 0.0f && (a.lowerArm(v) || a.upperArm(v))) {
-            on = a.shaped[v].y < a.wristTop + c.reach;
+            on = a.withinReachOfWrist(v, c.reach);
         }
         if (on) out.verts.push_back(v);
     }
@@ -394,11 +450,9 @@ bool garmentSlotsClash(const std::string& a, const std::string& b) {
     return (a == "dress" && underDress(b)) || (b == "dress" && underDress(a));
 }
 
-std::vector<GarmentShape> garmentPieces(const HumanPack& pack, const std::vector<glm::vec3>& shaped, const std::string& id) {
-    const Entry* e = findEntry(id);
-    if (!e || shaped.size() != pack.positions().size()) return {};
-    const Cut& c = e->cut;
-    const Anatomy a(pack, shaped);
+namespace {
+std::vector<GarmentShape> piecesOn(const Anatomy& a, const Cut& c) {
+    const std::vector<glm::vec3>& shaped = a.shaped;
     std::vector<GarmentShape> out;
     switch (c.kind) {
     case Cut::Top: out.push_back(suitPiece(a, c.offset, [&](uint32_t v) { return wearsTop(a, c, v); })); break;
@@ -418,6 +472,32 @@ std::vector<GarmentShape> garmentPieces(const HumanPack& pack, const std::vector
     case Cut::Gloves: out.push_back(glovePiece(a, c)); break;
     }
     return out;
+}
+} // namespace
+
+std::vector<GarmentShape> garmentPieces(const HumanPack& pack, const std::vector<glm::vec3>& shaped, const std::string& id) {
+    const Entry* e = findEntry(id);
+    if (!e || shaped.size() != pack.positions().size()) return {};
+    return piecesOn(Anatomy(pack, shaped), e->cut);
+}
+
+std::vector<GarmentShape> garmentPiecesOn(const GarmentBody& body, const std::string& id) {
+    const Entry* e = findEntry(id);
+    if (!e || body.bone.size() != body.positions.size()) return {};
+    std::vector<GarmentShape> out = piecesOn(Anatomy(body), e->cut);
+    // The cloth pieces (a skirt, coat tails) are cut from MakeHuman's long
+    // skirt, which another body does not have: the caller builds those
+    // (garmentSkirt()).
+    out.erase(std::remove_if(out.begin(), out.end(), [](const GarmentShape& s) { return s.group == "helper-skirt"; }), out.end());
+    return out;
+}
+
+bool garmentSkirt(const std::string& id, float* reach, float* offset) {
+    const Entry* e = findEntry(id);
+    if (!e || (e->cut.kind != Cut::Skirt && e->cut.kind != Cut::Dress && e->cut.kind != Cut::Coat)) return false;
+    if (reach) *reach = e->cut.reach;
+    if (offset) *offset = e->cut.kind == Cut::Coat ? e->cut.offset : 0.004f;
+    return true;
 }
 
 GarmentShape garmentShape(const HumanPack& pack, const std::vector<glm::vec3>& shaped, const std::string& id) {

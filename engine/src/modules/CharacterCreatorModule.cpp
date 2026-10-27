@@ -55,9 +55,24 @@ struct Preset {
     const char* name;
     std::vector<std::pair<const char*, float>> values, female, male; // female/male: added by gender
 };
+// MakeHuman's proportions slider runs 0 (squat) to 1 (the classical ideal:
+// longer legs, a smaller head, a waist); its middle is the average person
+// and looks heavy-headed on a screen, so a new body type starts at 0.7.
+constexpr float kProportions = 0.7f;
 const std::vector<Preset>& presets() {
     static const std::vector<Preset> list = {
         { "Average", {}, {}, {} },
+        // Short and slight, or tall and long-legged: the two ends of height.
+        { "Petite",
+          { { "macrodetails-height/Height", 0.18f }, { "macrodetails-universal/Weight", 0.3f }, { "macrodetails-universal/Muscle", 0.4f },
+            { "macrodetails-proportions/BodyProportions", 0.8f } },
+          { { "bodyshapes/bodyshapes-elvs-fem-neat-hourglass", 0.4f } },
+          { { "bodyshapes/bodyshapes-elvs-man-lean-column", 0.4f } } },
+        { "Model",
+          { { "macrodetails-height/Height", 0.64f }, { "macrodetails-universal/Weight", 0.18f }, { "macrodetails-universal/Muscle", 0.4f },
+            { "macrodetails-proportions/BodyProportions", 1.0f }, { "measure/measure-waist-circ-decr|incr", -0.3f } },
+          { { "bodyshapes/bodyshapes-elvs-fem-lean-column", 0.5f } },
+          { { "bodyshapes/bodyshapes-elvs-man-lean-column", 0.4f } } },
         { "Slim",
           { { "macrodetails-universal/Weight", 0.25f }, { "macrodetails-universal/Muscle", 0.45f },
             { "measure/measure-waist-circ-decr|incr", -0.4f } },
@@ -104,6 +119,7 @@ const std::vector<Preset>& presets() {
 // The sliders a body type owns (put back to default before one is applied).
 bool buildSlider(const HumanModifier& m) {
     if (m.macro == "Muscle" || m.macro == "Weight" || m.macro == "BreastSize" || m.macro == "BreastFirmness") return true;
+    if (m.macro == "Height" || m.macro == "BodyProportions") return true; // a body type is a stature and a build
     for (const char* g : { "bodyshapes", "measure", "torso", "hip", "stomach", "buttocks" })
         if (m.group == g) return true;
     return m.group == "armslegs" && (m.name.find("muscle") != std::string::npos || m.name.find("fat") != std::string::npos);
@@ -316,6 +332,8 @@ void CharacterCreatorModule::init(Application& app) {
     m_humansDir = dir;
     m_pack = std::make_unique<HumanPack>(HumanPack::load(dir + "/makehuman.kkhpack"));
     m_human = std::make_unique<Human>(*m_pack);
+    m_human->set("macrodetails/Gender", 0.0f); // a new person is a woman or a man, not half way: Female / Male buttons
+    setBodyType("Average");
     log::get(name())->info("human pack: {} targets, {} sliders, {}", m_pack->targets().size(), m_pack->modifiers().size(),
                            m_pack->licence());
 
@@ -361,7 +379,7 @@ void CharacterCreatorModule::init(Application& app) {
         m_look.hair = hair;
         fillSliders();
     }
-    if (const char* gender = dev::env("KKE_CREATOR_GENDER")) m_human->set("macrodetails/Gender", std::strtof(gender, nullptr)); // 0 female, 1 male
+    if (const char* gender = dev::env("KKE_CREATOR_GENDER")) applyArchetype(std::strtof(gender, nullptr) >= 0.5f); // 0 female, 1 male
     if (const char* preset = dev::env("KKE_CREATOR_PRESET")) applyPreset(preset); // "Curvy", "Strong"...
     if (const char* clothes = dev::env("KKE_CREATOR_CLOTHES")) { // "t-shirt,tennis skirt,shoes", "" = none
         m_look.clothes.clear();
@@ -412,12 +430,18 @@ void CharacterCreatorModule::buildModel() {
         g.RegisterMember("id", &GarmentView::id);
         g.RegisterMember("label", &GarmentView::label);
         g.RegisterMember("slot", &GarmentView::slot);
+        g.RegisterMember("thumb", &GarmentView::thumb);
         g.RegisterMember("worn", &GarmentView::worn);
     }
     c.RegisterArray<std::vector<GarmentView>>();
     c.Bind("garments", &m_garments);
     c.RegisterArray<std::vector<Rml::String>>();
     c.Bind("presets", &m_presets);
+    c.Bind("archetype", &m_archetype);
+    c.Bind("body_type", &m_bodyType);
+    c.BindEventCallback("archetype", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList& args) {
+        if (!args.empty()) applyArchetype(args[0].Get<Rml::String>() == "male");
+    });
     c.BindEventCallback("preset", [this](Rml::DataModelHandle, Rml::Event&, const Rml::VariantList& args) {
         if (!args.empty()) applyPreset(args[0].Get<Rml::String>());
     });
@@ -660,8 +684,35 @@ void CharacterCreatorModule::applyStyle() {
     if (m_cap) m_models->setVisible(m_cap, real && !m_look.hair.empty());
     for (auto& w : m_worn)
         if (w->instance) m_models->setVisible(w->instance, real);
-    if (m_anime && m_open) showAnimeBody();
+    if (m_anime && m_open) {
+        showAnimeBody();
+        dressAnime(); // what was put on while the other body showed
+    }
+    if (!m_anime && m_open) m_clothesDirty = true; // and back: the realistic pieces for what was put on
     if (m_animeDrawn) m_animeDrawn->setVisible(m_open && m_anime);
+}
+
+// What is on the avatar, as a string: a garment and its dye each.
+std::string CharacterCreatorModule::outfitKey() const {
+    std::string key;
+    char colour[48];
+    for (const HumanLook::Worn& w : m_look.clothes) {
+        std::snprintf(colour, sizeof colour, "|%.3f,%.3f,%.3f;", w.colour.r, w.colour.g, w.colour.b);
+        key += w.id + colour;
+    }
+    return key;
+}
+
+void CharacterCreatorModule::dressAnime() {
+    if (!m_vrm || !m_animeDrawn) return;
+    const std::string key = outfitKey();
+    if (key == m_animeOutfit) return;
+    const size_t pieces = dressVrm(*m_vrm, m_vrmStock, m_look.clothes);
+    m_animeOutfit = key;
+    m_animeDrawn->build(*m_vrm); // the garments are meshes of the avatar now
+    m_animeDrawn->setVisible(m_open && m_anime);
+    poseAnime(0.0f);
+    log::get(name())->info("anime clothes: {} garment mesh(es): {}", pieces, key.empty() ? "nothing (the avatar's own clothes)" : key);
 }
 
 void CharacterCreatorModule::showAnimeBody() {
@@ -673,6 +724,11 @@ void CharacterCreatorModule::showAnimeBody() {
         auto avatar = std::make_unique<VrmAvatar>(loadVrm(file));
         m_springs.reset();
         m_vrm = std::move(avatar);
+        m_vrmStock = VrmStock{};
+        const size_t pieces = dressVrm(*m_vrm, m_vrmStock, m_look.clothes); // before the renderer takes the meshes
+        m_animeOutfit = outfitKey();
+        log::get(name())->info("anime clothes: {} garment mesh(es) on {}: {}", pieces, std::filesystem::path(file).filename().string(),
+                               m_animeOutfit.empty() ? "nothing (the avatar's own clothes)" : m_animeOutfit);
     } catch (const std::exception& e) {
         log::get(name())->warn("anime body: {}", e.what());
         return;
@@ -844,6 +900,7 @@ void CharacterCreatorModule::fillSliders() {
     for (const char* group : tab->groups)
         for (const HumanModifier& m : m_pack->modifiers()) {
             if (m.group != group) continue;
+            if (m.macro == "Gender") continue; // an archetype (Female / Male buttons), not a slider
             const std::string pair = m_mirror ? mirrorOf(*m_pack, m.name) : std::string();
             // Mirrored: one slider for both sides, the right one standing in.
             if (!pair.empty() && m.name[m.name.find('/') + 1] == 'l') continue;
@@ -856,6 +913,8 @@ void CharacterCreatorModule::fillSliders() {
             s.value = s.shown = m_human->get(m.name);
             m_sliders.push_back(std::move(s));
         }
+    m_archetype = m_human->get("macrodetails/Gender") < 0.5f ? "female" : "male"; // after a load, an undo, a random person
+    m_handle.DirtyVariable("archetype");
     m_hairStyle = m_look.hair;
     m_hairLength = m_hairLengthShown = m_look.hairLength;
     m_handle.DirtyVariable("sliders");
@@ -878,17 +937,35 @@ void CharacterCreatorModule::restore(const std::map<std::string, float>& values)
 }
 
 void CharacterCreatorModule::applyPreset(const std::string& name) {
-    const Preset* preset = nullptr;
-    for (const Preset& p : presets())
-        if (name == p.name) preset = &p;
-    if (!preset) return;
+    if (std::none_of(presets().begin(), presets().end(), [&](const Preset& p) { return name == p.name; })) return;
     pushUndo();
-    for (const HumanModifier& m : m_pack->modifiers())
-        if (buildSlider(m)) m_human->set(m.name, m.defaultValue);
-    const bool female = m_human->get("macrodetails/Gender") < 0.5f;
-    for (const auto* list : { &preset->values, female ? &preset->female : &preset->male })
-        for (const auto& [slider, value] : *list) m_human->set(slider, value);
+    setBodyType(name);
     m_shapeDirty = true;
+    fillSliders();
+}
+
+void CharacterCreatorModule::setBodyType(const std::string& name) {
+    const Preset* found = nullptr;
+    for (const Preset& p : presets())
+        if (name == p.name) found = &p;
+    if (!found) return;
+    const Preset& preset = *found;
+    for (const HumanModifier& m : m_pack->modifiers())
+        if (buildSlider(m)) m_human->set(m.name, m.macro == "BodyProportions" ? kProportions : m.defaultValue);
+    const bool female = m_human->get("macrodetails/Gender") < 0.5f;
+    for (const auto* list : { &preset.values, female ? &preset.female : &preset.male })
+        for (const auto& [slider, value] : *list) m_human->set(slider, value);
+    m_bodyType = preset.name;
+    if (m_handle) m_handle.DirtyVariable("body_type");
+}
+
+void CharacterCreatorModule::applyArchetype(bool male) {
+    pushUndo();
+    m_human->set("macrodetails/Gender", male ? 1.0f : 0.0f);
+    m_archetype = male ? "male" : "female";
+    setBodyType(m_bodyType); // the same build, cut for this body
+    m_shapeDirty = true;
+    if (m_anime) applyStyle(); // the other VRoid avatar
     fillSliders();
 }
 
@@ -915,7 +992,7 @@ void CharacterCreatorModule::randomise(bool everything) {
         if (m.macro == "Age" || m.macro == "African" || m.macro == "Asian" || m.macro == "Caucasian") continue; // set below
         // Whole-body presets and measurements stay put: they fight the rest.
         if (m.group == "bodyshapes") continue;
-        const float v = m.macro == "Gender" ? (u(m_rng) < 0.5f ? 0.1f : 0.9f) : pick(m);
+        const float v = m.macro == "Gender" ? (u(m_rng) < 0.5f ? 0.0f : 1.0f) : pick(m);
         m_human->set(m.name, v);
         if (const std::string pair = mirrorOf(*m_pack, m.name); !pair.empty() && m.name[m.name.find('/') + 1] == 'r')
             m_human->set(pair, v == m.defaultValue ? v : v + n(m_rng) * 0.02f); // a face is never quite symmetric
@@ -1050,6 +1127,10 @@ void CharacterCreatorModule::update(const UpdateContext& ctx) {
         bool dressed = m_worn.size() == pieces;
         for (const auto& w : m_worn)
             dressed = dressed && (w->cloth ? m_world->clothStats(w->cloth).triangles > 20 : w->instance != 0);
+        if (m_anime) { // the avatar wears them: a mesh each at least, and what it wears is what was asked
+            dressed = m_vrm && m_vrmStock.ready && m_animeOutfit == outfitKey() &&
+                      m_vrm->model.meshes.size() >= m_vrmStock.meshes + m_look.clothes.size();
+        }
         log::get(name())->info("creator self-test {} (code {}, floor {}, hair '{}' {}, clothes '{}' {})",
                                same && floor && hair && dressed ? "passed" : "FAILED", same ? "round-trips" : "differs",
                                floor ? "ok" : "off", m_look.hair, hair ? "ok" : "missing", clothes, dressed ? "ok" : "missing");
@@ -1263,6 +1344,10 @@ void CharacterCreatorModule::undress() {
 
 void CharacterCreatorModule::dressUp() {
     m_clothesDirty = false;
+    if (m_anime) { // the avatar wears them (VrmClothes.h); the realistic pieces are rebuilt when that body shows again
+        applyStyle(); // loads the avatar if it is not there, then dresses it
+        return;
+    }
     undress();
     const std::vector<glm::vec3> shaped = m_human->shapedPositions();
     const ModelMesh* suit = m_tightsBake.model.meshes.empty() ? nullptr : &m_tightsBake.model.meshes[0];
@@ -1412,7 +1497,12 @@ void CharacterCreatorModule::wear(const std::string& id) {
 void CharacterCreatorModule::fillClothes() {
     m_garments.clear();
     for (const GarmentInfo& g : garments()) {
-        GarmentView v{ g.id, g.label, g.slot };
+        if (g.slot != m_clothSlot) continue; // the browser shows one slot at a time
+        GarmentView v{ g.id, g.label, g.slot, {}, false };
+        // thumbs/<id>.png, spaces as underscores (tools/garment_thumbs).
+        std::string file = g.id;
+        std::replace(file.begin(), file.end(), ' ', '_');
+        v.thumb = "thumbs/" + file + ".png";
         v.worn = std::any_of(m_look.clothes.begin(), m_look.clothes.end(), [&](const HumanLook::Worn& w) { return w.id == g.id; });
         m_garments.push_back(std::move(v));
     }

@@ -67,7 +67,7 @@ It casts shadows with the engine's shadow map like any other mesh.
 
 The Realistic and Anime buttons switch bodies. Anime shows VRoid's CC0
 sample avatars (`assets/anime/HairSample_Female.vrm` and
-`HairSample_Male.vrm`, by the Gender slider), blinking now and then and
+`HairSample_Male.vrm`, by the Female / Male buttons), blinking now and then and
 breathing, their hair on spring bones. `KKE_CREATOR_STYLE=anime` and
 `KKE_CREATOR_EXPRESSION=joy` set the style and a held expression for
 screenshots.
@@ -78,5 +78,21 @@ The avatars are VRoid Project's own samples, released under CC0 on
 own VRM licence fields say CC0, commercial use and redistribution allowed.
 Other VRoid samples (AvatarSample_A-C) are not CC0 and are not used.
 
+## Clothes
+
+The wardrobe (docs/HUMANS.md "Clothes", `garments()`) works on the avatars
+too: `dressVrm()` (`kke/VrmClothes.h`) cuts each garment from the avatar's own
+skin, the same cuts the realistic body wears, by naming every skin vertex's
+bone in MakeHuman's words and giving the arms a position along the bone
+(a VRoid avatar stands in a T, so height says nothing there):
+`garmentPiecesOn()`. The cut triangles are copied a few millimetres out along
+their normals, on the same bones, drawn in the toon shader with an outline
+in the garment's dye (satin, silk, leather and rubber catch a little rim
+light). Skirts, dresses and coat tails are a flared skirt built round the
+hips and skinned to the hips and thighs, so it follows the legs (the
+realistic body simulates them as cloth; spring bones on a skirt are still to
+do). VRoid's own top, trousers (the male) and shoes are hidden by the
+garments that take their place, and are back when nothing does.
+
 Still to do: body sliders on the VRM body (height, build, bust, hips),
-hair and eye colour, hairstyles and clothes to swap, VRM 1.0.
+hair and eye colour, hairstyles to swap, a skirt on spring bones, VRM 1.0.
