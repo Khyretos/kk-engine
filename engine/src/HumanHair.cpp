@@ -85,7 +85,7 @@ HumanScalp findScalp(const HumanPack& pack, const std::vector<glm::vec3>& shaped
         const float above = glm::dot(p, scalp.up) / span;
         const float forward = glm::dot(p, scalp.front) / span;
         const bool forehead = forward > -0.25f;
-        const bool grows = forehead ? above > 0.62f : above > 0.18f - 0.25f * std::clamp(-forward - 0.6f, 0.0f, 1.0f);
+        const bool grows = forehead ? above > 0.50f : above > 0.18f - 0.25f * std::clamp(-forward - 0.6f, 0.0f, 1.0f);
         if (!grows) continue;
         scalp.verts.push_back(v);
         points.push_back(shaped[v]);
@@ -104,7 +104,7 @@ bool hairOnHuman(HairDesc& desc, const std::string& style, const HumanPack& pack
     // scalp, so strands start out over the skin, not in it.
     float outer = 0.0f;
     for (uint32_t v : scalp.verts) outer = std::max(outer, glm::distance(shaped[v], scalp.centre));
-    if (!hairstyleOnHead(desc, style, scalp.centre, outer, guides, scalp.up, scalp.front)) return false;
+    if (!hairstyleOnHead(desc, style, scalp.centre, outer, guides, scalp.up, scalp.front, 1.3f)) return false;
     // A real face stands out in front of that sphere: hair combed back
     // (the loose styles) starts back and up from the hairline, or it would
     // fall over the eyes.

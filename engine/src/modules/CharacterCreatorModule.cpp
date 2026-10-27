@@ -273,7 +273,7 @@ const std::vector<std::pair<const char*, const char*>>& hairChoices() {
     return c;
 }
 
-constexpr int kHairGuides = 160;
+constexpr int kHairGuides = 320;
 
 std::string uiRoot() {
     if (const char* env = dev::env("KKE_CREATOR_UI")) {
@@ -301,6 +301,7 @@ struct CharacterCreatorModule::WornPiece {
     ModelModule::ModelId model = 0;
     ModelModule::InstanceId instance = 0;
     std::vector<uint32_t> from; // piece vertex -> body suit (or skin) bake vertex
+    std::vector<float> lift;    // piece vertex -> m slid up onto an open neckline
     std::vector<uint32_t> under; // piece vertex -> the skin vertex it must stay over
     ModelData data;
     // Cloth.
@@ -1322,6 +1323,7 @@ void CharacterCreatorModule::buildHair() {
         log::get(name())->warn("hair: no hairstyle '{}' (kke::hairstyleNames(), hairStyleNames())", m_look.hair);
         return;
     }
+    d.style.shine = std::min(d.style.shine, 0.3f); // thin strands under a bright light read as white scratches
     d.style.length *= std::clamp(m_look.hairLength, 0.3f, 2.0f);
     m_hairRoots = d.roots.size();
     d.wind = 0.0f; // indoors
@@ -1411,7 +1413,7 @@ void CharacterCreatorModule::dressUp() {
                 // The body suit's (or, for gloves, the skin's) triangles that
                 // are all this piece.
                 const Human::Bake& source = w->fromBody ? m_bodyBake : m_tightsBake;
-                ModelMesh mesh = garmentMesh(source.model.meshes[0], source.sourceVertex[0], shape, &w->from);
+                ModelMesh mesh = garmentMesh(source.model.meshes[0], source.sourceVertex[0], shape, &w->from, &w->lift);
                 mesh.name = worn.id;
                 if (mesh.indices.empty()) continue;
                 w->data.meshes.push_back(std::move(mesh));
@@ -1456,6 +1458,7 @@ void CharacterCreatorModule::moveClothes() {
         for (size_t i = 0; i < w->from.size(); ++i) {
             const ModelVertex& v = source.vertices[w->from[i]];
             mesh.vertices[i].position = v.position + v.normal * w->offset;
+            if (i < w->lift.size()) mesh.vertices[i].position.y += w->lift[i];
             mesh.vertices[i].normal = v.normal;
         }
         if (!w->fromBody) { // gloves are the skin itself, moved out: nothing to stay over

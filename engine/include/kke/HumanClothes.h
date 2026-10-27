@@ -56,6 +56,11 @@ struct GarmentShape {
     bool cloth = false;
     std::vector<uint32_t> pinned;
     float offset = 0.0f;
+    // Open necklines: (vertex, m up to the neckline curve) for the vertices
+    // just under it. A cut keeps whole quads, so the collar came out as
+    // stairs; garmentMesh() slides the vertices on the cut's edge up onto
+    // the curve.
+    std::vector<std::pair<uint32_t, float>> neckLift;
 };
 // Every piece of a garment: one for most, a bodice and a skirt for a
 // dress, a jacket and its tails for a long coat. shaped:
@@ -91,9 +96,11 @@ GarmentShape garmentShape(const HumanPack& pack, const std::vector<glm::vec3>& s
 // among the groups; `mesh` is that group's mesh, sourceVertex its map):
 // its triangles, each vertex `offset` out along its normal, skin weights
 // kept, so a skinned bake gives a skinned garment. from (optional):
-// garment vertex -> bake vertex, to move it again after Human::reshape.
+// garment vertex -> bake vertex, to move it again after Human::reshape;
+// lift (optional): per garment vertex, the m it was slid up onto an open
+// neckline (already in the mesh; the caller that moves vertices adds it again).
 ModelMesh garmentMesh(const ModelMesh& mesh, const std::vector<uint32_t>& sourceVertex, const GarmentShape& shape,
-                      std::vector<uint32_t>* from = nullptr);
+                      std::vector<uint32_t>* from = nullptr, std::vector<float>* lift = nullptr);
 
 // The material a garment is drawn with when it is not simulated: its
 // fabric's roughness and sheen, in `colour`.

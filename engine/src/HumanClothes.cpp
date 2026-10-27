@@ -43,7 +43,7 @@ const glm::vec3 kWhite{ 0.92f, 0.92f, 0.9f }, kBlack{ 0.08f, 0.08f, 0.09f }, kSk
     kCoral{ 0.95f, 0.45f, 0.35f }, kTeal{ 0.12f, 0.45f, 0.45f }, kLilac{ 0.7f, 0.6f, 0.85f };
 
 Entry top(const char* id, const char* label, Sleeve s, Neck n, float hem, const char* fabric = "cotton", glm::vec3 colour = kSky,
-          float offset = 0.003f) {
+          float offset = 0.0075f) {
     return { { id, label, "top", fabric, colour }, { Cut::Top, s, n, hem, 0.0f, offset } };
 }
 Entry outer(const char* id, const char* label, Sleeve s, Neck n, float hem, const char* fabric, glm::vec3 colour, float offset = 0.009f) {
@@ -94,13 +94,13 @@ const std::vector<Entry>& table() {
         top("polo", "Polo", S::Short, N::V, -0.08f, "cotton", kTeal),
         top("henley", "Henley", S::Long, N::V, -0.08f, "cotton", kSand),
         top("turtleneck", "Turtleneck", S::Long, N::Turtle, -0.03f, "wool", kBlack),
-        top("sweater", "Sweater", S::Long, N::Crew, -0.1f, "wool", kWine, 0.006f),
-        top("cropped sweater", "Cropped sweater", S::Long, N::Crew, 0.08f, "wool", kCream, 0.006f),
-        top("sweatshirt", "Sweatshirt", S::Long, N::Crew, -0.1f, "fleece", kGrey, 0.006f),
+        top("sweater", "Sweater", S::Long, N::Crew, -0.1f, "wool", kWine, 0.0075f),
+        top("cropped sweater", "Cropped sweater", S::Long, N::Crew, 0.08f, "wool", kCream, 0.0075f),
+        top("sweatshirt", "Sweatshirt", S::Long, N::Crew, -0.1f, "fleece", kGrey, 0.0075f),
         top("hoodie", "Hoodie", S::Long, N::Turtle, -0.12f, "fleece", kNight, 0.008f),
         top("cropped hoodie", "Cropped hoodie", S::Long, N::Turtle, 0.06f, "fleece", kRose, 0.008f),
         top("blouse", "Blouse", S::Elbow, N::V, -0.05f, "satin", kCream),
-        top("wrap top", "Wrap top", S::Elbow, N::DeepV, -0.12f, "satin", kWine, 0.005f),
+        top("wrap top", "Wrap top", S::Elbow, N::DeepV, -0.12f, "satin", kWine, 0.0075f),
         top("camisole", "Camisole", S::None, N::Scoop, -0.03f, "satin", kRose),
         top("tube top", "Tube top", S::None, N::Bare, 0.1f),
         top("bandeau", "Bandeau", S::None, N::Bare, 0.14f, "cotton", kBlack),
@@ -110,8 +110,8 @@ const std::vector<Entry>& table() {
         top("sports bra", "Sports bra", S::None, N::Scoop, 0.14f, "cotton", kBlack, 0.0015f),
         top("rash guard", "Rash guard", S::Long, N::Crew, -0.03f, "rubber", kTeal, 0.0015f),
         top("bodysuit", "Bodysuit", S::Long, N::Scoop, -0.15f, "rubber", kBlack, 0.0015f),
-        top("corset", "Corset", S::None, N::Bare, 0.02f, "leather", kWine, 0.004f),
-        top("linen shirt", "Linen shirt", S::Long, N::V, -0.12f, "linen", kWhite, 0.005f),
+        top("corset", "Corset", S::None, N::Bare, 0.02f, "leather", kWine, 0.007f),
+        top("linen shirt", "Linen shirt", S::Long, N::V, -0.12f, "linen", kWhite, 0.0075f),
         // Outerwear: over a top, further out.
         outer("denim jacket", "Denim jacket", S::Long, N::V, -0.08f, "denim", kDenim),
         outer("leather jacket", "Leather jacket", S::Long, N::V, -0.08f, "leather", kBlack),
@@ -123,7 +123,7 @@ const std::vector<Entry>& table() {
         outer("puffer jacket", "Puffer jacket", S::Long, N::Crew, -0.12f, "canvas", kBlack, 0.02f),
         outer("windbreaker", "Windbreaker", S::Long, N::Turtle, -0.1f, "canvas", kSky, 0.01f),
         outer("varsity jacket", "Varsity jacket", S::Long, N::Crew, -0.08f, "wool", kWine),
-        outer("track jacket", "Track jacket", S::Long, N::Turtle, -0.06f, "rubber", kNight, 0.007f),
+        outer("track jacket", "Track jacket", S::Long, N::Turtle, -0.06f, "rubber", kNight, 0.0095f),
         outer("shrug", "Shrug", S::Elbow, N::DeepV, 0.1f, "wool", kLilac),
         coat("long coat", "Long coat", S::Long, N::DeepV, 0.75f, "wool", kNight),
         coat("trench coat", "Trench coat", S::Long, N::DeepV, 0.6f, "canvas", kSand),
@@ -141,14 +141,14 @@ const std::vector<Entry>& table() {
         bottom("briefs", "Briefs", 0.8f, "cotton", kBlack, 0.0012f),
         bottom("breeches", "Breeches", 0.45f, "canvas", kBrown),
         bottom("capri", "Capri trousers", 0.3f, "cotton", kSand),
-        bottom("trousers", "Trousers", 0.05f),
-        bottom("jeans", "Jeans", 0.05f, "denim", kDenim),
-        bottom("wide trousers", "Wide trousers", 0.05f, "linen", kCream, 0.008f),
+        bottom("trousers", "Trousers", 0.05f, "cotton", kNight, 0.006f),
+        bottom("jeans", "Jeans", 0.05f, "denim", kDenim, 0.006f),
+        bottom("wide trousers", "Wide trousers", 0.05f, "linen", kCream, 0.007f),
         bottom("cargo trousers", "Cargo trousers", 0.05f, "canvas", kOlive, 0.006f),
-        bottom("chinos", "Chinos", 0.05f, "canvas", kSand),
+        bottom("chinos", "Chinos", 0.05f, "canvas", kSand, 0.006f),
         bottom("joggers", "Joggers", 0.05f, "fleece", kGrey, 0.004f),
         bottom("leggings", "Leggings", 0.02f, "cotton", kBlack, 0.0012f),
-        bottom("leather trousers", "Leather trousers", 0.05f, "leather", kBlack),
+        bottom("leather trousers", "Leather trousers", 0.05f, "leather", kBlack, 0.004f),
         // Skirts: cloth, this much of the long skirt.
         skirt("mini skirt", "Mini skirt", 0.22f, "denim", kDenim),
         skirt("tennis skirt", "Tennis skirt", 0.3f),
@@ -295,8 +295,10 @@ struct Anatomy {
     }
     bool arm(uint32_t v) const { return upperArm(v) || lowerArm(v) || hand(v); }
     bool foot(uint32_t v) const { return startsWith(bone[v], "foot") || startsWith(bone[v], "toe"); }
-    // Below the waist and not an arm or a foot: the legs and the hips.
-    bool below(uint32_t v) const { return !arm(v) && !foot(v) && !torso(v) && !shoulder(v) && !neck(v) && shaped[v].y < waist + 0.04f; }
+    // Below the waist and not an arm or a foot: the legs and the hips. By
+    // height, not by bone: spine05 carries the belly and the groin, and
+    // leaving those out tore a hole into every pair of trousers.
+    bool below(uint32_t v) const { return !arm(v) && !foot(v) && !shoulder(v) && !neck(v) && shaped[v].y < waist + 0.04f; }
     // The height of an open neckline at ax (m from the middle), front or
     // back: the cloth lies below it. A crew sits just over the base of the
     // neck; scoops and Vs drop in front, V's straight-sided.
@@ -451,11 +453,28 @@ bool garmentSlotsClash(const std::string& a, const std::string& b) {
 }
 
 namespace {
+// The vertices of an open neckline that lie just under the curve: how far
+// up each would have to go to stand on it (garmentMesh() moves the ones on
+// the cut's edge).
+void addNeckLift(const Anatomy& a, const Cut& c, GarmentShape& piece) {
+    const bool collar = c.neck == Neck::Crew || c.neck == Neck::V || c.neck == Neck::DeepV || c.neck == Neck::Scoop;
+    if (!collar || a.neckY <= 0.0f) return;
+    for (uint32_t v : piece.verts) {
+        if (a.arm(v)) continue;
+        const glm::vec3& p = a.shaped[v];
+        const float up = a.collarY(c.neck, std::abs(p.x), p.z > a.neckZ) - p.y;
+        if (up > 0.0f && up < 0.03f) piece.neckLift.emplace_back(v, up);
+    }
+}
+
 std::vector<GarmentShape> piecesOn(const Anatomy& a, const Cut& c) {
     const std::vector<glm::vec3>& shaped = a.shaped;
     std::vector<GarmentShape> out;
     switch (c.kind) {
-    case Cut::Top: out.push_back(suitPiece(a, c.offset, [&](uint32_t v) { return wearsTop(a, c, v); })); break;
+    case Cut::Top:
+        out.push_back(suitPiece(a, c.offset, [&](uint32_t v) { return wearsTop(a, c, v); }));
+        addNeckLift(a, c, out.back());
+        break;
     case Cut::Bottom:
         // Bottoms rise a little over the waist, under the top (which sits further out).
         out.push_back(suitPiece(a, c.offset, [&](uint32_t v) { return a.below(v) && shaped[v].y > a.legY(c.reach); }));
@@ -464,6 +483,7 @@ std::vector<GarmentShape> piecesOn(const Anatomy& a, const Cut& c) {
     case Cut::Dress:
     case Cut::Coat:
         out.push_back(suitPiece(a, c.offset, [&](uint32_t v) { return wearsTop(a, c, v); }));
+        addNeckLift(a, c, out.back());
         out.push_back(skirtPiece(a, c.reach, c.kind == Cut::Coat ? c.offset : 0.004f));
         break;
     case Cut::Lower: // socks and shoes: the feet, and the legs up to the cuff
@@ -506,12 +526,28 @@ GarmentShape garmentShape(const HumanPack& pack, const std::vector<glm::vec3>& s
 }
 
 ModelMesh garmentMesh(const ModelMesh& mesh, const std::vector<uint32_t>& sourceVertex, const GarmentShape& shape,
-                      std::vector<uint32_t>* from) {
+                      std::vector<uint32_t>* from, std::vector<float>* liftOut) {
     ModelMesh out;
     out.skinned = mesh.skinned;
     const std::set<uint32_t> in(shape.verts.begin(), shape.verts.end());
     std::map<uint32_t, uint32_t> index;
     std::vector<uint32_t> source;
+    std::vector<float> lifted;
+    // The edges of the cut (used by one triangle only), by source vertex:
+    // the neckline's lift applies to them.
+    std::map<std::pair<uint32_t, uint32_t>, int> edgeUse;
+    if (!shape.neckLift.empty())
+        for (size_t t = 0; t + 2 < mesh.indices.size(); t += 3) {
+            const uint32_t s[3] = { sourceVertex[mesh.indices[t]], sourceVertex[mesh.indices[t + 1]], sourceVertex[mesh.indices[t + 2]] };
+            if (!in.count(s[0]) || !in.count(s[1]) || !in.count(s[2])) continue;
+            for (int k = 0; k < 3; ++k) ++edgeUse[{ std::min(s[k], s[(k + 1) % 3]), std::max(s[k], s[(k + 1) % 3]) }];
+        }
+    std::set<uint32_t> onEdge;
+    for (const auto& [e, n] : edgeUse)
+        if (n == 1) onEdge.insert({ e.first, e.second });
+    std::map<uint32_t, float> lift;
+    for (const auto& [v, up] : shape.neckLift)
+        if (onEdge.count(v)) lift[v] = up;
     for (size_t t = 0; t + 2 < mesh.indices.size(); t += 3) {
         const uint32_t a = mesh.indices[t], b = mesh.indices[t + 1], c = mesh.indices[t + 2];
         if (!in.count(sourceVertex[a]) || !in.count(sourceVertex[b]) || !in.count(sourceVertex[c])) continue;
@@ -520,6 +556,10 @@ ModelMesh garmentMesh(const ModelMesh& mesh, const std::vector<uint32_t>& source
             if (added) {
                 ModelVertex mv = mesh.vertices[v];
                 mv.position += mv.normal * shape.offset;
+                float up = 0.0f;
+                if (auto l = lift.find(sourceVertex[v]); l != lift.end()) up = l->second;
+                mv.position.y += up;
+                lifted.push_back(up);
                 out.vertices.push_back(mv);
                 source.push_back(v);
             }
@@ -527,6 +567,7 @@ ModelMesh garmentMesh(const ModelMesh& mesh, const std::vector<uint32_t>& source
         }
     }
     if (from) *from = std::move(source);
+    if (liftOut) *liftOut = std::move(lifted);
     return out;
 }
 

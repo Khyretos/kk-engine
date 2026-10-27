@@ -140,9 +140,11 @@ void hairScalp(HairDesc& desc, const glm::vec3& center, float radius, int count,
 // "bantu knots", "box braids", "cornrows", "locs", "two-strand twists"
 // (hairstyleNames()); any hairStyleNames() name gives that type grown
 // out. Keeps desc.style's colours. `guides` is a hint: braids, cornrows
-// and locs have as many as the style has. False for unknown names.
+// and locs have as many as the style has. hairline: how far down the
+// forehead it grows, radians from the top (a real face stands out of the
+// sphere: HumanHair passes a lower one). False for unknown names.
 bool hairstyleOnHead(HairDesc& desc, const std::string& name, const glm::vec3& center, float radius, int guides,
-                     const glm::vec3& up = glm::vec3(0, 1, 0), const glm::vec3& front = glm::vec3(0, 0, 1));
+                     const glm::vec3& up = glm::vec3(0, 1, 0), const glm::vec3& front = glm::vec3(0, 0, 1), float hairline = 1.0f);
 std::vector<std::string> hairstyleNames();
 
 // Vertices per guide strand: the root, the follicle (both follow the head)

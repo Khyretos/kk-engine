@@ -322,7 +322,7 @@ TEST(HumanHair, RootsSitOnTheSkin) {
         kke::HairDesc d;
         ASSERT_TRUE(kke::hairOnHuman(d, style, pack(), shaped, 160)) << style;
         kke::HairDesc sphere; // the same style on the scalp's sphere: most roots have skin under them
-        ASSERT_TRUE(kke::hairstyleOnHead(sphere, style, scalp.centre, scalp.radius, 160, scalp.up, scalp.front));
+        ASSERT_TRUE(kke::hairstyleOnHead(sphere, style, scalp.centre, scalp.radius, 160, scalp.up, scalp.front, 1.3f));
         EXPECT_GE(d.roots.size(), sphere.roots.size() * 6 / 10) << style;
         EXPECT_EQ(d.directions.size(), d.roots.size());
         if (!d.lengths.empty()) {
@@ -630,6 +630,53 @@ TEST(HumanClothes, NecklinesAreCurvesRoundTheNeck) {
         EXPECT_GT(scoopN, deepN);
         EXPECT_GT(crewN, vN);
     }
+}
+
+// spine05 carries the belly and the groin: trousers cut by bone left a hole
+// there (the bare patch between the legs).
+TEST(HumanClothes, TrousersCoverTheHipsAndTheGroin) {
+    NEED_PACK();
+    for (float gender : { 0.0f, 1.0f }) {
+        kke::Human h(pack());
+        h.set("macrodetails/Gender", gender);
+        const auto shaped = h.shapedPositions();
+        const auto pieces = kke::garmentPieces(pack(), shaped, "jeans");
+        ASSERT_EQ(pieces.size(), 1u);
+        const std::set<uint32_t> worn(pieces[0].verts.begin(), pieces[0].verts.end());
+        float top = -1e9f;
+        for (uint32_t v : pieces[0].verts) top = std::max(top, shaped[v].y);
+        const kke::HumanGroup& g = pack().groups()[static_cast<size_t>(pack().findGroup("helper-tights"))];
+        std::set<uint32_t> suit;
+        for (uint32_t f = g.firstFace; f < g.firstFace + g.faceCount; ++f)
+            for (uint32_t v : pack().quads()[f].verts) suit.insert(v);
+        int bare = 0, checked = 0;
+        for (uint32_t v : suit) {
+            const glm::vec3& p = shaped[v];
+            if (std::abs(p.x) > 0.2f || p.y > top - 0.005f || p.y < top - 0.3f) continue; // not an arm; the hips and the thighs
+            ++checked;
+            if (!worn.count(v)) ++bare;
+        }
+        EXPECT_GT(checked, 100);
+        EXPECT_EQ(bare, 0) << "gender " << gender;
+    }
+}
+
+// An open neckline is a curve: the cut keeps whole quads, so the vertices
+// just under it are recorded to be slid up onto it (garmentMesh()).
+TEST(HumanClothes, OpenNecklinesRecordTheirLift) {
+    NEED_PACK();
+    kke::Human h(pack());
+    const auto shaped = h.shapedPositions();
+    for (const char* id : { "t-shirt", "scoop tee", "v-neck tee", "deep-v tee" }) {
+        const auto pieces = kke::garmentPieces(pack(), shaped, id);
+        ASSERT_FALSE(pieces.empty()) << id;
+        EXPECT_GT(pieces[0].neckLift.size(), 10u) << id;
+        for (const auto& [v, up] : pieces[0].neckLift) {
+            EXPECT_GT(up, 0.0f) << id;
+            EXPECT_LT(up, 0.03f) << id;
+        }
+    }
+    EXPECT_TRUE(kke::garmentPieces(pack(), shaped, "turtleneck")[0].neckLift.empty());
 }
 
 // The clothes browser (assets/ui/character_creator/thumbs, made by
