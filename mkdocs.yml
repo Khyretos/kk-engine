@@ -125,6 +125,7 @@ nav:
       - Physics, water and sound:
           - Physics (FEMFX): demos/physics_demo.md
           - Melting: demos/melt_demo.md
+          - Water tank (MLS-MPM): demos/water_demo.md
           - Particles: demos/particles_demo.md
           - Sea: demos/sea_demo.md
           - Jiggle: demos/jiggle_demo.md

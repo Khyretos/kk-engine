@@ -13,6 +13,8 @@ namespace kke {
 namespace {
 struct BlurPush { glm::ivec2 dir; float projScale; float worldRadius; float depthFalloff; };
 struct CompositePush { glm::mat4 invProj; glm::mat4 invView; };
+struct WaterPush { glm::mat4 invProj; glm::vec4 toWorld[3]; glm::vec4 deepRefract; };
+static_assert(sizeof(WaterPush) == 128, "fluid_water.frag's push constants");
 } // namespace
 
 FluidSurfaceRenderer::FluidSurfaceRenderer(Application& app) : m_app(app), m_device(app.device().device()) {
@@ -22,20 +24,21 @@ FluidSurfaceRenderer::FluidSurfaceRenderer(Application& app) : m_app(app), m_dev
     si.addressModeU = si.addressModeV = si.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
     VK_CHECK(vkCreateSampler(m_device, &si, nullptr, &m_sampler));
 
-    auto makeLayout = [&](VkDescriptorType type, VkShaderStageFlags stage) {
-        VkDescriptorSetLayoutBinding b[2]{};
-        for (uint32_t i = 0; i < 2; ++i) b[i] = { i, type, 1, stage, nullptr };
+    auto makeLayout = [&](VkDescriptorType type, VkShaderStageFlags stage, uint32_t count) {
+        VkDescriptorSetLayoutBinding b[3]{};
+        for (uint32_t i = 0; i < count; ++i) b[i] = { i, type, 1, stage, nullptr };
         VkDescriptorSetLayoutCreateInfo li{};
         li.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        li.bindingCount = 2;
+        li.bindingCount = count;
         li.pBindings = b;
         VkDescriptorSetLayout layout;
         VK_CHECK(vkCreateDescriptorSetLayout(m_device, &li, nullptr, &layout));
         return layout;
     };
-    m_blurLayout = makeLayout(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT);
-    m_sampleLayout = makeLayout(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT);
-    VkDescriptorPoolSize sizes[2] = { { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 4 }, { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2 } };
+    m_blurLayout = makeLayout(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT, 2);
+    // Depth, colour, and clear water's thickness.
+    m_sampleLayout = makeLayout(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 3);
+    VkDescriptorPoolSize sizes[2] = { { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 4 }, { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 3 } };
     VkDescriptorPoolCreateInfo pi{};
     pi.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     pi.maxSets = 3;
@@ -126,6 +129,47 @@ FluidSurfaceRenderer::FluidSurfaceRenderer(Application& app) : m_app(app), m_dev
     cc.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout(), m_sampleLayout };
     m_compositePipeline = std::make_unique<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/sky.vert.spv",
                                                      "shaders/fluid_composite.frag.spv", cc);
+
+    // Clear water: thickness pass (RG16F, every sphere added, no depth
+    // test) and the see-through surface drawn in renderTranslucent.
+    VkAttachmentDescription ta{ 0, VK_FORMAT_R16G16_SFLOAT, VK_SAMPLE_COUNT_1_BIT, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE,
+                                VK_ATTACHMENT_LOAD_OP_DONT_CARE, VK_ATTACHMENT_STORE_OP_DONT_CARE, VK_IMAGE_LAYOUT_UNDEFINED,
+                                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+    VkAttachmentReference tref{ 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL };
+    VkSubpassDescription tsub{};
+    tsub.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    tsub.colorAttachmentCount = 1;
+    tsub.pColorAttachments = &tref;
+    VkSubpassDependency tdeps[2]{};
+    tdeps[0] = { VK_SUBPASS_EXTERNAL, 0, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_SHADER_READ_BIT,
+                 VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 0 };
+    tdeps[1] = { 0, VK_SUBPASS_EXTERNAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                 VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, 0 };
+    VkRenderPassCreateInfo trp{};
+    trp.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    trp.attachmentCount = 1;
+    trp.pAttachments = &ta;
+    trp.subpassCount = 1;
+    trp.pSubpasses = &tsub;
+    trp.dependencyCount = 2;
+    trp.pDependencies = tdeps;
+    VK_CHECK(vkCreateRenderPass(m_device, &trp, nullptr, &m_thickPass));
+    PipelineConfig tc;
+    tc.cullMode = rhi::CullMode::None;
+    tc.depthTestEnable = false;
+    tc.depthWriteEnable = false;
+    tc.blendEnable = true;
+    tc.customColorBlend = true;
+    tc.srcColorBlendFactor = rhi::BlendFactor::One;
+    tc.dstColorBlendFactor = rhi::BlendFactor::One;
+    tc.pushConstantRange = { rhi::kFragment, 0, sizeof(glm::vec4) };
+    tc.descriptorSetLayouts = { app.lightingBuffer().descriptorSetLayout() };
+    m_thickPipeline = std::make_unique<Pipeline>(app.device(), m_thickPass, "shaders/impostor.vert.spv", "shaders/fluid_thickness.frag.spv", tc);
+    PipelineConfig wc = cc;
+    wc.blendEnable = true;
+    wc.premultipliedAlpha = true;
+    wc.pushConstantRange = { rhi::kFragment, 0, sizeof(WaterPush) };
+    m_waterPipeline = std::make_unique<Pipeline>(app.device(), app.renderer().renderPass(), "shaders/sky.vert.spv", "shaders/fluid_water.frag.spv", wc);
 }
 
 FluidSurfaceRenderer::~FluidSurfaceRenderer() {
@@ -133,12 +177,15 @@ FluidSurfaceRenderer::~FluidSurfaceRenderer() {
     destroyTargets();
     m_particlePipeline.reset();
     m_compositePipeline.reset();
+    m_thickPipeline.reset();
+    m_waterPipeline.reset();
     if (m_blurPipeline) vkDestroyPipeline(m_device, m_blurPipeline, nullptr);
     if (m_blurPipelineLayout) vkDestroyPipelineLayout(m_device, m_blurPipelineLayout, nullptr);
     if (m_pool) vkDestroyDescriptorPool(m_device, m_pool, nullptr);
     if (m_blurLayout) vkDestroyDescriptorSetLayout(m_device, m_blurLayout, nullptr);
     if (m_sampleLayout) vkDestroyDescriptorSetLayout(m_device, m_sampleLayout, nullptr);
     if (m_pass) vkDestroyRenderPass(m_device, m_pass, nullptr);
+    if (m_thickPass) vkDestroyRenderPass(m_device, m_thickPass, nullptr);
     if (m_sampler) vkDestroySampler(m_device, m_sampler, nullptr);
 }
 
@@ -177,6 +224,9 @@ void FluidSurfaceRenderer::destroyImage(Image& img) {
 void FluidSurfaceRenderer::destroyTargets() {
     if (m_framebuffer) vkDestroyFramebuffer(m_device, m_framebuffer, nullptr);
     m_framebuffer = VK_NULL_HANDLE;
+    if (m_thickFramebuffer) vkDestroyFramebuffer(m_device, m_thickFramebuffer, nullptr);
+    m_thickFramebuffer = VK_NULL_HANDLE;
+    destroyImage(m_thickness);
     destroyImage(m_depth);
     destroyImage(m_z);
     destroyImage(m_zTmp);
@@ -200,13 +250,19 @@ void FluidSurfaceRenderer::createTargets(VkExtent2D e) {
     fi.height = e.height;
     fi.layers = 1;
     VK_CHECK(vkCreateFramebuffer(m_device, &fi, nullptr, &m_framebuffer));
+    m_thickness = makeImage(e, VK_FORMAT_R16G16_SFLOAT, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_ASPECT_COLOR_BIT);
+    fi.renderPass = m_thickPass;
+    fi.attachmentCount = 1;
+    fi.pAttachments = &m_thickness.view;
+    VK_CHECK(vkCreateFramebuffer(m_device, &fi, nullptr, &m_thickFramebuffer));
     m_extent = e;
 
     VkDescriptorImageInfo zInfo{ VK_NULL_HANDLE, m_z.view, VK_IMAGE_LAYOUT_GENERAL };
     VkDescriptorImageInfo tmpInfo{ VK_NULL_HANDLE, m_zTmp.view, VK_IMAGE_LAYOUT_GENERAL };
     VkDescriptorImageInfo zSample{ m_sampler, m_z.view, VK_IMAGE_LAYOUT_GENERAL };
     VkDescriptorImageInfo colorSample{ m_sampler, m_color.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
-    VkWriteDescriptorSet w[6]{};
+    VkDescriptorImageInfo thickSample{ m_sampler, m_thickness.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+    VkWriteDescriptorSet w[7]{};
     auto write = [&](int i, VkDescriptorSet set, uint32_t binding, VkDescriptorType type, const VkDescriptorImageInfo* info) {
         w[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         w[i].dstSet = set;
@@ -221,7 +277,8 @@ void FluidSurfaceRenderer::createTargets(VkExtent2D e) {
     write(3, m_blurBA, 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, &zInfo);
     write(4, m_sampleSet, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &zSample);
     write(5, m_sampleSet, 1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &colorSample);
-    vkUpdateDescriptorSets(m_device, 6, w, 0, nullptr);
+    write(6, m_sampleSet, 2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, &thickSample);
+    vkUpdateDescriptorSets(m_device, 7, w, 0, nullptr);
 }
 
 void FluidSurfaceRenderer::prepass(const PrepassContext& ctx, const std::vector<Particle>& particles) {
@@ -237,7 +294,7 @@ void FluidSurfaceRenderer::prepass(const PrepassContext& ctx, const std::vector<
     m_scratch.resize(particles.size() * 6);
     for (size_t i = 0; i < particles.size(); ++i) {
         const Particle& p = particles[i];
-        for (int k = 0; k < 6; ++k) m_scratch[i * 6 + k] = Vertex{ p.center, p.color, glm::vec3(p.radius, p.glow, 0.5f), corners[k] };
+        for (int k = 0; k < 6; ++k) m_scratch[i * 6 + k] = Vertex{ p.center, p.color, glm::vec3(p.radius, p.glow, p.foam), corners[k] };
     }
     const uint32_t f = ctx.frameIndex;
     if (m_capacity[f] < m_scratch.size()) {
@@ -273,6 +330,25 @@ void FluidSurfaceRenderer::prepass(const PrepassContext& ctx, const std::vector<
     vkCmdBindVertexBuffers(ctx.cmd, 0, 1, &vb, &off);
     vkCmdDraw(ctx.cmd, static_cast<uint32_t>(m_scratch.size()), 1, 0, 0);
     vkCmdEndRenderPass(ctx.cmd);
+
+    // 1b. Clear water: how much water each pixel looks through.
+    if (m_settings.clearWater) {
+        VkClearValue zero{};
+        bi.renderPass = m_thickPass;
+        bi.framebuffer = m_thickFramebuffer;
+        bi.clearValueCount = 1;
+        bi.pClearValues = &zero;
+        vkCmdBeginRenderPass(ctx.cmd, &bi, VK_SUBPASS_CONTENTS_INLINE);
+        vkCmdSetViewport(ctx.cmd, 0, 1, &vp);
+        vkCmdSetScissor(ctx.cmd, 0, 1, &sc);
+        m_thickPipeline->bind(ctx.cmd);
+        vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_thickPipeline->layout(), 0, 1, &ctx.lightingDescriptorSet, 0, nullptr);
+        const glm::vec4 params(m_settings.particleVolume, 0.0f, 0.0f, 0.0f);
+        vkCmdPushConstants(ctx.cmd, m_thickPipeline->layout(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(params), &params);
+        vkCmdBindVertexBuffers(ctx.cmd, 0, 1, &vb, &off);
+        vkCmdDraw(ctx.cmd, static_cast<uint32_t>(m_scratch.size()), 1, 0, 0);
+        vkCmdEndRenderPass(ctx.cmd);
+    }
 
     // 2. Bilateral blur, z -> tmp -> z, in GENERAL layout.
     VkImageMemoryBarrier toGeneral{};
@@ -311,10 +387,24 @@ void FluidSurfaceRenderer::prepass(const PrepassContext& ctx, const std::vector<
     m_hasContent = true;
 }
 
+void FluidSurfaceRenderer::drawWater(const RenderContext& ctx) {
+    if (!m_hasContent || ctx.viewCount > 1 || !m_settings.clearWater) return;
+    m_waterPipeline->bind(ctx.cmd);
+    VkDescriptorSet sets[2] = { ctx.lightingDescriptorSet, m_sampleSet };
+    vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_waterPipeline->layout(), 0, 2, sets, 0, nullptr);
+    WaterPush pc{};
+    pc.invProj = m_invProj;
+    const glm::vec3& a = m_settings.absorption;
+    for (int i = 0; i < 3; ++i) pc.toWorld[i] = glm::vec4(glm::vec3(m_invView[i]), a[i]);
+    pc.deepRefract = glm::vec4(m_settings.deepColor, m_settings.refraction);
+    vkCmdPushConstants(ctx.cmd, m_waterPipeline->layout(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pc), &pc);
+    vkCmdDraw(ctx.cmd, 3, 1, 0, 0);
+}
+
 void FluidSurfaceRenderer::draw(const RenderContext& ctx) {
     // The prepass drew the whole window from the first view's camera:
     // with split screen that image fits none of the views.
-    if (!m_hasContent || ctx.viewCount > 1) return;
+    if (!m_hasContent || ctx.viewCount > 1 || m_settings.clearWater) return;
     m_compositePipeline->bind(ctx.cmd);
     VkDescriptorSet sets[2] = { ctx.lightingDescriptorSet, m_sampleSet };
     vkCmdBindDescriptorSets(ctx.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_compositePipeline->layout(), 0, 2, sets, 0, nullptr);

@@ -23,7 +23,7 @@ endforeach()
 foreach(shader rml_ui.vert rml_ui.frag rml_gradient.frag)
     engine_add_shader(kke_demo ${CMAKE_SOURCE_DIR}/shaders/${shader})
 endforeach()
-foreach(shader model.vert model_instanced.vert shadow_instanced.vert model.frag shadow.vert shadow.frag cube.vert cube.frag glow.frag ocean.vert ocean.frag sky.vert sky.frag impostor.vert impostor.frag fluid_depth.frag fluid_blur.comp fluid_composite.frag
+foreach(shader model.vert model_instanced.vert shadow_instanced.vert model.frag shadow.vert shadow.frag cube.vert cube.frag glow.frag ocean.vert ocean.frag sky.vert sky.frag impostor.vert impostor.frag fluid_depth.frag fluid_blur.comp fluid_composite.frag fluid_thickness.frag fluid_water.frag
                effect.vert effect_smoke.frag effect_spark.frag effect_glow.frag effect_flake.frag effect_ring.frag) # effect_*: particles (guns, blasts)
     engine_add_shader(kke_demo ${CMAKE_SOURCE_DIR}/shaders/${shader})
 endforeach()

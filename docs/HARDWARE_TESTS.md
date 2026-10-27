@@ -40,6 +40,27 @@ them): a `.txt` to read and a `.json` for analysis, including your CPU,
 GPU, driver, RAM, OS and build type. Paste either file back instead of
 log lines.
 
+### HW-021 · MLS-MPM water on the GPU (dev box)
+
+docs/OPTIMIZATION.md #46: games/water_demo runs its water (a dam break
+in a tank, with floating crates) on the GPU. The sandbox only has
+lavapipe, where it matches the CPU but can't say how fast it is. On the
+RX 9070 XT:
+
+```bash
+cd build-release/bin
+KKE_BENCHMARK=30 KKE_BENCH_SHOTS=1 ./water_demo 2>&1 | grep -E "MpmWater|water:|fps avg"
+KKE_BENCHMARK=30 KKE_BENCH_SHOTS=0 KKE_MPM_GPU=0 ./water_demo 2>&1 | grep -E "water:|fps avg"
+KKE_WATER_CELL=0.035 KKE_BENCHMARK=30 KKE_BENCH_SHOTS=0 ./water_demo 2>&1 | grep -E "water:|fps avg"
+KKE_BENCHMARK=30 KKE_BENCH_SHOTS=0 KKE_MPM_GPU_CHECK=1 ./water_demo 2>&1 | grep "check:"
+```
+
+Send back: the `water:` lines (particles, ms a step, substeps, GPU or
+CPU, late steps), the fps lines, the last `check:` line, and the
+screenshots from the first run (they show the look).
+
+**Result:** pending.
+
 ### HW-020 · Liquid neighbour search, GPU against CPU (dev box)
 
 docs/OPTIMIZATION.md #44 and #45: the liquid now runs on several threads,
@@ -59,7 +80,22 @@ Send back: the `liquid:` lines (step time, threads, which side found the
 neighbours, both search times) for each size with and without the GPU,
 and the last `check:` line (how many GPU searches differed from the CPU's).
 
-**Result:** (not run yet)
+**Result:** 2026-10-25, soucouyant: AMD Radeon RX 9070 XT (RADV GFX1201),
+Release build, 4 worker threads, offscreen. The GPU won at every size and
+the fluid kept it every time (0 declined):
+
+| Particles | Step, GPU on | Step, `KKE_FLUID_GPU=0` | Search, GPU | Search, CPU |
+|---|---|---|---|---|
+| 3,000 | 0.85 ms | 1.02 ms | 0.14 ms | 0.29–0.53 ms |
+| 8,000 | 1.8–2.2 ms | 2.9 ms | 0.22 ms | 0.86 ms |
+| 27,000 | 8.4 ms | 15.3 ms | 0.75 ms | 4.4 ms |
+
+At 27,000 particles melt_demo went from 38 fps ("struggles") to 352 fps.
+`check:` 5 of 3,840 GPU searches differed from the CPU's (0.13%, single
+pairs at the kernel's edge, as on lavapipe). The first search costs about
+9 ms (pipeline warm-up). kke_bench single thread: particle_fluid_2000
+1.79 ms, particle_fluid_8000 7.65 ms (median). Full suite: 1,253 passed,
+23 skipped, 0 failed.
 
 ### HW-019 · Showcase walk on min-spec, with sound (dev box)
 
