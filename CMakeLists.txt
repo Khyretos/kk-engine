@@ -1040,6 +1040,11 @@ add_subdirectory(games/sea_demo)
 if(KKE_ENABLE_JOLT)
     add_subdirectory(games/audio_demo)
 endif()
+# A tank of MLS-MPM water with floating crates (games/water_demo/README.md).
+# Jolt: the crates and the paddle.
+if(KKE_ENABLE_JOLT)
+    add_subdirectory(games/water_demo)
+endif()
 # Climb Race: a generated mountain face, climbed hold by hold, against a
 # rival (games/climb_race/README.md). Jolt: the rock and the climbers;
 # networking: it always adds kke::NetModule (online races).
