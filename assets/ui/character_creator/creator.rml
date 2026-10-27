@@ -76,9 +76,17 @@
             <div class="choices">
                 <span data-for="g : garments"><button data-if="g.slot == 'top'" data-class-on="g.worn" data-event-click="wear(g.id)">{{ g.label }}</button></span>
             </div>
+            <h2>Outerwear</h2>
+            <div class="choices">
+                <span data-for="g : garments"><button data-if="g.slot == 'outer'" data-class-on="g.worn" data-event-click="wear(g.id)">{{ g.label }}</button></span>
+            </div>
             <h2>Bottom</h2>
             <div class="choices">
                 <span data-for="g : garments"><button data-if="g.slot == 'bottom'" data-class-on="g.worn" data-event-click="wear(g.id)">{{ g.label }}</button></span>
+            </div>
+            <h2>Dress</h2>
+            <div class="choices">
+                <span data-for="g : garments"><button data-if="g.slot == 'dress'" data-class-on="g.worn" data-event-click="wear(g.id)">{{ g.label }}</button></span>
             </div>
             <h2>Socks</h2>
             <div class="choices">
@@ -88,17 +96,24 @@
             <div class="choices">
                 <span data-for="g : garments"><button data-if="g.slot == 'shoes'" data-class-on="g.worn" data-event-click="wear(g.id)">{{ g.label }}</button></span>
             </div>
+            <h2>Gloves</h2>
+            <div class="choices">
+                <span data-for="g : garments"><button data-if="g.slot == 'gloves'" data-class-on="g.worn" data-event-click="wear(g.id)">{{ g.label }}</button></span>
+            </div>
             <h2>{{ cloth_slot_label }}</h2>
             <div class="choices">
                 <button data-class-on="cloth_slot == 'top'" data-event-click="cloth_slot('top')">Top</button>
+                <button data-class-on="cloth_slot == 'outer'" data-event-click="cloth_slot('outer')">Outerwear</button>
                 <button data-class-on="cloth_slot == 'bottom'" data-event-click="cloth_slot('bottom')">Bottom</button>
+                <button data-class-on="cloth_slot == 'dress'" data-event-click="cloth_slot('dress')">Dress</button>
                 <button data-class-on="cloth_slot == 'socks'" data-event-click="cloth_slot('socks')">Socks</button>
                 <button data-class-on="cloth_slot == 'shoes'" data-event-click="cloth_slot('shoes')">Shoes</button>
+                <button data-class-on="cloth_slot == 'gloves'" data-event-click="cloth_slot('gloves')">Gloves</button>
             </div>
             <div class="swatches">
                 <span class="swatch" data-for="c, i : cloth_swatches" data-style-background-color="c.css" data-event-click="cloth_colour(i)"><span class="tip">{{ c.name }}</span></span>
             </div>
-            <p class="note">Every garment is cut from shapes the body itself carries, so it fits whatever the sliders do. Skirts are the engine's cloth: press Turn to see them swing. Click a worn garment again to take it off.</p>
+            <p class="note">Every garment is cut from shapes the body itself carries, so it fits whatever the sliders do. Skirts, dresses and coat tails are the engine's cloth in the garment's fabric (satin drapes, denim holds): press Turn to see them swing. A dress replaces the top and the bottom. Click a worn garment again to take it off.</p>
         </div>
     </div>
 

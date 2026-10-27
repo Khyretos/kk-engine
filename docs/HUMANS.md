@@ -230,16 +230,41 @@ few millimetres over the skin (`helper-tights`) and an ankle-length skirt
 (`helper-skirt`). So a garment is already the size of whatever body the
 sliders made, with no fitting step.
 
-- Fitted garments (T-shirt, tank top, crop top, long sleeve, shorts,
-  trousers, socks, shoes) are the suit's vertices picked by the bone that
-  moves each one and by height: tops end at the waist (the skirt's top),
-  tucked in 3 cm; bottoms start there; socks and shoes by height over the
-  sole. Each is drawn a little further out than the one under it (socks
-  1 mm, bottoms 2, tops 3, shoes 6), so layers never fight.
-- Skirts (tennis skirt, skirt, long skirt: the skirt's top 30%, 55% or
-  all of it) are the engine's cloth (docs/CLOTH.md), pinned at the
-  waistband to the figure and falling against the body collider the hair
-  uses, drawn with the fabric shader.
+The wardrobe is about a hundred garments (`garments()`), every one a
+few numbers in a table in `HumanClothes.cpp` rather than a mesh of its
+own: a cut (sleeve, neckline, hem, length), a layer offset, a fabric and
+a colour. Adding a garment is adding a line.
+
+- Fitted garments are the suit's vertices picked by the bone that moves
+  each one and by height. Tops: a sleeve (none, cap, short, three-quarter,
+  long), a neckline (crew, V, deep V, scoop, turtle, off-the-shoulder,
+  halter) and a hem in metres over the waist (the skirt's top), so a
+  T-shirt is tucked in 3 cm, a crop top ends 11 cm up, a tunic 25 cm down.
+  Outerwear (`outer` slot: jackets, blazer, cardigan, puffer...) is the
+  same cut further out. Bottoms (shorts, jeans, cargo, leggings...) start
+  at the waist and reach down the leg to a fraction of it; socks and shoes
+  (ankle socks to tights, sandals to thigh boots) reach up it. Gloves are
+  the body's own hand vertices (and the arm up to the cuff) moved out,
+  so they are the only pieces cut from the skin rather than the suit.
+  Each layer is drawn a little further out than the one under it (socks
+  1 mm, bottoms 2, tops 3, shoes 6, coats 9, a puffer 20), so layers
+  never fight.
+- Skirts (mini to maxi, hakama, tulle) are the engine's cloth
+  (docs/CLOTH.md), pinned at the waistband to the figure and falling
+  against the body collider the hair uses, drawn with the fabric shader
+  in the garment's fabric: satin drapes, denim and leather hold their
+  shape, a tulle skirt is net.
+- A dress (`dress` slot, which takes the top's and the bottom's place:
+  `garmentSlotsClash`) is two pieces: a bodice from the suit and a skirt of
+  cloth. A long coat, trench, duster, kimono or cape is a jacket and its
+  tails the same way. `garmentPieces(pack, shaped, id)` gives every piece;
+  `garmentShape` the first.
+- Every garment has a `fabric`: one of `clothFabric()`'s presets (cotton,
+  linen, denim, canvas, wool, fleece, satin, silk, leather, rubber, net).
+  Cloth pieces simulate with it; fitted pieces get its roughness and gloss
+  (`garmentMaterial`). The colour is the player's dye (`HumanLook::Worn`);
+  a garment is worn in its own colour (jeans blue, leather black) until it
+  is dyed.
 
 `garmentShape(pack, shaped, id)` gives a garment's vertices; the creator
 builds a model of the suit's triangles from them (moved with the body on
@@ -261,9 +286,10 @@ one skinned draw per garment; `CharacterCreatorModule::bakeSkinned()`
 returns it. Skirts come along as skinned meshes there; a game that wants
 them to swing runs them as cloth, as the creator does.
 
-These are plain garments in one colour each: MakeHuman's own `.mhclo`
-clothes (with textures) can't be downloaded from here, and are the next
-step for richer outfits.
+These are plain garments in one colour each, with the fabric's weave and
+sheen but no printed texture: MakeHuman's own `.mhclo` clothes (with
+textures) can't be downloaded from here, and are the next step for
+richer outfits.
 
 ## Anime style
 

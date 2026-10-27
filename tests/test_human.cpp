@@ -1,3 +1,4 @@
+#include "kke/Cloth.h"
 #include "kke/Human.h"
 #include "kke/HumanClothes.h"
 #include "kke/HumanEyes.h"
@@ -347,11 +348,46 @@ TEST(HumanClothes, EveryGarmentHasItsPart) {
     NEED_PACK();
     kke::Human h(pack());
     const std::vector<glm::vec3> shaped = h.shapedPositions();
+    EXPECT_GE(kke::garments().size(), 100u); // a wardrobe, not a sample
     for (const kke::GarmentInfo& g : kke::garments()) {
-        const kke::GarmentShape s = kke::garmentShape(pack(), shaped, g.id);
-        EXPECT_GT(s.verts.size(), 20u) << g.id;
-        EXPECT_EQ(s.cloth, !s.pinned.empty()) << g.id;
+        const std::vector<kke::GarmentShape> pieces = kke::garmentPieces(pack(), shaped, g.id);
+        ASSERT_FALSE(pieces.empty()) << g.id;
+        EXPECT_EQ(kke::garmentShape(pack(), shaped, g.id).verts, pieces[0].verts) << g.id;
+        for (const kke::GarmentShape& s : pieces) {
+            EXPECT_GT(s.verts.size(), 20u) << g.id;
+            EXPECT_EQ(s.cloth, !s.pinned.empty()) << g.id;
+            EXPECT_EQ(s.group == "body", g.slot == "gloves") << g.id; // gloves alone are cut from the skin
+        }
+        if (g.slot == "dress") { EXPECT_EQ(pieces.size(), 2u) << g.id; }
+        EXPECT_EQ(kke::clothFabric(g.fabric).name, g.fabric) << g.id; // a preset that exists
+        EXPECT_TRUE(std::find(kke::garmentSlots().begin(), kke::garmentSlots().end(), g.slot) != kke::garmentSlots().end()) << g.id;
     }
+    // A dress is a bodice and a skirt; a long coat a jacket and its tails.
+    EXPECT_EQ(kke::garmentPieces(pack(), shaped, "sundress").size(), 2u);
+    EXPECT_TRUE(kke::garmentPieces(pack(), shaped, "sundress")[1].cloth);
+    EXPECT_EQ(kke::garmentPieces(pack(), shaped, "long coat").size(), 2u);
+    EXPECT_EQ(kke::garmentPieces(pack(), shaped, "denim jacket").size(), 1u);
+    // Necklines and sleeves take cloth away from the same suit.
+    const auto count = [&](const char* id) { return kke::garmentShape(pack(), shaped, id).verts.size(); };
+    EXPECT_LT(count("v-neck tee"), count("t-shirt"));
+    EXPECT_LT(count("deep-v tee"), count("v-neck tee"));
+    EXPECT_GT(count("turtleneck"), count("long sleeve"));
+    EXPECT_LT(count("tank top"), count("t-shirt"));
+    EXPECT_LT(count("t-shirt"), count("three-quarter tee"));
+    EXPECT_LT(count("three-quarter tee"), count("long sleeve"));
+    EXPECT_LT(count("tube top"), count("tank top"));
+    EXPECT_LT(count("ankle socks"), count("socks"));
+    EXPECT_LT(count("socks"), count("knee socks"));
+    EXPECT_LT(count("gloves"), count("long gloves"));
+    EXPECT_LT(count("fingerless gloves"), count("gloves"));
+    EXPECT_GT(count("arm warmers"), 20u);
+    // Slots: one per slot, and a dress takes the top's and the bottom's place.
+    EXPECT_TRUE(kke::garmentSlotsClash("top", "top"));
+    EXPECT_TRUE(kke::garmentSlotsClash("dress", "top"));
+    EXPECT_TRUE(kke::garmentSlotsClash("bottom", "dress"));
+    EXPECT_FALSE(kke::garmentSlotsClash("dress", "outer"));
+    EXPECT_FALSE(kke::garmentSlotsClash("top", "outer"));
+    EXPECT_EQ(kke::findGarment("jeans")->fabric, "denim");
     const auto lowest = [&](const char* id) {
         float y = 1e9f;
         for (uint32_t v : kke::garmentShape(pack(), shaped, id).verts) y = std::min(y, shaped[v].y);
@@ -396,6 +432,18 @@ TEST(HumanClothes, DressedBakeIsOneSkinnedModel) {
     EXPECT_EQ(b.model.materials[b.model.meshes[bodyMeshes].material].baseColor, glm::vec3(1.0f, 0.0f, 0.0f));
     kke::dress(b.model, h, {}); // nothing worn: nothing added
     EXPECT_EQ(b.model.meshes.size(), bodyMeshes + clothes.size());
+    // A dress gives two meshes (bodice and skirt), gloves one from the
+    // skin's own hands; the material is the fabric's: satin shinier than wool.
+    const size_t before = b.model.meshes.size();
+    kke::dress(b.model, h, { { "slip dress", {} }, { "gloves", {} } });
+    ASSERT_EQ(b.model.meshes.size(), before + 3);
+    EXPECT_EQ(b.model.meshes[before].name, "slip dress");
+    EXPECT_EQ(b.model.meshes[before + 1].name, "slip dress");
+    EXPECT_EQ(b.model.meshes[before + 2].name, "gloves");
+    EXPECT_TRUE(b.model.meshes[before + 2].skinned);
+    EXPECT_LT(b.model.materials[b.model.meshes[before].material].roughness, 0.6f);
+    kke::dress(b.model, h, { { "sweater", {} } });
+    EXPECT_GT(b.model.materials.back().roughness, 0.8f);
 }
 
 // The helper eyes are white balls: addIrises gives each a pupil, an iris

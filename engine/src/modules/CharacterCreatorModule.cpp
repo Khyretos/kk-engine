@@ -280,10 +280,11 @@ struct CharacterCreatorModule::WornPiece {
     std::string id;
     glm::vec3 colour{ 0.9f };
     float offset = 0.0f;
+    bool fromBody = false; // cut from the skin itself (gloves), not the body suit
     // Fitted.
     ModelModule::ModelId model = 0;
     ModelModule::InstanceId instance = 0;
-    std::vector<uint32_t> from; // piece vertex -> body suit bake vertex
+    std::vector<uint32_t> from; // piece vertex -> body suit (or skin) bake vertex
     std::vector<uint32_t> under; // piece vertex -> the skin vertex it must stay over
     ModelData data;
     // Cloth.
@@ -958,16 +959,22 @@ void CharacterCreatorModule::randomise(bool everything) {
             m_look.hairTip = c.tip;
             m_look.hairLength = std::clamp(1.0f + n(m_rng) * 0.15f, 0.7f, 1.3f);
             m_hairDirty = true;
-            // An outfit: a top and a bottom nearly always, socks and shoes mostly.
+            // An outfit: a dress now and then, else a top and a bottom nearly
+            // always; socks and shoes mostly; a coat or gloves sometimes.
             m_look.clothes.clear();
             const auto& cloth = clothColours();
-            for (const char* slot : { "top", "bottom", "socks", "shoes" }) {
+            const bool dress = u(m_rng) < 0.25f;
+            for (const std::string& slot : garmentSlots()) {
+                if (dress ? (slot == "top" || slot == "bottom") : slot == "dress") continue;
                 std::vector<const GarmentInfo*> in;
                 for (const GarmentInfo& g : garments())
                     if (g.slot == slot) in.push_back(&g);
-                if (in.empty() || u(m_rng) > (std::string(slot) == "socks" ? 0.7f : 0.95f)) continue;
+                const float chance = slot == "socks" ? 0.7f : slot == "outer" ? 0.3f : slot == "gloves" ? 0.15f : 0.95f;
+                if (in.empty() || u(m_rng) > chance) continue;
                 const GarmentInfo* g = in[std::uniform_int_distribution<size_t>(0, in.size() - 1)(m_rng)];
-                m_look.clothes.push_back({ g->id, cloth[std::uniform_int_distribution<size_t>(0, cloth.size() - 1)(m_rng)].rgb });
+                // Half the time its own colour (jeans blue, leather black), else any dye.
+                const glm::vec3 colour = u(m_rng) < 0.5f ? g->colour : cloth[std::uniform_int_distribution<size_t>(0, cloth.size() - 1)(m_rng)].rgb;
+                m_look.clothes.push_back({ g->id, colour });
             }
             m_clothesDirty = true;
         }
@@ -1033,13 +1040,16 @@ void CharacterCreatorModule::update(const UpdateContext& ctx) {
         // Every guide asked for: a plaited style has only a row or braid each
         // (cornrows 6-14), so a fixed count failed whenever one came up.
         const bool hair = m_look.hair.empty() || (m_hair && m_hairRoots > 0 && m_world->hairStats(m_hair).guides >= m_hairRoots);
-        dressUp(); // and every random garment on the random body
-        bool dressed = m_worn.size() == m_look.clothes.size();
+        dressUp(); // and every random garment on the random body, every piece of it
+        size_t pieces = 0;
         std::string clothes;
-        for (const auto& w : m_worn) {
-            dressed = dressed && (w->cloth ? m_world->clothStats(w->cloth).triangles > 20 : w->instance != 0);
-            clothes += (clothes.empty() ? "" : ", ") + w->id;
+        for (const HumanLook::Worn& worn : m_look.clothes) {
+            pieces += garmentPieces(*m_pack, m_human->shapedPositions(), worn.id).size();
+            clothes += (clothes.empty() ? "" : ", ") + worn.id;
         }
+        bool dressed = m_worn.size() == pieces;
+        for (const auto& w : m_worn)
+            dressed = dressed && (w->cloth ? m_world->clothStats(w->cloth).triangles > 20 : w->instance != 0);
         log::get(name())->info("creator self-test {} (code {}, floor {}, hair '{}' {}, clothes '{}' {})",
                                same && floor && hair && dressed ? "passed" : "FAILED", same ? "round-trips" : "differs",
                                floor ? "ok" : "off", m_look.hair, hair ? "ok" : "missing", clothes, dressed ? "ok" : "missing");
@@ -1256,100 +1266,117 @@ void CharacterCreatorModule::dressUp() {
     undress();
     const std::vector<glm::vec3> shaped = m_human->shapedPositions();
     const ModelMesh* suit = m_tightsBake.model.meshes.empty() ? nullptr : &m_tightsBake.model.meshes[0];
+    const ModelMesh* skin = m_bodyBake.model.meshes.empty() ? nullptr : &m_bodyBake.model.meshes[0];
     for (const HumanLook::Worn& worn : m_look.clothes) {
-        const GarmentShape shape = garmentShape(*m_pack, shaped, worn.id);
-        if (shape.verts.empty()) {
+        const GarmentInfo* info = findGarment(worn.id);
+        const std::vector<GarmentShape> pieces = garmentPieces(*m_pack, shaped, worn.id);
+        if (!info || pieces.empty()) {
             log::get(name())->warn("clothes: no garment '{}' (kke::garments())", worn.id);
             continue;
         }
-        auto w = std::make_unique<WornPiece>();
-        w->id = worn.id;
-        w->colour = worn.colour;
-        w->offset = shape.offset;
-        const std::set<uint32_t> in(shape.verts.begin(), shape.verts.end());
+        for (const GarmentShape& shape : pieces) {
+            auto w = std::make_unique<WornPiece>();
+            w->id = worn.id;
+            w->colour = worn.colour;
+            w->offset = shape.offset;
+            w->fromBody = shape.group == "body";
+            const std::set<uint32_t> in(shape.verts.begin(), shape.verts.end());
 
-        if (shape.cloth) {
-            if (!m_world) continue;
-            // The skirt's faces whose four corners are in it, as triangles,
-            // where the figure stands now; the waistband pinned to the figure.
-            const int g = m_pack->findGroup(shape.group);
-            if (g < 0) continue;
-            std::map<uint32_t, uint32_t> index;
-            ClothDesc d;
-            auto vertex = [&](uint32_t v) {
-                auto [it, added] = index.emplace(v, static_cast<uint32_t>(d.mesh.positions.size()));
-                if (added) d.mesh.positions.push_back(glm::vec3(m_figure * glm::vec4(shaped[v], 1.0f)));
-                return it->second;
-            };
-            const HumanGroup& group = m_pack->groups()[static_cast<size_t>(g)];
-            for (uint32_t f = group.firstFace; f < group.firstFace + group.faceCount; ++f) {
-                const auto& q = m_pack->quads()[f].verts;
-                if (!in.count(q[0]) || !in.count(q[1]) || !in.count(q[2]) || !in.count(q[3])) continue;
-                const uint32_t a = vertex(q[0]), b = vertex(q[1]), c = vertex(q[2]), e = vertex(q[3]);
-                d.mesh.indices.insert(d.mesh.indices.end(), { a, b, c });
-                if (q[3] != q[2]) d.mesh.indices.insert(d.mesh.indices.end(), { a, c, e });
+            if (shape.cloth) {
+                if (!m_world) continue;
+                // The skirt's faces whose four corners are in it, as triangles,
+                // where the figure stands now; the waistband pinned to the figure.
+                const int g = m_pack->findGroup(shape.group);
+                if (g < 0) continue;
+                std::map<uint32_t, uint32_t> index;
+                ClothDesc d;
+                auto vertex = [&](uint32_t v) {
+                    auto [it, added] = index.emplace(v, static_cast<uint32_t>(d.mesh.positions.size()));
+                    if (added) d.mesh.positions.push_back(glm::vec3(m_figure * glm::vec4(shaped[v], 1.0f)));
+                    return it->second;
+                };
+                const HumanGroup& group = m_pack->groups()[static_cast<size_t>(g)];
+                for (uint32_t f = group.firstFace; f < group.firstFace + group.faceCount; ++f) {
+                    const auto& q = m_pack->quads()[f].verts;
+                    if (!in.count(q[0]) || !in.count(q[1]) || !in.count(q[2]) || !in.count(q[3])) continue;
+                    const uint32_t a = vertex(q[0]), b = vertex(q[1]), c = vertex(q[2]), e = vertex(q[3]);
+                    d.mesh.indices.insert(d.mesh.indices.end(), { a, b, c });
+                    if (q[3] != q[2]) d.mesh.indices.insert(d.mesh.indices.end(), { a, c, e });
+                }
+                for (uint32_t v : shape.pinned)
+                    if (auto it = index.find(v); it != index.end()) d.pinned.push_back(it->second);
+                if (d.mesh.indices.empty() || d.pinned.empty()) continue;
+                // Cloth coordinates for the weave: round the skirt and down it.
+                for (const glm::vec3& p : d.mesh.positions) {
+                    const glm::vec3 local = glm::vec3(glm::inverse(m_figure) * glm::vec4(p, 1.0f));
+                    d.mesh.uvs.emplace_back(std::atan2(local.x, local.z) * 0.15f, -local.y);
+                }
+                d.fabric = clothFabric(info->fabric); // satin drapes, denim and leather hold their shape
+                d.fabric.color = worn.colour;
+                d.fabric.thickness = std::max(0.004f, shape.offset); // over the hips without a gap; a coat's tails over the clothes under it
+                d.protection = ClothProtection::Basic; // one layer: the body is what it must not go through
+                d.bindPose = { m_figure };
+                d.wind = 0.0f;
+                w->fabric = d.fabric;
+                w->indices = d.mesh.indices;
+                w->cloth = m_world->addCloth(d);
+                m_world->setClothJoints(w->cloth, { m_figure });
+                w->drawn = std::make_unique<DynamicMeshRenderer>(*m_app);
+            } else if (w->fromBody ? skin != nullptr : suit != nullptr) {
+                // The body suit's (or, for gloves, the skin's) triangles that
+                // are all this piece.
+                const Human::Bake& source = w->fromBody ? m_bodyBake : m_tightsBake;
+                ModelMesh mesh = garmentMesh(source.model.meshes[0], source.sourceVertex[0], shape, &w->from);
+                mesh.name = worn.id;
+                if (mesh.indices.empty()) continue;
+                w->data.meshes.push_back(std::move(mesh));
+                ModelMaterial m = garmentMaterial(*info, worn.colour); // the fabric's roughness; the colour is the tint
+                m.name = worn.id;
+                m.baseColor = glm::vec3(1.0f);
+                w->data.materials.push_back(m);
+                // Bounds for culling: the whole body's, since the sliders move it.
+                w->data.boundsMin = m_bodyBake.model.boundsMin - glm::vec3(0.2f);
+                w->data.boundsMax = m_bodyBake.model.boundsMax + glm::vec3(0.2f);
+                m_worn.push_back(std::move(w));
+                WornPiece& piece = *m_worn.back();
+                moveClothes(); // onto the body, offset over the skin
+                piece.model = m_models->add(piece.data, "character_creator/garment/" + std::to_string(++m_garmentSerial), /*transient=*/true);
+                piece.instance = m_models->spawn(piece.model, m_figure);
+                m_models->setTint(piece.instance, piece.colour);
+                m_models->setVisible(piece.instance, m_open);
+                continue;
             }
-            for (uint32_t v : shape.pinned)
-                if (auto it = index.find(v); it != index.end()) d.pinned.push_back(it->second);
-            if (d.mesh.indices.empty() || d.pinned.empty()) continue;
-            // Cloth coordinates for the weave: round the skirt and down it.
-            for (const glm::vec3& p : d.mesh.positions) {
-                const glm::vec3 local = glm::vec3(glm::inverse(m_figure) * glm::vec4(p, 1.0f));
-                d.mesh.uvs.emplace_back(std::atan2(local.x, local.z) * 0.15f, -local.y);
-            }
-            d.fabric = clothFabric("cotton");
-            d.fabric.color = worn.colour;
-            d.fabric.thickness = 0.004f; // over the hips without a gap
-            d.protection = ClothProtection::Basic; // one layer: the body is what it must not go through
-            d.bindPose = { m_figure };
-            d.wind = 0.0f;
-            w->fabric = d.fabric;
-            w->indices = d.mesh.indices;
-            w->cloth = m_world->addCloth(d);
-            m_world->setClothJoints(w->cloth, { m_figure });
-            w->drawn = std::make_unique<DynamicMeshRenderer>(*m_app);
-        } else if (suit) {
-            // The body suit's triangles that are all this garment.
-            ModelMesh mesh = garmentMesh(*suit, m_tightsBake.sourceVertex[0], shape, &w->from);
-            mesh.name = worn.id;
-            if (mesh.indices.empty()) continue;
-            w->data.meshes.push_back(std::move(mesh));
-            ModelMaterial m;
-            m.name = worn.id;
-            m.roughness = worn.id == "shoes" ? 0.5f : 0.85f;
-            w->data.materials.push_back(m);
-            // Bounds for culling: the whole body's, since the sliders move it.
-            w->data.boundsMin = m_bodyBake.model.boundsMin - glm::vec3(0.2f);
-            w->data.boundsMax = m_bodyBake.model.boundsMax + glm::vec3(0.2f);
             m_worn.push_back(std::move(w));
-            WornPiece& piece = *m_worn.back();
-            moveClothes(); // onto the body, offset over the skin
-            piece.model = m_models->add(piece.data, "character_creator/garment/" + std::to_string(++m_garmentSerial), /*transient=*/true);
-            piece.instance = m_models->spawn(piece.model, m_figure);
-            m_models->setTint(piece.instance, piece.colour);
-            m_models->setVisible(piece.instance, m_open);
-            continue;
-        }
-        m_worn.push_back(std::move(w));
+        } // each piece
     }
     moveClothes();
     applyStyle();
+    size_t cloth = 0;
+    std::string worn;
+    for (const auto& w : m_worn) {
+        cloth += w->cloth ? 1 : 0;
+        if (worn.find(w->id) == std::string::npos) worn += (worn.empty() ? "" : ", ") + w->id;
+    }
+    log::get(name())->info("clothes: {} piece(s), {} as cloth: {}", m_worn.size(), cloth, worn.empty() ? "nothing" : worn);
 }
 
 void CharacterCreatorModule::moveClothes() {
     if (m_tightsBake.model.meshes.empty()) return;
     const ModelMesh& suit = m_tightsBake.model.meshes[0];
+    const ModelMesh& skin = m_bodyBake.model.meshes[0];
     for (auto& w : m_worn) {
         if (w->data.meshes.empty()) continue;
         ModelMesh& mesh = w->data.meshes[0];
+        const ModelMesh& source = w->fromBody ? skin : suit;
         for (size_t i = 0; i < w->from.size(); ++i) {
-            const ModelVertex& v = suit.vertices[w->from[i]];
+            const ModelVertex& v = source.vertices[w->from[i]];
             mesh.vertices[i].position = v.position + v.normal * w->offset;
             mesh.vertices[i].normal = v.normal;
         }
-        const ModelMesh& skin = m_bodyBake.model.meshes[0];
-        if (w->under.empty()) w->under = skinUnder(mesh, skin);
-        keepOutside(mesh, skin, w->under, w->offset);
+        if (!w->fromBody) { // gloves are the skin itself, moved out: nothing to stay over
+            if (w->under.empty()) w->under = skinUnder(mesh, skin);
+            keepOutside(mesh, skin, w->under, w->offset);
+        }
         if (!w->instance) continue;
         std::vector<std::vector<glm::vec3>> pos(1), nrm(1);
         for (const ModelVertex& v : mesh.vertices) {
@@ -1365,15 +1392,14 @@ void CharacterCreatorModule::wear(const std::string& id) {
     if (!g) return;
     auto& clothes = m_look.clothes;
     const bool wasOn = std::any_of(clothes.begin(), clothes.end(), [&](const HumanLook::Worn& w) { return w.id == id; });
-    glm::vec3 colour = g->slot == "top"    ? glm::vec3(0.35f, 0.65f, 1.0f)  // Sky
-                       : g->slot == "bottom" ? glm::vec3(0.16f, 0.18f, 0.24f) // Night
-                                             : glm::vec3(0.92f, 0.92f, 0.9f); // Snow
-    for (const HumanLook::Worn& w : clothes) // a new skirt keeps the old shorts' colour
+    glm::vec3 colour = g->colour; // its own (jeans blue, leather black)...
+    for (const HumanLook::Worn& w : clothes) // ...unless a new skirt keeps the old shorts' colour
         if (const GarmentInfo* o = findGarment(w.id); o && o->slot == g->slot) colour = w.colour;
+    // Off with what it replaces: the slot's garment, and under a dress the top and the bottom.
     clothes.erase(std::remove_if(clothes.begin(), clothes.end(),
                                  [&](const HumanLook::Worn& w) {
                                      const GarmentInfo* o = findGarment(w.id);
-                                     return !o || o->slot == g->slot;
+                                     return !o || garmentSlotsClash(o->slot, g->slot);
                                  }),
                   clothes.end());
     if (!wasOn) clothes.push_back({ id, colour });

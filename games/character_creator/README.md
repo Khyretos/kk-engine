@@ -72,7 +72,9 @@ reads one.
   thousand drawn hairs built on the GPU.
 - **Clothes** are cut from shapes MakeHuman's body carries, a body suit
   and a long skirt (docs/HUMANS.md "Clothes"), so they fit every body the
-  sliders make. Fitted garments are models that move with the body's
+  sliders make: about a hundred garments in seven slots (top, outerwear,
+  bottom, dress, socks, shoes, gloves), each in a fabric the cloth
+  simulation and the shading know (denim, satin, wool, leather...). Fitted garments are models that move with the body's
   vertices; skirts are the engine's cloth pinned at the waist. Over the
   network a garment is its name and colour. `bakeSkinned()` hands the
   game the person dressed, every garment skinned to the body's bones.
