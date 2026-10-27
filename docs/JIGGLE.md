@@ -119,8 +119,9 @@ the tool (see the physics demo's rubber ball); for a jelly that wobbles,
   inside, light shining through from behind and a glossy highlight. No
   sorting or extra render targets; draw it after the opaque scene.
 - **Body**: a full-figured woman (our Vitruvian body,
-  `assets/bodies/vitruvian_voluptuous.glb`, CC0, with no skeleton, rigged
-  at load by `kke::autoRigHumanoid`, [AUTO_RIG.md](AUTO_RIG.md)) with
+  `assets/bodies/vitruvian_voluptuous.glb`, CC0, with Vitruvian's own
+  Mixamo skeleton and skin weights; a body with none is rigged at load by
+  `kke::autoRigHumanoid`, [AUTO_RIG.md](AUTO_RIG.md)) with
   soft-tissue bones from `addHumanoidSoftTissue` and strand hair
   ([HAIR.md](HAIR.md)); `KKE_JIGGLE_CHARACTER` picks a Synty character
   reshaped with `addHumanoidSoftTissue` instead. She runs

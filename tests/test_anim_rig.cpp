@@ -325,6 +325,16 @@ TEST(AnimRig, CanonicalNamesPairUalWithSynty) {
     EXPECT_EQ(kke::canonicalBoneName("indexFinger_02_r"), kke::canonicalBoneName("index_02_r"));
     EXPECT_EQ(kke::canonicalBoneName("finger_01_l"), kke::canonicalBoneName("middle_01_l"));
     EXPECT_EQ(kke::canonicalBoneName("mixamorig:Hips"), "pelvis");
+    // Mixamo's own names, as Vitruvian's rig has them: UAL's words for the same bones.
+    for (const auto& [mixamo, ual] : std::vector<std::pair<const char*, const char*>>{
+             { "mixamorig:Spine", "spine_01" },           { "mixamorig:Spine1", "spine_02" },         { "mixamorig:Spine2", "spine_03" },
+             { "mixamorig:Neck", "neck_01" },             { "mixamorig:Head", "head" },               { "mixamorig:LeftShoulder", "clavicle_l" },
+             { "mixamorig:LeftArm", "upperarm_l" },       { "mixamorig:RightForeArm", "lowerarm_r" }, { "mixamorig:LeftHand", "hand_l" },
+             { "mixamorig:RightHandIndex2", "index_02_r" }, { "mixamorig:LeftHandThumb1", "thumb_01_l" }, { "mixamorig:LeftHandPinky3", "pinky_03_l" },
+             { "mixamorig:LeftUpLeg", "thigh_l" },        { "mixamorig:RightLeg", "calf_r" },         { "mixamorig:LeftFoot", "foot_l" },
+             { "mixamorig:RightToeBase", "ball_r" } })
+        EXPECT_EQ(kke::canonicalBoneName(mixamo), ual) << mixamo;
+    EXPECT_EQ(kke::canonicalBoneName("Spine"), "spine"); // only a Mixamo rig takes the table
     EXPECT_EQ(kke::canonicalBoneName("ball_leaf_l"), kke::canonicalBoneName("ball_l"));
     // Synty's older rig (Goblin War Camp): Shoulder is the upper arm, Elbow
     // the forearm, UpperLeg / LowerLeg / Ankle the leg, one Neck.

@@ -218,8 +218,10 @@ glute bones, belly and thigh skin zones).
 - Body: `assets/bodies/vitruvian_voluptuous.glb`, in the repository (CC0:
   CharMorph's Vitruvian body shaped to a full figure by
   `tools/vitruvian/build_body.py`, licence note in `assets/bodies/`), a
-  mesh with one skin texture and no skeleton, auto-rigged at load
-  (`kke::autoRigHumanoid`, no reshaping). `KKE_JIGGLE_BODY` picks another file.
+  mesh with one skin texture and Vitruvian's own skeleton and skin weights
+  (Mixamo's 52 bones; the clips reach it by bone name), no reshaping.
+  `KKE_JIGGLE_BODY` picks another file (one with no skeleton is auto-rigged
+  at load, `kke::autoRigHumanoid`).
 - Or a Synty character (reshaped: bust +7.5 cm, glutes +6 cm, hips +3 cm), only
   when `KKE_JIGGLE_CHARACTER` names one (`SK_Character_Female_Gypsy`,
   `SK_Character_Female_Peasant_01`, `SK_Character_HipsterGirl`...) and the

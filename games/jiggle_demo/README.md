@@ -9,8 +9,11 @@ when what they are attached to moves.
   is and change its flavour and look.
 - **Body.** A full-figured woman (our own Vitruvian body,
   `assets/bodies/vitruvian_voluptuous.glb`, CC0) runs a circle on animation clips: stand, jog,
-  jump, sprint, stop dead, jump, walk. Her file has no skeleton, so the
-  engine rigs her when the demo starts (`kke::autoRigHumanoid`,
+  jump, sprint, stop dead, jump, walk. Her file carries Vitruvian's own
+  skeleton and skin weights (Mixamo's 52 bones, made by the artists), so
+  she bends the way they meant and the clips reach her by bone name. A body
+  file with no skeleton (`KKE_JIGGLE_BODY=some.obj`) is rigged when the demo
+  starts instead (`kke::autoRigHumanoid`,
   [docs/AUTO_RIG.md](../../docs/AUTO_RIG.md)). Her breasts, glutes, belly
   and thighs jiggle, she wears our strand hair (box braids to start; the
   panel picks any style and colour), and a twin with the same body and
@@ -259,7 +262,8 @@ This runs once, at start:
 3. Load her. See-through shells (eye occlusion, tear lines, eyelashes, as
    Character Creator exports them) are dropped: drawn opaque they would
    cover her eyes. An OBJ has no units; one in centimetres (over 10 m
-   tall) is scaled by 0.01. With no skeleton in the file,
+   tall) is scaled by 0.01. Our own body already has its skeleton and skin
+   weights: nothing to fit. With no skeleton in the file,
    `kke::autoRigHumanoid(body, ual)` fits UAL's skeleton to her, weights
    her skin and lifts her arms from the A-pose into UAL's T-pose (about
    25 ms; logged with the arm angle). If rigging fails she stands still

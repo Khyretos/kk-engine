@@ -91,8 +91,9 @@ void flatShape(kke::DynamicMeshRenderer& r, float y, float radius, int sides, co
 
 // The body: our own Vitruvian woman, assets/bodies/vitruvian_voluptuous.glb
 // (CC0, built by tools/vitruvian/build_body.py), a full figure so the
-// soft-tissue motion is easy to see. She has no skeleton: the engine rigs her
-// at load. KKE_JIGGLE_BODY=<file> picks another body file (rigged or not).
+// soft-tissue motion is easy to see. She brings Vitruvian's own skeleton and
+// skin weights; a body file without them (KKE_JIGGLE_BODY=<file>) is rigged
+// at load.
 std::string findBodyFile(const char* executableDir) {
     if (const char* e = std::getenv("KKE_JIGGLE_BODY"); e && *e) return e;
     const std::string dir = kke::findAssetFolder("assets/bodies", { "KKE_BODIES_DIR" }, executableDir ? executableDir : "");
@@ -477,7 +478,10 @@ void JiggleDemoModule::setupBodies() {
         log->warn("{}: {}", realistic, e.what());
         body = kke::ModelData{};
     }
-    bool realisticBody = false;
+    // Our own body (or one picked with KKE_JIGGLE_BODY): its shape is in the mesh, so no
+    // reshaping below. A body with its own skeleton and skin weights (our Vitruvian file has
+    // the artist's) keeps them; one without gets UAL's skeleton fitted.
+    const bool realisticBody = !body.meshes.empty();
     if (!body.meshes.empty() && !body.isSkinned()) {
         // No skeleton in the file (the OBJ): fit UAL's skeleton to her and
         // weight the skin to it (kke::autoRigHumanoid, docs/AUTO_RIG.md).
@@ -496,7 +500,6 @@ void JiggleDemoModule::setupBodies() {
         }
         log->info("'{}': auto-rigged in {:.0f} ms: {} skin points, scale {:.2f}, arms lifted {:.0f} / {:.0f} deg into the T-pose", m_characterName, ms,
                   rig.points, static_cast<double>(rig.scale), static_cast<double>(rig.armDropDegrees[0]), static_cast<double>(rig.armDropDegrees[1]));
-        realisticBody = true;
     }
     if (body.meshes.empty()) {
         const kke::AssetCatalog catalog = packDir.empty() ? kke::AssetCatalog{} : kke::AssetCatalog::scan(packDir);

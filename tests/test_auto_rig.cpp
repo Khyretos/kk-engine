@@ -172,9 +172,10 @@ TEST(AutoRig, SaysWhyItCannotRig) {
 }
 
 // The jiggle demo's own body (assets/bodies/vitruvian_voluptuous.glb, CC0,
-// tools/vitruvian/build_body.py): a human-sized mesh with one skin
-// material, no skeleton, that the engine rigs on UAL's clips.
-TEST(AutoRig, TheShippedBodyRigsOnTheAnimationLibrary) {
+// tools/vitruvian/build_body.py): human-sized, one skin material, and the
+// skeleton and skin weights Vitruvian's artists made (Mixamo's 52 bones), so it
+// bends like the artist meant and takes UAL's clips by bone name.
+TEST(VitruvianBody, ShippedBodyIsRiggedAndTakesTheAnimationLibrary) {
     namespace fs = std::filesystem;
     const fs::path bodyFile = fs::path(KKE_SOURCE_DIR) / "assets/bodies/vitruvian_voluptuous.glb";
     const fs::path ualFile = fs::path(KKE_SOURCE_DIR) / "assets/animations/UAL1_Standard.fbx";
@@ -182,24 +183,31 @@ TEST(AutoRig, TheShippedBodyRigsOnTheAnimationLibrary) {
     ASSERT_TRUE(fs::exists(ualFile)) << ualFile;
     ModelData body = kke::loadModel(bodyFile.string());
     ModelData ual = kke::loadModel(ualFile.string());
-    EXPECT_FALSE(body.isSkinned());
-    size_t vertices = 0;
+    ASSERT_TRUE(body.isSkinned());
+    EXPECT_GE(body.bones.size(), 52u);
+    size_t vertices = 0, loose = 0;
     bool skin = false;
     for (const kke::ModelMesh& m : body.meshes) {
         vertices += m.vertices.size();
         if (m.material < body.materials.size() && body.materials[m.material].name == "Skin") skin = true; // the demo's head search needs it
+        for (const kke::ModelVertex& v : m.vertices)
+            if (std::abs(v.weights.x + v.weights.y + v.weights.z + v.weights.w - 1.0f) > 0.02f) ++loose;
     }
     EXPECT_TRUE(skin);
     EXPECT_GT(vertices, 30000u);
+    EXPECT_EQ(loose, 0u) << "every vertex has skin weights adding up to 1";
     const float height = body.boundsMax.y - body.boundsMin.y;
     EXPECT_GT(height, 1.6f);
     EXPECT_LT(height, 1.9f);
 
-    const kke::AutoRigReport r = kke::autoRigHumanoid(body, ual);
-    ASSERT_TRUE(r.ok) << r.reason;
-    EXPECT_TRUE(body.isSkinned());
+    // Mixamo's names reach UAL's: nearly every bone takes the clips.
     const kke::BoneMatch match = kke::matchBones(ual, body);
-    EXPECT_GT(match.matched, 55); // the clips reach (almost) every bone
+    EXPECT_GE(match.matched, 50);
+    for (const char* name : { "pelvis", "spine_03", "upperarm_l", "lowerarm_r", "thigh_l", "calf_r", "foot_l", "ball_r", "hand_l", "index_02_l" }) {
+        bool found = false;
+        for (const kke::ModelBone& b : body.bones) found = found || kke::canonicalBoneName(b.name) == name;
+        EXPECT_TRUE(found) << name;
+    }
     // The soft-tissue bones the demo adds: breasts and glutes, found on her.
     kke::HumanoidSoftTissue tissue;
     tissue.bust = tissue.glutes = tissue.hips = 0.0f; // her shape is in the mesh

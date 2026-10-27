@@ -12,6 +12,7 @@ config.yaml.
 Authors: Sean Buckley, Olaf Delgado-Friedrichs (+ SirMaxim, Upliner, AgentA1CR,
 Benjamin McDonnell, Mindfront). Based on a modified Antonia Polygon, relicensed
 with its author's permission (the repository's README).
-The .glb itself: built by tools/vitruvian/build_body.py, no skeleton (the engine
-rigs it at load: kke::autoRigHumanoid).
+The .glb itself: built by tools/vitruvian/build_body.py. It carries Vitruvian's own
+Mixamo skeleton (52 bones, placed on this body's shape) and skin weights
+(weights/mixamo.npz), the bandeau and shorts as cloth shells cut from its skin.
 Credit is welcome, not required.

@@ -70,6 +70,135 @@ for m, w in weights.items():
     pos += w * morph(m)
 print("WEIGHTS", weights, flush=True)
 
+# ---- Vitruvian's own skeleton and skin weights (Mixamo rig, weights/mixamo.npz, joints/Mixamo.npz) ------------
+def packed(path):
+    d = np.load(path)
+    names = [n for n in bytes(d["names"]).decode().split("\x00") if n]
+    off = np.concatenate([[0], np.cumsum(d["cnt"].astype(int))])
+    return {n: (d["idx"][off[i]:off[i + 1]].astype(int), d["weights"][off[i]:off[i + 1]].astype("f8")) for i, n in enumerate(names)}
+
+
+skin_w = packed(ROOT + "weights/Mixamo.npz" if os.path.exists(ROOT + "weights/Mixamo.npz") else ROOT + "weights/mixamo.npz")
+joint_w = packed(ROOT + "joints/Mixamo.npz")
+PREFIX = "mixamorig:"
+PARENT = {"Spine": "Hips", "Spine1": "Spine", "Spine2": "Spine1", "Neck": "Spine2", "Head": "Neck"}
+for side in ("Left", "Right"):
+    PARENT.update({side + "Shoulder": "Spine2", side + "Arm": side + "Shoulder", side + "ForeArm": side + "Arm", side + "Hand": side + "ForeArm",
+                   side + "UpLeg": "Hips", side + "Leg": side + "UpLeg", side + "Foot": side + "Leg", side + "ToeBase": side + "Foot"})
+    for f in ("Thumb", "Index", "Middle", "Ring", "Pinky"):
+        PARENT[side + "Hand" + f + "1"] = side + "Hand"
+        PARENT[side + "Hand" + f + "2"] = side + "Hand" + f + "1"
+        PARENT[side + "Hand" + f + "3"] = side + "Hand" + f + "2"
+
+
+def joint(name):
+    if name not in joint_w:
+        return None
+    i, w = joint_w[name]
+    return (pos[i] * w[:, None]).sum(0) / w.sum()
+
+
+BONES = {}  # short name -> (head, tail)
+for full in skin_w:
+    short = full[len(PREFIX):]
+    head, tail = joint("joint_%s_head" % full), joint("joint_%s_tail" % full)
+    if head is None:
+        head = BONES[PARENT[short]][1]
+    if tail is None:
+        print("NOTAIL", short, flush=True)
+        up = BONES[PARENT[short]]
+        tail = head + (up[1] - up[0]) * 0.4
+    BONES[short] = (head, tail)
+# every weighted vertex's strongest bone, to cut the swimwear by anatomy
+strongest = np.full(len(pos), "", dtype=object)
+best = np.zeros(len(pos))
+for full, (i, w) in skin_w.items():
+    m = w > best[i]
+    strongest[i[m]] = full[len(PREFIX):]
+    best[i[m]] = w[m]
+print("BONES", len(BONES), "weighted vertices", int((best > 0).sum()), "of", len(pos), flush=True)
+
+# ---- the bandeau and the shorts: cloth shells 4 mm over the skin ----------------------------------------------------
+# Cut by geometry, not by whole faces (the mesh rows are not level, whole faces make a sawtooth hem): every
+# triangle is clipped against level planes (the hems) and against the 0.5 line of a smooth weight field (the
+# armpits for the bandeau, the waist and the legs for the shorts). New vertices get interpolated positions
+# and skin weights.
+BAND_Z = tuple(float(x) for x in os.environ.get("VOL_BAND", "1.17,1.38").split(","))
+SHORTS_Z = tuple(float(x) for x in os.environ.get("VOL_SHORTS", "0.76,0.99").split(","))
+CLOTH = float(os.environ.get("VOL_CLOTH", "0.004"))
+bone_names = list(skin_w)
+col = {n[len(PREFIX):]: k for k, n in enumerate(bone_names)}
+W = np.zeros((len(pos), len(bone_names)), "f4")
+for k, n in enumerate(bone_names):
+    i, w = skin_w[n]
+    W[i, k] = w
+torso_w = W[:, [col[n] for n in ("Spine", "Spine1", "Spine2")]].sum(1)
+pelvis_w = W[:, [col[n] for n in ("Hips", "LeftUpLeg", "RightUpLeg")]].sum(1)
+mats = [4 if m == 5 else m for m in mats]  # the file's mask is plain skin now
+vnorm = np.zeros_like(pos)
+for f in faces:
+    n = np.cross(pos[f[1]] - pos[f[0]], pos[f[2]] - pos[f[0]])
+    for v in f:
+        vnorm[v] += n
+vnorm /= np.maximum(np.linalg.norm(vnorm, axis=1), 1e-9)[:, None]
+
+
+def clip(poly, k):
+    """Sutherland-Hodgman against field k >= 0; a vertex is (position, normal, weights, fields)."""
+    out = []
+    for a, b in zip(poly, poly[1:] + poly[:1]):
+        fa, fb = a[3][k], b[3][k]
+        if fa >= 0:
+            out.append(a)
+        if (fa >= 0) != (fb >= 0):
+            t = fa / (fa - fb)
+            out.append(tuple(x + (y - x) * t for x, y in zip(a, b)))
+    return out
+
+
+shell_pos, shell_nrm, shell_w, shell_tri, shell_key = [], [], [], [], {}
+
+
+def shell_vertex(v):
+    key = tuple(np.round(v[0] * 1e6).astype(np.int64))
+    if key not in shell_key:
+        shell_key[key] = len(shell_pos)
+        shell_pos.append(v[0])
+        shell_nrm.append(v[1] / max(np.linalg.norm(v[1]), 1e-9))
+        shell_w.append(v[2])
+    return shell_key[key]
+
+
+for zr, field in ((BAND_Z, torso_w), (SHORTS_Z, pelvis_w)):
+    fields = np.stack([pos[:, 2] - zr[0], zr[1] - pos[:, 2], field - 0.5], axis=1)
+    for fi, f in enumerate(faces):
+        if mats[fi] != 4 or fields[f][:, :2].min() < -0.05 and False:
+            continue
+        if (fields[f][:, 0] < 0).all() or (fields[f][:, 1] < 0).all() or (fields[f][:, 2] < 0).all():
+            continue  # wholly outside one hem or the weight line
+        for tri in (f[:3], [f[0], f[2], f[3]] if len(f) == 4 else None):
+            if tri is None:
+                continue
+            poly = [(pos[v].copy(), vnorm[v].copy(), W[v].copy(), fields[v].copy()) for v in tri]
+            for k in range(3):
+                poly = clip(poly, k)
+                if len(poly) < 3:
+                    break
+            if len(poly) < 3:
+                continue
+            idx = [shell_vertex(v) for v in poly]
+            for j in range(1, len(idx) - 1):
+                if len({idx[0], idx[j], idx[j + 1]}) == 3:
+                    shell_tri.append([idx[0], idx[j], idx[j + 1]])
+base_count = len(pos)
+pos = np.vstack([pos, np.array(shell_pos) + np.array(shell_nrm) * CLOTH])
+shell_w = np.array(shell_w)
+for t in shell_tri:
+    faces.append([base_count + i for i in t])
+    mats.append(5)
+    loop_uv.append([(0.0, 0.0)] * 3)
+print("SWIMWEAR", len(shell_tri), "triangles,", len(shell_pos), "new vertices", flush=True)
+
 # ---- a clean scene -------------------------------------------------------------------------------------------
 bpy.ops.wm.read_factory_settings(use_empty=True)
 scene = bpy.context.scene
@@ -149,6 +278,35 @@ layer.data.foreach_set("uv", np.array(uv, "f4").ravel())
 mesh.update()
 obj = bpy.data.objects.new("body", mesh)
 scene.collection.objects.link(obj)
+# ---- armature + vertex groups -------------------------------------------------------------------------------------
+rig_data = bpy.data.armatures.new("rig")
+rig = bpy.data.objects.new("rig", rig_data)
+scene.collection.objects.link(rig)
+bpy.context.view_layer.objects.active = rig
+bpy.ops.object.mode_set(mode="EDIT")
+edit = {}
+for short, (head, tail) in BONES.items():
+    b = rig_data.edit_bones.new(PREFIX + short)
+    b.head = tuple(head)
+    b.tail = tuple(tail) if np.linalg.norm(tail - head) > 1e-4 else tuple(head + np.array([0, 0, 0.01]))
+    edit[short] = b
+for short, b in edit.items():
+    if short in PARENT:
+        b.parent = edit[PARENT[short]]
+bpy.ops.object.mode_set(mode="OBJECT")
+obj.parent = rig
+mod = obj.modifiers.new("Armature", "ARMATURE")
+mod.object = rig
+for k, full in enumerate(bone_names):
+    vg = obj.vertex_groups.new(name=full)
+    idx, w = skin_w[full]
+    for v, wt in zip(idx.tolist(), w.tolist()):
+        vg.add([v], wt, "REPLACE")
+    for i in np.nonzero(shell_w[:, k] > 0)[0].tolist():
+        row = shell_w[i]
+        top = np.argsort(row)[-4:]  # the strongest four, normalised
+        if k in top:
+            vg.add([base_count + i], float(row[k] / row[top].sum()), "REPLACE")
 print("BUILT", len(mesh.vertices), "verts", len(mesh.polygons), "faces, height %.3f" % (pos[:, 2].max() - pos[:, 2].min()), flush=True)
 
 # ---- previews -------------------------------------------------------------------------------------------------
@@ -194,6 +352,7 @@ if do_shots:
 if do_export:
     bpy.ops.object.select_all(action="DESELECT")
     obj.select_set(True)
+    rig.select_set(True)
     path = OUT + "vitruvian_%s.glb" % preset
     bpy.ops.export_scene.gltf(filepath=path, export_format="GLB", use_selection=True, export_image_format="JPEG",
                               export_jpeg_quality=90, export_yup=True, export_apply=False)
