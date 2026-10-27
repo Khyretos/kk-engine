@@ -94,6 +94,7 @@ public:
     // Changing the tank or the cell size needs a new MpmWater; these can change any time.
     void setSoundSpeed(float c) { m_params.soundSpeed = c; }
     void setViscosity(float nu) { m_params.viscosity = nu; }
+    void setTension(float t) { m_params.tension = t; }
     void setGravity(const glm::vec3& g) { m_params.gravity = g; }
 
     // One particle (clamped into the tank).
