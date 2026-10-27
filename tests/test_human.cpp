@@ -12,6 +12,7 @@
 #include <chrono>
 #include <cmath>
 #include <filesystem>
+#include <set>
 #include <stdexcept>
 
 // MakeHuman's CC0 human (assets/humans/makehuman.kkhpack, cooked by
