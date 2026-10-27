@@ -76,6 +76,7 @@ add_executable(kke_tests
     test_physics_world.cpp
     test_buoyancy.cpp
     test_camera_rig.cpp
+    test_camera_director.cpp
     test_scene_file.cpp
     test_net.cpp
     test_input_replay.cpp

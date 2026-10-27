@@ -1,6 +1,6 @@
 -- explosion.lua: press B to blow up the heap. Every body nearby is
 -- pushed away from the centre, harder the closer it is; there's a sound,
--- and the camera shakes where the game has one that can.
+-- and the camera shakes.
 -- (docs/cookbook/gameplay.md)
 
 input.define("boom", "Explosion", "B")
@@ -35,7 +35,7 @@ local function explode(centre)
     end
   end
   if audio then audio.impact(centre, "Stone", 1.0) end
-  if view then view.shake(0.8) end   -- only in games with a view table (the cookbook game)
+  camera.shake(0.8, 0.6)   -- strength 0..1, seconds
 end
 
 local HEAP = Vec(0, 0, 2)

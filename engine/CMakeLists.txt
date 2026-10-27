@@ -74,6 +74,7 @@ set(ENGINE_SOURCES
     src/PhysicsWorld.cpp
     src/Buoyancy.cpp
     src/CameraRig.cpp
+    src/CameraDirector.cpp
     src/SceneFile.cpp
     src/ai/Steering.cpp
     src/ai/Perception.cpp
@@ -493,7 +494,7 @@ else()
 endif()
 
 if(ENGINE_ENABLE_LUA)
-    target_sources(kke_engine PRIVATE src/ScriptVM.cpp src/ScriptCalls.cpp src/ScriptTables.cpp src/ScriptStore.cpp src/modules/ScriptModule.cpp src/modules/ScriptBindings.cpp src/modules/ScriptReplication.cpp)
+    target_sources(kke_engine PRIVATE src/ScriptVM.cpp src/ScriptCalls.cpp src/ScriptTables.cpp src/ScriptStore.cpp src/modules/ScriptModule.cpp src/modules/ScriptBindings.cpp src/modules/ScriptCamera.cpp src/modules/ScriptReplication.cpp)
     if(KKE_ENABLE_NET)
         target_sources(kke_engine PRIVATE src/server/ServerScripts.cpp)
     endif()

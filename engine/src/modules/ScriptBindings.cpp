@@ -1510,6 +1510,10 @@ void ScriptModule::releaseScript(const std::string& source) {
         m_navObstacles.clear();
         m_navSource.clear();
     }
+    if (source == m_directorOwner) { // its cutscene ends: back to gameplay, quickly
+        m_director.release(0.3f);
+        m_directorOwner.clear();
+    }
     // Its effects stop emitting; what is already in the air finishes.
     for (ScriptFx::EmitterId id : m_fx.releaseAll(source))
         if (m_fxLibrary) m_fxLibrary->stop(id);

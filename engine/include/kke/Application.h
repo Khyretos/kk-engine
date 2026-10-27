@@ -273,6 +273,14 @@ public:
     // The same on Vulkan, for buffers the Vulkan-only passes also use.
     rhi::VulkanGpuDevice& vulkanGpu() { return *m_gpu; }
     Camera& camera() { return m_camera; }
+    // A late camera pass (cutscenes, kke/CameraDirector.h): runs after
+    // every module's update with the camera gameplay made this frame and
+    // the frame's dt; returns true when it changed it. The change lasts
+    // one frame: camera() is gameplay's again before the next updates,
+    // so the player's camera code never sees the cutscene's. One at a
+    // time; an empty function removes it.
+    using CameraDirectorFn = std::function<bool(Camera&, float)>;
+    void setCameraDirector(CameraDirectorFn fn) { m_cameraDirector = std::move(fn); }
     // Split screen / picture-in-picture (ACTION_PLAN.md 1.3): each view
     // is a camera drawn into its part of the window (kke/Viewports.h for
     // the usual layouts), in order, so a picture-in-picture goes last.
@@ -544,6 +552,9 @@ private:
     std::unique_ptr<Renderer> m_renderer; // created after window, needs it for the surface
     std::unique_ptr<DebugUi> m_debugUi;
     Camera m_camera;
+    CameraDirectorFn m_cameraDirector;
+    Camera m_gameplayCamera; // m_camera before the director changed it
+    bool m_cameraDirected = false;
     Lighting m_lighting;
     std::optional<ToneMapper> m_toneMapperOverride; // KKE_TONEMAP
     std::unique_ptr<LightingBuffer> m_lightingBuffer;
