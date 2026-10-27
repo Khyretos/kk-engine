@@ -1,11 +1,14 @@
 #include "kke/AutoRig.h"
 
 #include "kke/AnimRig.h"
+#include "kke/JigglePhysics.h"
+#include "kke/ModelAsset.h"
 
 #include <gtest/gtest.h>
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <cmath>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -166,4 +169,41 @@ TEST(AutoRig, SaysWhyItCannotRig) {
     EXPECT_FALSE(r.ok);
     EXPECT_FALSE(r.reason.empty());
     EXPECT_FALSE(body.isSkinned()); // left as it was
+}
+
+// The jiggle demo's own body (assets/bodies/vitruvian_voluptuous.glb, CC0,
+// tools/vitruvian/build_body.py): a human-sized mesh with one skin
+// material, no skeleton, that the engine rigs on UAL's clips.
+TEST(AutoRig, TheShippedBodyRigsOnTheAnimationLibrary) {
+    namespace fs = std::filesystem;
+    const fs::path bodyFile = fs::path(KKE_SOURCE_DIR) / "assets/bodies/vitruvian_voluptuous.glb";
+    const fs::path ualFile = fs::path(KKE_SOURCE_DIR) / "assets/animations/UAL1_Standard.fbx";
+    ASSERT_TRUE(fs::exists(bodyFile)) << bodyFile; // shipped in the repository: not optional
+    ASSERT_TRUE(fs::exists(ualFile)) << ualFile;
+    ModelData body = kke::loadModel(bodyFile.string());
+    ModelData ual = kke::loadModel(ualFile.string());
+    EXPECT_FALSE(body.isSkinned());
+    size_t vertices = 0;
+    bool skin = false;
+    for (const kke::ModelMesh& m : body.meshes) {
+        vertices += m.vertices.size();
+        if (m.material < body.materials.size() && body.materials[m.material].name == "Skin") skin = true; // the demo's head search needs it
+    }
+    EXPECT_TRUE(skin);
+    EXPECT_GT(vertices, 30000u);
+    const float height = body.boundsMax.y - body.boundsMin.y;
+    EXPECT_GT(height, 1.6f);
+    EXPECT_LT(height, 1.9f);
+
+    const kke::AutoRigReport r = kke::autoRigHumanoid(body, ual);
+    ASSERT_TRUE(r.ok) << r.reason;
+    EXPECT_TRUE(body.isSkinned());
+    const kke::BoneMatch match = kke::matchBones(ual, body);
+    EXPECT_GT(match.matched, 55); // the clips reach (almost) every bone
+    // The soft-tissue bones the demo adds: breasts and glutes, found on her.
+    kke::HumanoidSoftTissue tissue;
+    tissue.bust = tissue.glutes = tissue.hips = 0.0f; // her shape is in the mesh
+    const kke::HumanoidJiggleSetup setup = kke::addHumanoidSoftTissue(body, tissue);
+    EXPECT_GE(setup.chains.size(), 4u) << "two breast and two glute bones";
+    EXPECT_GE(setup.zones.size(), 2u);
 }

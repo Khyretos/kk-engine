@@ -215,15 +215,15 @@ Not a scene file: the demo loads one body by name and gives it
 soft-tissue bones in code (`kke::addHumanoidSoftTissue`: two breast and two
 glute bones, belly and thigh skin zones).
 
-- Body: **female_body** ("Realistic Human Female Body rigged gameready",
-  free on CGTrader; Character Creator 4): `Obj/obj.obj` and the textures
-  next to it, auto-rigged at load (`kke::autoRigHumanoid`, no reshaping).
-  Fetch: `tools/fetch_assets.sh female_body`. `KKE_JIGGLE_BODY` picks
-  another file.
-- Without it, a character (reshaped: bust +7.5 cm, glutes +6 cm, hips +3 cm): **POLYGON Fantasy Characters**, `SK_Character_Female_Gypsy`
-  (falls back to `SK_Character_Female_Peasant_01`, then POLYGON City
-  Characters `SK_Character_HipsterGirl`; `KKE_JIGGLE_CHARACTER` picks any).
-  Texture: the pack's own atlas via `packLoadOptions`.
+- Body: `assets/bodies/vitruvian_voluptuous.glb`, in the repository (CC0:
+  CharMorph's Vitruvian body shaped to a full figure by
+  `tools/vitruvian/build_body.py`, licence note in `assets/bodies/`), a
+  mesh with one skin texture and no skeleton, auto-rigged at load
+  (`kke::autoRigHumanoid`, no reshaping). `KKE_JIGGLE_BODY` picks another file.
+- Or a Synty character (reshaped: bust +7.5 cm, glutes +6 cm, hips +3 cm), only
+  when `KKE_JIGGLE_CHARACTER` names one (`SK_Character_Female_Gypsy`,
+  `SK_Character_Female_Peasant_01`, `SK_Character_HipsterGirl`...) and the
+  pack is in `assets/synty/`. Texture: the pack's own atlas via `packLoadOptions`.
 - Clips: Quaternius Universal Animation Library,
   `assets/animations/UAL1_Standard.fbx` (Idle_Loop, Walk_Loop,
   Jog_Fwd_Loop, Sprint_Loop, Jump_Start, Jump_Loop, Jump_Land), retargeted.

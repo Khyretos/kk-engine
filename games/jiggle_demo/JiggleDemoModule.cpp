@@ -89,25 +89,17 @@ void flatShape(kke::DynamicMeshRenderer& r, float y, float radius, int sides, co
     r.upload(v, idx);
 }
 
-// The realistic body Kees picked (female_body.zip from the asset share: a
-// Character Creator 4 woman, free on CGTrader, never committed). Looks in
-// <packs>/female_body for a rigged FBX first, then any FBX or OBJ.
-// KKE_JIGGLE_BODY=<file> picks one directly.
-std::string findRealisticBody(const std::string& packDir) {
+// The body: our own Vitruvian woman, assets/bodies/vitruvian_voluptuous.glb
+// (CC0, built by tools/vitruvian/build_body.py), a full figure so the
+// soft-tissue motion is easy to see. She has no skeleton: the engine rigs her
+// at load. KKE_JIGGLE_BODY=<file> picks another body file (rigged or not).
+std::string findBodyFile(const char* executableDir) {
     if (const char* e = std::getenv("KKE_JIGGLE_BODY"); e && *e) return e;
-    if (packDir.empty()) return {};
+    const std::string dir = kke::findAssetFolder("assets/bodies", { "KKE_BODIES_DIR" }, executableDir ? executableDir : "");
+    if (dir.empty()) return {};
+    const std::filesystem::path file = std::filesystem::path(dir) / "vitruvian_voluptuous.glb";
     std::error_code ec;
-    const std::filesystem::path dir = std::filesystem::path(packDir) / "female_body";
-    if (!std::filesystem::is_directory(dir, ec)) return {};
-    std::string fbx, obj;
-    for (auto it = std::filesystem::recursive_directory_iterator(dir, ec); !ec && it != std::filesystem::recursive_directory_iterator(); it.increment(ec)) {
-        if (!it->is_regular_file(ec)) continue;
-        std::string ext = it->path().extension().string();
-        std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-        if (ext == ".fbx" && fbx.empty()) fbx = it->path().string();
-        else if (ext == ".obj" && obj.empty()) obj = it->path().string();
-    }
-    return fbx.empty() ? obj : fbx;
+    return std::filesystem::exists(file, ec) ? file.string() : std::string();
 }
 
 // Character Creator's eye occlusion, tear lines and eyelashes are thin
@@ -135,6 +127,31 @@ void JiggleDemoModule::findHead(const kke::ModelData& body) {
     const kke::ModelMesh* head = nullptr;
     for (const kke::ModelMesh& mesh : body.meshes)
         if (mesh.material < body.materials.size() && body.materials[mesh.material].name.find("Skin_Head") != std::string::npos) head = &mesh;
+    // A one-piece skin (our Vitruvian body: a single "Skin" material): the head
+    // is the part of it that stands above the chin, a head's height under the crown.
+    kke::ModelMesh cut;
+    if (!head) {
+        const kke::ModelMesh* skin = nullptr;
+        for (const kke::ModelMesh& mesh : body.meshes)
+            if (mesh.material < body.materials.size() && body.materials[mesh.material].name == "Skin") skin = &mesh;
+        if (skin && !skin->vertices.empty()) {
+            float crown = -1e9f;
+            for (const kke::ModelVertex& v : skin->vertices) crown = std::max(crown, v.position.y);
+            std::vector<uint32_t> remap(skin->vertices.size(), ~0u);
+            for (size_t t = 0; t + 2 < skin->indices.size(); t += 3) {
+                const uint32_t tri[3] = { skin->indices[t], skin->indices[t + 1], skin->indices[t + 2] };
+                if (std::any_of(tri, tri + 3, [&](uint32_t i) { return skin->vertices[i].position.y < crown - 0.22f; })) continue;
+                for (uint32_t i : tri) {
+                    if (remap[i] == ~0u) {
+                        remap[i] = static_cast<uint32_t>(cut.vertices.size());
+                        cut.vertices.push_back(skin->vertices[i]);
+                    }
+                    cut.indices.push_back(remap[i]);
+                }
+            }
+            head = &cut;
+        }
+    }
     if (!head || head->vertices.empty()) return;
     float top = -1e9f;
     for (const kke::ModelVertex& v : head->vertices) top = std::max(top, v.position.y);
@@ -433,8 +450,8 @@ void JiggleDemoModule::setupBodies() {
     std::vector<std::string> searched;
     const std::string packDir = kke::findAssetFolder("assets/synty", { "KKE_ASSETS_DIR", "KKE_SYNTY_DIR" }, base ? base : "", &searched);
     kke::ModelData ual, body;
-    // The realistic body first; a Synty character when it isn't there.
-    const std::string realistic = std::getenv("KKE_JIGGLE_CHARACTER") ? std::string() : findRealisticBody(packDir);
+    // Our body, unless a Synty character is asked for (KKE_JIGGLE_CHARACTER).
+    const std::string realistic = std::getenv("KKE_JIGGLE_CHARACTER") ? std::string() : findBodyFile(base);
     try {
         ual = kke::loadModel(ualFile);
     } catch (const std::exception& e) {
@@ -453,7 +470,8 @@ void JiggleDemoModule::setupBodies() {
                 body.boundsMin *= 0.01f;
                 body.boundsMax *= 0.01f;
             }
-            m_characterName = "Realistic body (" + std::filesystem::path(realistic).filename().string() + ")";
+            const std::string file = std::filesystem::path(realistic).filename().string();
+            m_characterName = file == "vitruvian_voluptuous.glb" ? "Vitruvian woman (CC0, full figure)" : "Realistic body (" + file + ")";
         }
     } catch (const std::exception& e) {
         log->warn("{}: {}", realistic, e.what());
@@ -484,13 +502,11 @@ void JiggleDemoModule::setupBodies() {
         const kke::AssetCatalog catalog = packDir.empty() ? kke::AssetCatalog{} : kke::AssetCatalog::scan(packDir);
         const kke::CatalogAsset* asset = nullptr;
         if (const char* want = std::getenv("KKE_JIGGLE_CHARACTER")) asset = catalog.find(want);
-        for (const char* c : { "SK_Character_Female_Gypsy", "SK_Character_Female_Peasant_01", "SK_Character_HipsterGirl", "SK_Character_Female_Druid",
-                               "SK_Character_Dummy_Female_01" })
-            if (!asset) asset = catalog.find(c, { "POLYGON_Fantasy_Characters", "POLYGON_City_Characters", "POLYGON_Prototype" });
         if (!asset) {
-            m_bodyStatus = "No body found. Put female_body (or a female Synty character: POLYGON Fantasy Characters, City Characters) "
-                           "in assets/synty/ or set KKE_ASSETS_DIR.";
-            log->info("{}", m_bodyStatus); // optional pack; the panel says so too
+            m_bodyStatus = std::getenv("KKE_JIGGLE_CHARACTER")
+                               ? std::string("No Synty character '") + std::getenv("KKE_JIGGLE_CHARACTER") + "' in assets/synty/ (KKE_ASSETS_DIR)."
+                               : "Body not found: assets/bodies/vitruvian_voluptuous.glb (or set KKE_BODIES_DIR, KKE_JIGGLE_BODY).";
+            log->info("{}", m_bodyStatus); // the panel says so too
             return;
         }
         try {
@@ -504,7 +520,7 @@ void JiggleDemoModule::setupBodies() {
     }
     // The shape and the soft-tissue bones first, then the clips (the new
     // bones have no UAL counterpart and stay at rest in them).
-    // Her shape is the artist's: soft-tissue bones only, no added volume.
+    // Her shape is in the mesh (the morphs): soft-tissue bones only, no added volume.
     kke::HumanoidSoftTissue tissue = m_tissue;
     if (realisticBody) tissue.bust = tissue.glutes = tissue.hips = 0.0f;
     const kke::HumanoidJiggleSetup setup = kke::addHumanoidSoftTissue(body, tissue);
@@ -619,8 +635,10 @@ void JiggleDemoModule::updateBodies(float dt) {
     const auto t0 = std::chrono::steady_clock::now();
     for (size_t i = 0; i < m_dancers.size(); ++i) {
         Dancer& d = m_dancers[i];
-        // Both on one circle, half a lap apart.
-        const float a = m_angle + static_cast<float>(i) * 3.14159265f;
+        // Both on one circle, the twin 0.5 rad (a metre) ahead of her: the same clip in the
+        // same pose, so the only difference between them is the jiggle. (Ahead, so that in
+        // the side view the panel on the right never covers it.)
+        const float a = m_angle + static_cast<float>(1 - static_cast<int>(i)) * 0.5f;
         const glm::vec3 pos(std::cos(a) * radius, m_jumpY, std::sin(a) * radius);
         const glm::vec3 tangent(-std::sin(a), 0.0f, std::cos(a));
         const float yaw = std::atan2(tangent.x, tangent.z) - std::atan2(fwd.x, fwd.z);
@@ -844,7 +862,7 @@ void JiggleDemoModule::buildPanel() {
     b.choice("Hair colour", &m_hairColour, colours, [this] { buildHair(); }).showIf([this] { return m_head.found && m_hairStyle > 0; });
 #endif
     b.toggle("Twin without jiggle", Panel::Ref<bool>([this] { return m_bodiesReady ? &m_showTwin : nullptr; }), [this] { setScene(m_scene); });
-    b.note("The twin runs half a lap behind with the same body and clips, but no jiggle, to compare.").showIf([this] { return m_bodiesReady; });
+    b.note("The twin runs a metre ahead of her with the same body and clips, but no jiggle, to compare.").showIf([this] { return m_bodiesReady; });
     b.choice("Move", Panel::Ref<int>([this] {
                  m_moveIndex = static_cast<int>(m_move);
                  return m_bodiesReady ? &m_moveIndex : nullptr;

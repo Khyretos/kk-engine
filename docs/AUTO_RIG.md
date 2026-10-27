@@ -3,15 +3,15 @@
 `kke::autoRigHumanoid` ([kke/AutoRig.h](../engine/include/kke/AutoRig.h))
 gives a humanoid mesh that has no bones (an OBJ export, a sculpt, a scan)
 the skeleton and skin weights of a reference rig, so it plays that rig's
-animation clips. The jiggle demo uses it for the realistic body
-(`female_body`, a Character Creator 4 OBJ): she runs, jumps and stops on
-the UAL clips like any rigged character.
+animation clips. The jiggle demo uses it for its body
+(`assets/bodies/vitruvian_voluptuous.glb`, a mesh with no skeleton): she
+runs, jumps and stops on the UAL clips like any rigged character.
 
 ```cpp
 #include "kke/AutoRig.h"
 
 kke::ModelData ual = kke::loadModel("assets/animations/UAL1_Standard.fbx");
-kke::ModelData body = kke::loadModel("female_body/Obj/obj.obj");   // no bones
+kke::ModelData body = kke::loadModel("assets/bodies/vitruvian_voluptuous.glb");   // no bones
 // (an OBJ in centimetres: scale the vertices by 0.01 first; see below)
 const kke::AutoRigReport r = kke::autoRigHumanoid(body, ual);
 if (!r.ok) log->warn("can't rig: {}", r.reason);                 // body is left as it was
