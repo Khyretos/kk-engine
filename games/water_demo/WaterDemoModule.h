@@ -73,7 +73,7 @@ private:
     bool m_smoothSurface = true;  // clear water vs. the raw particles
     float m_viscosity = 0.0f;
     float m_stiffness = 12.0f;    // the water's sound speed (m/s): higher = less squeeze and bounce, more substeps
-    float m_cohesion = 0.01f;     // how hard stretched water pulls itself together (0 = none)
+    float m_cohesion = 0.0f;      // how hard stretched water pulls itself together (0 = none: plain water)
     float m_smoothing = 1.2f;     // the surface blur, in cells: lower = more separate drops, higher = one smooth mass
     bool m_check = false;         // KKE_MPM_GPU_CHECK
     uint32_t m_rng = 2024;

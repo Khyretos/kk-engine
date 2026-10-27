@@ -75,6 +75,8 @@ void WaterDemoModule::init(kke::Application& app) {
     // KKE_WATER_CELL=metres: the water's grid spacing. 5 cm on a GPU
     // (~77,000 particles), 7 cm on the CPU (~28,000).
     m_cell = m_gpu ? 0.05f : 0.07f;
+    // Stiffer water bounces less (a dropped block rebounds 29% of its fall at 12 m/s, 20% at 40): the GPU has the room for twice the substeps.
+    m_stiffness = m_gpu ? 24.0f : 12.0f;
     if (const char* e = std::getenv("KKE_WATER_CELL")) m_cell = std::clamp(static_cast<float>(std::atof(e)), 0.02f, 0.2f);
     if (const char* e = std::getenv("KKE_MPM_GPU_CHECK")) m_check = std::atoi(e) != 0;
     defineInput();
