@@ -76,8 +76,10 @@ shown in [C++](cpp.md#your-own-lua-bindings).
 Shake sells an explosion or a heavy landing. Add "trauma" (0 to 1) when
 something happens; each frame, turn the camera by a small smooth wobble
 that grows with trauma squared (so little bumps stay little), and let
-trauma fade. From Lua it's `view.shake(0.4)`; the [explosion](gameplay.md#explosions)
-recipe uses it when it's there. The C++, on top of whichever camera is on:
+trauma fade. In any game, Lua's `camera.shake(strength, seconds)` does this
+on top of whatever camera is on (the [explosion](gameplay.md#explosions)
+recipe uses it); the cookbook game also has its own `view.shake(0.4)`,
+to show how it's done. Its C++, on top of whichever camera is on:
 
 ```cpp title="games/cookbook/CookbookPlayer.cpp"
 --8<-- "games/cookbook/CookbookPlayer.cpp:shake"
@@ -88,5 +90,26 @@ The wobble itself is smooth noise, not random jumps:
 ```cpp title="games/cookbook/Procedural.h"
 --8<-- "games/cookbook/Procedural.h:shake"
 ```
+
+## Cutscenes in any game
+
+`view` belongs to the cookbook game. Every game has the engine's
+`camera.*` for cutscenes: `camera.path` flies through a list of shots
+and blends in from (and back to) whatever camera the game has, so the
+player's own camera code keeps running underneath. `camera.hold` parks
+the camera on one shot until `camera.release`, and the `CameraDone` hook
+says when a path is over. Press **C**:
+
+![A fly-around of a crate tower](media/cutscene.jpg)
+
+```lua title="cutscene.lua"
+--8<-- "docs/cookbook/recipes/cutscene.lua"
+```
+
+[Download cutscene.lua](recipes/cutscene.lua){ .md-button }
+
+Shots without a `t` are spread evenly over `seconds`. A shot's `fov`
+zooms (35 here for the close-up); without one the game's own is kept.
+The whole API is in [Scripting](../SCRIPTING.md) and `kke/CameraDirector.h`.
 
 Next: [gameplay](gameplay.md).

@@ -5,6 +5,7 @@
 #include "kke/Module.h"
 #include "kke/SceneLoader.h"
 #include "kke/ScriptCalls.h"
+#include "kke/CameraDirector.h"
 #include "kke/ScriptFx.h"
 #include "kke/ScriptLights.h"
 #include "kke/ScriptStore.h"
@@ -51,7 +52,8 @@ class ParticleLibrary;
 // Hooks the engine runs: "Init" (once, after the first load), "Think"
 // (dt, every frame), "Tick" (dt, tick; fixed rate, before physics results
 // are read), "Contact" (a table per physics contact, capped per frame),
-// "Break" (id: a script breakable came apart), "NetMessage" (name, data,
+// "Break" (id: a script breakable came apart), "CameraDone" (a camera.path
+// reached its end), "NetMessage" (name, data,
 // fromPlayer), "Shutdown".
 //
 // Bindings, each present only when its module is in the game:
@@ -73,7 +75,9 @@ class ParticleLibrary;
 //                                                          (NetModule)
 //   audio.*      impact(pos, material, intensity), materials   (AudioModule)
 //   input.*      define(id, label, key), pressed, held, value  (InputModule)
-//   camera.*     position, forward, target
+//   camera.*     position, forward, target, fov (what the player sees);
+//                path, hold, release, directing, shake: cutscenes
+//                (kke/CameraDirector.h; hook "CameraDone" when a path ends)
 //   terrain.*    create, height, normal, slope, ground, raise, lower, smooth,
 //                flatten, paint, scatter, unscatter, layer, info, remove:
 //                heightmap ground with trees and rocks
@@ -173,6 +177,7 @@ private:
     void bindCreatures();  // ai.* over script-spawned models (ScriptBindings.cpp)
     void stepCreatures(float dt); // moves them, plays their clips, runs the ai hooks
     void forgetCreature(uint32_t instance);
+    void bindCamera(); // ScriptCamera.cpp
     // Multiplayer copies of what sv_ scripts spawn (ScriptReplication.cpp).
     void bindReplication();
     void syncNetRole();                    // hosting / joining / leaving changed what's replicated
@@ -227,6 +232,13 @@ private:
     std::unique_ptr<ai::AiWorld> m_ai = std::make_unique<ai::AiWorld>(1);
     struct CreatureClips { std::unordered_map<std::string, int> byAnim; std::string playing; };
     std::unordered_map<uint32_t, CreatureClips> m_creatureClips; // ai.anims, by model instance
+    // camera.*: the cutscene director (run by Application after every update),
+    // the script that started the shot, and what was shown last frame.
+    CameraDirector m_director;
+    std::string m_directorOwner;
+    Camera m_shownCamera;
+    bool m_cameraShown = false, m_cameraDone = false;
+    const Camera& shownCamera() const;
     ScriptLights m_lights; // light.*: lamps scripts placed (kke/ScriptLights.h)
     std::unique_ptr<ScriptTerrain> m_terrain; // terrain.*
     std::unique_ptr<ScriptClock> m_clock;     // clock.*

@@ -181,14 +181,7 @@ void ScriptModule::bindAll() {
     vm.registerFunction("kke", "time", [this](lua_State* L) { lua_pushnumber(L, m_time); return 1; });
     vm.registerFunction("kke", "dt", [this](lua_State* L) { lua_pushnumber(L, m_dt); return 1; });
 
-    // camera.*
-    vm.registerFunction("camera", "position", [app](lua_State* L) { ScriptVM::pushVec3(L, app->camera().position); return 1; });
-    vm.registerFunction("camera", "target", [app](lua_State* L) { ScriptVM::pushVec3(L, app->camera().target); return 1; });
-    vm.registerFunction("camera", "forward", [app](lua_State* L) {
-        glm::vec3 f = app->camera().target - app->camera().position;
-        ScriptVM::pushVec3(L, glm::length(f) > 1e-6f ? glm::normalize(f) : glm::vec3(0, 0, -1));
-        return 1;
-    });
+    bindCamera(); // camera.*: ScriptCamera.cpp
 
     // mood.*: the sky, sun, fog and look (kke/Mood.h, docs/MOODS.md).
     vm.registerFunction("mood", "set", [app](lua_State* L) {
@@ -772,8 +765,12 @@ void ScriptModule::update(const UpdateContext& ctx) {
         m_promptSerial = in->promptSerial();
         m_vm->callHook("InputStyle", std::string(toString(in->promptStyle(0))));
     }
+    if (m_cameraDone) {
+        m_cameraDone = false;
+        m_vm->callHook("CameraDone");
+    }
     m_vm->callHook("Think", ctx.dt);
-    m_terrain->update(ctx.dt, m_app->camera().position); // chunks for the camera; collision after sculpting
+    m_terrain->update(ctx.dt, shownCamera().position); // chunks for the camera shown (a cutscene's shot); collision after sculpting
     if (m_nav && m_nav->dynamic()) m_nav->update(); // obstacles nav.obstacle added or removed
     stepCreatures(ctx.dt);
     m_clock->update(ctx.dt, *m_vm);                         // time of day: the sun, the sky, Dawn/Dusk/Hour hooks
@@ -921,7 +918,10 @@ void ScriptModule::renderUi() {
 
 void ScriptModule::shutdown() {
     if (m_vm && m_inited) m_vm->callHook("Shutdown");
-    if (m_app) releaseAll();
+    if (m_app) {
+        releaseAll();
+        m_app->setCameraDirector({});
+    }
     m_terrain.reset(); // before the physics world goes
     m_batch.reset();
     m_glass.reset();
