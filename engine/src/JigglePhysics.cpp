@@ -504,6 +504,7 @@ HumanoidJiggleSetup addHumanoidSoftTissue(ModelData& model, const HumanoidSoftTi
     };
 
     // Breasts: the most forward chest skin either side of the sternum.
+    std::vector<glm::vec3> breastCentres; // for the skin zones below
     if (chest >= 0) {
         const float y = at(chest).y;
         const float r = 0.085f * k;
@@ -515,6 +516,7 @@ HumanoidJiggleSetup addHumanoidSoftTissue(ModelData& model, const HumanoidSoftTi
                 continue;
             }
             const glm::vec3 centre = front - fwd * (r * 0.8f);
+            breastCentres.push_back(front - fwd * (r * 0.55f));
             if (o.bust > 0.0f) inflateSkin(model, centre + fwd * (r * 0.5f), r * 1.35f, o.bust, fwd, 0.65f);
             if (o.breastBones) {
                 const float len = r * 0.9f + o.bust;
@@ -579,6 +581,14 @@ HumanoidJiggleSetup addHumanoidSoftTissue(ModelData& model, const HumanoidSoftTi
             }();
             const glm::vec3 mid = calf >= 0 ? (at(t) * 0.6f + at(calf) * 0.4f) : at(t) - glm::vec3(0, 0.15f * k, 0);
             zone(t, mid - fwd * (0.04f * k), 0.12f * k, 0.015f * k);
+        }
+    }
+    // The breasts, as a whole: a zone on the chest at each (see breastZones).
+    if (o.breastZones && chest >= 0) {
+        for (const glm::vec3& c : breastCentres) {
+            out.breastZones.push_back(out.zones.size());
+            zone(chest, c, 0.105f * k, o.breastTravel * k);
+            out.zones.back().settings = o.breastSkin;
         }
     }
     return out;

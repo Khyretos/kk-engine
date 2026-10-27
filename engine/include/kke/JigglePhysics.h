@@ -211,6 +211,9 @@ public:
                float stepHz = 90.0f);
     void apply(const ModelData& model, const Pose& pose, const glm::mat4& toWorld, float dt);
     const std::vector<SkinJiggleOffset>& offsets() const { return m_out; }
+    size_t zoneCount() const { return m_zones.size(); }
+    JiggleSettings& settings(size_t zone) { return m_zones[zone].settings; }
+    Zone& zone(size_t i) { return m_zones[i]; }
     bool valid() const { return !m_zones.empty(); }
     void reset() { m_initialized = false; }
 
@@ -236,6 +239,20 @@ struct HumanoidSoftTissue {
     float hips = 0.0f;     // widens the hips to the sides
     bool breastBones = true, gluteBones = true;
     bool bellyZone = true, thighZones = true;
+    // A skin zone on each breast besides its bone. The bone swings the
+    // breast about a point inside it (a centimetre of skin travel at most);
+    // the zone moves it as a whole and lets it lag, which is most of what a
+    // breast does when the body jogs. breastTravel: the most it moves, metres
+    // for a 1.8 m person. The spring is stiff enough (0.2) to stay off that
+    // limit in a sprint: much softer and it resonates with the stride and sits
+    // on the limit (measured on the demo's tour).
+    bool breastZones = true;
+    float breastTravel = 0.05f;
+    JiggleSettings breastSkin = [] {
+        JiggleSettings s;
+        s.stiffness = 0.2f; s.soften = 0.5f; s.drag = 0.05f; s.airDrag = 0.01f; s.gravity = 0.12f;
+        return s;
+    }();
     JiggleSettings breast = [] {
         JiggleSettings s;
         s.stiffness = 0.16f; s.soften = 0.5f; s.stretch = 0.18f; s.angleLimit = 32.0f;
@@ -258,6 +275,7 @@ struct HumanoidJiggleSetup {
     std::vector<JiggleRig::Chain> chains;  // for JiggleRig
     std::vector<JiggleSkin::Zone> zones;   // for JiggleSkin
     std::vector<glm::vec3> zonePositions;  // model space, rest pose
+    std::vector<size_t> breastZones;       // which of `zones` are the breasts (left, right)
     std::vector<std::string> missing;      // what couldn't be found (logged by the caller)
     std::vector<int> addedBones;
 };
