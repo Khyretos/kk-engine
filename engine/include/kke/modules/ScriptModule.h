@@ -4,12 +4,17 @@
 #include "kke/AudioMixer.h"
 #include "kke/Module.h"
 #include "kke/SceneLoader.h"
+#include "kke/ScriptBehavior.h"
 #include "kke/ScriptCalls.h"
 #include "kke/CameraDirector.h"
 #include "kke/ScriptFx.h"
 #include "kke/ScriptLights.h"
+#include "kke/ScriptMusic.h"
 #include "kke/ScriptStore.h"
 #include "kke/ScriptTables.h"
+#include "kke/ScriptTimeline.h"
+#include "kke/ScriptWeather.h"
+#include "kke/ScriptWorld.h"
 #include "kke/ScriptVM.h"
 #include "kke/ai/AiWorld.h"
 #include "kke/ai/NavMesh.h"
@@ -178,6 +183,8 @@ private:
     void stepCreatures(float dt); // moves them, plays their clips, runs the ai hooks
     void forgetCreature(uint32_t instance);
     void bindCamera(); // ScriptCamera.cpp
+    void bindProfile(); // ScriptProfile.cpp
+    void bindLocale();  // ScriptLocale.cpp: loc.*, subtitles.*, accessibility.*
     // Multiplayer copies of what sv_ scripts spawn (ScriptReplication.cpp).
     void bindReplication();
     void syncNetRole();                    // hosting / joining / leaving changed what's replicated
@@ -242,6 +249,16 @@ private:
     ScriptLights m_lights; // light.*: lamps scripts placed (kke/ScriptLights.h)
     std::unique_ptr<ScriptTerrain> m_terrain; // terrain.*
     std::unique_ptr<ScriptClock> m_clock;     // clock.*
+    ScriptBehavior m_behavior;                // bt.* (kke/ScriptBehavior.h)
+    ScriptTimeline m_timeline;                // timeline.* (kke/ScriptTimeline.h)
+    ScriptMusic m_music;                      // music.* (kke/ScriptMusic.h)
+    ScriptWorld m_world;                      // world.* (kke/ScriptWorld.h)
+    ScriptWeather m_weather;                  // weather.* (kke/ScriptWeather.h)
+    struct WeatherStream {                    // the rain or snow emitters the weather keeps running
+        std::string effect;
+        std::vector<uint32_t> ids;
+    };
+    std::map<std::string, WeatherStream> m_weatherStreams;
     // fx.*: one particle pool and library for every script, made on first use.
     static constexpr size_t kFxParticles = 8000;
     std::unique_ptr<ParticleEffects> m_fxEffects;

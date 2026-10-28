@@ -1,9 +1,11 @@
 #include "kke/modules/StatsModule.h"
 #include "kke/Application.h"
 #include "kke/Log.h"
+#include "kke/Profiler.h"
 
 #include <imgui.h>
 #include <algorithm>
+#include <cstdio>
 #include <numeric>
 #include <string>
 #include <vector>
@@ -56,6 +58,40 @@ void StatsModule::renderUi() {
     plotWithStats("CPU frame time", m_cpuFrameTimesMs, "ms");
     ImGui::Spacing();
     plotWithStats("GPU frame time", m_gpuFrameTimesMs, "ms");
+
+    // Where the CPU time goes: every module's calls, timed by Application
+    // every frame (kke/Profiler.h), and a capture of them for Perfetto.
+    Profiler& profiler = Profiler::get();
+    ImGui::Separator();
+    ImGui::Text("Modules, CPU (avg / worst of %d frames)", Profiler::kWindow);
+    const double frameMs = std::max(0.001, profiler.averageFrameMs());
+    for (const Profiler::ModuleStat& s : profiler.moduleStats(8)) {
+        if (s.avgMs < 0.005) break;
+        char label[64];
+        std::snprintf(label, sizeof(label), "%.2f / %.2f ms", s.avgMs, s.maxMs);
+        ImGui::ProgressBar(static_cast<float>(std::min(1.0, s.avgMs / frameMs)), ImVec2(120, 0), label);
+        ImGui::SameLine();
+        ImGui::TextUnformatted(s.name.c_str());
+    }
+    const Profiler::CaptureState capture = profiler.captureState();
+    if (capture.active) {
+        ImGui::Text("Capturing: %.1f s, %d frames, %zu events", capture.elapsedSeconds, capture.frames, capture.events);
+        if (ImGui::Button("Stop and save")) {
+            std::string error;
+            if (profiler.stopCapture(&error)) log::get("Profiler")->info("capture saved to {}\n{}", profiler.lastCapturePath(), profiler.lastCaptureSummary());
+            else log::get("Profiler")->warn("capture not saved: {}", error);
+        }
+    } else {
+        if (ImGui::Button("Capture 5 s")) {
+            Profiler::CaptureOptions options;
+            options.seconds = 5.0;
+            options.path = Profiler::newCapturePath();
+            std::string error;
+            if (!profiler.startCapture(options, &error)) log::get("Profiler")->warn("{}", error);
+        }
+        if (const std::string last = profiler.lastCapturePath(); !last.empty())
+            ImGui::TextWrapped("Saved: %s (open it at ui.perfetto.dev)", last.c_str());
+    }
 
     // Real per-draw-call GPU profiling, when VulkanProfiler is actually
     // active — see kke::VulkanDevice::queryGpuProfilerFrameSummary() and

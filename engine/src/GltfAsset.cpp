@@ -16,7 +16,8 @@
 // that image is split into two grey images, "#image<N>.roughness.pgm" and
 // "#image<N>.metallic.pgm".
 //
-// Not read (yet): morph targets, node animation without a skin, more than
+// Morph targets (blend shapes) are read, with their names and default weights; animating them is not (yet).
+// Not read (yet): node animation without a skin, more than
 // four influences per vertex (JOINTS_1), TEXCOORD_1, KHR_texture_transform,
 // emissive, alpha modes and the KHR_materials_* extensions. Files that
 // need Draco or meshopt compression, or KTX2/WebP images only, say so in
@@ -468,7 +469,42 @@ private:
                 }
             }
         }
+        readMorphTargets(*node.mesh, prim, out, posAcc->count, placement, normalMatrix, !nrm.empty());
         if (!out.indices.empty()) m_model.meshes.push_back(std::move(out));
+    }
+
+    // Morph targets (blend shapes): each target's position and normal offsets, sparse, moved into
+    // the same space as the vertices. Only for meshes whose vertices are the file's own (the ones
+    // with normals): a mesh the loader had to split into flat-shaded triangles has no vertex to
+    // point a target at.
+    void readMorphTargets(const cgltf_mesh& mesh, const cgltf_primitive& prim, ModelMesh& out, cgltf_size vertexCount,
+                          const glm::mat4& placement, const glm::mat3& normalMatrix, bool indexed) {
+        if (!indexed || prim.targets_count == 0) return;
+        const glm::mat3 linear(placement);
+        for (cgltf_size t = 0; t < prim.targets_count; ++t) {
+            const cgltf_morph_target& target = prim.targets[t];
+            const cgltf_accessor* posAcc = nullptr;
+            const cgltf_accessor* normAcc = nullptr;
+            for (cgltf_size a = 0; a < target.attributes_count; ++a) {
+                if (target.attributes[a].type == cgltf_attribute_type_position) posAcc = target.attributes[a].data;
+                if (target.attributes[a].type == cgltf_attribute_type_normal) normAcc = target.attributes[a].data;
+            }
+            ModelMorphTarget m;
+            m.name = t < mesh.target_names_count && mesh.target_names[t] ? mesh.target_names[t] : "target" + std::to_string(t);
+            const std::vector<float> dp = posAcc && posAcc->count == vertexCount ? unpackFloats(posAcc) : std::vector<float>{};
+            const std::vector<float> dn = normAcc && normAcc->count == vertexCount ? unpackFloats(normAcc) : std::vector<float>{};
+            for (cgltf_size i = 0; i < vertexCount; ++i) {
+                const glm::vec3 p = dp.empty() ? glm::vec3(0.0f) : linear * glm::vec3(dp[i * 3], dp[i * 3 + 1], dp[i * 3 + 2]);
+                const glm::vec3 n = dn.empty() ? glm::vec3(0.0f) : normalMatrix * glm::vec3(dn[i * 3], dn[i * 3 + 1], dn[i * 3 + 2]);
+                if (glm::dot(p, p) == 0.0f && glm::dot(n, n) == 0.0f) continue;
+                m.vertices.push_back(static_cast<uint32_t>(i));
+                m.positions.push_back(p);
+                if (!dn.empty()) m.normals.push_back(n);
+            }
+            out.morphs.push_back(std::move(m));
+        }
+        out.morphWeights.assign(out.morphs.size(), 0.0f);
+        for (cgltf_size t = 0; t < mesh.weights_count && t < out.morphWeights.size(); ++t) out.morphWeights[t] = mesh.weights[t];
     }
 
     // ---- animations

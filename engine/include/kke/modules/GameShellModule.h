@@ -252,6 +252,9 @@ private:
     EngineSettings m_settings;
     std::string m_settingsPath = "settings.json";
     int m_frameCap = 0;          // index into frameCaps()
+    int m_languageIndex = 0;     // 0 = automatic, then m_languageCodes
+    std::vector<std::string> m_languageCodes;
+    int m_colorBlindIndex = 0;   // off, protanopia, deuteranopia, tritanopia
     int m_controlsDevice = 0;    // 0 keyboard and mouse, 1 controller
 
     Page m_page = Page::None;

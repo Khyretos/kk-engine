@@ -49,6 +49,13 @@ set(ENGINE_SOURCES
     src/BreakGraph.cpp
     src/AnimEvents.cpp
     src/Animator.cpp
+    src/AnimCompress.cpp
+    src/Mocap.cpp
+    src/Timeline.cpp
+    src/MusicDirector.cpp
+    src/Rollback.cpp
+    src/WorldStream.cpp
+    src/Weather.cpp
     src/AnimRig.cpp
     src/BodyShape.cpp
     src/Human.cpp
@@ -79,6 +86,7 @@ set(ENGINE_SOURCES
     src/ai/Steering.cpp
     src/ai/Perception.cpp
     src/ai/Utility.cpp
+    src/ai/BehaviorTree.cpp
     src/ai/NavMesh.cpp
     src/ai/Species.cpp
     src/ai/AiWorld.cpp
@@ -112,6 +120,9 @@ set(ENGINE_SOURCES
     src/PackSeal.cpp
     src/ContentPacks.cpp
     src/DataFile.cpp
+    src/Morph.cpp
+    src/FaceRig.cpp
+    src/LodChain.cpp
     src/DevTools.cpp
     src/InputMap.cpp
     src/ButtonPrompts.cpp
@@ -204,6 +215,12 @@ set(ENGINE_SOURCES
     src/MarketplaceIndex.cpp
     src/RmlTextSafety.cpp
     src/Log.cpp
+    src/Profiler.cpp
+    src/Bidi.cpp
+    src/Localization.cpp
+    src/Accessibility.cpp
+    src/Subtitles.cpp
+    src/CrashReporter.cpp
     src/HardwareCheck.cpp
     src/modules/GridModule.cpp
     src/modules/StatsModule.cpp
@@ -359,6 +376,16 @@ foreach(shader logo.vert logo.frag logo_backdrop.vert logo_backdrop.frag logo_te
     engine_add_shader(kke_engine ${CMAKE_SOURCE_DIR}/shaders/${shader})
 endforeach()
 engine_copy_runtime_file(kke_engine ${CMAKE_SOURCE_DIR}/assets/fonts/NotoSans-Bold.ttf assets/fonts/NotoSans-Bold.ttf)
+# Languages (docs/LOCALIZATION.md): the engine's own string tables, and the fonts the Arabic and
+# Hebrew ones need (loaded as fallback faces by kke::UiModule). Every game gets them.
+foreach(font NotoSansArabic-Regular.ttf NotoSansHebrew-Regular.ttf)
+    engine_copy_runtime_file(kke_engine ${CMAKE_SOURCE_DIR}/assets/fonts/${font} assets/fonts/${font})
+endforeach()
+file(GLOB KKE_LOCALE_FILES CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/assets/locales/*.json)
+foreach(locale ${KKE_LOCALE_FILES})
+    get_filename_component(locale_name ${locale} NAME)
+    engine_copy_runtime_file(kke_engine ${locale} assets/locales/${locale_name})
+endforeach()
 # Quaternius' CC0 mannequin and its animations (docs/DEPENDENCIES.md): a
 # character without art is this, never a block, in every build and download.
 engine_copy_runtime_file(kke_engine ${CMAKE_SOURCE_DIR}/assets/animations/UAL1_Standard.fbx assets/animations/UAL1_Standard.fbx)
@@ -494,7 +521,7 @@ else()
 endif()
 
 if(ENGINE_ENABLE_LUA)
-    target_sources(kke_engine PRIVATE src/ScriptVM.cpp src/ScriptCalls.cpp src/ScriptTables.cpp src/ScriptStore.cpp src/modules/ScriptModule.cpp src/modules/ScriptBindings.cpp src/modules/ScriptCamera.cpp src/modules/ScriptReplication.cpp)
+    target_sources(kke_engine PRIVATE src/ScriptVM.cpp src/ScriptBehavior.cpp src/ScriptTimeline.cpp src/ScriptMusic.cpp src/ScriptWorld.cpp src/ScriptWeather.cpp src/ScriptCalls.cpp src/ScriptTables.cpp src/ScriptStore.cpp src/modules/ScriptModule.cpp src/modules/ScriptBindings.cpp src/modules/ScriptCamera.cpp src/modules/ScriptProfile.cpp src/modules/ScriptLocale.cpp src/modules/ScriptReplication.cpp)
     if(KKE_ENABLE_NET)
         target_sources(kke_engine PRIVATE src/server/ServerScripts.cpp)
     endif()

@@ -576,6 +576,7 @@ private:
     bool m_dofOn = false;
     std::optional<bool> m_motionBlurEnv;                        // KKE_MOTION_BLUR
     bool m_motionBlurOn = false;
+    bool m_motionBlurRequested = false; // what the settings asked; "reduce motion" can hold it off
     std::optional<bool> m_occlusionEnv; // KKE_OCCLUSION
     bool m_occlusionOn = false;
     std::vector<std::pair<const void*, std::function<void(VkCommandBuffer)>>> m_frameCompute;

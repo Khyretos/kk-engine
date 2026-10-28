@@ -9,6 +9,9 @@ add_executable(kke_tests
     test_marketplace_index.cpp
     test_engine_error.cpp
     test_engine_settings.cpp
+    test_morph.cpp
+    test_face_rig.cpp
+    test_lod_chain.cpp
     test_model_asset.cpp
     test_gltf_asset.cpp
     test_ragdoll.cpp
@@ -66,6 +69,11 @@ add_executable(kke_tests
     test_resource_governor.cpp
     test_hardware_target.cpp
     test_frame_stats.cpp
+    test_profiler.cpp
+    test_bidi.cpp
+    test_localization.cpp
+    test_accessibility.cpp
+    test_crash_reporter.cpp
     test_bench_recorder.cpp
     test_cooked_file.cpp
     test_viewports.cpp
@@ -77,6 +85,19 @@ add_executable(kke_tests
     test_buoyancy.cpp
     test_camera_rig.cpp
     test_camera_director.cpp
+    test_behavior_tree.cpp
+    test_script_behavior.cpp
+    test_anim_compress.cpp
+    test_mocap.cpp
+    test_timeline.cpp
+    test_script_timeline.cpp
+    test_music.cpp
+    test_script_music.cpp
+    test_rollback.cpp
+    test_world_stream.cpp
+    test_script_world.cpp
+    test_weather.cpp
+    test_script_weather.cpp
     test_scene_file.cpp
     test_net.cpp
     test_input_replay.cpp

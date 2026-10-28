@@ -1,7 +1,9 @@
 #include "kke/modules/SettingsModule.h"
 
 #include "kke/Application.h"
+#include "kke/Accessibility.h"
 #include "kke/Capabilities.h"
+#include "kke/CrashReporter.h"
 #include "kke/Log.h"
 
 namespace kke {
@@ -40,6 +42,9 @@ void SettingsModule::apply() {
     m_app->lighting().ambientColor = m_baseAmbient * g.brightness;
     m_app->debugUi().setVisible(g.showDebugOverlay);
     m_app->setMaxFixedStepsPerFrame(static_cast<uint32_t>(m_settings.gameplay.maxPhysicsStepsPerFrame));
+    applyTextAndAccessibility(m_settings);
+    crash::setOptIn(m_settings.privacy.sendCrashReports);
+    crash::sendPending(crash::defaultFolder()); // only does anything with the player's yes and a game's uploader
     for (ISettingsListener* listener : m_app->findCapability<ISettingsListener>()) {
         listener->onSettingsChanged(m_settings);
     }

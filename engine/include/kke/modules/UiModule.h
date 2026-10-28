@@ -10,6 +10,8 @@
 #include <RmlUi/Core/SystemInterface.h>
 #include <cstdint>
 #include <memory>
+#include <set>
+#include <string>
 #include <unordered_map>
 
 namespace Rml {
@@ -137,6 +139,11 @@ private:
         // (a thumbnail or screenshot in the user's cache, <img src>) is
         // kept as it is; everything else joins the RmlUi way.
         void JoinPath(Rml::String& translatedPath, const Rml::String& documentPath, const Rml::String& path) override;
+        // Every text node RmlUi makes (static text in a document, innerRML, data-bound text) comes
+        // through here (docs/LOCALIZATION.md): English text that has a translation in the current
+        // language is replaced by it, "@menu.start" is a named key, and right-to-left text is
+        // joined and put in visual order. Anything else is left alone.
+        int TranslateString(Rml::String& translated, const Rml::String& input) override;
         SDL_Window* window = nullptr;
     };
 
@@ -169,6 +176,16 @@ private:
     // Cleared on mouse-up regardless of where the button is released,
     // so a drag that ends off the slider doesn't leave this stuck.
     float m_uiScale = 1.0f;
+
+    // Words and captions (docs/LOCALIZATION.md, docs/ACCESSIBILITY.md).
+    void loadLanguageFonts();
+    void syncSubtitles();
+    std::set<std::string> m_languageFonts; // font files already loaded as fallback faces
+    int m_localeListener = 0;
+    Rml::ElementDocument* m_subtitleDoc = nullptr;
+    unsigned m_subtitleRevision = ~0u;
+    int m_lastAnnouncedId = 0;
+    float m_subtitleSize = 1.0f, m_subtitleBackground = 0.6f;
     float m_navHeld[4] = {}, m_navRepeat[4] = {};
     float m_dpRatio = 1.0f;
     float m_pixelsPerPoint = 1.0f; // see Window::pixelsPerPoint()

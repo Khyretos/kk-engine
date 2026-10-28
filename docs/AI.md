@@ -140,11 +140,13 @@ don't mean lower scores) and the weight; the running action keeps a
 `momentum` bonus so agents don't flicker; `cooldown` stops an action being
 picked again right after it ends.
 
-Why utility AI and not behaviour trees: animals' reasons are continuous
-("a bit hungry, quite scared"), and "the one that wants it most wins"
-reads the same in Lua, in a node graph and to a child. Orders slot in as
-actions that win. A behaviour-tree layer (for scripted boss phases) can
-sit on top later; it would drive orders and inputs, not replace this.
+Why utility AI for animals and not behaviour trees: their reasons are
+continuous ("a bit hungry, quite scared"), and "the one that wants it
+most wins" reads the same in Lua, in a node graph and to a child. Orders
+slot in as actions that win. Plans with steps and phases are the other
+kind of decision: that is the behaviour-tree layer ("Behaviour trees"
+below), which sits on top and drives orders and inputs rather than
+replacing this.
 
 ## Orders (companions and squads)
 
@@ -207,6 +209,60 @@ cell).
 Without a navmesh everything still works on open ground (steering only),
 with `addObstacle` circles for trees and posts and `groundHeight` for
 hills.
+
+## Behaviour trees
+
+`kke/ai/BehaviorTree.h` (ENG-F71) is the layer for scripted behaviour: a
+boss that opens with a charge, enrages under 30% health and summons adds; a
+guard that patrols, spots, chases and gives up. A tree is ticked once per
+frame; every node answers `success`, `failure` or `running`, and a running
+node is ticked again next frame where it left off.
+
+| Kind | Nodes |
+|---|---|
+| Composites | `sequence` (all must succeed), `selector` (first to succeed), `reactive_sequence` and `reactive_selector` (start at the first child every tick, so a condition up front is re-checked all the time and a stronger branch **pre-empts** what was running, which is aborted: Unreal's "observer aborts"), `parallel` (`success` and `failure` policies: `"all"`, `"one"` or a count), `random_selector` and `random_sequence` (a weighted shuffle each time they start) |
+| Decorators | `inverter`, `succeeder`, `failer`, `repeat` (count, 0 = for ever, one iteration per tick), `retry` (attempts), `until_fail`, `cooldown` (fails for N seconds after the child ends), `timeout` (aborts the child after N seconds), `delay` |
+| Leaves | `action` and `condition` (functions), `check` (a blackboard compare: `==`, `!=`, `<`, `<=`, `>`, `>=`, against a value or another key; no operator = truthy), `set`, `wait`, `chance`, `success`, `failure`, `subtree` |
+
+Nodes share a **blackboard**: numbers, booleans, strings and vectors by
+name. A plain `sequence` or `selector` remembers its running child and does
+not re-check what is before it; use the reactive ones where a branch must be
+dropped when something changes. A node that is dropped while running gets
+its abort callback, so an action can stop its animation. The abort runs right
+after the pre-empting branch's first tick.
+
+```lua
+-- bt.create takes a table: the first item is the node type
+local boss = bt.create({ "reactive_selector",
+  { "reactive_sequence", label = "phase 3",
+      { "check", "hp", "<", 30 },
+      { "action", function(bb, dt) bb.rage = true; return "running" end } },
+  { "reactive_sequence", label = "phase 2",
+      { "check", "hp", "<", 60 },
+      { "succeeder", { "cooldown", 8, summonAdds } },
+      slam },
+  { "reactive_sequence", label = "phase 1", { "condition", function(bb) return bb.playerNear end }, charge },
+}, { seed = 1 })
+
+bt.set(boss, "hp", 100)
+hook.Add("Think", "boss", function(dt) bt.tick(boss, dt) end)   -- "success", "failure" or "running"
+print(bt.describe(boss))   -- the tree, each node's last answer
+```
+
+Leaves are `function(bb, dt)`; `bb` reads and writes the blackboard like a
+table (`bb.hp = 40`, `if bb.target then ...`). A leaf answers `"success"`,
+`"failure"` or `"running"` (`true` and `false` work too; no answer counts as
+success). `{"action", fn, onAbort}` takes a second function for the abort.
+A function in place of a node is an action; a string is a tree made with
+`bt.define(name, node)`, which several trees can use, each with its own
+state. Leaves run on the calling script's own Lua state, so its instruction
+budget and its errors apply; an error in a leaf stops the tick with the leaf's
+label. Trees go with the script that made them.
+
+From C++ build a tree with `btSequence(...)`, `btAction(...)` and the other
+factories, or from JSON with `BtFactory` (registered actions and conditions,
+`addTree` for subtrees). A mistake comes back with its path:
+`root.children[1]: no action or condition called 'jump'`.
 
 ## Lua
 
@@ -302,6 +358,8 @@ use a uniform grid (`SpatialGrid`).
 
 ## Not yet
 
+- Behaviour trees: a node-graph editor for them, and a utility selector node
+  that scores its children with `kke/ai/Utility.h` curves.
 - Learning from rewards (reinforcement learning). Teaching by example
   (above) is built.
 - Off-mesh links for jumps and ladders, per-area costs (mud, water).

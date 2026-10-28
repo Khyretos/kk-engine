@@ -1,7 +1,11 @@
 #include "kke/modules/UiModule.h"
 
 #include "../TouchOverlay.h"
+#include "kke/Accessibility.h"
 #include "kke/Application.h"
+#include "kke/Bidi.h"
+#include "kke/Localization.h"
+#include "kke/Subtitles.h"
 #include "kke/Log.h"
 #include "kke/EngineSettings.h"
 #include "kke/modules/AudioModule.h"
@@ -25,6 +29,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <algorithm>
+#include <cstdio>
 #include <cmath>
 
 namespace kke {
@@ -266,6 +271,30 @@ void UiModule::EngineSystemInterface::DeactivateKeyboard() {
     if (window) SDL_StopTextInput(window);
 }
 
+int UiModule::EngineSystemInterface::TranslateString(Rml::String& translated, const Rml::String& input) {
+    Localization& loc = Localization::get();
+    // RmlUi passes an empty `translated` and uses it whatever the return value is: always fill it.
+    translated = input;
+    // SetInnerRML hands over the whole markup string first, and RmlUi then parses it and comes back
+    // here with each piece of text. Markup is left alone, so it is the pieces that get translated
+    // (and reordered): reversing a string with tags in it would reverse the tags.
+    if (input.find('<') != std::string::npos) return 0;
+    // "@menu.start": a named key (a game that keys its strings rather than using English as the key).
+    if (input.size() > 1 && input[0] == '@' && input.find_first_of(" \n\t") == std::string::npos) {
+        translated = loc.display(loc.tr(input.substr(1)));
+        return 1;
+    }
+    if (loc.has(input)) {
+        translated = loc.display(loc.tr(input));
+        return 1;
+    }
+    if (loc.rtl() || bidi::hasRtl(input)) {
+        translated = loc.display(input);
+        return translated == input ? 0 : 1;
+    }
+    return 0;
+}
+
 void UiModule::EngineSystemInterface::JoinPath(Rml::String& translatedPath, const Rml::String& documentPath, const Rml::String& path) {
     if (isSpriteReference(path)) { // "sprite:NAME": the render interface looks it up
         translatedPath = path;
@@ -312,6 +341,8 @@ void UiModule::showScreenButtonPressed(uint64_t pointer, Rml::Element* button) {
 
 void UiModule::frameStart(const UpdateContext& ctx) {
     if (!m_context || !m_app) return;
+    Subtitles::get().update(ctx.dt);
+    syncSubtitles();
     InputModule* input = m_app->getModule<InputModule>();
     if (!input) return;
     if (!m_finderSet) {
@@ -418,6 +449,24 @@ void UiModule::init(Application& app) {
     m_earcons = std::make_unique<EarconListener>(app);
     for (const char* ev : {"focus", "click", "change"}) m_context->AddEventListener(ev, m_earcons.get(), true);
 
+    // Languages bring their own fonts (Arabic, Hebrew...): loaded as fallback faces, so a name
+    // in any of them shows in any UI. Games that load more languages later are picked up
+    // when the language changes.
+    loadLanguageFonts();
+    m_localeListener = Localization::get().onChange([this] { loadLanguageFonts(); });
+
+    // Captions (kke/Subtitles.h): one document, lines rebuilt when they change.
+    static const char* kSubtitleRml = R"(<rml><head><style>
+        body { font-family: Noto Sans; width: 100%; height: 100%; pointer-events: none; }
+        #subtitles { position: absolute; left: 8%; right: 8%; bottom: 7%; text-align: center; pointer-events: none; }
+        .row { display: block; margin-top: 4dp; }
+        .line { display: inline-block; padding: 3dp 12dp; border-radius: 6dp; color: #ffffff; }
+        .speaker { color: #ffd479; font-weight: bold; }
+        .sound { font-style: italic; color: #d4ecff; }
+        </style></head><body><div id="subtitles"></div></body></rml>)";
+    m_subtitleDoc = m_context->LoadDocumentFromMemory(kSubtitleRml, "subtitles");
+    if (m_subtitleDoc) m_subtitleDoc->Show();
+
     std::cout << "[ui] RmlUi initialised with real Vulkan rendering (text via glyph textures, <img>/background-image via stb_image, both real now -- see RmlVulkanRenderInterface.h)" << std::endl;
 }
 
@@ -452,6 +501,8 @@ void UiModule::renderUi() {
     {
         const UiProfile profile = m_app->uiProfile();
         const bool portrait = extent.height > extent.width;
+        const bool rtl = Localization::get().rtl();
+        const bool highContrast = Accessibility::get().highContrast();
         for (int i = 0; i < m_context->GetNumDocuments(); ++i) {
             Rml::ElementDocument* doc = m_context->GetDocument(i);
             doc->SetClass("kke-phone", profile == UiProfile::Phone);
@@ -459,6 +510,11 @@ void UiModule::renderUi() {
             doc->SetClass("kke-console", profile == UiProfile::Console);
             doc->SetClass("kke-portrait", portrait);
             doc->SetClass("kke-landscape", !portrait);
+            // Menus can mirror themselves in a right-to-left language and thicken up for high
+            // contrast (docs/LOCALIZATION.md, docs/ACCESSIBILITY.md): `.rtl .row { flex-direction: row-reverse; }`.
+            doc->SetClass("rtl", rtl);
+            doc->SetClass("ltr", !rtl);
+            doc->SetClass("high-contrast", highContrast);
         }
     }
     m_pixelsPerPoint = m_app->window().pixelsPerPoint();
@@ -476,6 +532,55 @@ void UiModule::renderUi() {
 
 void UiModule::onSettingsChanged(const EngineSettings& settings) {
     m_uiScale = settings.graphics.uiScale;
+    if (m_subtitleSize != settings.text.subtitleSize || m_subtitleBackground != settings.text.subtitleBackground) {
+        m_subtitleSize = settings.text.subtitleSize;
+        m_subtitleBackground = settings.text.subtitleBackground;
+        m_subtitleRevision = ~0u; // rebuild the lines at the new size
+    }
+}
+
+void UiModule::loadLanguageFonts() {
+    for (const Localization::Language& l : Localization::get().languages())
+        for (const std::string& font : l.fonts) {
+            if (!m_languageFonts.insert(font).second) continue;
+            if (!Rml::LoadFontFace(font, /*fallback_face=*/true))
+                log::get(name())->warn("font '{}' for language {} not found: its text will show as boxes", font, l.code);
+        }
+}
+
+// The lines on screen, when they change: speaker, then the words, newest at the bottom.
+void UiModule::syncSubtitles() {
+    Subtitles& subtitles = Subtitles::get();
+    if (!m_subtitleDoc || subtitles.revision() == m_subtitleRevision) return;
+    m_subtitleRevision = subtitles.revision();
+    Rml::Element* box = m_subtitleDoc->GetElementById("subtitles");
+    if (!box) return;
+    char style[160];
+    std::snprintf(style, sizeof(style), "font-size: %.1fdp; background-color: #000000%02x;", 22.0f * m_subtitleSize,
+                  static_cast<unsigned>(std::clamp(m_subtitleBackground, 0.0f, 1.0f) * 255.0f + 0.5f));
+    // The words in the player's language: English text that has a translation, or "@key". (Bracketing a
+    // sound caption comes after, or its key would no longer match.)
+    Localization& loc = Localization::get();
+    auto wordsOf = [&loc](const std::string& text) {
+        if (!text.empty() && text[0] == '@') return loc.tr(text.substr(1));
+        return loc.has(text) ? loc.tr(text) : text;
+    };
+    std::string rml;
+    for (const Subtitles::Line& line : subtitles.lines()) {
+        const std::string words = wordsOf(line.text);
+        rml += std::string("<div class=\"row\"><span class=\"line ") + (line.kind == "sound" ? "sound" : "") + "\" style=\"" + style + "\">";
+        if (!line.speaker.empty()) rml += "<span class=\"speaker\">" + escapeRmlText(wordsOf(line.speaker)) + ": </span>";
+        rml += escapeRmlText(line.kind == "sound" ? "[" + words + "]" : words) + "</span></div>";
+    }
+    box->SetInnerRML(rml);
+    // A caption is also said aloud to a screen reader, once, as it appears (ids only grow, so a
+    // renewed caption is not said again).
+    for (const Subtitles::Line& line : subtitles.lines())
+        if (line.id > m_lastAnnouncedId && line.kind != "sound") {
+            m_lastAnnouncedId = line.id;
+            const std::string words = wordsOf(line.text);
+            Accessibility::get().announce(line.speaker.empty() ? words : wordsOf(line.speaker) + ": " + words);
+        }
 }
 
 void UiModule::reloadStyleSheets() {
@@ -655,6 +760,9 @@ void UiModule::onEvent(const SDL_Event& event) {
 }
 
 void UiModule::shutdown() {
+    if (m_localeListener) Localization::get().removeOnChange(m_localeListener);
+    m_localeListener = 0;
+    m_subtitleDoc = nullptr;
     if (m_finderSet && m_app)
         if (InputModule* input = m_app->getModule<InputModule>()) {
             input->setScreenButtonFinder(nullptr);

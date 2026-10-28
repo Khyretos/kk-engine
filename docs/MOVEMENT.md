@@ -398,6 +398,49 @@ pointed 5 to 6.2 degrees away from the clip without matching (the
 werewolf's arms rest 30 degrees off UAL's), 0.0 with it, and no foot
 moved. `PoseRetarget::restDifferenceDegrees()` says how much was matched.
 
+## Motion capture: `kke/Mocap.h`
+
+Mocap libraries (CMU, Mixamo exports, Rokoko, Perception Neuron, Blender) ship
+**BVH** files: a skeleton of offsets and rotation channels, then a line of
+numbers per frame (ENG-F23). A BVH file loads as a model with no meshes: its
+joints are the bones, its offsets the rest pose, its motion the one clip,
+sampled at the file's frame rate. `loadModel("walk.bvh")` and `loadBvh` do it
+(cooked files too), so the retargeter takes it like any skeleton:
+
+```cpp
+kke::ModelData mocap = kke::loadBvh("walk.bvh");
+kke::BoneMatch match = kke::matchBones(mocap, hero);        // by canonical bone name
+auto clips = kke::retargetAnimations(mocap, hero, match);   // clips for the hero's skeleton
+```
+
+- Rotations apply in the order the channels list them (`Zrotation Xrotation
+  Yrotation` is Rz x Rx x Ry), as the format defines; root position channels
+  add to its offset.
+- Units: a skeleton over 3 units tall is taken as centimetres (the usual),
+  otherwise metres; `BvhImportOptions::scale` says so outright. `zUp` turns a
+  Z-up file to Y up.
+- Names with colons (`mixamorig:Hips`) and Windows line endings work.
+- A bad file is refused with its line: `line 12: unknown channel 'Wrotation'`.
+  Joints are limited to 512, frames to 200,000.
+
+Capture is noisy. `cleanAnimation(clip, options)` (or `cleanMotion` on poses)
+works in this order, each step off until asked for:
+
+| Option | Does |
+|---|---|
+| `trimStart`, `trimEnd` | cuts seconds off the ends |
+| `fixFlips` (on) | q and -q are one rotation: keeps neighbours on the same side |
+| `spikeDegrees`, `spikeMetres` | a value that jumps and straight back (a tracking glitch) is replaced by its neighbours' midpoint |
+| `smoothSeconds` | Gaussian smoothing with this sigma |
+| `resampleRate` | the clip at another frame rate |
+| `inPlaceBone` | takes that bone's (the root's) horizontal travel out; its height stays; the report says how far it went |
+| `loopBlendSeconds` | the end crossfades into the start and the clip gets that much shorter, so a clip that returns to its pose loops without a pop (the root should be in place) |
+
+`MotionCleanReport` has the frame counts, how many spikes went and the travel.
+
+Not done: foot-contact clean-up (locking planted feet), and finger solving for
+hand-less markers.
+
 ## Not done yet (next)
 
 - Animation layering (upper body over locomotion; *Animation layering

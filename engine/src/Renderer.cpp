@@ -809,6 +809,16 @@ void Renderer::destroyPostPass() {
     m_postSampler = VK_NULL_HANDLE;
 }
 
+namespace {
+// shaders/tonemap_post.frag's push constants: the curve and look, then the
+// colour-blind correction's rows. 112 bytes: inside the 128 Vulkan promises.
+struct PostPush {
+    PostParams post;
+    glm::vec4 colorRow0, colorRow1, colorRow2;
+};
+static_assert(sizeof(PostPush) == 112, "the tone-map pass's push constants");
+} // namespace
+
 // One full-screen triangle: this frame's scene image through the tone
 // map, exposure and look (shaders/tonemap_post.frag), into the swapchain.
 void Renderer::drawPostPass(VkCommandBuffer cmd) {
@@ -820,7 +830,7 @@ void Renderer::drawPostPass(VkCommandBuffer cmd) {
         config.cullMode = rhi::CullMode::None;
         config.depthTestEnable = false;
         config.depthWriteEnable = false;
-        config.pushConstantRange = { rhi::kFragment, 0, sizeof(PostParams) };
+        config.pushConstantRange = { rhi::kFragment, 0, sizeof(PostPush) };
         config.descriptorSetLayouts = { m_postSetLayout };
         m_postPipeline = std::make_unique<Pipeline>(*m_device, m_swapChain->renderPass(), "shaders/rml_fullscreen.vert.spv",
                                                     "shaders/tonemap_post.frag.spv", config);
@@ -850,7 +860,8 @@ void Renderer::drawPostPass(VkCommandBuffer cmd) {
     post.tone.w = m_bloomSource && m_bloom ? m_bloom->settings().strength : 0.0f;
     post.lookPower.a = m_lutTexture ? static_cast<float>(m_lutTexture->size()) : 0.0f;
     post.tone.z = m_swapChain->encodesSrgb() ? 0.0f : 1.0f; // a UNORM (10-bit) swapchain: the shader encodes sRGB
-    vkCmdPushConstants(cmd, m_postPipeline->layout(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PostParams), &post);
+    PostPush push{ post, m_colorRows[0], m_colorRows[1], m_colorRows[2] };
+    vkCmdPushConstants(cmd, m_postPipeline->layout(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PostPush), &push);
     vkCmdDraw(cmd, 3, 1, 0, 0);
 }
 

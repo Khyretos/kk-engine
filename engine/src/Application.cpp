@@ -9,6 +9,11 @@
 #include "ReflectionPass.h"
 #include "ScreenGiPass.h"
 #include "kke/Capabilities.h"
+#include "kke/Accessibility.h"
+#include "kke/CrashReporter.h"
+#include "kke/AssetCatalog.h"
+#include "kke/Localization.h"
+#include "kke/Profiler.h"
 #include "kke/RayScene.h"
 #include "kke/SphereImpostors.h"
 #include "kke/Mood.h"
@@ -114,6 +119,32 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
         if (int n = loadHardwareTargetsFile("targets.json", &error); n > 0)
             log::get("Application")->info("{} hardware target(s) from targets.json", n);
         if (!error.empty()) log::get("Application")->warn("{}", error);
+    }
+    // Words (docs/LOCALIZATION.md): the engine's own languages, then the
+    // system's; the player's settings choose again once they load.
+    {
+        const char* exeDir = SDL_GetBasePath();
+        const std::string folder = findAssetFolder("assets/locales", { "KKE_LOCALES_DIR" }, exeDir ? exeDir : "");
+        if (!folder.empty()) {
+            std::string errors;
+            const int n = Localization::get().loadFolder(folder, &errors);
+            log::get("Application")->info("{} language(s) from {}", n, folder);
+            if (!errors.empty()) log::get("Application")->warn("{}", errors);
+        }
+        if (const char* forced = dev::env("KKE_LANGUAGE"); forced && *forced) Localization::get().setLanguage(forced);
+        else Localization::get().useSystemLanguage();
+        log::get("Application")->info("language: {}", Localization::get().language());
+    }
+    // Crash reports (docs/CRASH_REPORTS.md): a file in the crash folder when the game dies; nothing is sent.
+    {
+        crash::Options crashOptions;
+        crashOptions.folder = crash::defaultFolder();
+        crashOptions.app = title;
+        if (const char* off = dev::env("KKE_NO_CRASH_REPORTS"); !(off && *off == '1')) {
+            if (crash::install(crashOptions)) log::get("Application")->info("crash reports go to {}", crashOptions.folder);
+            crash::setContext("language", Localization::get().language());
+            Localization::get().onChange([] { crash::setContext("language", Localization::get().language()); });
+        }
     }
     m_target = detectHardwareTarget();
     log::get("Application")->info("Hardware target: {} ({}); platform backend: {}", m_target.target->name, m_target.reason,
@@ -385,7 +416,9 @@ Application::~Application() {
 void Application::safeInvoke(Module* m, const char* stage, const std::function<void()>& fn) {
     if (m_faultedModules.count(m)) return;
     const bool timed = m_bench && !m_benchModuleIndex.empty();
-    const auto started = timed ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+    // Every module call is timed, always: the Performance panel's per-module
+    // table and a capture's zones come from this (kke/Profiler.h).
+    const auto started = std::chrono::steady_clock::now();
     const size_t brokenBefore = m_brokenModuleInfos.size();
 
     try {
@@ -428,9 +461,10 @@ void Application::safeInvoke(Module* m, const char* stage, const std::function<v
         m_brokenModuleInfos.push_back({ m->name(), stage, message, message, ErrorSource::Unknown, "", 0 });
         log::get(m->name())->error("disabled for the rest of this session after throwing a non-standard exception during {}()", stage);
     }
+    const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
+    Profiler::get().addModuleTime(Profiler::get().moduleZone(m->name(), stage), ms);
     if (timed) {
-        if (auto it = m_benchModuleIndex.find(m); it != m_benchModuleIndex.end())
-            m_bench->addModule(it->second, stage, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count());
+        if (auto it = m_benchModuleIndex.find(m); it != m_benchModuleIndex.end()) m_bench->addModule(it->second, stage, ms);
         if (m_brokenModuleInfos.size() > brokenBefore)
             m_bench->addEvent(std::string("module ") + m->name() + " disabled in " + std::string(stage) + "(): " + m_brokenModuleInfos.back().friendlyMessage);
     }
@@ -668,6 +702,66 @@ void Application::writeBenchmarkShots(const std::filesystem::path& dir, const st
 
 void Application::run() {
     resolveInitOrder();
+    // The profiler (kke/Profiler.h): this thread is "main"; a capture also
+    // samples the GPU time and the memory once a frame; KKE_PROFILE=file or
+    // file:frames starts one now (600 frames unless it says).
+    Profiler::get().nameThisThread("main");
+    {
+        VkPhysicalDeviceProperties gpu{};
+        vkGetPhysicalDeviceProperties(device().physicalDevice(), &gpu);
+        crash::setContext("gpu", gpu.deviceName);
+        crash::setContext("hardware tier", m_target.target->name);
+        crash::setContext("backend", platform::backendName());
+        std::string names;
+        for (Module* m : m_initOrder) names += (names.empty() ? "" : ", ") + std::string(m->name());
+        crash::setContext("modules", names);
+    }
+    Profiler::get().setCounterSource([this](Profiler& p) {
+        const uint32_t gpu = p.intern("GPU frame ms"), rss = p.intern("Process memory MB"), vram = p.intern("GPU memory MB");
+        if (const float g = m_renderer->lastGpuFrameTimeMs(); g >= 0.0f) p.counter(gpu, g);
+        if (const double r = platform::residentMemoryMb(); r > 0.0) p.counter(rss, r);
+        VkPhysicalDeviceMemoryProperties props{};
+        vkGetPhysicalDeviceMemoryProperties(device().physicalDevice(), &props);
+        std::vector<VmaBudget> budgets(props.memoryHeapCount);
+        vmaGetHeapBudgets(device().allocator(), budgets.data());
+        double local = 0.0;
+        for (uint32_t i = 0; i < props.memoryHeapCount; ++i)
+            if (props.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) local += static_cast<double>(budgets[i].statistics.allocationBytes);
+        p.counter(vram, local / (1024.0 * 1024.0));
+    });
+    // Accessibility (docs/ACCESSIBILITY.md): the colour-blind correction goes
+    // to the tone-map pass, and "reduce motion" turns motion blur off.
+    // KKE_COLORBLIND=deuteranopia (or protanopia, tritanopia) forces a mode for a screenshot.
+    auto applyAccessibility = [this] {
+        const Accessibility::Options& o = Accessibility::get().options();
+        std::string mode = o.colorBlind;
+        float strength = o.colorBlindStrength;
+        if (const char* forced = dev::env("KKE_COLORBLIND"); forced && *forced) {
+            mode = forced;
+            strength = 1.0f;
+        }
+        const auto rows = Accessibility::colorMatrixRows(mode, strength);
+        m_renderer->setColorRows({ rows[0], rows[1], rows[2] });
+        setMotionBlur(m_motionBlurRequested);
+    };
+    const char* crashTest = dev::env("KKE_TEST_CRASH");
+    int crashTestFrames = 0;
+    const int accessibilityListener = Accessibility::get().onChange(applyAccessibility);
+    applyAccessibility();
+    if (const char* env = dev::env("KKE_PROFILE"); env && *env) {
+        Profiler::CaptureOptions options;
+        options.path = env;
+        options.frames = 600;
+        const size_t colon = options.path.rfind(':');
+        if (colon != std::string::npos && colon + 1 < options.path.size() &&
+            options.path.find_first_not_of("0123456789", colon + 1) == std::string::npos) {
+            options.frames = std::max(1, std::atoi(options.path.c_str() + colon + 1));
+            options.path.resize(colon);
+        }
+        std::string error;
+        if (!Profiler::get().startCapture(options, &error)) log::get("Profiler")->warn("KKE_PROFILE: {}", error);
+        else log::get("Profiler")->info("capturing {} frames to {}", options.frames, options.path);
+    }
     // A benchmark measures the game, not the logo.
     if (!m_bench)
         if (auto options = BenchRecorder::fromEnvironment()) startBenchmark(*options);
@@ -1332,6 +1426,20 @@ void Application::run() {
             m_bench->addStage(BenchRecorder::Idle, msSince(benchAfterEnd, benchIdleEnd));
             m_bench->setFrameInfo(m_renderer->lastGpuFrameTimeMs(), static_cast<int>(m_fixedStepsLastFrame), static_cast<int>(stepCap));
         }
+        Profiler::get().endFrame(std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - now).count());
+        // KKE_TEST_CRASH=segv|abort|throw: dies on the 20th frame, to see what a crash report holds (docs/CRASH_REPORTS.md).
+        if (crashTest && ++crashTestFrames == 20) {
+            const std::string how = crashTest;
+            if (how == "abort") std::abort();
+            if (how == "throw") throw std::runtime_error("KKE_TEST_CRASH: a test exception nobody catches");
+            *static_cast<volatile int*>(nullptr) = 1;
+        }
+    }
+    Accessibility::get().removeOnChange(accessibilityListener);
+    if (Profiler::get().capturing()) {
+        std::string error;
+        if (Profiler::get().stopCapture(&error)) log::get("Profiler")->info("capture saved to {}\n{}", Profiler::get().lastCapturePath(), Profiler::get().lastCaptureSummary());
+        else log::get("Profiler")->warn("capture not saved: {}", error);
     }
     if (m_bench) writeBenchmarkReport();
     startQuitWatchdog();
@@ -1462,7 +1570,9 @@ void Application::setDepthOfField(bool on) {
 DofSettings& Application::depthOfFieldSettings() { return m_renderer->depthOfFieldSettings(); }
 
 void Application::setMotionBlur(bool on) {
-    m_motionBlurOn = m_motionBlurEnv ? *m_motionBlurEnv : on;
+    m_motionBlurRequested = on;
+    // "Reduce motion" (docs/ACCESSIBILITY.md) wins over the setting, not over a developer's KKE_MOTION_BLUR.
+    m_motionBlurOn = m_motionBlurEnv ? *m_motionBlurEnv : (on && !Accessibility::get().reduceMotion());
     m_renderer->setMotionBlur(m_motionBlurOn);
     updateSceneDepthReadable();
 }

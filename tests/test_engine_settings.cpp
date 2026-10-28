@@ -26,6 +26,8 @@ TEST(EngineSettings, ModifiedValuesRoundTrip) {
     s.graphics.brightness = 1.5f;
     s.graphics.uiScale = 1.25f;
     s.graphics.showDebugOverlay = false;
+    s.graphics.autoLod = false;
+    s.graphics.lodBias = 1.75f;
     s.audio.master = 10;
     s.audio.music = 0;
     s.audio.effects = 100;
@@ -38,6 +40,18 @@ TEST(EngineSettings, ModifiedValuesRoundTrip) {
     s.gameplay.showDamageNumbers = false;
     s.custom["favoriteColor"] = "teal";
     EXPECT_EQ(kke::settingsFromJson(kke::settingsToJson(s)), s);
+}
+
+TEST(EngineSettings, LevelOfDetailDefaultsToOnAndTheBiasIsClamped) {
+    EngineSettings s;
+    EXPECT_TRUE(s.graphics.autoLod);
+    EXPECT_FLOAT_EQ(s.graphics.lodBias, 1.0f);
+    EngineSettings wild = kke::settingsFromJson(R"({"graphics": {"lodBias": 99}})");
+    wild.sanitize();
+    EXPECT_FLOAT_EQ(wild.graphics.lodBias, 4.0f);
+    wild.graphics.lodBias = 0.0f;
+    wild.sanitize();
+    EXPECT_FLOAT_EQ(wild.graphics.lodBias, 0.25f);
 }
 
 TEST(EngineSettings, MissingKeysKeepDefaults) {
@@ -134,4 +148,58 @@ TEST(EngineSettings, CorruptFileFallsBackToDefaults) {
 
 TEST(EngineSettings, SaveToUnwritablePathFails) {
     EXPECT_FALSE(kke::saveSettingsFile(EngineSettings{}, "/nonexistent-dir/definitely/settings.json"));
+}
+
+TEST(EngineSettings, LanguageAndAccessibilityRoundTrip) {
+    EngineSettings s;
+    EXPECT_EQ(s.text.language, "auto");
+    EXPECT_TRUE(s.text.subtitles);
+    EXPECT_EQ(s.accessibility.colorBlind, "off");
+    s.text.language = "pt-BR";
+    s.text.subtitles = false;
+    s.text.subtitleSize = 1.5f;
+    s.text.subtitleBackground = 0.25f;
+    s.accessibility.colorBlind = "deuteranopia";
+    s.accessibility.colorBlindStrength = 0.5f;
+    s.accessibility.highContrast = true;
+    s.accessibility.reduceMotion = true;
+    s.accessibility.screenReader = true;
+    const EngineSettings back = kke::settingsFromJson(kke::settingsToJson(s));
+    EXPECT_EQ(back, s);
+    EXPECT_EQ(back.text.language, "pt-BR");
+    EXPECT_EQ(back.accessibility.colorBlind, "deuteranopia");
+    EXPECT_TRUE(back.accessibility.screenReader);
+    EngineSettings other = s;
+    other.accessibility.reduceMotion = false;
+    EXPECT_NE(other, s); // each one counts in the comparison
+    other = s;
+    other.text.language = "nl";
+    EXPECT_NE(other, s);
+}
+
+TEST(EngineSettings, LanguageAndAccessibilityAreSanitised) {
+    const EngineSettings s = kke::settingsFromJson(R"({"text": {"language": "", "subtitleSize": 9, "subtitleBackground": -1},
+        "accessibility": {"colorBlind": "rainbow", "colorBlindStrength": 7}})");
+    EXPECT_EQ(s.text.language, "auto");
+    EXPECT_FLOAT_EQ(s.text.subtitleSize, 2.5f);
+    EXPECT_FLOAT_EQ(s.text.subtitleBackground, 0.0f);
+    EXPECT_EQ(s.accessibility.colorBlind, "off");
+    EXPECT_FLOAT_EQ(s.accessibility.colorBlindStrength, 1.0f);
+    // An old file without them keeps the defaults.
+    const EngineSettings old = kke::settingsFromJson(R"({"graphics": {"vsync": false}})");
+    EXPECT_EQ(old.text.language, "auto");
+    EXPECT_TRUE(old.text.subtitles);
+}
+
+TEST(EngineSettings, CrashReportsAreNeverSentUnlessThePlayerSaysSo) {
+    EngineSettings s;
+    EXPECT_FALSE(s.privacy.sendCrashReports); // off by default
+    EXPECT_FALSE(kke::settingsFromJson(R"({"graphics": {"vsync": false}})").privacy.sendCrashReports); // and an old file keeps it off
+    s.privacy.sendCrashReports = true;
+    const EngineSettings back = kke::settingsFromJson(kke::settingsToJson(s));
+    EXPECT_TRUE(back.privacy.sendCrashReports);
+    EXPECT_EQ(back, s);
+    EngineSettings other = s;
+    other.privacy.sendCrashReports = false;
+    EXPECT_NE(other, s);
 }

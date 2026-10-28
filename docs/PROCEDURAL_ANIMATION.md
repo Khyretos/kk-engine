@@ -313,6 +313,46 @@ character on its feet and goes away when balance is lost. It is applied
 before every physics step, so it holds the same at 20 fps as at 144. FEMFX ragdolls have no motors: there
 `driveRagdoll` returns false and characters simply go limp.
 
+## Compression: `AnimationSet::compress`
+
+A baked clip is a 4x4 matrix per bone per frame: 64 bytes x 60 bones x 30 frames
+a second is 115 KB for every second of animation, and most of it says nothing a
+curve doesn't. `kke/AnimCompress.h` (ENG-F63) packs a clip:
+
+1. It splits the clip into translation, rotation and scale tracks per bone.
+2. It keeps only the frames a track needs. A key is dropped when the curve
+   through its neighbours stays within a tolerance of it (Ramer-Douglas-Peucker
+   over time; rotations are measured as the angle between them, translations
+   in metres). A track that never moves is one key; a constant-speed turn is two.
+3. It stores the keys as 16-bit numbers: translations and scales over the
+   track's own range, rotations as the three smaller components of the unit
+   quaternion ("smallest three").
+
+```cpp
+kke::AnimationSet set(model);
+kke::AnimCompressionStats stats;
+set.compress({}, &stats);            // defaults: 0.5 mm, 0.05 degrees, 16-bit
+// set.sample(...) plays as before, from the packed clips; the frames are freed
+printf("%.1fx smaller, worst error %.2f mm\n", stats.ratio(), stats.maxPositionError * 1000);
+```
+
+On the shipped Universal Animation Library (43 clips) that is 8.6 MB as
+matrices to 0.51 MB: **17x smaller**, worst error 0.5 mm and 0.051 degrees.
+`sample` returns what it did before within the tolerance (it blends the two
+frames around the time exactly as before). Root motion and lift removal still
+work after packing: `extractRootMotion` and `removeLift` unpack the clips they
+edit (and `compress` packs them again).
+
+For cooked art, `PackedClip` is a file: `packAnimation(clip, options, packed)`,
+`packed.serialize()` and `PackedClip::deserialize(bytes, packed, &error)`. The
+reader trusts nothing (header, version, counts, key order and ranges are checked;
+cut-short and corrupted files are refused, never crash). `quantize = false` keeps
+32-bit floats (about twice the size). Clips are limited to 65,535 frames.
+
+Not done: playing from the packed form without the `AnimationSet`'s pose copy in
+`ModelModule` (which still lerps matrices from `ModelData::animations`), and
+per-bone tolerances that scale with the length of the chain below the bone.
+
 ## On any model: `ModelModule::setPoseModifier`
 
 A skinned model playing a clip can have a procedural layer on top: the

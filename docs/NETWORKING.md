@@ -548,9 +548,83 @@ simulated network with lag, jitter and loss a Locomotion player vaults
 the same on both sides, a client with a wall missing from its level is
 stopped by the host's, and a cheat's fast clock buys nothing.
 
+## Rollback
+
+Fighting games (GGPO, Skullgirls, Street Fighter 6) do not wait for the other
+player. Every machine runs the whole game; where the other player's input has not
+arrived yet it **guesses** (they will keep doing what they did) and carries on at
+once. When the real input arrives and the guess was wrong, the machine loads the
+state from before the mistake and re-runs the frames with the right input, faster
+than anyone can see. With a good line nobody waits; with a bad one you see a character
+snap, not a frozen game. `kke/Rollback.h` (ENG-F55) is that, with no engine
+dependencies.
+
+It needs one thing of the game: **determinism**. The same inputs from the same
+state must give the same next state on every machine (a fixed time step, no
+wall-clock reads, no unordered-container order, the same random numbers; floats
+are fine on one CPU architecture and compiler). `rollbackSyncTest` checks it for
+you, from a single machine, before you ever go online.
+
+```cpp
+kke::RollbackConfig cfg;  cfg.players = 2;  cfg.inputSize = 2;  cfg.inputDelay = 2;  cfg.maxPrediction = 8;
+kke::RollbackSession session(cfg);
+session.setLocalPlayer(myIndex);
+
+kke::RollbackGame game;                       // what the game can do with its state
+game.save    = [&] { return world.toBytes(); };
+game.load    = [&](const kke::Bytes& b) { world.fromBytes(b); };
+game.advance = [&](const std::vector<kke::Bytes>& inputs) { world.step(inputs); };   // one fixed frame
+
+kke::RollbackDriver driver(session, game);
+
+// every tick of a fixed 60 Hz loop:
+auto status = driver.tick(readMyInput());     // guesses, advances, rolls back and re-runs when a guess was wrong
+if (status == kke::RollbackSession::Status::PredictionLimit) { /* too far ahead of them: this tick waits */ }
+send(session.makePacket());                   // to every other player, unreliably (UDP)
+for (auto& p : received) session.receive(p);  // what arrived
+for (auto& e : session.takeEvents()) { /* Desync, Rollback, Disconnected */ }
+```
+
+For a game that does not want the driver, `session.advance(requests)` returns the
+list of things to do, in order: `Save(frame)`, `Load(frame)`, `Advance(frame, inputs,
+predicted)` (the GGPO / GGRS style), and the game stores the snapshots itself in a ring
+of `session.snapshotSlots()`.
+
+- **Input delay** (`inputDelay`, frames) is the usual trade: a button is seen
+  that many frames later, and the others' inputs have that long to arrive before
+  they are needed. Two or three frames is invisible; more means fewer rollbacks.
+- **Prediction limit** (`maxPrediction`): the simulation never runs further ahead of
+  the last input everyone has than this; then `tick` returns `PredictionLimit` and
+  the game waits. A rollback is never deeper than it.
+- **Packets** are small (about 40 bytes plus 2 bytes per unconfirmed frame), carry every
+  input the others have not acknowledged yet (so a lost packet costs nothing, and a
+  late or doubled one is harmless), and are checked on the way in: a wrong header,
+  size, sender or an absurd frame is refused and changes nothing. Send one every tick.
+- **Desync detection**: every `checksumInterval` frames the machines compare checksums
+  of a state both consider final; a difference raises a `Desync` event with the frame
+  and both checksums.
+- **Time sync**: `session.recommendedWait()` (0..8) says how many ticks the machine
+  that is running ahead should skip so the other can catch up.
+- **Disconnects**: `disconnectPlayer(player, fromFrame)` plays zeros for them from a
+  frame every machine agrees on (the game sends that agreement itself).
+- 1 to 8 players; `session.stats()` counts rollbacks, frames re-run, the deepest
+  rollback, guesses and how many were wrong, stalls and packets.
+
+Tested (`tests/test_rollback.cpp`) with a deterministic toy game over a simulated
+line with lag, jitter, 25% loss, doubled packets and reordering: in every case both
+machines end with exactly the state of a sequential run, no false desync is
+reported, a machine whose game disagrees is caught within the checksum interval,
+and garbage and damaged packets (thousands, at random) never crash it.
+
+Not here yet: a peer-to-peer unreliable transport. `NetModule`'s events are reliable
+and relayed by the host (fine on a LAN, with head-of-line delay under loss), so a
+rollback game today sends `makePacket()` through its own UDP socket or through
+`sendEvent`. Also not done: spectators, and a deterministic physics (Jolt is not
+guaranteed bit-for-bit across machines; a fighting game's own fixed-point logic is).
+
 ## Not yet
 
-- Rollback for fighting games, lockstep for RTS (ACTION_PLAN.md); with
+- Lockstep for RTS (ACTION_PLAN.md; rollback is done, see "Rollback"); with
   input replay: player-vs-player collision, host-side respawns, and
   lag-compensated hit checks (rewinding the other players to what the
   shooter saw).

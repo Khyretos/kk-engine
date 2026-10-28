@@ -97,6 +97,11 @@ void ScriptModule::init(Application& app) {
         releaseScript(source);
         if (m_terrain) m_terrain->release(source);
         if (m_clock) m_clock->release(source);
+        m_behavior.release(source);
+        m_timeline.release(source);
+        m_music.release(source);
+        m_world.release(source);
+        m_weather.release(source);
     };
     m_vm->onStopped = [this](const std::string& source) {
         for (ScriptFile& f : m_files)
@@ -120,6 +125,29 @@ void ScriptModule::init(Application& app) {
     m_terrain->bind(*m_vm);
     m_clock = std::make_unique<ScriptClock>(&app);
     m_clock->bind(*m_vm);
+    m_behavior.bind(*m_vm);
+    m_timeline.setFolder(m_dir);
+    m_timeline.bind(*m_vm);
+    m_world.bind(*m_vm);
+    m_weather.attach(&app.lighting());
+    m_weather.precipitation = [this](const std::string& family, const std::string& effect, int count, const glm::vec3& position, float floor) {
+        WeatherStream& st = m_weatherStreams[family];
+        ParticleLibrary& lib = fxLibrary();
+        ParticleLibrary::Spot spot;
+        spot.position = position;
+        spot.floor = floor;
+        if (st.effect != effect || static_cast<int>(st.ids.size()) != count) { // a different effect or amount: start over
+            for (uint32_t id : st.ids) lib.stop(id);
+            st.ids.clear();
+            st.effect = effect;
+            for (int i = 0; i < count; ++i)
+                if (const ParticleLibrary::EmitterId id = lib.start(effect, spot)) st.ids.push_back(id);
+        } else {
+            for (uint32_t id : st.ids) lib.move(id, spot);
+        }
+    };
+    m_weather.wind = [this](const glm::vec3& w) { m_fxWind = w; };
+    m_weather.bind(*m_vm);
     scanFolder(false);
     log::get(name())->info("{} script(s) from '{}'", m_files.size(), m_dir);
 }
@@ -182,6 +210,8 @@ void ScriptModule::bindAll() {
     vm.registerFunction("kke", "dt", [this](lua_State* L) { lua_pushnumber(L, m_dt); return 1; });
 
     bindCamera(); // camera.*: ScriptCamera.cpp
+    bindProfile(); // profile.*: ScriptProfile.cpp
+    bindLocale(); // loc.*, subtitles.*, accessibility.*: ScriptLocale.cpp
 
     // mood.*: the sky, sun, fog and look (kke/Mood.h, docs/MOODS.md).
     vm.registerFunction("mood", "set", [app](lua_State* L) {
@@ -774,6 +804,10 @@ void ScriptModule::update(const UpdateContext& ctx) {
     if (m_nav && m_nav->dynamic()) m_nav->update(); // obstacles nav.obstacle added or removed
     stepCreatures(ctx.dt);
     m_clock->update(ctx.dt, *m_vm);                         // time of day: the sun, the sky, Dawn/Dusk/Hour hooks
+    m_music.update(ctx.dt, *m_vm);                          // adaptive music: beats, bars, segments, stingers
+    m_world.update(ctx.dt, *m_vm, m_app->camera().position);   // streamed worlds: cells load and unload around the foci
+    m_weather.update(ctx.dt, *m_vm, m_app->camera().position, m_clock->active() ? m_clock->clock().hour : -1.0f); // weather: rain, snow, wind, light, lightning
+    m_timeline.update(ctx.dt, *m_vm);                       // timelines: events, bound values, spans, clips
     // Per-script CPU time this frame, smoothed for the panel.
     for (const auto& [source, total] : m_vm->cpuTimes()) {
         const double ms = (total - m_cpuLast[source]) * 1000.0;

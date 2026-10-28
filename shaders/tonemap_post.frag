@@ -21,6 +21,9 @@ layout(push_constant) uniform Post {
     vec4 lookSlope;  // rgb = slope, a = saturation
     vec4 lookOffset; // rgb = offset, a = 1 when a look is set
     vec4 lookPower;  // rgb = power, a = the colour LUT's size (0 = none)
+    vec4 colorRow0;  // docs/ACCESSIBILITY.md: the colour-blind correction's rows (kke::Accessibility::colorMatrixRows);
+    vec4 colorRow1;  // colorRow0.w = 1 when it is on
+    vec4 colorRow2;
 } post;
 
 layout(location = 0) in vec2 inUv;
@@ -56,6 +59,9 @@ void main() {
     vec3 c = toneMapLook(light, post.tone, post.lookSlope, post.lookOffset, post.lookPower);
     int lutSize = int(post.lookPower.a + 0.5);
     if (lutSize >= 2) c = srgbToLinearExact(lutApply(linearToSrgb(clamp(c, 0.0, 1.0)), lutSize)); // a .cube grades display colour
+    // The colour-blind correction, on display-linear colour: a 3x3, per pixel, nothing temporal.
+    if (post.colorRow0.w > 0.5)
+        c = clamp(vec3(dot(post.colorRow0.xyz, c), dot(post.colorRow1.xyz, c), dot(post.colorRow2.xyz, c)), 0.0, 1.0);
     if (post.tone.z > 0.5) c = linearToSrgb(c);
     outColor = vec4(c, 1.0);
 }

@@ -38,6 +38,7 @@ void EngineSettings::sanitize() {
     graphics.fieldOfView = std::clamp(graphics.fieldOfView, 30.0f, 120.0f);
     graphics.brightness = std::clamp(graphics.brightness, 0.0f, 3.0f);
     graphics.uiScale = std::clamp(graphics.uiScale, 0.5f, 2.5f);
+    graphics.lodBias = std::clamp(graphics.lodBias, 0.25f, 4.0f);
     graphics.msaa = graphics.msaa >= 8 ? 8 : graphics.msaa >= 4 ? 4 : graphics.msaa >= 2 ? 2 : 1;
     graphics.shadowResolution = graphics.shadowResolution >= 2048 ? 2048 : 1024;
     audio.master = std::clamp(audio.master, 0, 100);
@@ -48,6 +49,13 @@ void EngineSettings::sanitize() {
         gameplay.difficulty = "normal";
     }
     gameplay.maxPhysicsStepsPerFrame = std::clamp(gameplay.maxPhysicsStepsPerFrame, 1, 8);
+    text.subtitleSize = std::clamp(text.subtitleSize, 0.75f, 2.5f);
+    text.subtitleBackground = std::clamp(text.subtitleBackground, 0.0f, 1.0f);
+    if (text.language.empty()) text.language = "auto";
+    if (accessibility.colorBlind != "off" && accessibility.colorBlind != "protanopia" && accessibility.colorBlind != "deuteranopia" &&
+        accessibility.colorBlind != "tritanopia")
+        accessibility.colorBlind = "off";
+    accessibility.colorBlindStrength = std::clamp(accessibility.colorBlindStrength, 0.0f, 1.0f);
     performance.workerThreads = std::clamp(performance.workerThreads, 0, 256);
     performance.renderScale = std::clamp(performance.renderScale, 0.5f, 1.0f);
     performance.backgroundFrameRate = std::clamp(performance.backgroundFrameRate, 0.0f, 240.0f);
@@ -59,7 +67,7 @@ bool EngineSettings::operator==(const EngineSettings& o) const {
            graphics.frameRateLimit == o.graphics.frameRateLimit && graphics.fieldOfView == o.graphics.fieldOfView &&
            graphics.shadows == o.graphics.shadows && graphics.shadowResolution == o.graphics.shadowResolution && graphics.msaa == o.graphics.msaa &&
            graphics.globalIllumination == o.graphics.globalIllumination && graphics.reflections == o.graphics.reflections &&
-           graphics.volumetricFog == o.graphics.volumetricFog && graphics.smaa == o.graphics.smaa && graphics.taa == o.graphics.taa && graphics.bloom == o.graphics.bloom && graphics.depthOfField == o.graphics.depthOfField && graphics.motionBlur == o.graphics.motionBlur && graphics.occlusionCulling == o.graphics.occlusionCulling && graphics.shadowRays == o.graphics.shadowRays && graphics.brightness == o.graphics.brightness &&
+           graphics.volumetricFog == o.graphics.volumetricFog && graphics.smaa == o.graphics.smaa && graphics.taa == o.graphics.taa && graphics.bloom == o.graphics.bloom && graphics.depthOfField == o.graphics.depthOfField && graphics.motionBlur == o.graphics.motionBlur && graphics.occlusionCulling == o.graphics.occlusionCulling && graphics.autoLod == o.graphics.autoLod && graphics.lodBias == o.graphics.lodBias && graphics.shadowRays == o.graphics.shadowRays && graphics.brightness == o.graphics.brightness &&
            graphics.uiScale == o.graphics.uiScale && graphics.showDebugOverlay == o.graphics.showDebugOverlay &&
            audio.master == o.audio.master && audio.music == o.audio.music && audio.effects == o.audio.effects &&
            audio.muteWhenUnfocused == o.audio.muteWhenUnfocused &&
@@ -68,6 +76,11 @@ bool EngineSettings::operator==(const EngineSettings& o) const {
            gameplay.difficulty == o.gameplay.difficulty &&
            gameplay.maxPhysicsStepsPerFrame == o.gameplay.maxPhysicsStepsPerFrame &&
            gameplay.showDamageNumbers == o.gameplay.showDamageNumbers &&
+           text.language == o.text.language && text.subtitles == o.text.subtitles && text.subtitleSize == o.text.subtitleSize &&
+           text.subtitleBackground == o.text.subtitleBackground && accessibility.colorBlind == o.accessibility.colorBlind &&
+           accessibility.colorBlindStrength == o.accessibility.colorBlindStrength && accessibility.highContrast == o.accessibility.highContrast &&
+           accessibility.reduceMotion == o.accessibility.reduceMotion && accessibility.screenReader == o.accessibility.screenReader &&
+           privacy.sendCrashReports == o.privacy.sendCrashReports &&
            performance.useEverything == o.performance.useEverything && performance.workerThreads == o.performance.workerThreads &&
            performance.renderScale == o.performance.renderScale &&
            performance.backgroundFrameRate == o.performance.backgroundFrameRate && custom == o.custom;
@@ -79,7 +92,7 @@ std::string settingsToJson(const EngineSettings& s) {
     j["graphics"] = {
         {"fullscreen", s.graphics.fullscreen}, {"vsync", s.graphics.vsync},
         {"frameRateLimit", s.graphics.frameRateLimit}, {"fieldOfView", s.graphics.fieldOfView},
-        {"shadows", s.graphics.shadows}, {"shadowResolution", s.graphics.shadowResolution}, {"msaa", s.graphics.msaa}, {"globalIllumination", s.graphics.globalIllumination}, {"reflections", s.graphics.reflections}, {"volumetricFog", s.graphics.volumetricFog}, {"smaa", s.graphics.smaa}, {"taa", s.graphics.taa}, {"bloom", s.graphics.bloom}, {"depthOfField", s.graphics.depthOfField}, {"motionBlur", s.graphics.motionBlur}, {"occlusionCulling", s.graphics.occlusionCulling}, {"shadowRays", s.graphics.shadowRays}, {"brightness", s.graphics.brightness},
+        {"autoLod", s.graphics.autoLod}, {"lodBias", s.graphics.lodBias}, {"shadows", s.graphics.shadows}, {"shadowResolution", s.graphics.shadowResolution}, {"msaa", s.graphics.msaa}, {"globalIllumination", s.graphics.globalIllumination}, {"reflections", s.graphics.reflections}, {"volumetricFog", s.graphics.volumetricFog}, {"smaa", s.graphics.smaa}, {"taa", s.graphics.taa}, {"bloom", s.graphics.bloom}, {"depthOfField", s.graphics.depthOfField}, {"motionBlur", s.graphics.motionBlur}, {"occlusionCulling", s.graphics.occlusionCulling}, {"shadowRays", s.graphics.shadowRays}, {"brightness", s.graphics.brightness},
         {"uiScale", s.graphics.uiScale}, {"showDebugOverlay", s.graphics.showDebugOverlay},
     };
     j["audio"] = {
@@ -94,6 +107,16 @@ std::string settingsToJson(const EngineSettings& s) {
         {"difficulty", s.gameplay.difficulty}, {"maxPhysicsStepsPerFrame", s.gameplay.maxPhysicsStepsPerFrame},
         {"showDamageNumbers", s.gameplay.showDamageNumbers},
     };
+    j["text"] = {
+        {"language", s.text.language}, {"subtitles", s.text.subtitles}, {"subtitleSize", s.text.subtitleSize},
+        {"subtitleBackground", s.text.subtitleBackground},
+    };
+    j["accessibility"] = {
+        {"colorBlind", s.accessibility.colorBlind}, {"colorBlindStrength", s.accessibility.colorBlindStrength},
+        {"highContrast", s.accessibility.highContrast}, {"reduceMotion", s.accessibility.reduceMotion},
+        {"screenReader", s.accessibility.screenReader},
+    };
+    j["privacy"] = { {"sendCrashReports", s.privacy.sendCrashReports} };
     j["performance"] = {
         {"useEverything", s.performance.useEverything}, {"workerThreads", s.performance.workerThreads},
         {"renderScale", s.performance.renderScale}, {"backgroundFrameRate", s.performance.backgroundFrameRate},
@@ -126,6 +149,8 @@ EngineSettings settingsFromJson(const std::string& text, const EngineSettings& d
     readIfPresent(g, "depthOfField", s.graphics.depthOfField);
     readIfPresent(g, "motionBlur", s.graphics.motionBlur);
     readIfPresent(g, "occlusionCulling", s.graphics.occlusionCulling);
+    readIfPresent(g, "autoLod", s.graphics.autoLod);
+    readIfPresent(g, "lodBias", s.graphics.lodBias);
     readIfPresent(g, "shadowRays", s.graphics.shadowRays);
     readIfPresent(g, "brightness", s.graphics.brightness);
     readIfPresent(g, "uiScale", s.graphics.uiScale);
@@ -147,6 +172,18 @@ EngineSettings settingsFromJson(const std::string& text, const EngineSettings& d
     readIfPresent(gp, "difficulty", s.gameplay.difficulty);
     readIfPresent(gp, "maxPhysicsStepsPerFrame", s.gameplay.maxPhysicsStepsPerFrame);
     readIfPresent(gp, "showDamageNumbers", s.gameplay.showDamageNumbers);
+    const auto& tx = section(j, "text");
+    readIfPresent(tx, "language", s.text.language);
+    readIfPresent(tx, "subtitles", s.text.subtitles);
+    readIfPresent(tx, "subtitleSize", s.text.subtitleSize);
+    readIfPresent(tx, "subtitleBackground", s.text.subtitleBackground);
+    const auto& ac = section(j, "accessibility");
+    readIfPresent(ac, "colorBlind", s.accessibility.colorBlind);
+    readIfPresent(ac, "colorBlindStrength", s.accessibility.colorBlindStrength);
+    readIfPresent(ac, "highContrast", s.accessibility.highContrast);
+    readIfPresent(ac, "reduceMotion", s.accessibility.reduceMotion);
+    readIfPresent(ac, "screenReader", s.accessibility.screenReader);
+    readIfPresent(section(j, "privacy"), "sendCrashReports", s.privacy.sendCrashReports);
     const auto& pf = section(j, "performance");
     readIfPresent(pf, "useEverything", s.performance.useEverything);
     readIfPresent(pf, "workerThreads", s.performance.workerThreads);
