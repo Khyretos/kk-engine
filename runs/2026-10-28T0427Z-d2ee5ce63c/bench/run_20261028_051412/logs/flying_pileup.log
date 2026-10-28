@@ -1,0 +1,33 @@
+[2026-10-28 05:19:22.517][engine][Application][Flying][info]: Hardware target: desktop (no specific device recognised); platform backend: desktop
+[2026-10-28 05:19:22.517][engine][Application][Flying][info]: UI profile: desktop
+[2026-10-28 05:19:22.519][engine][Governor][Flying][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 1.00
+[2026-10-28 05:19:22.525][engine][VulkanDevice][Flying][info]: using device: llvmpipe (LLVM 22.1.8, 256 bits)
+[2026-10-28 05:19:22.525][engine][VulkanDevice][Flying][info]: inline ray tracing (VK_KHR_ray_query): on
+[2026-10-28 05:19:22.600][engine][SwapChain][Flying][info]: colour output: format 50 (8-bit sRGB)
+[2026-10-28 05:19:22.603][engine][Application][Flying][info]: Hardware target: software-gpu (the only Vulkan device is a CPU: llvmpipe (LLVM 22.1.8, 256 bits))
+[2026-10-28 05:19:22.603][engine][Governor][Flying][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+[2026-10-28 05:19:22.603][engine][Application][Flying][info]: MSAA 1x (software rasteriser)
+[2026-10-28 05:19:22.708][engine][Application][Flying][info]: mood 'clear_day' (assets/moods/clear_day.yaml)
+[2026-10-28 05:19:22.714][engine][Benchmark][Flying][info]: benchmark: 3 s warm-up, then 30 s measured, uncapped (no vsync, no frame cap)
+[2026-10-28 05:19:22.715][engine][Settings][Flying][info]: no settings file at 'settings.json' (using defaults)
+[2026-10-28 05:19:22.715][engine][Governor][Flying][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+[rmlui] Loaded font face 'Noto Sans' [regular] from 'assets/fonts/NotoSans-Regular.ttf'.
+[rmlui] Loaded font face 'Noto Sans' [bold] from 'assets/fonts/NotoSans-Bold.ttf'.
+[rmlui] Loaded font face 'Noto Sans' [italic] from 'assets/fonts/NotoSans-Italic.ttf'.
+[rmlui] Loaded font face 'Noto Color Emoji' [regular] from 'assets/fonts/NotoColorEmoji.ttf'.
+[ui] RmlUi initialised with real Vulkan rendering (text via glyph textures, <img>/background-image via stb_image, both real now -- see RmlVulkanRenderInterface.h)
+[2026-10-28 05:19:23.032][engine][Audio][Flying][info]: Audio ready: 48000 Hz, 32 voices, output: Speakers (Realtek High Definition Audio) (WASAPI)
+[2026-10-28 05:19:23.080][engine][Flying][Flying][info]: POLYGON Stunt Plane isn't installed: the planes are built from boxes. Put the extracted pack in assets/synty/ or set KKE_ASSETS_DIR (README.md "The plane").
+[2026-10-28 05:19:23.219][engine][Flying][Flying][info]: island 1: 52524 triangles, 1400 trees, runway at (0, 6, 380)
+[2026-10-28 05:19:23.231][engine][Flying][Flying][info]: town on island 1: 197 buildings (45 towers, 0 Synty houses), 9656 triangles
+[2026-10-28 05:19:23.244][engine][Flying][Flying][info]: dogfight on island 1 (10 rings of 14 m, 2 laps): 1 playing here, 0 online, 5 CPU
+[2026-10-28 05:19:23.244][engine][Governor][Flying][info]: budget: 2 worker thread(s), frame cap 0, background cap 0, render scale 0.75
+[2026-10-28 05:19:23.246][engine][Input][Flying][info]: touch controls: stick left, look fly.look, button fly.throttle.up, button fly.throttle.down, button fly.fire, button fly.smoke, button fly.camera, button fly.brake, pause
+[2026-10-28 05:19:34.843][engine][Flying][Flying][info]: Skye collided at (-331, 323, 0), 67 m/s
+[2026-10-28 05:19:38.479][engine][Flying][Flying][info]: pile-up 1: 6 of 6 planes exploded
+[2026-10-28 05:19:42.748][engine][Flying][Flying][info]: Skye collided at (-330, 323, 0), 67 m/s
+[2026-10-28 05:19:46.396][engine][Flying][Flying][info]: pile-up 2: 6 of 6 planes exploded
+[2026-10-28 05:19:50.607][engine][Flying][Flying][info]: Skye collided at (-325, 322, -0), 67 m/s
+[2026-10-28 05:19:53.829][engine][Flying][Flying][info]: pile-up 3: 5 of 6 planes exploded
+[2026-10-28 05:19:56.616][engine][Benchmark][Flying][info]: benchmark: 6 screenshot(s) in C:/forgejo-runner/work/487be413d5e1f9a2/hostexecutor/results/bench/run_20261028_051412/reports/shots
+[2026-10-28 05:19:56.617][engine][Benchmark][Flying][info]: benchmark: 258 frames, 9.2 fps avg, 1.3 fps 1% low, 1 hitch(es), verdict too slow; report C:\forgejo-runner\work\487be413d5e1f9a2\hostexecutor\results\bench\run_20261028_051412\reports\flying_pileup.json
