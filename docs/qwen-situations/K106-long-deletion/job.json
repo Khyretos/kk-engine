@@ -1,16 +1,16 @@
 [
- {
-  "mode": "patch",
-  "focus": [
-   "^\\ \\ \\ \\ \\ \\ \\ \\ m_defaultWhiteTexture\\ =\\ std::make_unique<Texture>\\(m_renderer\\->device\\(\\),\\ whitePixel,\\ 1,\\ 1\\);$"
-  ],
-  "name": "r1d-applicatio2",
-  "role": "worker/cpp-games",
-  "out": "engine/src/Application.cpp",
-  "prompt": "Kreative Kompas Engine (C++20, Vulkan, forward renderer): R1d makes bind groups (what a descriptor set binds) through the render hardware interface's device (docs/plans/rhi.md): rhi::Device::createBindGroupLayout (rhi::BindingLayout: binding, rhi::BindingType UniformBuffer, StorageBuffer or Texture, stage bits rhi::kVertex, kFragment, kCompute), createBindGroup, writeBindGroup (rhi::BindingWrite: binding, buffer, offset, range, texture) and releaseBindGroup; rhi::VulkanGpuDevice and rhi::VulkanBindGroupLayout are its Vulkan side, with pools that grow.  Make these 1 edits in engine/src/Application.cpp, each its own SEARCH/REPLACE block.\nEdit 1. Your SEARCH block is exactly these lines:\n```\n        m_defaultWhiteTexture = std::make_unique<Texture>(m_renderer->device(), whitePixel, 1, 1);\n\n        // texture's own set (allocated below) and CubeModule's real\n        // one (allocated separately, using this same layout, when it\n        // creates its own texture). A single shared pool for both, not\n        // a second pool just for CubeModule, since there's only ever\n        // one other real consumer of this exact layout right now.\n        VkDescriptorPoolSize poolSize{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2 };\n        VkDescriptorPoolCreateInfo poolInfo{};\n        poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;\n        poolInfo.maxSets = 2;\n        poolInfo.poolSizeCount = 1;\n        poolInfo.pPoolSizes = &poolSize;\n        VK_CHECK(vkCreateDescriptorPool(m_renderer->device().device(), &poolInfo, nullptr, &m_materialTextureDescriptorPool));\n\n        VkDescriptorSetAllocateInfo allocInfo{};\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n        m_defaultWhiteTexture = std::make_unique<Texture>(m_renderer->device(), whitePixel, 1, 1);\n\n```\nEdit 1 only deletes lines: the REPLACE block is the SEARCH block without them; put no blank line or anything else where they were.\nChange nothing else; do not copy or move any other line.\n",
-  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g09.py r1dapplicatio2",
-  "precheck": false,
-  "context": [],
-  "max_tokens": 1118
- }
+  {
+    "mode": "patch",
+    "focus": [
+      "^\\ \\ \\ \\ \\ \\ \\ \\ m_defaultWhiteTexture\\ =\\ std::make_unique<Texture>\\(m_renderer\\->device\\(\\),\\ whitePixel,\\ 1,\\ 1\\);$"
+    ],
+    "name": "r1d-applicatio2",
+    "role": "worker/cpp-games",
+    "out": "engine/src/Application.cpp",
+    "prompt": "Kreative Kompas Engine (C++20, Vulkan, forward renderer): R1d makes bind groups (what a descriptor set binds) through the render hardware interface's device (docs/plans/rhi.md): rhi::Device::createBindGroupLayout (rhi::BindingLayout: binding, rhi::BindingType UniformBuffer, StorageBuffer or Texture, stage bits rhi::kVertex, kFragment, kCompute), createBindGroup, writeBindGroup (rhi::BindingWrite: binding, buffer, offset, range, texture) and releaseBindGroup; rhi::VulkanGpuDevice and rhi::VulkanBindGroupLayout are its Vulkan side, with pools that grow.  Make these 1 edits in engine/src/Application.cpp, each its own SEARCH/REPLACE block.\nEdit 1. Your SEARCH block is exactly these lines:\n```\n        m_defaultWhiteTexture = std::make_unique<Texture>(m_renderer->device(), whitePixel, 1, 1);\n\n        // texture's own set (allocated below) and CubeModule's real\n        // one (allocated separately, using this same layout, when it\n        // creates its own texture). A single shared pool for both, not\n        // a second pool just for CubeModule, since there's only ever\n        // one other real consumer of this exact layout right now.\n        VkDescriptorPoolSize poolSize{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2 };\n        VkDescriptorPoolCreateInfo poolInfo{};\n        poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;\n        poolInfo.maxSets = 2;\n        poolInfo.poolSizeCount = 1;\n        poolInfo.pPoolSizes = &poolSize;\n        VK_CHECK(vkCreateDescriptorPool(m_renderer->device().device(), &poolInfo, nullptr, &m_materialTextureDescriptorPool));\n\n        VkDescriptorSetAllocateInfo allocInfo{};\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n        m_defaultWhiteTexture = std::make_unique<Texture>(m_renderer->device(), whitePixel, 1, 1);\n\n```\nEdit 1 only deletes lines: the REPLACE block is the SEARCH block without them; put no blank line or anything else where they were.\nChange nothing else; do not copy or move any other line.\n",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g09.py r1dapplicatio2",
+    "precheck": false,
+    "context": [],
+    "max_tokens": 1118
+  }
 ]

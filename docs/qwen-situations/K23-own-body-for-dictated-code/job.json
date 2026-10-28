@@ -1,19 +1,17 @@
 [
- {
-  "name": "loop-use",
-  "role": "worker/cpp-games",
-  "mode": "patch",
-  "out": "engine/src/net/EnetTransport.cpp",
-  "prompt": "Every ENet socket in the engine binds to ENET_HOST_ANY (all interfaces), so each Windows test run of kke_tests asks the firewall to let it in. We add a process-wide bind address; the tests set it to 127.0.0.1. Use the bind address. Four edits, nothing else changes:\n1. In EnetTransport::host, the line `    address.host = ENET_HOST_ANY;` becomes `    address.host = bindHost();`.\n2. In EnetTransport::ensureClientHost, inside the for loop, the line `        address.host = ENET_HOST_ANY;` becomes `        address.host = bindHost();`.\n3. In ensureClientHost, the line `    if (!m_host) m_host = enet_host_create(nullptr, 1, 2, 0, 0);` becomes this block (a null address would leave the socket on all interfaces):\n```\n    if (!m_host) {\n        ENetAddress address{};\n        address.host = bindHost();\n        address.port = 0; // any free port\n        m_host = enet_host_create(&address, 1, 2, 0, 0);\n    }\n```\n4. Directly before the line `bool EnetTransport::host(uint16_t port, size_t maxPeers, std::string* error) {` add this function and a blank line after it:\n```\nstd::string EnetTransport::boundAddress() const {\n    ENetAddress a{};\n    char ip[64] = {};\n    if (!m_host || enet_socket_get_address(m_host->socket, &a) != 0 || enet_address_get_host_ip(&a, ip, sizeof ip) != 0) return {};\n    return ip;\n}\n```",
-  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_loop.py use",
-  "precheck": false,
-  "context": [
-   "engine/include/kke/net/EnetTransport.h"
-  ],
-  "max_tokens": 3000,
-  "focus": [
-   "^bool EnetTransport::host\\(",
-   "^bool EnetTransport::ensureClientHost"
-  ]
- }
+  {
+    "name": "loop-use",
+    "role": "worker/cpp-games",
+    "mode": "patch",
+    "out": "engine/src/net/EnetTransport.cpp",
+    "prompt": "Every ENet socket in the engine binds to ENET_HOST_ANY (all interfaces), so each Windows test run of kke_tests asks the firewall to let it in. We add a process-wide bind address; the tests set it to 127.0.0.1. Use the bind address. Four edits, nothing else changes:\n1. In EnetTransport::host, the line `    address.host = ENET_HOST_ANY;` becomes `    address.host = bindHost();`.\n2. In EnetTransport::ensureClientHost, inside the for loop, the line `        address.host = ENET_HOST_ANY;` becomes `        address.host = bindHost();`.\n3. In ensureClientHost, the line `    if (!m_host) m_host = enet_host_create(nullptr, 1, 2, 0, 0);` becomes this block (a null address would leave the socket on all interfaces):\n```\n    if (!m_host) {\n        ENetAddress address{};\n        address.host = bindHost();\n        address.port = 0; // any free port\n        m_host = enet_host_create(&address, 1, 2, 0, 0);\n    }\n```\n4. Directly before the line `bool EnetTransport::host(uint16_t port, size_t maxPeers, std::string* error) {` add this function and a blank line after it:\n```\nstd::string EnetTransport::boundAddress() const {\n    ENetAddress a{};\n    char ip[64] = {};\n    if (!m_host || enet_socket_get_address(m_host->socket, &a) != 0 || enet_address_get_host_ip(&a, ip, sizeof ip) != 0) return {};\n    return ip;\n}\n```",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_loop.py use",
+    "precheck": false,
+    "context": ["engine/include/kke/net/EnetTransport.h"],
+    "max_tokens": 3000,
+    "focus": [
+      "^bool EnetTransport::host\\(",
+      "^bool EnetTransport::ensureClientHost"
+    ]
+  }
 ]
