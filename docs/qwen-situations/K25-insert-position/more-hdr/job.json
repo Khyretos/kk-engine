@@ -1,16 +1,14 @@
 [
- {
-  "name": "g04-hdr",
-  "role": "worker/cpp-games",
-  "mode": "patch",
-  "out": "engine/include/kke/ShadowMap.h",
-  "prompt": "ENG-G04 point-light shadows. Until now only the directional key light (lights[0]) casts shadows, through cascaded shadow maps (class kke::ShadowMap). Now each point light that casts shadows gets a cube of 6 faces around it (+X, -X, +Y, -Y, +Z, -Z), each a perspective view a little wider than 90 degrees, drawn into its own tile of a second ShadowMap (the point map): tile = light * ShadowMap::kPointFaces + face. C++20, glm, Vulkan (depth 0..1, clip-space Y flipped by proj[1][1] *= -1.0f like computeLightViewProj). In class ShadowMap, directly ABOVE the two lines\n```\n    // Tiles across the map for `tiles` tiles: the smallest square grid that holds them.\n    static uint32_t gridFor(uint32_t tiles);\n```\ninsert these declarations, each with a short comment above it saying what it is, then a blank line. Nothing else in the file changes.\n1. `static constexpr uint32_t kPointFaces = 6;` (faces per point light; tile = light * kPointFaces + face in the point map).\n2. `static constexpr uint32_t kPointFaceMargin = 4;` (texels each face's view reaches past its 90 degrees on every side, so the normal offset and the 3x3 taps near a face's edge still read that face).\n3. `static constexpr uint32_t kPointTileResolution = 512;` (texels across one point-light face).\n4. `static constexpr uint32_t kMaxPointShadows = 4;` (lights that can cast point shadows: Lighting::kMaxLights, checked in LightingBuffer.cpp).\n5. `static uint32_t pointFace(const glm::vec3& toPoint);` (the face that sees direction toPoint from the light, by its largest axis: 0 +X, 1 -X, 2 +Y, 3 -Y, 4 +Z, 5 -Z).\n6. `static glm::mat4 pointFaceViewProj(const glm::vec3& lightPos, uint32_t face, float range, uint32_t tileResolution);` (face `face`'s view-projection for a point light at lightPos, depth 0..1 out to range, kPointFaceMargin texels of a tileResolution tile wider than 90 degrees on each side).",
-  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g04.py hdr",
-  "precheck": false,
-  "context": [],
-  "max_tokens": 2500,
-  "focus": [
-   "Tiles across the map for `tiles` tiles"
-  ]
- }
+  {
+    "name": "g04-hdr",
+    "role": "worker/cpp-games",
+    "mode": "patch",
+    "out": "engine/include/kke/ShadowMap.h",
+    "prompt": "ENG-G04 point-light shadows. Until now only the directional key light (lights[0]) casts shadows, through cascaded shadow maps (class kke::ShadowMap). Now each point light that casts shadows gets a cube of 6 faces around it (+X, -X, +Y, -Y, +Z, -Z), each a perspective view a little wider than 90 degrees, drawn into its own tile of a second ShadowMap (the point map): tile = light * ShadowMap::kPointFaces + face. C++20, glm, Vulkan (depth 0..1, clip-space Y flipped by proj[1][1] *= -1.0f like computeLightViewProj). In class ShadowMap, directly ABOVE the two lines\n```\n    // Tiles across the map for `tiles` tiles: the smallest square grid that holds them.\n    static uint32_t gridFor(uint32_t tiles);\n```\ninsert these declarations, each with a short comment above it saying what it is, then a blank line. Nothing else in the file changes.\n1. `static constexpr uint32_t kPointFaces = 6;` (faces per point light; tile = light * kPointFaces + face in the point map).\n2. `static constexpr uint32_t kPointFaceMargin = 4;` (texels each face's view reaches past its 90 degrees on every side, so the normal offset and the 3x3 taps near a face's edge still read that face).\n3. `static constexpr uint32_t kPointTileResolution = 512;` (texels across one point-light face).\n4. `static constexpr uint32_t kMaxPointShadows = 4;` (lights that can cast point shadows: Lighting::kMaxLights, checked in LightingBuffer.cpp).\n5. `static uint32_t pointFace(const glm::vec3& toPoint);` (the face that sees direction toPoint from the light, by its largest axis: 0 +X, 1 -X, 2 +Y, 3 -Y, 4 +Z, 5 -Z).\n6. `static glm::mat4 pointFaceViewProj(const glm::vec3& lightPos, uint32_t face, float range, uint32_t tileResolution);` (face `face`'s view-projection for a point light at lightPos, depth 0..1 out to range, kPointFaceMargin texels of a tileResolution tile wider than 90 degrees on each side).",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g04.py hdr",
+    "precheck": false,
+    "context": [],
+    "max_tokens": 2500,
+    "focus": ["Tiles across the map for `tiles` tiles"]
+  }
 ]
