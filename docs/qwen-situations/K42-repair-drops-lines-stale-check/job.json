@@ -1,13 +1,13 @@
 [
- {
-  "name": "g07-recipefix",
-  "role": "worker/cpp-games",
-  "mode": "patch",
-  "out": "docs/cookbook/recipes/lamps.lua",
-  "prompt": "Review of your docs/cookbook/recipes/lamps.lua (the file below). Fix exactly these four points with edit blocks; change nothing else:\n1. The white pillar is missing. Directly after the `input.define(...)` line add a blank line, the comment `-- A white pillar for the lamps to light.` and `physics.box { pos = Vec(0, 1.5, 6), size = Vec(0.6, 3, 0.6), color = Vec(0.9, 0.9, 0.9), static = true }`.\n2. light.point returns nil AND the reason as a second value. For the warm lamp write `local sun, why = light.point { ... }` (same fields) and `if not sun then kke.log(\"warm lamp: \" .. why) end`.\n3. In the ring loop write `local id, why = light.point { ... }` (same fields) and log `kke.log(\"ring lamp \" .. i .. \": \" .. why)` before `break`.\n4. Remove the unused line `local count = light.count()`, and in the Think hook remove the line `if not id then break end` and the `if id then ... end` around `light.set(id, { on = on })` (ring holds only real ids).",
-  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g07.py recipefix",
-  "precheck": false,
-  "context": [],
-  "max_tokens": 2000
- }
+  {
+    "name": "g07-recipefix",
+    "role": "worker/cpp-games",
+    "mode": "patch",
+    "out": "docs/cookbook/recipes/lamps.lua",
+    "prompt": "Review of your docs/cookbook/recipes/lamps.lua (the file below). Fix exactly these four points with edit blocks; change nothing else:\n1. The white pillar is missing. Directly after the `input.define(...)` line add a blank line, the comment `-- A white pillar for the lamps to light.` and `physics.box { pos = Vec(0, 1.5, 6), size = Vec(0.6, 3, 0.6), color = Vec(0.9, 0.9, 0.9), static = true }`.\n2. light.point returns nil AND the reason as a second value. For the warm lamp write `local sun, why = light.point { ... }` (same fields) and `if not sun then kke.log(\"warm lamp: \" .. why) end`.\n3. In the ring loop write `local id, why = light.point { ... }` (same fields) and log `kke.log(\"ring lamp \" .. i .. \": \" .. why)` before `break`.\n4. Remove the unused line `local count = light.count()`, and in the Think hook remove the line `if not id then break end` and the `if id then ... end` around `light.set(id, { on = on })` (ring holds only real ids).",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g07.py recipefix",
+    "precheck": false,
+    "context": [],
+    "max_tokens": 2000
+  }
 ]
