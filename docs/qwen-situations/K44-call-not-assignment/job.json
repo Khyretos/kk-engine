@@ -1,18 +1,14 @@
 [
- {
-  "name": "g07-bpoint",
-  "role": "worker/cpp-games",
-  "mode": "patch",
-  "out": "engine/src/modules/ScriptModule.cpp",
-  "prompt": "ENG-G07: the engine goes from 4 lights to 16 (kke::Lighting::kMaxLights). Light 0 stays the sun (directional, cascaded shadows). Point lights gain an optional range (Light::range, 0 = reaches everywhere as before) with a smooth falloff; at most ShadowMap::kMaxPointShadows (4) point lights cast shadows, each in a point-shadow slot (Lighting::pointShadowSlots: the first 4 casting lights in order). Lua scripts place lamps with light.*. C++20, glm, Vulkan, GLSL 450 std140. ScriptModule::bindAll gets light.point, right after the mood.* bindings. ScriptModule has the member `ScriptLights m_lights;` (header kke/ScriptLights.h in context); `app` (Application*) and `m_vm` exist in bindAll; app->lighting() returns Lighting&. Your SEARCH block is exactly these lines:\n```\n    vm.registerFunction(\"mood\", \"list\", [](lua_State* L) {\n        const std::vector<std::string> names = listMoods();\n        lua_createtable(L, static_cast<int>(names.size()), 0);\n        for (size_t i = 0; i < names.size(); ++i) {\n            lua_pushstring(L, names[i].c_str());\n            lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));\n        }\n        return 1;\n    });\n```\nand your REPLACE block is those same lines, unchanged and first, followed by a blank line, a two-line `//` comment (light.*: lamps a script places, kke/ScriptLights.h: free slots of Lighting::lights after the sun, taken back when the script goes) and the binding `vm.registerFunction(\"light\", \"point\", [this, app](lua_State* L) { ... });` whose body:\n`luaL_checktype(L, 1, LUA_TTABLE);`, `ScriptLights::Desc d;`, then d.position, d.color, d.intensity, d.range and d.shadows each read from the table's fields \"pos\", \"color\", \"intensity\", \"range\" and \"shadows\" with `ScriptVM::fieldVec3(L, 1, \"pos\", d.position)`, `ScriptVM::fieldVec3(L, 1, \"color\", d.color)`, `ScriptVM::fieldNumber(L, 1, \"intensity\", d.intensity)`, `ScriptVM::fieldNumber(L, 1, \"range\", d.range)`, `ScriptVM::fieldBool(L, 1, \"shadows\", d.shadows)`; `const int slot = m_lights.add(app->lighting(), m_vm->currentSource(), d);`; when slot < 0: `lua_pushnil(L);`, `lua_pushfstring(L, \"all %d lights are in use\", Lighting::kMaxLights);`, return 2; else `lua_pushinteger(L, slot);` and return 1.\nChange nothing else; do not copy or move any other line.\n",
-  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g07.py bpoint",
-  "precheck": false,
-  "context": [
-   "engine/include/kke/ScriptLights.h"
-  ],
-  "max_tokens": 2500,
-  "focus": [
-   "vm\\.registerFunction\\(\"mood\", \"list\""
-  ]
- }
+  {
+    "name": "g07-bpoint",
+    "role": "worker/cpp-games",
+    "mode": "patch",
+    "out": "engine/src/modules/ScriptModule.cpp",
+    "prompt": "ENG-G07: the engine goes from 4 lights to 16 (kke::Lighting::kMaxLights). Light 0 stays the sun (directional, cascaded shadows). Point lights gain an optional range (Light::range, 0 = reaches everywhere as before) with a smooth falloff; at most ShadowMap::kMaxPointShadows (4) point lights cast shadows, each in a point-shadow slot (Lighting::pointShadowSlots: the first 4 casting lights in order). Lua scripts place lamps with light.*. C++20, glm, Vulkan, GLSL 450 std140. ScriptModule::bindAll gets light.point, right after the mood.* bindings. ScriptModule has the member `ScriptLights m_lights;` (header kke/ScriptLights.h in context); `app` (Application*) and `m_vm` exist in bindAll; app->lighting() returns Lighting&. Your SEARCH block is exactly these lines:\n```\n    vm.registerFunction(\"mood\", \"list\", [](lua_State* L) {\n        const std::vector<std::string> names = listMoods();\n        lua_createtable(L, static_cast<int>(names.size()), 0);\n        for (size_t i = 0; i < names.size(); ++i) {\n            lua_pushstring(L, names[i].c_str());\n            lua_rawseti(L, -2, static_cast<lua_Integer>(i + 1));\n        }\n        return 1;\n    });\n```\nand your REPLACE block is those same lines, unchanged and first, followed by a blank line, a two-line `//` comment (light.*: lamps a script places, kke/ScriptLights.h: free slots of Lighting::lights after the sun, taken back when the script goes) and the binding `vm.registerFunction(\"light\", \"point\", [this, app](lua_State* L) { ... });` whose body:\n`luaL_checktype(L, 1, LUA_TTABLE);`, `ScriptLights::Desc d;`, then d.position, d.color, d.intensity, d.range and d.shadows each read from the table's fields \"pos\", \"color\", \"intensity\", \"range\" and \"shadows\" with `ScriptVM::fieldVec3(L, 1, \"pos\", d.position)`, `ScriptVM::fieldVec3(L, 1, \"color\", d.color)`, `ScriptVM::fieldNumber(L, 1, \"intensity\", d.intensity)`, `ScriptVM::fieldNumber(L, 1, \"range\", d.range)`, `ScriptVM::fieldBool(L, 1, \"shadows\", d.shadows)`; `const int slot = m_lights.add(app->lighting(), m_vm->currentSource(), d);`; when slot < 0: `lua_pushnil(L);`, `lua_pushfstring(L, \"all %d lights are in use\", Lighting::kMaxLights);`, return 2; else `lua_pushinteger(L, slot);` and return 1.\nChange nothing else; do not copy or move any other line.\n",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g07.py bpoint",
+    "precheck": false,
+    "context": ["engine/include/kke/ScriptLights.h"],
+    "max_tokens": 2500,
+    "focus": ["vm\\.registerFunction\\(\"mood\", \"list\""]
+  }
 ]
