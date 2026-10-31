@@ -140,7 +140,7 @@ VrmToon toonFor(const glm::vec3& colour, const GarmentInfo& info) {
 }
 
 // A flared skirt round the hips from the waist down `reach` of the leg.
-ModelMesh skirtMesh(const VrmAvatar& av, const VrmStock& st, float reach, float offset) {
+ModelMesh skirtMesh(const VrmStock& st, float reach, float offset) {
     ModelMesh out;
     out.skinned = true;
     if (st.hips < 0 || st.leftLeg < 0 || st.rightLeg < 0) return out;
@@ -258,7 +258,7 @@ size_t dressVrm(VrmAvatar& av, VrmStock& st, const std::vector<HumanLook::Worn>&
         }
         float reach = 0.0f, offset = 0.0f;
         if (garmentSkirt(w.id, &reach, &offset)) {
-            ModelMesh skirt = skirtMesh(av, st, reach, std::max(offset, info->slot == "outer" ? 0.012f : 0.006f));
+            ModelMesh skirt = skirtMesh(st, reach, std::max(offset, info->slot == "outer" ? 0.012f : 0.006f));
             if (!skirt.indices.empty()) {
                 skirt.name = w.id + " skirt";
                 skirt.material = addMaterial(*info, w.colour, true);
