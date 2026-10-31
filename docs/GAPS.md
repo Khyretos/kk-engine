@@ -94,7 +94,7 @@ by area. The goal is parity with the big engines and more.
 | ENG-F13 | Rendering | Occlusion culling: a small farthest-depth map of each frame read back by the CPU two frames later, so models hidden behind others are not skinned, uploaded or drawn, with the CPU's instancing kept (`occlusionCulling`, off by default; worth it in dense scenes). Not yet: GPU-driven indirect draws. | ✅ |
 | ENG-F14 | Rendering | Upscalers such as FSR (render scale exists) | 🟡 |
 | ENG-F15 | Lighting | Light probes with baking | ⬜ |
-| ENG-F16 | Lighting | Contact shadows | ⬜ |
+| ENG-F16 | Lighting | Contact shadows: a screen-space march towards the sun after each frame, read reprojected by the lit shaders; on by default, any GPU (RENDERING_PRINCIPLES.md) | ✅ local |
 | ENG-F17 | Lighting | Light portals | ⬜ |
 | ENG-F18 | Lighting | Screen-space reflections. Done with ENG-F02: `reflections = screen`, a fixed-step march along the ray's line on screen, one frame late. | ✅ |
 | ENG-F19 | 2D | 2D toolkit: tilemaps, sprite animation, 2D lights, 2D physics, parallax | ⬜ |

@@ -1,0 +1,4 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+// Contact shadows, single-sampled depth (shaders/contact_shadows.glsl).
+#include "contact_shadows.glsl"

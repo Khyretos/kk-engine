@@ -197,6 +197,18 @@ slope-scaled bias, texel-snapped light projection (no shimmer when the
 camera moves), then cascades as already planned in #20:
 [#38](https://github.com/Khyretos/kk-engine/issues/38).
 
+**Contact shadows (ENG-F16, 2026-10-31).** The setting `contactShadows`
+(on by default; `KKE_CONTACT_SHADOWS=0/1`) adds the small shadows a shadow
+map is too coarse for: under a foot, where a crate meets the floor. After
+each frame a compute pass (`shaders/contact_shadows.glsl`) marches 35 cm
+towards the sun through the frame's depth in 16 steps from every pixel
+nearer than 60 m (fading out from 45 m); a surface in front of the march by
+less than 12 cm shades it. The next frame's lit shaders read the result
+reprojected, as they read the shadow rays, and multiply the sun's shadow by
+it, also when the shadow map is off. Any GPU, one view; one full-screen
+dispatch (`kke::ContactShadowSettings` holds the numbers;
+`kke::contactShadowMarch` is the same march on the CPU, tested).
+
 **Ray-traced shadows (ENG-F07, 2026-10-18).** The setting `shadowRays`
 (off by default; `KKE_SHADOW_RAYS`) is `kke` or `classic`, on GPUs with
 ray query. KKE keeps the argument above: the shadow maps stay, and a ray

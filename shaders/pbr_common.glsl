@@ -280,6 +280,9 @@ vec3 shadeSurfaceAA(vec3 albedo, vec2 metallicRoughness, vec3 normalWorld, vec3 
     // Ray-traced sun shadows (ENG-F07): last frame's ray where there is one.
     float rayShadow = lighting.ambient.a > 0.5 ? shadowRayAt(fragPosWorld) : -1.0;
     if (rayShadow >= 0.0) shadow = rayShadow;
+    // Contact shadows (ENG-F16): the small ones the map is too coarse for, from last frame's depth;
+    // they also ground things when the shadow map is off (their own switch).
+    shadow *= contactShadowAt(fragPosWorld);
     vec3 Lo = vec3(0.0);
 
     for (int i = 0; i < MAX_LIGHTS; ++i) {

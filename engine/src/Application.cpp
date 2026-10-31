@@ -5,6 +5,7 @@
 #include "ClusterLightPass.h"
 #include "DecalTextures.h"
 #include "ShadowRayPass.h"
+#include "ContactShadowPass.h"
 #include "VolumetricFogPass.h"
 #include "RefractionRays.h"
 #include "ReflectionPass.h"
@@ -213,6 +214,12 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
     if (const char* env = dev::env("KKE_SHADOW_RAYS"); env && *env) {
         m_shadowRaysEnv = shadowRaysFromName(env, ShadowRays::Off);
         setShadowRays(*m_shadowRaysEnv);
+    }
+    if (const char* env = dev::env("KKE_CONTACT_SHADOWS"); env && *env) {
+        m_contactShadowsEnv = env[0] == '1';
+        setContactShadows(*m_contactShadowsEnv);
+    } else {
+        updateSceneDepthReadable(); // on by default: the march reads the depth
     }
     if (const char* env = dev::env("KKE_BLOOM"); env && *env) {
         m_bloomEnv = env[0] == '1';
@@ -1248,6 +1255,15 @@ void Application::run() {
                 m_shadowRayPass->prepare(sceneExtent);
             }
             const bool shadowRaysReady = shadowRaysOn && m_shadowRayPass->ready();
+            // Contact shadows (ENG-F16): last frame's march for this frame's shading, marched again after it.
+            const Light& contactSun = m_lighting.lights[0];
+            const bool contactOn = m_contactShadowsOn && viewCount == 1 && !m_sceneCovered && contactSun.enabled && contactSun.isDirectional &&
+                                   contactSun.intensity > 0.0f;
+            if (contactOn) {
+                if (!m_contactShadowPass) m_contactShadowPass = std::make_unique<ContactShadowPass>(m_renderer->device());
+                m_contactShadowPass->prepare(sceneExtent);
+            }
+            const bool contactReady = contactOn && m_contactShadowPass->ready();
             // Many lights (ENG-F08): this frame's, listed per cell after the shadow pass (one view; split screen walks them all).
             std::vector<ClusterLightPass::GpuLight> manyLights;
             for (const Light& l : m_lighting.manyLights)
@@ -1311,6 +1327,12 @@ void Application::run() {
                                                          m_shadowRayPass->size(), m_shadowRaySettings.reprojectSlack);
                 else
                     drawViews[i].lighting->setShadowRays(VK_NULL_HANDLE, VK_NULL_HANDLE, glm::mat4(1.0f), glm::vec2(0.0f), m_shadowRaySettings.reprojectSlack);
+                if (i == 0 && contactReady)
+                    drawViews[i].lighting->setContactShadows(m_contactShadowPass->image(), m_contactShadowPass->sampler(), m_contactShadowPass->viewProj(),
+                                                             m_contactShadowPass->size(), m_contactShadowSettings.reprojectSlack);
+                else
+                    drawViews[i].lighting->setContactShadows(VK_NULL_HANDLE, VK_NULL_HANDLE, glm::mat4(1.0f), glm::vec2(0.0f),
+                                                             m_contactShadowSettings.reprojectSlack);
                 if (i == 0 && refractOn) drawViews[i].lighting->setBehind(m_behindPass->image(), m_behindPass->sampler(), m_behindPass->size());
                 else drawViews[i].lighting->setBehind(VK_NULL_HANDLE, VK_NULL_HANDLE, glm::vec2(0.0f));
                 if (i == 0 && reflReady)
@@ -1496,6 +1518,13 @@ void Application::run() {
                 m_shadowRayPass->record(cmd, m_renderer->currentFrameIndex(), m_renderer->sceneImages(), view, proj, shadowRays, m_shadowRaySettings);
             } else if (m_shadowRayPass) {
                 m_shadowRayPass->invalidate();
+            }
+            if (contactOn && drawScene) {
+                m_renderer->endScenePass();
+                m_contactShadowPass->record(cmd, m_renderer->currentFrameIndex(), m_renderer->sceneImages(), view, proj, -contactSun.direction,
+                                            m_contactShadowSettings);
+            } else if (m_contactShadowPass) {
+                m_contactShadowPass->invalidate();
             }
             // The overlay covers the whole window with the first camera.
             renderCtx.view = view;
@@ -1687,6 +1716,12 @@ void Application::setShadowRays(ShadowRays mode) {
     if (m_shadowRays == ShadowRays::Off && m_shadowRayPass) m_shadowRayPass->invalidate();
 }
 
+void Application::setContactShadows(bool on) {
+    m_contactShadowsOn = m_contactShadowsEnv ? *m_contactShadowsEnv : on;
+    updateSceneDepthReadable();
+    if (!m_contactShadowsOn && m_contactShadowPass) m_contactShadowPass->invalidate();
+}
+
 void Application::setBloom(bool on) { m_renderer->setBloom(m_bloomEnv ? *m_bloomEnv : on); }
 
 void Application::setTaa(bool on) {
@@ -1747,7 +1782,7 @@ void Application::wantSceneDepth(const void* owner, bool want) {
 }
 
 void Application::updateSceneDepthReadable() {
-    m_renderer->setSceneDepthReadable(m_screenGiOn || m_reflections != Reflections::Off || m_taaOn || m_shadowRays != ShadowRays::Off || m_dofOn ||
+    m_renderer->setSceneDepthReadable(m_screenGiOn || m_reflections != Reflections::Off || m_taaOn || m_shadowRays != ShadowRays::Off || m_contactShadowsOn || m_dofOn ||
                                       m_motionBlurOn || m_occlusionOn || !m_depthWanted.empty());
 }
 

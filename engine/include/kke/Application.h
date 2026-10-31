@@ -21,6 +21,7 @@
 #include "kke/VolumetricFog.h"
 #include "kke/Taa.h"
 #include "kke/ShadowRays.h"
+#include "kke/ContactShadows.h"
 #include "kke/ScreenGi.h"
 #include "kke/ShadowMap.h"
 #include "kke/Texture.h"
@@ -50,6 +51,7 @@ class BehindPass;
 class ClusterLightPass;
 class DecalTextures;
 class ShadowRayPass;
+class ContactShadowPass;
 class VolumetricFogPass;
 class RefractionRays;
 struct ReflectionRays;
@@ -371,6 +373,12 @@ public:
     void setShadowRays(ShadowRays mode);
     ShadowRays shadowRays() const { return m_shadowRays; }
     ShadowRaySettings& shadowRaySettings() { return m_shadowRaySettings; }
+    // Contact shadows (ENG-F16, kke/ContactShadows.h): short sun shadows from
+    // the frame's depth where things touch; any GPU, one view. On by default:
+    // the graphics setting "contactShadows" or KKE_CONTACT_SHADOWS=0/1.
+    void setContactShadows(bool on);
+    bool contactShadows() const { return m_contactShadowsOn; }
+    ContactShadowSettings& contactShadowSettings() { return m_contactShadowSettings; }
     TaaSettings& taaSettings() { return m_taaSettings; }
     bool volumetricFog() const { return m_volumetricFogOn; }
     VolumetricFogSettings& volumetricFogSettings() { return m_volumetricFogSettings; }
@@ -583,6 +591,10 @@ private:
     std::vector<const void*> m_depthWanted;
     std::optional<bool> m_bloomEnv;                             // KKE_BLOOM
     std::unique_ptr<ShadowRayPass> m_shadowRayPass; // made the first time shadow rays are on
+    std::unique_ptr<ContactShadowPass> m_contactShadowPass; // made the first frame contact shadows are on
+    bool m_contactShadowsOn = true;
+    std::optional<bool> m_contactShadowsEnv; // KKE_CONTACT_SHADOWS
+    ContactShadowSettings m_contactShadowSettings;
     std::unique_ptr<ClusterLightPass> m_clusterLights; // made the first time there are many lights (ENG-F08)
     // Decals (ENG-F12): every one placed, their textures, their per-cell lists and per frame their records.
     DecalSet m_decals;

@@ -68,8 +68,10 @@ struct LightingUBOData {
     glm::vec4 clusterScreen;     // the scene's size in pixels
     glm::vec4 decalParams;       // x = how many decals (ENG-F12; 0 = none), y = near, z = far distance of their cells
     glm::vec4 decalScreen;       // xy = the scene's size in pixels (their cells')
+    glm::mat4 contactViewProj;   // the camera the contact shadows were marched with (ENG-F16)
+    glm::vec4 contactShadows;    // x = 1 when they hold a frame's result, yz = their size, w = reprojection slack
 };
-static_assert(sizeof(LightingUBOData) == Lighting::kMaxLights * 3 * 16 + 2 * 16 + 2 * 64 + 7 * 16 + 9 * 16 + 2 * ShadowMap::kCascades * 16 + ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces * (64 + 16) + 16 + 64 + 16 + 64 + 16 + 16 + 16 + 64 + 16 + 3 * 16 + 2 * 16, "must match shaders/lighting_ubo.glsl");
+static_assert(sizeof(LightingUBOData) == Lighting::kMaxLights * 3 * 16 + 2 * 16 + 2 * 64 + 7 * 16 + 9 * 16 + 2 * ShadowMap::kCascades * 16 + ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces * (64 + 16) + 16 + 64 + 16 + 64 + 16 + 16 + 16 + 64 + 16 + 3 * 16 + 2 * 16 + 64 + 16, "must match shaders/lighting_ubo.glsl");
 static_assert(ShadowMap::kMaxPointShadows <= Lighting::kMaxLights, "every point-shadow slot needs a light");
 
 } // namespace
@@ -82,10 +84,10 @@ LightingBuffer::LightingBuffer(VulkanDevice& device) : m_device(device) {
     // see-through surfaces show behind them (setBehind); 7: volumetric fog's grid, a 3D image
     // (setFogVolume); 8: last frame's ray-traced sun shadows (setShadowRays); 9-11: the many
     // lights and their per-cell lists (setManyLights); 12-14: the decals and theirs, 15 their
-    // textures (setDecals).
-    std::array<rhi::BindingLayout, 16> bindings;
+    // textures (setDecals); 16: last frame's contact shadows (setContactShadows).
+    std::array<rhi::BindingLayout, 17> bindings;
     bindings[0] = { 0, rhi::BindingType::UniformBuffer, rhi::kVertex | rhi::kFragment | rhi::kCompute };
-    for (uint32_t i = 1; i < 16; ++i)
+    for (uint32_t i = 1; i < 17; ++i)
         bindings[i] = { i, i >= 9 && i < 15 ? rhi::BindingType::StorageBuffer : rhi::BindingType::Texture, rhi::kFragment };
     m_layout = m_gpu.createBindGroupLayout(bindings);
 
@@ -216,7 +218,7 @@ void LightingBuffer::writeEnvironment(uint32_t slot) {
     const auto tex = [](VkSampler sampler, VkImageView view, bool written) {
         return rhi::TextureRef{ rhi::VulkanCommandList::toHandle(view), rhi::VulkanCommandList::toHandle(sampler), written };
     };
-    std::array<rhi::BindingWrite, 15> w;
+    std::array<rhi::BindingWrite, 16> w;
     w[0].texture = map.ref();
     w[1].texture = gi ? tex(m_giSampler, m_giLight, true) : m_placeholder->ref();
     w[2].texture = gi ? tex(m_giSampler, m_giDepth, true) : w[1].texture;
@@ -242,6 +244,8 @@ void LightingBuffer::writeEnvironment(uint32_t slot) {
     // Without decals the black placeholder stands in for their textures (never read: decalParams.x = 0).
     w[14].binding = 15;
     w[14].texture = decals ? tex(m_decalSampler, m_decalTextures, false) : tex(m_decalArraySampler, m_decalArrayView, false);
+    w[15].binding = 16;
+    w[15].texture = m_contact && m_contactSampler ? tex(m_contactSampler, m_contact, true) : none;
     m_gpu.writeBindGroup(rhi::VulkanCommandList::group(m_descriptorSets[slot]), *m_layout, w);
 }
 
@@ -322,6 +326,8 @@ void LightingBuffer::update(const Lighting& lighting, const glm::vec3& cameraPos
     data.decalScreen = glm::vec4(m_decalScreen, 0.0f, 0.0f);
     data.shadowRayViewProj = m_shadowRayViewProj;
     data.shadowRays = glm::vec4(m_shadowRays ? 1.0f : 0.0f, m_shadowRaySize.x, m_shadowRaySize.y, m_shadowRaySlack);
+    data.contactViewProj = m_contactViewProj;
+    data.contactShadows = glm::vec4(m_contact ? 1.0f : 0.0f, m_contactSize.x, m_contactSize.y, m_contactSlack);
     data.fogVolume = m_fogVolume ? glm::vec4(1.0f, m_fogVolumeSettings.nearDistance, m_fogVolumeSettings.farDistance,
                                              static_cast<float>(m_fogVolumeSettings.slices))
                                  : glm::vec4(0.0f);

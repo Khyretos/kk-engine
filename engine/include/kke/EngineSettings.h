@@ -55,6 +55,8 @@ struct EngineSettings {
         // Ray-traced sun shadows (kke/ShadowRays.h): "off", "kke" (only past
         // the shadow map's reach) or "classic" (every pixel).
         std::string shadowRays = "off";
+        // Contact shadows (kke/ContactShadows.h): short sun shadows where things touch.
+        bool contactShadows = true;
         float brightness = 1.0f;       // multiplies ambient light
         float uiScale = 1.0f;          // see UiModule::setUiScale()
         bool showDebugOverlay = false; // the ImGui developer panels (F1 in the showcase)

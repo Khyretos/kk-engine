@@ -130,6 +130,14 @@ public:
         m_shadowRaySize = size;
         m_shadowRaySlack = slack;
     }
+    // Contact shadows (ENG-F16, ContactShadowPass): last frame's, or a null image for none.
+    void setContactShadows(VkImageView image, VkSampler sampler, const glm::mat4& viewProj, const glm::vec2& size, float slack) {
+        m_contact = image;
+        m_contactSampler = sampler;
+        m_contactViewProj = viewProj;
+        m_contactSize = size;
+        m_contactSlack = slack;
+    }
     void setBehind(VkImageView image, VkSampler sampler, const glm::vec2& size) {
         m_behind = image;
         m_behindSampler = sampler;
@@ -203,6 +211,11 @@ private:
     glm::mat4 m_shadowRayViewProj{1.0f};
     glm::vec2 m_shadowRaySize{0.0f};
     float m_shadowRaySlack = 0.03f;
+    VkImageView m_contact = VK_NULL_HANDLE;
+    VkSampler m_contactSampler = VK_NULL_HANDLE;
+    glm::mat4 m_contactViewProj{1.0f};
+    glm::vec2 m_contactSize{0.0f};
+    float m_contactSlack = 0.03f;
     VkImageView m_fogVolume = VK_NULL_HANDLE;
     VkSampler m_fogVolumeSampler = VK_NULL_HANDLE;
     VolumetricFogSettings m_fogVolumeSettings;

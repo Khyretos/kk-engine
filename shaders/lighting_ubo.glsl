@@ -51,6 +51,8 @@ layout(set = 0, binding = 0) uniform LightingUBO {
     vec4 clusterScreen;     // xy = the scene's size in pixels
     vec4 decalParams;       // x = how many decals (ENG-F12; 0 = none), y = near, z = far distance of their cells
     vec4 decalScreen;       // xy = the scene's size in pixels (their cells')
+    mat4 contactViewProj;   // the camera the contact shadows were marched with (last frame's, ENG-F16)
+    vec4 contactShadows;    // x = 1 when they hold a frame's result, yz = their size, w = reprojection slack
 } lighting;
 
 // The sky prefiltered for reflections (kke::EnvMap, kke::LightingBuffer::setEnvironmentMap):
@@ -116,6 +118,22 @@ float shadowRayAt(vec3 worldPos) {
     vec2 t = texelFetch(shadowRayImage, ivec2(uv * lighting.shadowRays.yz), 0).rg;
     if (t.y <= 0.0) return -1.0;
     return abs(t.y - c.w) <= lighting.shadowRays.w * c.w + 0.05 ? t.x : -1.0;
+}
+
+// Contact shadows (ENG-F16, kke::ContactShadowPass): r = how lit, g = the
+// view depth they were marched from (0 = not marched).
+layout(set = 0, binding = 16) uniform sampler2D contactShadowImage;
+
+// Last frame's contact shadow for this surface: how lit (0..1), 1 where
+// there is none (off, not marched, or the pixel showed something else).
+float contactShadowAt(vec3 worldPos) {
+    if (lighting.contactShadows.x < 0.5) return 1.0;
+    vec4 c = lighting.contactViewProj * vec4(worldPos, 1.0);
+    vec2 uv = c.xy / c.w * 0.5 + 0.5;
+    if (c.w <= 0.0 || any(lessThan(uv, vec2(0.0))) || any(greaterThanEqual(uv, vec2(1.0)))) return 1.0;
+    vec2 t = texelFetch(contactShadowImage, ivec2(uv * lighting.contactShadows.yz), 0).rg;
+    if (t.y <= 0.0) return 1.0;
+    return abs(t.y - c.w) <= lighting.contactShadows.w * c.w + 0.05 ? t.x : 1.0;
 }
 
 // The four nearest texels of a half-resolution screen image made with camera
