@@ -1,6 +1,7 @@
 #pragma once
 
 #include "kke/ButtonPrompts.h"
+#include "kke/Haptics.h"
 #include "kke/InputDevices.h"
 #include "kke/InputSanity.h"
 #include "kke/InputMap.h"
@@ -43,6 +44,12 @@ public:
 
     InputDevices& devices() { return m_devices; }
     InputMap& map(int player = 0) { return *m_maps[static_cast<size_t>(player)]; }
+    // Haptics (ENG-F48, kke/Haptics.h): what player `p`'s controllers feel.
+    // Mixed and sent every frame to the pads the player uses (the assigned
+    // ones; with one player and none assigned, every connected pad).
+    HapticMixer& haptics(int player = 0);
+    // The last mix sent to player `p` (tests, debug panels).
+    HapticMix hapticOutput(int player = 0) const;
     int players() const { return static_cast<int>(m_maps.size()); }
     void setPlayers(int count);
     // Split screen: which devices player `p` listens to (empty = all).
@@ -211,6 +218,14 @@ private:
     bool m_touchMouse = false;       // the touch-emulated mouse pressed on the controls
     bool m_touchWasEnabled = false;
     double m_touchApplied = -1.0;
+
+    void sendHaptics(float dt);
+    struct PlayerHaptics {
+        HapticMixer mixer;
+        HapticMix sent;
+        uint64_t sentAtMs = 0; // SDL_GetTicks
+    };
+    std::vector<PlayerHaptics> m_haptics;
 
     std::string m_path;
     InputDevices m_devices;

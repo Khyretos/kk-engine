@@ -99,6 +99,7 @@ public:
     // Swaps two identical devices' identities (plugged into each other's ports).
     void swapIdentities(uint32_t a, uint32_t b);
     bool rumble(uint32_t ref, float low, float high, uint32_t ms);
+    bool rumbleTriggers(uint32_t ref, float left, float right, uint32_t ms); // the trigger motors (Xbox One and later)
     bool setLed(uint32_t ref, glm::vec3 rgb);
     void identify(uint32_t ref); // rumble + LED flash where supported
 

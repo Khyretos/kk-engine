@@ -35,6 +35,40 @@ void InputModule::setPlayers(int count) {
     m_maps.resize(static_cast<size_t>(count));
 }
 
+HapticMixer& InputModule::haptics(int player) {
+    if (m_haptics.size() < static_cast<size_t>(std::max(players(), player + 1))) m_haptics.resize(static_cast<size_t>(std::max(players(), player + 1)));
+    return m_haptics[static_cast<size_t>(player)].mixer;
+}
+
+HapticMix InputModule::hapticOutput(int player) const {
+    return player >= 0 && static_cast<size_t>(player) < m_haptics.size() ? m_haptics[static_cast<size_t>(player)].sent : HapticMix{};
+}
+
+void InputModule::sendHaptics(float dt) {
+    for (size_t p = 0; p < m_haptics.size(); ++p) {
+        PlayerHaptics& h = m_haptics[p];
+        const HapticMix mix = h.mixer.update(dt);
+        const bool silent = mix == HapticMix{};
+        // SDL keeps a rumble going for the time given (250 ms of real time,
+        // whatever the game clock does): refresh a steady one before it runs
+        // out, send a change at once, and a stop once.
+        const bool changed = !(mix == h.sent);
+        const uint64_t wallMs = SDL_GetTicks();
+        if (!changed && (silent || wallMs - h.sentAtMs < 150)) continue;
+        std::vector<uint32_t> pads;
+        if (p < m_maps.size()) pads = m_maps[p]->devices();
+        if (pads.empty() && (p == 0 || players() == 1))
+            for (const InputDevices::Device& d : m_devices.devices())
+                if (d.connected && d.hasRumble) pads.push_back(d.ref);
+        for (uint32_t ref : pads) {
+            m_devices.rumble(ref, mix.low, mix.high, 250);
+            m_devices.rumbleTriggers(ref, mix.leftTrigger, mix.rightTrigger, 250);
+        }
+        h.sent = mix;
+        h.sentAtMs = wallMs;
+    }
+}
+
 void InputModule::assignDevices(int player, std::vector<uint32_t> devices) {
     if (player >= 0 && player < players()) m_maps[static_cast<size_t>(player)]->setDevices(std::move(devices));
 }
@@ -368,6 +402,15 @@ void InputModule::attachVirtualDevices(const std::string& spec) {
             d.axis_mask = (1u << SDL_GAMEPAD_AXIS_COUNT) - 1u;
             d.nsensors = 2;
             d.sensors = sensors;
+            // Haptics reach it (ENG-F48): each change is logged, so headless checks can see what a pad would feel.
+            d.Rumble = [](void*, Uint16 low, Uint16 high) {
+                log::get("Input")->info("virtual gamepad rumble: low {:.2f} high {:.2f}", low / 65535.0f, high / 65535.0f);
+                return true;
+            };
+            d.RumbleTriggers = [](void*, Uint16 left, Uint16 right) {
+                if (left || right) log::get("Input")->info("virtual gamepad triggers: left {:.2f} right {:.2f}", left / 65535.0f, right / 65535.0f);
+                return true;
+            };
         } else {
             d.type = SDL_JOYSTICK_TYPE_FLIGHT_STICK;
             d.name = "KKE virtual flight stick"; // two of these = a HOSAS pair
@@ -608,6 +651,7 @@ void InputModule::frameStart(const UpdateContext& ctx) {
     if (!m_padScript.empty() || !m_padReleases.empty()) playPadScript(m_now);
     if (!m_touchScript.empty()) playTouchScript(m_now);
     m_devices.poll();
+    if (!m_haptics.empty()) sendHaptics(ctx.dt);
     if (!m_promptTouched) {
         // Until someone presses something, a Steam Deck's own controls are
         // the best guess on a Deck.

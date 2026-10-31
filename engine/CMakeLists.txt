@@ -177,6 +177,7 @@ set(ENGINE_SOURCES
     src/ShadowRays.cpp
     src/ContactShadows.cpp
     src/Upscale.cpp
+    src/Haptics.cpp
     src/Taa.cpp
     src/VolumetricFog.cpp
     src/BehindPass.cpp

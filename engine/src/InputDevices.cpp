@@ -546,6 +546,13 @@ bool InputDevices::rumble(uint32_t ref, float low, float high, uint32_t ms) {
     return SDL_RumbleJoystick(d->joystick, u16(low), u16(high), ms);
 }
 
+bool InputDevices::rumbleTriggers(uint32_t ref, float left, float right, uint32_t ms) {
+    Device* d = find(ref);
+    if (!d || !d->joystick) return false;
+    auto u16 = [](float v) { return static_cast<Uint16>(std::clamp(v, 0.0f, 1.0f) * 65535.0f); };
+    return SDL_RumbleJoystickTriggers(d->joystick, u16(left), u16(right), ms);
+}
+
 bool InputDevices::setLed(uint32_t ref, glm::vec3 rgb) {
     Device* d = find(ref);
     if (!d || !d->joystick) return false;

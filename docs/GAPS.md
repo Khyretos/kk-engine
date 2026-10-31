@@ -126,7 +126,7 @@ by area. The goal is parity with the big engines and more.
 | ENG-F45 | UI | Animation curves for UI | 🟡 |
 | ENG-F46 | UI | Multi-monitor | ⬜ |
 | ENG-F47 | Input | Gesture recognition beyond pinch, pan and twist | 🟡 |
-| ENG-F48 | Input | Haptics API (rumble on impacts is next in INPUT) | 🟡 |
+| ENG-F48 | Input | Haptics API: per-player mixer (one-shots with envelopes, steady levels, 10 presets, trigger motors), `controls.vibration` setting, Lua `input.haptic/hapticLevel/rumble/rumbleTriggers/stopHaptics/vibration` (INPUT.md "Haptics") | ✅ local |
 | ENG-F49 | Input | Virtual joystick for phones: on-screen sticks and buttons from the game's actions, player-editable (docs/TOUCH.md) | ✅ |
 | ENG-F50 | Input | Action maps, rebinding, glyphs, per-player devices (docs/INPUT.md) | ✅ |
 | ENG-F51 | Scripting | Visual scripting (node graph; #33 leftovers) | 🟡 |

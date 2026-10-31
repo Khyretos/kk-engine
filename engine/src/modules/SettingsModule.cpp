@@ -5,6 +5,7 @@
 #include "kke/Capabilities.h"
 #include "kke/CrashReporter.h"
 #include "kke/Log.h"
+#include "kke/modules/InputModule.h"
 
 namespace kke {
 
@@ -40,6 +41,8 @@ void SettingsModule::apply() {
     m_app->setShadowRays(shadowRaysFromName(g.shadowRays, ShadowRays::Off));
     m_app->setContactShadows(g.contactShadows);
     m_app->setUpscaler(g.upscaler, g.upscaleSharpness);
+    if (auto* input = m_app->getModule<InputModule>())
+        for (int p = 0; p < input->players(); ++p) input->haptics(p).setScale(m_settings.controls.vibration);
     m_app->shadowMap().setBaseTileResolution(static_cast<uint32_t>(g.shadowResolution));
     m_app->lighting().ambientColor = m_baseAmbient * g.brightness;
     m_app->debugUi().setVisible(g.showDebugOverlay);

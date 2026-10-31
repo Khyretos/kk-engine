@@ -77,6 +77,7 @@ struct EngineSettings {
     struct Controls {
         float mouseSensitivity = 1.0f;
         bool invertY = false;
+        float vibration = 1.0f; // controller haptics strength (ENG-F48): 0 = off, up to 1.5
         // action name -> SDL key name (SDL_GetKeyName / SDL_GetKeyFromName)
         std::map<std::string, std::string> keyBindings = {
             {"move_forward", "W"}, {"move_back", "S"}, {"move_left", "A"}, {"move_right", "D"},

@@ -442,6 +442,54 @@ void ScriptModule::bindAll() {
             if (p < 0 || p >= in->players()) luaL_error(L, "player %d: this game has %d local player(s)", p + 1, in->players());
             return p;
         };
+        // Haptics (ENG-F48, docs/INPUT.md "Haptics").
+        vm.registerFunction("input", "rumble", [in, playerArg](lua_State* L) {
+            HapticPulse p;
+            p.low = static_cast<float>(luaL_checknumber(L, 1));
+            p.high = static_cast<float>(luaL_optnumber(L, 2, p.low));
+            p.seconds = static_cast<float>(luaL_optnumber(L, 3, 0.2));
+            p.decay = 0.0f;
+            in->haptics(playerArg(L, 4)).play(p);
+            return 0;
+        });
+        vm.registerFunction("input", "rumbleTriggers", [in, playerArg](lua_State* L) {
+            HapticPulse p;
+            p.leftTrigger = static_cast<float>(luaL_checknumber(L, 1));
+            p.rightTrigger = static_cast<float>(luaL_optnumber(L, 2, p.leftTrigger));
+            p.seconds = static_cast<float>(luaL_optnumber(L, 3, 0.2));
+            p.decay = 0.0f;
+            in->haptics(playerArg(L, 4)).play(p);
+            return 0;
+        });
+        auto presetArg = [](lua_State* L, const char* fn, float strength) {
+            const std::string name = luaL_checkstring(L, 1);
+            HapticPulse p;
+            if (!hapticPreset(name, strength, p)) {
+                std::string names;
+                for (const std::string& n : hapticPresetNames()) names += (names.empty() ? "" : ", ") + n;
+                luaL_error(L, "%s: unknown haptic '%s' (%s)", fn, name.c_str(), names.c_str());
+            }
+            return p;
+        };
+        vm.registerFunction("input", "haptic", [in, playerArg, presetArg](lua_State* L) {
+            in->haptics(playerArg(L, 3)).play(presetArg(L, "input.haptic", static_cast<float>(luaL_optnumber(L, 2, 1.0))));
+            return 0;
+        });
+        vm.registerFunction("input", "hapticLevel", [in, playerArg, presetArg](lua_State* L) {
+            const HapticPulse shape = presetArg(L, "input.hapticLevel", 1.0f);
+            in->haptics(playerArg(L, 3)).setLevel(luaL_checkstring(L, 1), static_cast<float>(luaL_checknumber(L, 2)), shape);
+            return 0;
+        });
+        vm.registerFunction("input", "stopHaptics", [in, playerArg](lua_State* L) {
+            in->haptics(playerArg(L, 1)).stop();
+            return 0;
+        });
+        vm.registerFunction("input", "vibration", [in, playerArg](lua_State* L) {
+            HapticMixer& h = in->haptics(playerArg(L, 2));
+            if (lua_isnumber(L, 1)) h.setScale(static_cast<float>(lua_tonumber(L, 1)));
+            lua_pushnumber(L, h.scale());
+            return 1;
+        });
         vm.registerFunction("input", "style", [in, playerArg](lua_State* L) {
             lua_pushstring(L, toString(in->promptStyle(playerArg(L, 1))));
             return 1;

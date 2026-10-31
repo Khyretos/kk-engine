@@ -281,6 +281,32 @@ Games that start on a menu let the players join themselves instead:
 presses A, shows "press A to join" when one is plugged in, and assigns
 the devices with `applyInput()`.
 
+## Haptics
+
+Controllers rumble through `kke::HapticMixer` (kke/Haptics.h, ENG-F48):
+one per local player, many sources at once, mixed every frame and sent to
+the pads that player uses (the assigned ones; with one player and none
+assigned, every connected pad). Two motors in the body (low = heavy,
+high = buzzy) and, on pads that have them, one in each trigger.
+
+```lua
+input.haptic("impact")             -- a preset, strength 1
+input.haptic("explosion", 0.6, 2)  -- strength 0.6, player 2
+input.hapticLevel("engine", rpm / maxRpm)  -- a steady source: set it as it changes, 0 stops it
+input.rumble(0.8, 0.3, 0.25)       -- low, high, seconds
+input.rumbleTriggers(0, 0.7, 0.1)  -- left, right trigger motor, seconds
+input.stopHaptics()                -- everything, for player 1
+input.vibration(0.5)               -- the player's strength (0 = off); also the setting controls.vibration
+```
+
+Presets: `impact`, `light`, `explosion`, `footstep`, `heartbeat`,
+`alarm`, `shoot`, `brake`, `engine`, `rain`. One-shots add up and clip
+at full strength; a level keeps going until set to 0. The setting
+`controls.vibration` (0 to 1.5, default 1) scales everything, and 0 turns
+it off: offer it in your options menu (some players can't use rumble).
+The virtual pad (`KKE_VIRTUAL_INPUT=pad`) logs what it is asked to do,
+so a headless run shows the haptics a game sends.
+
 ## Testing without hardware
 
 `KKE_VIRTUAL_INPUT=hosas,pad` attaches two identical virtual flight sticks

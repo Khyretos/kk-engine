@@ -47,6 +47,7 @@ void EngineSettings::sanitize() {
     audio.music = std::clamp(audio.music, 0, 100);
     audio.effects = std::clamp(audio.effects, 0, 100);
     controls.mouseSensitivity = std::clamp(controls.mouseSensitivity, 0.1f, 5.0f);
+    controls.vibration = std::clamp(controls.vibration, 0.0f, 1.5f);
     if (gameplay.difficulty != "easy" && gameplay.difficulty != "normal" && gameplay.difficulty != "hard") {
         gameplay.difficulty = "normal";
     }
@@ -73,7 +74,7 @@ bool EngineSettings::operator==(const EngineSettings& o) const {
            graphics.uiScale == o.graphics.uiScale && graphics.showDebugOverlay == o.graphics.showDebugOverlay &&
            audio.master == o.audio.master && audio.music == o.audio.music && audio.effects == o.audio.effects &&
            audio.muteWhenUnfocused == o.audio.muteWhenUnfocused &&
-           controls.mouseSensitivity == o.controls.mouseSensitivity && controls.invertY == o.controls.invertY &&
+           controls.mouseSensitivity == o.controls.mouseSensitivity && controls.invertY == o.controls.invertY && controls.vibration == o.controls.vibration &&
            controls.keyBindings == o.controls.keyBindings &&
            gameplay.difficulty == o.gameplay.difficulty &&
            gameplay.maxPhysicsStepsPerFrame == o.gameplay.maxPhysicsStepsPerFrame &&
@@ -102,7 +103,7 @@ std::string settingsToJson(const EngineSettings& s) {
         {"muteWhenUnfocused", s.audio.muteWhenUnfocused},
     };
     j["controls"] = {
-        {"mouseSensitivity", s.controls.mouseSensitivity}, {"invertY", s.controls.invertY},
+        {"mouseSensitivity", s.controls.mouseSensitivity}, {"invertY", s.controls.invertY}, {"vibration", s.controls.vibration},
         {"keyBindings", s.controls.keyBindings},
     };
     j["gameplay"] = {
@@ -168,6 +169,7 @@ EngineSettings settingsFromJson(const std::string& text, const EngineSettings& d
     const auto& c = section(j, "controls");
     readIfPresent(c, "mouseSensitivity", s.controls.mouseSensitivity);
     readIfPresent(c, "invertY", s.controls.invertY);
+    readIfPresent(c, "vibration", s.controls.vibration);
     // Merge, don't replace: a binding added in a newer build keeps its
     // default when an older file doesn't mention it.
     std::map<std::string, std::string> bindings;
