@@ -266,6 +266,83 @@ void ScriptModule::bindModels() {
         models->playAnimation(inst, clip, lua_isnoneornil(L, 3) ? true : bool(lua_toboolean(L, 3)), float(luaL_optnumber(L, 4, 1.0)));
         return 0;
     });
+    // models.lod(instance) -> level of detail now (0 = full). models.autoLod([on]) -> whether automatic levels of
+    // detail are on (docs/LOD.md); models.lodStats() -> instances below full detail, triangles saved (last frame).
+    vm.registerFunction("models", "lod", [models, owned](lua_State* L) {
+        lua_pushinteger(L, models->lodOf(owned(L, 1, "models.lod")));
+        return 1;
+    });
+    vm.registerFunction("models", "autoLod", [models](lua_State* L) {
+        if (!lua_isnoneornil(L, 1)) models->setAutoLod(lua_toboolean(L, 1));
+        lua_pushboolean(L, models->autoLod());
+        return 1;
+    });
+    vm.registerFunction("models", "lodStats", [models](lua_State* L) {
+        lua_pushinteger(L, lua_Integer(models->lodInstancesLastFrame()));
+        lua_pushinteger(L, lua_Integer(models->lodTrianglesSavedLastFrame()));
+        return 2;
+    });
+    // ---- face.*: facial animation on a skinned model's blend shapes (docs/FACIAL_ANIMATION.md)
+    // face.expressions(instance) -> {"happy", "blink", "aa", ...}: what this model can do.
+    vm.registerFunction("face", "expressions", [models, owned](lua_State* L) {
+        const auto inst = owned(L, 1, "face.expressions");
+        const std::vector<std::string> list = models->face(inst).expressions();
+        lua_createtable(L, int(list.size()), 0);
+        int i = 1;
+        for (const std::string& e : list) {
+            lua_pushstring(L, e.c_str());
+            lua_rawseti(L, -2, i++);
+        }
+        return 1;
+    });
+    // face.morphs(instance) -> {"smile", "jawOpen", ...}: the model's blend shapes by their own names.
+    vm.registerFunction("face", "morphs", [models, owned](lua_State* L) {
+        const auto inst = owned(L, 1, "face.morphs");
+        const std::vector<std::string> list = models->morphNames(inst);
+        lua_createtable(L, int(list.size()), 0);
+        int i = 1;
+        for (const std::string& e : list) {
+            lua_pushstring(L, e.c_str());
+            lua_rawseti(L, -2, i++);
+        }
+        return 1;
+    });
+    // face.expression(instance, "happy" [, weight=1]) -> true, or false when the model cannot do it.
+    vm.registerFunction("face", "expression", [models, owned](lua_State* L) {
+        const auto inst = owned(L, 1, "face.expression");
+        lua_pushboolean(L, models->face(inst).setExpression(luaL_checkstring(L, 2), float(luaL_optnumber(L, 3, 1.0))));
+        return 1;
+    });
+    // face.morph(instance, "jawOpen", weight): one blend shape directly, by any spelling of its name.
+    vm.registerFunction("face", "morph", [models, owned](lua_State* L) {
+        const auto inst = owned(L, 1, "face.morph");
+        lua_pushboolean(L, models->face(inst).setMorph(luaL_checkstring(L, 2), float(luaL_checknumber(L, 3))));
+        return 1;
+    });
+    // face.say(instance, text, seconds): the mouth moves through the vowels of the text for that long.
+    vm.registerFunction("face", "say", [models, owned](lua_State* L) {
+        const auto inst = owned(L, 1, "face.say");
+        models->face(inst).say(FaceRig::lipSyncFromText(luaL_checkstring(L, 2), float(luaL_checknumber(L, 3))));
+        return 0;
+    });
+    // face.level(instance, 0..1): the mouth follows a voice's loudness (call it every frame while it talks).
+    vm.registerFunction("face", "level", [models, owned](lua_State* L) {
+        models->face(owned(L, 1, "face.level")).setSpeechLevel(float(luaL_checknumber(L, 2)));
+        return 0;
+    });
+    vm.registerFunction("face", "blink", [models, owned](lua_State* L) {
+        models->face(owned(L, 1, "face.blink")).blink();
+        return 0;
+    });
+    // face.autoBlink(instance, on): on by default.
+    vm.registerFunction("face", "autoBlink", [models, owned](lua_State* L) {
+        models->face(owned(L, 1, "face.autoBlink")).setAutoBlink(lua_toboolean(L, 2));
+        return 0;
+    });
+    vm.registerFunction("face", "clear", [models, owned](lua_State* L) {
+        models->face(owned(L, 1, "face.clear")).clear();
+        return 0;
+    });
     // models.event(model, clip, seconds, name): an animation event, the
     // "AnimEvent" hook for every script model of `model` playing `clip`.
     // models.event(model, clip, nil) removes that clip's events.
@@ -530,8 +607,10 @@ void ScriptModule::bindUi() {
         return 0;
     });
     // ui.rml(doc, id, rml): markup.
-    vm.registerFunction("ui", "rml", [element](lua_State* L) {
-        element(L, "ui.rml")->SetInnerRML(luaL_checkstring(L, 3));
+    vm.registerFunction("ui", "rml", [element, ui](lua_State* L) {
+        Rml::Element* e = element(L, "ui.rml");
+        e->SetInnerRML(luaL_checkstring(L, 3));
+        ui->translate(e); // i18n="key" in the new markup (docs/LOCALIZATION.md)
         return 0;
     });
     // ui.class(doc, id, name, on)
@@ -605,6 +684,48 @@ void ScriptModule::dispatchClicks() {
 }
 
 // ----------------------------------------------------------------- scene.*
+// Loads the scene `name` (the game's scenes/ folder, then the shared one) at `origin` for script `source`. Returns the
+// scene's id, or 0 with `error`. Shared by scene.load and the world streamer (ScriptWorld.cpp), which has its own budget.
+int ScriptModule::loadSceneByName(const std::string& name, const glm::vec3& origin, const std::string& source, std::string& error, size_t* missing) {
+    auto* models = m_app->getModule<ModelModule>();
+    if (!models) {
+        error = "no ModelModule: scenes need models";
+        return 0;
+    }
+    // The first scenes folder that has it: the game's own, then the shared one.
+    std::filesystem::path file;
+    std::error_code ec;
+    for (const std::string& dir : sceneFolders()) {
+        file = datafile::resolve(std::filesystem::path(dir) / (name + ".scene.json"));
+        if (std::filesystem::is_regular_file(file, ec)) break;
+        file.clear();
+    }
+    if (file.empty()) {
+        error = "no scene '" + name + "' in the scenes folder";
+        return 0;
+    }
+    SceneFile sf;
+    try {
+        sf = SceneFile::load(file.string());
+    } catch (const std::exception& e) {
+        error = e.what();
+        return 0;
+    }
+    auto* rbm = m_app->getModule<RigidBodyModule>();
+    Scene s{ m_nextId++, loadScene(sf, catalog(), *models, rbm ? &rbm->world() : nullptr, origin), source, origin + sf.spawn, sf.spawnYaw };
+    if (missing) *missing = s.loaded.missing.size();
+    m_scenes.push_back(std::move(s));
+    return m_scenes.back().id;
+}
+
+void ScriptModule::unloadSceneById(int id) {
+    auto* models = m_app->getModule<ModelModule>();
+    auto* rbm = m_app->getModule<RigidBodyModule>();
+    for (Scene& s : m_scenes)
+        if (s.id == id && models) unloadScene(s.loaded, *models, rbm ? &rbm->world() : nullptr);
+    m_scenes.erase(std::remove_if(m_scenes.begin(), m_scenes.end(), [&](const Scene& x) { return x.id == id; }), m_scenes.end());
+}
+
 void ScriptModule::bindScenes() {
 #if KKE_ENABLE_JOLT
     auto* models = m_app->getModule<ModelModule>();
@@ -631,42 +752,24 @@ void ScriptModule::bindScenes() {
         return 1;
     });
     // scene.load(name, origin) -> scene id (+ how many assets were missing), or nil + reason
-    vm.registerFunction("scene", "load", [this, models](lua_State* L) {
+    vm.registerFunction("scene", "load", [this](lua_State* L) {
         const std::string name = luaL_checkstring(L, 1);
         if (!safeRelativePath(name) || name.find('/') != std::string::npos)
             return luaL_error(L, "scene.load: '%s' must be a scene name from scene.list()", name.c_str());
         const std::string src = m_vm->currentSource();
         size_t mine = 0;
-        for (const Scene& s : m_scenes) mine += s.source == src;
+        for (const Scene& s : m_scenes) mine += s.source == src && !s.streamed;
         if (mine >= maxScenesPerScript) return luaL_error(L, "scene.load: this script already has %d scenes loaded (maxScenesPerScript)", int(maxScenesPerScript));
-        // The first scenes folder that has it: the game's own, then the shared one.
-        std::filesystem::path file;
-        std::error_code ec;
-        for (const std::string& dir : sceneFolders()) {
-            file = datafile::resolve(std::filesystem::path(dir) / (name + ".scene.json"));
-            if (std::filesystem::is_regular_file(file, ec)) break;
-            file.clear();
-        }
-        if (file.empty()) {
+        std::string error;
+        size_t missing = 0;
+        const int id = loadSceneByName(name, ScriptVM::toVec3(L, 2), src, error, &missing);
+        if (!id) {
             lua_pushnil(L);
-            lua_pushfstring(L, "no scene '%s' in the scenes folder", name.c_str());
+            lua_pushstring(L, error.c_str());
             return 2;
         }
-        SceneFile sf;
-        try {
-            sf = SceneFile::load(file.string());
-        } catch (const std::exception& e) {
-            lua_pushnil(L);
-            lua_pushstring(L, e.what());
-            return 2;
-        }
-        auto* rbm = m_app->getModule<RigidBodyModule>();
-        const glm::vec3 origin = ScriptVM::toVec3(L, 2);
-        Scene s{m_nextId++, loadScene(sf, catalog(), *models, rbm ? &rbm->world() : nullptr, origin), src, origin + sf.spawn, sf.spawnYaw};
-        const size_t missing = s.loaded.missing.size();
-        m_scenes.push_back(std::move(s));
         if (missing) log(src, "scene '" + name + "': " + std::to_string(missing) + " asset(s) not installed, left out");
-        lua_pushinteger(L, m_scenes.back().id);
+        lua_pushinteger(L, id);
         lua_pushinteger(L, lua_Integer(missing));
         return 2;
     });
@@ -1487,6 +1590,7 @@ void ScriptModule::releaseScript(const std::string& source) {
             if (mine(s.source)) unloadScene(s.loaded, *models, rb ? &rb->world() : nullptr);
 #endif
     m_scenes.erase(std::remove_if(m_scenes.begin(), m_scenes.end(), [&](const Scene& s) { return mine(s.source); }), m_scenes.end());
+    releaseWorld(source); // its streamed cells (their scenes are unloaded with the rest above or here)
     m_lights.releaseAll(m_app->lighting(), source);
     // Its sounds stop (a short fade, no click); so does the music it started.
     if (auto* audio = m_app->getModule<AudioModule>()) {

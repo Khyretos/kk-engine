@@ -48,6 +48,10 @@ struct EngineSettings {
         bool motionBlur = false;
         // Occlusion culling (Renderer::setOcclusionCulling): models hidden behind others aren't drawn.
         bool occlusionCulling = false;
+        // Automatic levels of detail for models (kke::ModelModule, docs/LOD.md): simpler meshes for small, far objects.
+        // lodBias > 1 keeps detail to greater distances, < 1 drops it sooner.
+        bool autoLod = true;
+        float lodBias = 1.0f;
         // Ray-traced sun shadows (kke/ShadowRays.h): "off", "kke" (only past
         // the shadow map's reach) or "classic" (every pixel).
         std::string shadowRays = "off";
@@ -78,7 +82,24 @@ struct EngineSettings {
         std::string difficulty = "normal"; // "easy" | "normal" | "hard"
         int maxPhysicsStepsPerFrame = 2;   // Application::setMaxFixedStepsPerFrame()
         bool showDamageNumbers = true;
+        // The language of the game's text (kke::LocalizationModule): a code
+        // like "nl" or "pt-BR", or "auto" for the machine's own.
+        std::string language = "auto";
     } gameplay;
+
+    // Playing comfortably (ENG-F85). The UI scale is graphics.uiScale; keys
+    // are controls.keyBindings and the Input module's rebinding.
+    struct Accessibility {
+        // The picture corrected for a kind of colour blindness: "off",
+        // "protanopia" (no red cones), "deuteranopia" (no green),
+        // "tritanopia" (no blue), "achromatopsia" (no colour: contrast kept).
+        std::string colourBlind = "off";
+        float colourBlindStrength = 1.0f; // 0..1
+        bool subtitles = true;            // captions for speech and sounds that matter
+        float subtitleScale = 1.0f;       // 0.5..3
+        bool reduceMotion = false;        // no camera shake, no motion blur, gentler UI animation
+        bool highContrast = false;        // UI: strong outlines, solid panels (class kke-high-contrast on every document)
+    } accessibility;
 
     // The resource governor's inputs (kke/ResourceGovernor.h): by default
     // the engine takes what it needs and leaves the rest of the machine

@@ -57,8 +57,10 @@ AnimationSet::AnimationSet(const ModelData& model) {
         c.name = a.name;
         c.duration = a.duration;
         c.sampleRate = a.sampleRate > 0.0f ? a.sampleRate : 30.0f;
-        c.frames.reserve(a.frames.size());
-        for (const auto& frame : a.frames) {
+        c.frames.reserve(a.frameCount());
+        std::vector<glm::mat4> frame;
+        for (size_t f = 0; f < a.frameCount(); ++f) { // packed clips (ENG-F63) unpack frame by frame
+            a.localsAt(f, frame);
             Pose p(frame.size());
             for (size_t b = 0; b < frame.size(); ++b) p[b] = decompose(frame[b]);
             c.frames.push_back(std::move(p));

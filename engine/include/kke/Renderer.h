@@ -141,6 +141,10 @@ public:
     // Bloom (ENG-F10, kke/Bloom.h): bright light bleeding into what is around
     // it, mixed in before the tone map. On by default (graphics setting "bloom").
     void setBloom(bool on) { m_bloomOn = on; }
+    // A colour matrix on the tone-mapped colour (ENG-F85, kke/ColourBlind.h): the
+    // colour-blind correction, or a developer's simulation of the condition.
+    // Identity (the default) costs the shader nothing.
+    void setColourMatrix(const glm::mat3& matrix) { m_colourMatrix = matrix; }
     // A colour LUT after the tone map (ENG-F10, kke/ColorLut.h); null = none.
     // A new one is uploaded once (the call waits for the GPU).
     void setColorLut(std::shared_ptr<const ColorLut> lut);
@@ -308,6 +312,7 @@ private:
     std::shared_ptr<const ColorLut> m_lut;
     std::unique_ptr<ColorLutTexture> m_lutTexture, m_identityLut; // the LUT on the GPU; a 2^3 identity bound while there is none
     bool m_bloomOn = true;
+    glm::mat3 m_colourMatrix{1.0f}; // ENG-F85: the colour-blind correction, pushed after PostParams
     VkImageView m_bloomSource = VK_NULL_HANDLE; // this frame's bloom (GENERAL), or none
     std::unique_ptr<TaaPass> m_taa; // made the first time TAA is on
     std::unique_ptr<DofPass> m_dof; // made the first time depth of field is on

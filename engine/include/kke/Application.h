@@ -338,6 +338,14 @@ public:
     void setTaa(bool on);
     // Bloom (ENG-F10, Renderer::setBloom): the graphics setting "bloom"; KKE_BLOOM=1 or 0 wins over it.
     void setBloom(bool on);
+    // Colour-blind correction (ENG-F85, kke/ColourBlind.h): the accessibility setting. KKE_COLOURBLIND_SIM=protanopia
+    // (or deuteranopia, tritanopia, achromatopsia) shows the picture as a person with that condition sees it, for
+    // checking a game; it wins over the setting.
+    void setColourBlind(const std::string& mode, float strength);
+    // Reduced motion (ENG-F85, the accessibility setting): scripted camera shake does nothing and motion
+    // blur is off whatever the graphics setting says. Games that move the camera themselves read this.
+    void setReduceMotion(bool on) { m_reduceMotion = on; }
+    bool reduceMotion() const { return m_reduceMotion; }
     // Depth of field (ENG-F10 part 3, kke/DepthOfField.h): the graphics setting "depthOfField"; KKE_DOF=1 or 0
     // wins over it. Its focus, aperture and blur: depthOfFieldSettings() (focusDistance 0 = auto focus).
     void setDepthOfField(bool on);
@@ -580,6 +588,7 @@ private:
     bool m_occlusionOn = false;
     std::vector<std::pair<const void*, std::function<void(VkCommandBuffer)>>> m_frameCompute;
     std::vector<const void*> m_depthWanted;
+    bool m_reduceMotion = false;
     std::optional<bool> m_bloomEnv;                             // KKE_BLOOM
     std::unique_ptr<ShadowRayPass> m_shadowRayPass; // made the first time shadow rays are on
     std::unique_ptr<ClusterLightPass> m_clusterLights; // made the first time there are many lights (ENG-F08)

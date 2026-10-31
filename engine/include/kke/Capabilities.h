@@ -67,6 +67,16 @@ public:
     virtual void onSettingsChanged(const EngineSettings& settings) = 0;
 };
 
+// Implemented by the module that owns the player's language (kke::LocalizationModule,
+// ENG-F84): the UI asks it for text and for the language's font and direction
+// without depending on it, so a game without localization runs as before.
+class Localization;
+class ILocalizer {
+public:
+    virtual ~ILocalizer() = default;
+    virtual Localization& localization() = 0;
+};
+
 // Implemented by a module that has things rays should see (ENG-F02): each
 // frame, before the reflections pass, Application asks every implementer to
 // add what it draws to the frame's kke::RayScene, and how each instance looks

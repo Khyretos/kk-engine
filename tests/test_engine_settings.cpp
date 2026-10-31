@@ -26,6 +26,8 @@ TEST(EngineSettings, ModifiedValuesRoundTrip) {
     s.graphics.brightness = 1.5f;
     s.graphics.uiScale = 1.25f;
     s.graphics.showDebugOverlay = false;
+    s.graphics.autoLod = false;
+    s.graphics.lodBias = 1.75f;
     s.audio.master = 10;
     s.audio.music = 0;
     s.audio.effects = 100;
@@ -36,8 +38,46 @@ TEST(EngineSettings, ModifiedValuesRoundTrip) {
     s.gameplay.difficulty = "hard";
     s.gameplay.maxPhysicsStepsPerFrame = 4;
     s.gameplay.showDamageNumbers = false;
+    s.gameplay.language = "pt-BR";
+    s.accessibility.colourBlind = "deuteranopia";
+    s.accessibility.colourBlindStrength = 0.6f;
+    s.accessibility.subtitles = false;
+    s.accessibility.subtitleScale = 2.0f;
+    s.accessibility.reduceMotion = true;
+    s.accessibility.highContrast = true;
     s.custom["favoriteColor"] = "teal";
     EXPECT_EQ(kke::settingsFromJson(kke::settingsToJson(s)), s);
+}
+
+TEST(EngineSettings, LevelOfDetailDefaultsToOnAndTheBiasIsClamped) {
+    EngineSettings s;
+    EXPECT_TRUE(s.graphics.autoLod);
+    EXPECT_FLOAT_EQ(s.graphics.lodBias, 1.0f);
+    EngineSettings wild = kke::settingsFromJson(R"({"graphics": {"lodBias": 99}})");
+    wild.sanitize();
+    EXPECT_FLOAT_EQ(wild.graphics.lodBias, 4.0f);
+    wild.graphics.lodBias = 0.0f;
+    wild.sanitize();
+    EXPECT_FLOAT_EQ(wild.graphics.lodBias, 0.25f);
+}
+
+TEST(EngineSettings, AccessibilityDefaultsAndSanitising) {
+    EngineSettings s;
+    EXPECT_EQ(s.gameplay.language, "auto");
+    EXPECT_EQ(s.accessibility.colourBlind, "off");
+    EXPECT_TRUE(s.accessibility.subtitles);
+    EXPECT_FALSE(s.accessibility.reduceMotion);
+    EngineSettings bad = kke::settingsFromJson(R"({"gameplay": {"language": ""},
+        "accessibility": {"colourBlind": "rainbow", "colourBlindStrength": 9, "subtitleScale": 0.01}})");
+    bad.sanitize();
+    EXPECT_EQ(bad.gameplay.language, "auto");
+    EXPECT_EQ(bad.accessibility.colourBlind, "off") << "an unknown mode is no mode";
+    EXPECT_FLOAT_EQ(bad.accessibility.colourBlindStrength, 1.0f);
+    EXPECT_FLOAT_EQ(bad.accessibility.subtitleScale, 0.5f);
+    // An old settings file without the new groups keeps the defaults.
+    EngineSettings old = kke::settingsFromJson(R"({"graphics": {"fieldOfView": 75}})");
+    EXPECT_EQ(old.accessibility.colourBlind, "off");
+    EXPECT_TRUE(old.accessibility.subtitles);
 }
 
 TEST(EngineSettings, MissingKeysKeepDefaults) {

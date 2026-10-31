@@ -7,11 +7,13 @@
 #include "kke/modules/AudioModule.h"
 #include "kke/modules/GameShellModule.h"
 #include "kke/modules/InputModule.h"
+#include "kke/modules/LocalizationModule.h"
 #include "kke/modules/ModelModule.h"
 #include "kke/modules/RigidBodyModule.h"
 #include "kke/modules/ScriptModule.h"
 #include "kke/modules/SettingsModule.h"
 #include "kke/modules/StatsModule.h"
+#include "kke/modules/SubtitleModule.h"
 #include "kke/modules/UiModule.h"
 #if KKE_ENABLE_FEMFX
 #include "kke/modules/PhysicsBridgeModule.h"
@@ -39,6 +41,8 @@ int main() {
         // The shared menus: title, settings, controls, pause (docs/GAME_SHELL.md).
         app.addModule<kke::GameShellModule>("Starter Game", "Your game starts here");
         app.addModule<kke::AudioModule>().setUiVisible(false);
+        app.addModule<kke::LocalizationModule>();             // text in the player's language (i18n.* in Lua, lang/*.json)
+        app.addModule<kke::SubtitleModule>();                 // dialogue subtitles (subtitle.* in Lua)
 #if KKE_ENABLE_FEMFX
         // Things that really break (breakable.* in Lua), with the
         // "everything" build preset.

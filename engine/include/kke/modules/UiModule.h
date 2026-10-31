@@ -10,7 +10,9 @@
 #include <RmlUi/Core/SystemInterface.h>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace Rml {
 class Context;
@@ -118,6 +120,13 @@ public:
     // split screen. Needs an InputModule; without one it shows the label.
     class PromptInstancer;
 
+    // `i18n="key"` (and i18n-title, i18n-placeholder, i18n-value, i18n-count,
+    // i18n-args) on any element under `root`: set to the text in the player's
+    // language (kke::LocalizationModule, docs/LOCALIZATION.md). Done for every
+    // document when it opens and whenever the language changes; call it on
+    // an element whose RML a script has just replaced.
+    void translate(Rml::Element* root);
+
     // Reloads every open document's stylesheet from disk — bound to F5
     // (and Ctrl+R) so .rcss edits show up without restarting.
     void reloadStyleSheets();
@@ -169,6 +178,10 @@ private:
     // Cleared on mouse-up regardless of where the button is released,
     // so a drag that ends off the slider doesn't leave this stuck.
     float m_uiScale = 1.0f;
+    ILocalizer* m_localizer = nullptr; // found on the first frame: the module may be added after this one
+    bool m_localizerLooked = false;
+    std::unordered_set<std::string> m_loadedFonts;
+    bool m_highContrast = false, m_reduceMotion = false; // EngineSettings::Accessibility
     float m_navHeld[4] = {}, m_navRepeat[4] = {};
     float m_dpRatio = 1.0f;
     float m_pixelsPerPoint = 1.0f; // see Window::pixelsPerPoint()

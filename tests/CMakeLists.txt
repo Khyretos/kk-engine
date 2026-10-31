@@ -9,6 +9,14 @@ add_executable(kke_tests
     test_marketplace_index.cpp
     test_engine_error.cpp
     test_engine_settings.cpp
+    test_localization.cpp
+    test_colour_blind.cpp
+    test_subtitles.cpp
+    test_morph.cpp
+    test_face_rig.cpp
+    test_lod_chain.cpp
+    test_anim_compress.cpp
+    test_world_stream.cpp
     test_model_asset.cpp
     test_gltf_asset.cpp
     test_ragdoll.cpp

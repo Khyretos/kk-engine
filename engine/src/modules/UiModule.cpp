@@ -2,16 +2,19 @@
 
 #include "../TouchOverlay.h"
 #include "kke/Application.h"
+#include "kke/Localization.h"
 #include "kke/Log.h"
 #include "kke/EngineSettings.h"
 #include "kke/modules/AudioModule.h"
 #include "kke/modules/InputModule.h"
+#include "kke/modules/SettingsModule.h"
 #include "kke/RmlTextSafety.h"
 #include "kke/SpriteCatalog.h"
 
 #include <RmlUi/Core/Core.h>
 #include <RmlUi/Core/Context.h>
 #include <RmlUi/Core/ElementDocument.h>
+#include <RmlUi/Core/ElementUtilities.h>
 #include <RmlUi/Core/EventListener.h>
 #include <RmlUi/Core/Elements/ElementFormControl.h>
 #include <RmlUi/Core/Input.h>
@@ -409,6 +412,25 @@ void UiModule::init(Application& app) {
                      "emoji will not render." << std::endl;
     }
 
+    if (auto* settings = app.getModule<SettingsModule>()) { // it may have applied before this module existed
+        m_highContrast = settings->settings().accessibility.highContrast;
+        m_reduceMotion = settings->settings().accessibility.reduceMotion;
+    }
+
+    // Any font dropped in assets/fonts/fallback (Noto Sans CJK, Thai...) joins the fallback chain, so a
+    // language the bundled fonts lack only needs its font file there (docs/LOCALIZATION.md).
+    {
+        std::error_code ec;
+        std::vector<std::filesystem::path> extra;
+        for (const auto& entry : std::filesystem::directory_iterator("assets/fonts/fallback", ec)) {
+            const std::string ext = entry.path().extension().string();
+            if (entry.is_regular_file() && (ext == ".ttf" || ext == ".otf" || ext == ".ttc")) extra.push_back(entry.path());
+        }
+        std::sort(extra.begin(), extra.end());
+        for (const auto& font : extra)
+            if (Rml::LoadFontFace(font.generic_string(), /*fallback_face=*/true)) m_loadedFonts.insert(font.filename().string());
+    }
+
     VkExtent2D extent = app.renderer().extent();
     m_context = Rml::CreateContext("main", Rml::Vector2i(static_cast<int>(extent.width), static_cast<int>(extent.height)));
     if (!m_context) {
@@ -452,6 +474,11 @@ void UiModule::renderUi() {
     {
         const UiProfile profile = m_app->uiProfile();
         const bool portrait = extent.height > extent.width;
+        if (!m_localizerLooked) {
+            m_localizerLooked = true;
+            const auto found = m_app->findCapability<ILocalizer>();
+            if (!found.empty()) m_localizer = found.front();
+        }
         for (int i = 0; i < m_context->GetNumDocuments(); ++i) {
             Rml::ElementDocument* doc = m_context->GetDocument(i);
             doc->SetClass("kke-phone", profile == UiProfile::Phone);
@@ -459,6 +486,17 @@ void UiModule::renderUi() {
             doc->SetClass("kke-console", profile == UiProfile::Console);
             doc->SetClass("kke-portrait", portrait);
             doc->SetClass("kke-landscape", !portrait);
+            doc->SetClass("kke-high-contrast", m_highContrast);
+            doc->SetClass("kke-reduce-motion", m_reduceMotion);
+            if (m_localizer) {
+                Localization& language = m_localizer->localization();
+                doc->SetClass("kke-rtl", language.rtl());
+                const int generation = static_cast<int>(language.generation());
+                if (doc->GetAttribute<int>("kke-i18n", 0) != generation) {
+                    translate(doc);
+                    doc->SetAttribute("kke-i18n", generation);
+                }
+            }
         }
     }
     m_pixelsPerPoint = m_app->window().pixelsPerPoint();
@@ -476,6 +514,61 @@ void UiModule::renderUi() {
 
 void UiModule::onSettingsChanged(const EngineSettings& settings) {
     m_uiScale = settings.graphics.uiScale;
+    m_highContrast = settings.accessibility.highContrast;
+    m_reduceMotion = settings.accessibility.reduceMotion;
+}
+
+namespace {
+
+// "name=Kees;gold=5" -> {name, Kees}, {gold, 5}
+LocArgs parseI18nArgs(const std::string& text) {
+    LocArgs args;
+    size_t start = 0;
+    while (start <= text.size()) {
+        size_t end = text.find(';', start);
+        if (end == std::string::npos) end = text.size();
+        const std::string item = text.substr(start, end - start);
+        if (const size_t eq = item.find('='); eq != std::string::npos && eq > 0) args.emplace_back(item.substr(0, eq), item.substr(eq + 1));
+        start = end + 1;
+    }
+    return args;
+}
+
+} // namespace
+
+void UiModule::translate(Rml::Element* root) {
+    if (!root || !m_localizer) return;
+    Localization& language = m_localizer->localization();
+    if (const LanguageInfo* info = language.info(language.language()); info && !info->font.empty()) {
+        if (m_loadedFonts.insert(info->font).second && !Rml::LoadFontFace("assets/fonts/" + info->font, /*fallback_face=*/true))
+            log::get(name())->info("the font '{}' of language '{}' is not in assets/fonts: its text may show as boxes", info->font, info->code);
+    }
+    static const std::pair<const char*, const char*> kAttributes[] = {
+        { "i18n", "" }, { "i18n-title", "title" }, { "i18n-placeholder", "placeholder" }, { "i18n-value", "value" },
+    };
+    auto translateOne = [&](Rml::Element* e) {
+        for (const auto& [source, target] : kAttributes) {
+            if (!e->HasAttribute(source)) continue;
+            const std::string key = e->GetAttribute<Rml::String>(source, "");
+            if (key.empty()) continue;
+            const LocArgs args = parseI18nArgs(e->GetAttribute<Rml::String>("i18n-args", ""));
+            std::string text = e->HasAttribute("i18n-count")
+                                   ? language.trn(key, static_cast<double>(e->GetAttribute<float>("i18n-count", 0.0f)), args)
+                                   : language.tr(key, args);
+            text = Localization::visualOrder(text, language.rtl()); // RmlUi has no bidi or Arabic shaping
+            if (target[0] == '\0') {
+                std::string rml = escapeRmlText(text);
+                for (size_t at = rml.find('\n'); at != std::string::npos; at = rml.find('\n', at + 5)) rml.replace(at, 1, "<br/>");
+                e->SetInnerRML(rml);
+            } else {
+                e->SetAttribute(target, text);
+            }
+        }
+    };
+    translateOne(root);
+    Rml::ElementList found;
+    root->QuerySelectorAll(found, "[i18n],[i18n-title],[i18n-placeholder],[i18n-value]");
+    for (Rml::Element* e : found) translateOne(e);
 }
 
 void UiModule::reloadStyleSheets() {

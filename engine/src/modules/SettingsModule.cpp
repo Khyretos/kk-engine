@@ -32,8 +32,10 @@ void SettingsModule::apply() {
     m_app->setSmaa(g.smaa);
     m_app->setTaa(g.taa);
     m_app->setBloom(g.bloom);
+    m_app->setColourBlind(m_settings.accessibility.colourBlind, m_settings.accessibility.colourBlindStrength);
     m_app->setDepthOfField(g.depthOfField);
-    m_app->setMotionBlur(g.motionBlur);
+    m_app->setReduceMotion(m_settings.accessibility.reduceMotion);
+    m_app->setMotionBlur(g.motionBlur && !m_settings.accessibility.reduceMotion);
     m_app->setOcclusionCulling(g.occlusionCulling);
     m_app->setShadowRays(shadowRaysFromName(g.shadowRays, ShadowRays::Off));
     m_app->shadowMap().setBaseTileResolution(static_cast<uint32_t>(g.shadowResolution));

@@ -4,6 +4,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -52,6 +53,18 @@ struct ModelMaterial {
     std::string metallicTexture;
 };
 
+// A morph target (blend shape, ENG-F25): where it moves vertices from the
+// rest shape, for the vertices it moves. A face has dozens (smile, blink,
+// jaw open, a mouth shape for each vowel); at weight w the mesh is
+// rest + w * offset, summed over the targets (kke/Morph.h). Offsets are in
+// the mesh's own space, like its vertices.
+struct ModelMorphTarget {
+    std::string name;                 // "smile"; "target<N>" when the file names none
+    std::vector<uint32_t> vertices;   // ascending, each once
+    std::vector<glm::vec3> positions; // one offset per entry of `vertices`
+    std::vector<glm::vec3> normals;   // one per entry, or empty: the normals are then recomputed from the shape
+};
+
 struct ModelMesh {
     std::string name;
     std::vector<ModelVertex> vertices;
@@ -61,6 +74,10 @@ struct ModelMesh {
     // baked in). Skinned meshes: vertices are in the mesh's geometry
     // space, and ModelBone::inverseBind maps that space to each bone.
     bool skinned = false;
+    // Blend shapes (glTF morph targets); empty for most meshes. `morphWeights`
+    // are the file's default weights, one per target.
+    std::vector<ModelMorphTarget> morphs;
+    std::vector<float> morphWeights;
 };
 
 struct ModelBone {
@@ -73,12 +90,23 @@ struct ModelBone {
 // One animation clip, sampled at a fixed rate into per-bone local
 // transforms — simple to play back and to blend, and FBX curves are
 // usually baked at this rate anyway.
+struct PackedAnimation; // kke/AnimCompress.h
+
 struct ModelAnimation {
     std::string name;
     float duration = 0.0f;
     float sampleRate = 30.0f;
-    // frames[f][bone] = that bone's local transform at time f / sampleRate.
+    // frames[f][bone] = that bone's local transform at time f / sampleRate. Empty once the clip is packed
+    // (compressAnimations, ENG-F63): read it through frameCount(), localsAt() and sampleLocals(), which work either way.
     std::vector<std::vector<glm::mat4>> frames;
+    std::shared_ptr<const PackedAnimation> packed;
+
+    bool compressed() const { return packed != nullptr; }
+    size_t frameCount() const;
+    // Every bone's local matrix at a whole frame.
+    void localsAt(size_t frame, std::vector<glm::mat4>& out) const;
+    // At a fractional frame: the matrices of the frame before and after, blended (the rule the engine always used).
+    void sampleLocals(float frame, std::vector<glm::mat4>& out) const;
 };
 
 struct ModelData {

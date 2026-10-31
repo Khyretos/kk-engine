@@ -182,6 +182,7 @@ void ScriptModule::bindAll() {
     vm.registerFunction("kke", "dt", [this](lua_State* L) { lua_pushnumber(L, m_dt); return 1; });
 
     bindCamera(); // camera.*: ScriptCamera.cpp
+    bindWorld();  // world.*: ScriptWorld.cpp
 
     // mood.*: the sky, sun, fog and look (kke/Mood.h, docs/MOODS.md).
     vm.registerFunction("mood", "set", [app](lua_State* L) {
@@ -717,6 +718,7 @@ void ScriptModule::update(const UpdateContext& ctx) {
     m_vm->updateTimers(m_time);
     dispatchNet();
     dispatchClicks();
+    updateWorld(ctx.dt);
     checkBreaks();
 #if KKE_ENABLE_JOLT
     if (auto* rbm = m_app->getModule<RigidBodyModule>(); rbm && m_vm->hookCount("Contact") > 0) {

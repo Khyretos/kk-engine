@@ -103,7 +103,7 @@ by area. The goal is parity with the big engines and more.
 | ENG-F22 | Animation | IK solver (two-bone, foot, hand, look, FABRIK and CCD with bend limits; G19) | ✅ |
 | ENG-F23 | Animation | Motion capture import and clean-up | ⬜ |
 | ENG-F24 | Animation | Procedural animation (docs/PROCEDURAL_ANIMATION.md) | ✅ |
-| ENG-F25 | Animation | Facial animation, blend shapes | ⬜ |
+| ENG-F25 | Animation | Facial animation, blend shapes (docs/FACIAL_ANIMATION.md): glTF morph targets applied before skinning (GPU and CPU paths), `kke::FaceRig` (expressions, mouth shapes, blinking, text and voice lip-sync; ARKit, VRM, VRoid and Oculus names), Lua `face.*`. Not yet: weights animated inside a clip, VRM presets, morphs on unskinned meshes, eye look. | ✅ |
 | ENG-F26 | Animation | Retargeting between skeletons (by bone name, with rest-pose matching, ENG-G19) | ✅ |
 | ENG-F27 | Animation | Runtime sequencer and cutscenes from Lua or the node scripter (camera cutscenes from Lua: `camera.path/hold/release/shake`, kke/CameraDirector.h; a timeline for actors and the node scripter missing) | 🟡 |
 | ENG-F28 | Animation | State machine with events and root motion (crossfading state machine, root motion, and animation events in `Animator`, `ModelModule` and Lua `models.event` + the `AnimEvent` hook) | ✅ |
@@ -116,7 +116,7 @@ by area. The goal is parity with the big engines and more.
 | ENG-F35 | Physics | Cloth-to-cloth collision | ✅ |
 | ENG-F36 | Physics | Strand hair (docs/HAIR.md) | ✅ |
 | ENG-F37 | Physics | Joints and constraints API in Lua (hinge, slider, spring, motor): `RigidWorld::addJoint` (fixed, ball, hinge, slider, spring/rope) with motors, Lua `physics.joint`/`motor`/`jointValue` | ✅ |
-| ENG-F38 | Audio | HRTF spatial audio | ⬜ |
+| ENG-F38 | Audio | HRTF spatial audio. Already there (this row was stale): a built-in binaural mode (head shadow, interaural delay and level, front/back cue) and, with `-DKKE_ENABLE_STEAM_AUDIO=ON`, Steam Audio's measured HRTF (or your own .sofa); docs/AUDIO.md, tests/test_spatializer.cpp. | ✅ |
 | ENG-F39 | Audio | Dynamic, adaptive music | ⬜ |
 | ENG-F40 | Audio | Spatial voice chat (proximity voice exists) | ✅ |
 | ENG-F41 | Audio | Occlusion and diffraction (ray occlusion exists; diffraction missing) | 🟡 |
@@ -140,9 +140,9 @@ by area. The goal is parity with the big engines and more.
 | ENG-F59 | Networking | Cross-platform play | 🟡 |
 | ENG-F60 | Content | Texture compression ASTC/BCn (#39): BC7 in KTX2 done (`kke_texcook`, loaded instead of the PNG, decoded where the GPU lacks BC7); ASTC not yet | 🟡 |
 | ENG-F61 | Content | Texture streaming | ⬜ |
-| ENG-F62 | Content | LOD generation | ⬜ |
-| ENG-F63 | Content | Animation compression | ⬜ |
-| ENG-F64 | Content | Level streaming | ⬜ |
+| ENG-F62 | Content | LOD generation. `kke::simplifyModel` existed (crowds); now automatic: `kke/LodChain.h` builds up to three levels per big part over its own vertices (skinned and morphed parts work), `ModelModule` draws the one that suits the on-screen size, with hysteresis, in every pass (docs/LOD.md). Not yet: cross-fades, impostors, cooked levels. | ✅ |
+| ENG-F63 | Content | Animation compression (docs/ANIMATION_COMPRESSION.md): clips packed at load (`kke/AnimCompress.h`), 8.8 times smaller on the shipped mannequin library at 0.25 mm / 0.03 degrees worst error, sampled without unpacking. Not yet: cooked packed clips, a smaller `AnimationSet`. | ✅ |
+| ENG-F64 | Content | Level streaming: `world.cell` boxes load a scene or run your functions when a player nears or enters a volume, persistent levels, priorities and a resident cap (docs/WORLD_STREAMING.md). Not yet: worker-thread prefetch. | ✅ |
 | ENG-F65 | Platforms | Consoles (#69) | ⬜ |
 | ENG-F66 | Platforms | Steamworks: achievements, cloud saves (optional module) | ⬜ |
 | ENG-F67 | Tooling | Runtime CPU/GPU/memory profiler with capture files (frame stats exist) | 🟡 |
@@ -156,13 +156,13 @@ by area. The goal is parity with the big engines and more.
 | ENG-F75 | World | Terrain sculpting. Done: raise, lower, smooth, flatten and paint brushes, from Lua while the game runs (docs/TERRAIN.md). Not yet: an editor tool for them, saving sculpted terrain with the level. | 🟡 |
 | ENG-F76 | World | Heightmap terrain. Done: chunks with distance LOD and skirts, a Jolt height field for collision, four colour layers with rock on slopes, from a seed or a greyscale picture, Lua `terrain.*` (docs/TERRAIN.md). Not yet: textured layers, holes. | 🟡 |
 | ENG-F77 | World | Procedural terrain (ACTION_PLAN 4.1). Done: seeded gradient-noise hills or ridged mountains (docs/TERRAIN.md). Not yet: erosion, rivers, biomes. | 🟡 |
-| ENG-F78 | World | World streaming (ACTION_PLAN 3.6) | ⬜ |
+| ENG-F78 | World | World streaming (ACTION_PLAN 3.6): `world.grid` makes cells of an unbounded world where the players are and forgets them behind, load/unload radii with hysteresis, spread-out budgeted loads (docs/WORLD_STREAMING.md). Not yet: worker-thread prefetch, texture streaming (F61). | ✅ |
 | ENG-F79 | World | Foliage. Done: trees, rocks and bushes scattered on the terrain by layer, slope and height, solid trunks, kept on the ground when sculpted (Lua `terrain.scatter`, docs/TERRAIN.md). Not yet: GPU grass, wind sway. | 🟡 |
 | ENG-F80 | World | Water with waves (ocean and buoyancy exist) | ✅ |
 | ENG-F81 | World | Snow and weather | ⬜ |
 | ENG-F82 | World | Day/night cycle. Done: a clock that moves the sun, sky, light and exposure through dusk to moonlight, Lua `clock.*` with Dawn/Dusk/Hour hooks (docs/MOODS.md "Time of day"). Not yet: stars and moon in the sky, multiplayer clock sync. | 🟡 |
 | ENG-F83 | World | Biomes | ⬜ |
-| ENG-F84 | Localization | String tables, plurals, font fallback, RTL, language switch | ⬜ |
-| ENG-F85 | Accessibility | Subtitles, colour-blind modes, UI scale, remapping, screen-reader hooks (captions and remapping exist) | 🟡 |
+| ENG-F84 | Localization | String tables, plurals, font fallback, RTL, language switch: `kke::LocalizationModule` (docs/LOCALIZATION.md): language files, CLDR plurals, number formats, a fallback chain, a live switch, `i18n` in RML and Lua, Arabic joining and bidi for RmlUi, a translated game shell in seven languages. Not yet: the sandbox, creator and ImGui panels, select forms, Indic shaping. | ✅ |
+| ENG-F85 | Accessibility | Subtitles, colour-blind modes, UI scale, remapping, screen-reader hooks (docs/ACCESSIBILITY.md): `kke::SubtitleModule`, colour-blind correction in the tone-map pass with a simulation switch, reduced motion, high contrast; UI scale, remapping and sound captions existed. Not yet: the OS screen-reader bridge, UI-layer colour correction. | 🟡 |
 | ENG-F86 | Rendering | Ray-traced shadows without ray-tracing hardware: a compute-shader BVH tracer as the fallback where the GPU has no ray query (Kees, 2026-10-18; ideas from ThreatInteractive's Apache-2.0 SWRT prototype: 4-wide compressed nodes, binned SAH, GPU refits, per-tile caster lists), measured against ray query on the RX 9070 XT. After the RHI/web work. | ⬜ |
 | ENG-F87 | Content | Biome showcase scenes from Kees's Synty biome packs, each in its full glory with our water and ray tracing, and a comparison of every rendering mode (shadow map, KKE and classic rays, software rays, GI, reflections) with frame data and pictures: is each mode faster, does it look better (Kees, 2026-10-18). | ⬜ |

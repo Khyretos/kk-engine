@@ -190,6 +190,8 @@ hook.Add("Contact", "my.id", function(c) end)     -- two bodies (not the player)
 hook.Add("Break", "my.id", function(id) end)      -- a breakable this script made came apart
 hook.Add("AnimEvent", "my.id", function(e) end)   -- a script model's clip passed a models.event: e.instance, e.clip, e.name
 hook.Add("CameraDone", "my.id", function() end)  -- a camera.path (not a looping one) reached its end
+hook.Add("CellLoaded", "my.id", function(id) end)           -- a streamed world cell finished loading (world.cell, world.grid); "CellUnloaded" too
+hook.Add("LanguageChanged", "my.id", function(code) end) -- the player (or i18n.setLanguage) switched language: redo text you built yourself
 hook.Add("NetMessage", "my.id", function(name, data, from) end) -- net.send from another machine
 hook.Add("InputStyle", "my.id", function(style) end) -- the player switched devices ("xbox", "keyboard", "touch"...): redo prompts built with input.promptText
 hook.Add("Init", "my.id", function() end)         -- once, after all scripts loaded
@@ -374,6 +376,48 @@ local pos, yaw = models.position(wolf)
 - `ai.actor` ids start at 1,000,000 so they never meet a model's number.
   Removing a model (`models.remove`) or unloading the script takes its
   mind away too.
+
+## World streaming
+
+Parts of a big world loaded near the players and unloaded behind them (docs/WORLD_STREAMING.md):
+
+```lua
+world.config{loadRadius = 150, unloadRadius = 200, loads = 1, resident = 40}
+world.grid{size = 100, scene = function(x, z) return chunkName(x, z) end, load = function(x, z) end, unload = function(x, z) end}
+world.cell("cellar", {box = {min = Vec(10, -8, 10), max = Vec(30, 0, 30)}, scene = "cellar", radius = 0})
+world.observer(player)          -- where the players are (default: the camera); world.observers({a, b})
+world.state(id); world.loaded(id); world.cells(); world.stats(); world.remove(id)
+hook.Add("CellLoaded", "id", function(id) end)   -- and "CellUnloaded"
+```
+
+## Language and subtitles
+
+Text in the player's language (docs/LOCALIZATION.md; needs `LocalizationModule`, which the starter game has) and
+dialogue subtitles (docs/ACCESSIBILITY.md; `SubtitleModule`):
+
+```lua
+i18n.tr("menu.start")                       -- the text of a key in the player's language ("Begin")
+i18n.tr("hello", {name = "Kees"})           -- fills {name}
+i18n.trn("coins", 3)                        -- the plural form for a count ("3 munten")
+i18n.number(1234.5)                         -- "1.234,5" in Dutch, "1,234.5" in English
+i18n.language(); i18n.setLanguage("de")     -- the code; true, or false when nothing is loaded for it
+i18n.languages()                            -- { {code="en", name="English", rtl=false}, ... }
+i18n.has(key); i18n.rtl(); i18n.missing(); i18n.visual(text)
+subtitle.say("Welcome, {name}.", 0, "Mira", {name = "Kees"})  -- text or key, seconds (0 = reading time), speaker, placeholders
+subtitle.clear(); subtitle.active()
+```
+
+Facial animation on a skinned model's blend shapes (docs/FACIAL_ANIMATION.md):
+
+```lua
+face.expressions(inst)                      -- {"happy", "blink", "aa", ...}: what the model can do
+face.expression(inst, "happy", 0.8)         -- eases to it; false when the model has no shapes for it
+face.morph(inst, "jawOpen", 0.6)            -- one blend shape by name
+face.say(inst, "Welcome.", 2.0)             -- the mouth moves through the text's vowels for 2 s
+face.level(inst, 0.7); face.blink(inst); face.autoBlink(inst, false); face.clear(inst); face.morphs(inst)
+```
+
+In RML, `i18n="key"` on an element sets its text (also `i18n-title`, `i18n-placeholder`, `i18n-value`, `i18n-count`, `i18n-args`).
 
 ## Saving
 

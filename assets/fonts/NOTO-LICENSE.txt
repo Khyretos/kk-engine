@@ -1,5 +1,7 @@
 Noto Sans (Regular, Bold, Italic): Copyright 2015 Google LLC.
 Noto Color Emoji: Copyright 2022 Google Inc.
+Noto Sans Arabic, Noto Sans Hebrew (Regular): Copyright 2022 The Noto Project Authors
+(https://github.com/notofonts/arabic, https://github.com/notofonts/hebrew).
 (Copyright lines as embedded in the font files; the Noto fonts are also
 credited as "Copyright 2022 The Noto Project Authors" upstream:
 https://github.com/notofonts/latin-greek-cyrillic and

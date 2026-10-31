@@ -17,6 +17,8 @@
     "Stats",
     "GameShell",
     "Physics",
-    "PhysicsBridge"
+    "PhysicsBridge",
+    "Localization",
+    "Subtitles"
   ]
 }

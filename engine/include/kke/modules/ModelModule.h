@@ -2,6 +2,8 @@
 
 #include "kke/AnimEvents.h"
 #include "kke/Capabilities.h"
+#include "kke/FaceRig.h"
+#include "kke/LodChain.h"
 #include "kke/Module.h"
 #include "kke/Buffer.h"
 #include "kke/rhi/Device.h"
@@ -16,6 +18,7 @@
 #include <glm/glm.hpp>
 
 #include <functional>
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -42,7 +45,7 @@ namespace kke {
 //   models.spawn(tree, glm::translate(glm::mat4(1), {3, 0, 0}));
 class SkinWorkers;
 
-class ModelModule : public Module, public IRayContributor {
+class ModelModule : public Module, public IRayContributor, public ISettingsListener {
 public:
     using ModelId = uint32_t;     // 0 = invalid
     using InstanceId = uint32_t;  // 0 = invalid
@@ -56,6 +59,7 @@ public:
     void renderShadow(const ShadowRenderContext& ctx) override;
     // ENG-G08: skins every visible skinned instance on the GPU (shaders/skin.comp).
     void computeEveryFrame(VkCommandBuffer cmd) override;
+    void onSettingsChanged(const EngineSettings& settings) override; // graphics.autoLod, graphics.lodBias
     void shutdown() override;
 
     // Loads (or returns the cached) model. Only valid after init(). On
@@ -157,6 +161,37 @@ public:
     // vertex given here. Clearing the deformation clears this too.
     void setDeformedTopology(InstanceId instance, const std::vector<std::vector<ModelVertex>>& vertices);
 
+    // Blend shapes (ENG-F25, docs/FACIAL_ANIMATION.md): the weight of every morph target called
+    // `name`, on every skinned part of this instance that has one (glTF morph targets, 0 = rest,
+    // 1 = fully applied, more or less is allowed). The parts are morphed first and then skinned, so
+    // a face morphs and moves with its bones. Static (unskinned) parts are not morphed.
+    std::vector<std::string> morphNames(InstanceId instance) const;
+    void setMorphWeights(InstanceId instance, const std::map<std::string, float>& byName); // replaces all
+    void setMorphWeight(InstanceId instance, const std::string& name, float weight);
+    std::map<std::string, float> morphWeights(InstanceId instance) const;
+    // The instance's facial animation (kke/FaceRig.h), made on first use and bound to its morph
+    // targets. Once it exists it owns the weights: it is updated every frame and its result applied.
+    FaceRig& face(InstanceId instance);
+    bool hasFace(InstanceId instance) const;
+
+    // Automatic levels of detail (ENG-F62, docs/LOD.md, kke/LodChain.h): a part with many triangles gets simpler index
+    // lists over its own vertices, and each instance draws the one that suits how big it is on screen (with hysteresis,
+    // so nothing flickers on a line). Static and skinned parts alike. On by default (graphics.autoLod, KKE_LOD=0 turns it
+    // off); the bias > 1 keeps detail to greater distances, < 1 drops it sooner (graphics.lodBias).
+    void setAutoLod(bool on) { m_autoLod = on; }
+    bool autoLod() const { return m_autoLod; }
+    void setLodBias(float bias) { m_lodBias = bias; }
+    float lodBias() const { return m_lodBias; }
+    // Animation compression (ENG-F63, kke/AnimCompress.h): a loaded model's clips are packed, about 8 times smaller.
+    // Set before loading; KKE_ANIM_COMPRESS=0 turns it off.
+    void setCompressAnimations(bool on) { m_compressAnimations = on; }
+    bool compressAnimations() const { return m_compressAnimations; }
+    // Last frame: instances drawn below full detail, and the triangles that saved.
+    size_t lodInstancesLastFrame() const { return m_lodInstances; }
+    size_t lodTrianglesSavedLastFrame() const { return m_lodSaved; }
+    // The level of an instance now (0 = full detail).
+    int lodOf(InstanceId instance) const;
+
     // Draws every skinned instance's skeleton on top (depth test off).
     void setShowBones(bool show) { m_showBones = show; }
     bool showBones() const { return m_showBones; }
@@ -189,18 +224,29 @@ private:
     struct GpuMaterial { glm::vec3 color; float metallic, roughness; VkDescriptorSet textureSet = VK_NULL_HANDLE; bool albedo = false; };
     // skinBind: a skinned part's bind vertices for shaders/skin.comp
     // (packSkinBind), uploaded once; null on the CPU skinning path.
+    // One level of detail of a part: a simpler index list over the part's own vertices.
+    struct GpuLod {
+        std::unique_ptr<rhi::Buffer> indices;
+        uint32_t count = 0;
+    };
     struct GpuMesh {
         std::unique_ptr<Mesh> mesh;
         uint32_t material = 0;
         bool skinned = false;
         uint32_t meshIndex = 0;
         std::unique_ptr<Buffer> skinBind;
+        // Levels of detail (ensureLods): lods are the distinct lists, lodSlots[i] is the one the model's level i + 1
+        // draws (an index into lods; -1 = this part has nothing coarser for that level and draws in full).
+        std::vector<GpuLod> lods;
+        std::vector<int> lodSlots;
     };
     struct LoadedModel {
         ModelData data;
         std::vector<GpuMesh> meshes;
         std::vector<GpuMaterial> materials;
         std::vector<std::vector<AnimEvent>> clipEvents; // per clip (addClipEvent), seconds
+        bool lodsBuilt = false; // ensureLods has run (the first time an instance was small enough to want a level)
+        bool anyLod = false;    // some part got a level
     };
     struct SkinnedBuffers {
         std::unique_ptr<rhi::Buffer> vertices[Renderer::kMaxFramesInFlight];
@@ -208,6 +254,16 @@ private:
         std::vector<Vertex> cpu;
         uint32_t indexCount = 0;
         VkDescriptorSet skinSets[Renderer::kMaxFramesInFlight] = {}; // GPU skinning: skin.comp's set per frame slot
+    };
+    // Blend shapes of one skinned part of an instance: its vertices at the current weights, and (GPU
+    // skinning) its own bind buffer per frame slot for skin.comp to read instead of the model's shared one.
+    struct MorphPart {
+        std::vector<ModelVertex> vertices;       // the morphed bind vertices (when `active`)
+        uint64_t computed = 0;                   // the instance's morphVersion they are for
+        bool active = false;                     // any weight not zero on this part
+        std::unique_ptr<Buffer> bind[Renderer::kMaxFramesInFlight];
+        uint64_t uploaded[Renderer::kMaxFramesInFlight] = {};
+        bool useBind[Renderer::kMaxFramesInFlight] = {}; // skin.comp reads bind[slot], not the model's
     };
     // GPU skinning (ENG-G08): an instance's skin.comp descriptor sets come
     // from its own pool; its skin matrices and jiggle zones (packSkinData)
@@ -252,12 +308,19 @@ private:
         mutable uint64_t occlusionPass = ~0ull; // the draw `occluded` was worked out for (ENG-F13)
         mutable bool occluded = false;
         std::shared_ptr<GpuSkinState> gpuSkin; // GPU skinning only (createGpuSkin)
+        // Blend shapes (setMorphWeights): the weights, a version that bumps when they change, and the parts.
+        std::map<std::string, float> morphByName;
+        uint64_t morphVersion = 0; // 0 = never set: nothing to do
+        std::vector<MorphPart> morphParts; // one per skinned part, once weights are set
+        std::unique_ptr<FaceRig> face;
+        unsigned faceVersion = ~0u;
+        int lod = 0; // level of detail now (updateLods); 0 = full
     };
     // Per-instance data for the instanced pipelines (binding 1).
     struct InstanceGpu { glm::mat4 model; glm::vec4 tint; };
     // A run of instances sharing model + texture + overlay: one draw per
     // mesh part. Built each frame after culling.
-    struct Batch { ModelId model; VkDescriptorSet textureOverride; bool overlay; uint32_t first, count; };
+    struct Batch { ModelId model; VkDescriptorSet textureOverride; bool overlay; int lod; uint32_t first, count; };
     // eye set (camera passes): instances in each batch and the batches
     // themselves come out nearest first (kke/DrawOrder.h).
     void buildBatches(const struct Frustum& f, std::vector<Batch>& out, std::vector<InstanceGpu>& data, bool markDrawn,
@@ -286,6 +349,21 @@ private:
     void createSkinPipeline();
     void createGpuSkin(Instance& inst);
     void writeSkinSets(Instance& inst, uint32_t slot);
+    // Blend shapes: the parts' vertices at the instance's weights (both skinning paths), and the GPU
+    // path's per-slot bind buffers.
+    void refreshMorph(Instance& inst);
+    // Levels of detail: builds a model's lists, and picks each instance's level for this view.
+    void ensureLods(LoadedModel& lm);
+    void updateLods(const RenderContext& ctx);
+    static const GpuLod* lodIndices(const GpuMesh& gm, int lod);
+    void drawStatic(rhi::CommandList& list, const GpuMesh& gm, int lod, uint32_t instances) const;
+    bool m_autoLod = true;
+    bool m_compressAnimations = true;
+    float m_lodBias = 1.0f;
+    LodSettings m_lodSettings;
+    std::vector<float> m_lodSwitch; // the model-wide switch sizes, one per level
+    size_t m_lodInstances = 0, m_lodSaved = 0;
+    void uploadMorphBind(Instance& inst, uint32_t slot);
     void packSkin(Instance& inst, uint32_t slot);
     void recordSkin(VkCommandBuffer cmd, Instance& inst, uint32_t slot);
     void uploadDeformed(Instance& inst, uint32_t frameIndex);

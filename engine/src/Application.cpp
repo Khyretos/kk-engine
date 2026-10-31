@@ -14,6 +14,7 @@
 #include "kke/Mood.h"
 #include "kke/EngineSettings.h"
 #include "kke/LogoIntro.h"
+#include "kke/ColourBlind.h"
 #include "kke/DevTools.h"
 #include "kke/BenchRecorder.h"
 #include "kke/BenchmarkReport.h"
@@ -1446,6 +1447,14 @@ void Application::setShadowRays(ShadowRays mode) {
 }
 
 void Application::setBloom(bool on) { m_renderer->setBloom(m_bloomEnv ? *m_bloomEnv : on); }
+
+void Application::setColourBlind(const std::string& mode, float strength) {
+    if (const char* sim = dev::env("KKE_COLOURBLIND_SIM"); sim && *sim) {
+        m_renderer->setColourMatrix(colourBlindSimulation(colourBlindModeFromName(sim), 1.0f));
+        return;
+    }
+    m_renderer->setColourMatrix(colourBlindCorrection(colourBlindModeFromName(mode), strength));
+}
 
 void Application::setTaa(bool on) {
     m_taaOn = m_taaEnv ? *m_taaEnv : on;

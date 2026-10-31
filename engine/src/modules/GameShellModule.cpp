@@ -2,6 +2,7 @@
 
 #include "kke/Application.h"
 #include "kke/DevTools.h"
+#include "kke/Localization.h"
 #include "kke/Log.h"
 #include "kke/ResourceGovernor.h"
 #include "kke/RmlTextSafety.h"
@@ -67,6 +68,16 @@ const char* kShellRml = R"(
         .fill { height: 100%; border-radius: 3dp; background-color: #ffcf5c; }
         .box { display: inline-block; width: 12dp; height: 12dp; border-radius: 3dp; border: 2dp #4a5888; background-color: #0b0f1c; }
         .box.on { background-color: #ffcf5c; border-color: #fff1c7; }
+        /* Right to left (kke::LocalizationModule puts kke-rtl on the body): the same menu, mirrored. */
+        body.kke-rtl #menu { left: auto; right: 8%; text-align: right; }
+        body.kke-rtl .item { margin-left: auto; text-align: right; border-left: 0 #00000000; border-right: 3dp #00000000;
+                             border-radius: 6dp 0 0 6dp; decorator: linear-gradient(270deg, #1b2440cc, #1b244000);
+                             transition: padding-right border-color color 0.15s cubic-out; }
+        body.kke-rtl .item:hover, body.kke-rtl .item.focused { padding-left: 20dp; padding-right: 32dp; border-left-color: #00000000;
+                                     border-right-color: #ffcf5c; decorator: linear-gradient(270deg, #3a4a86ee, #3a4a8600); }
+        body.kke-rtl .item .value { float: left; }
+        body.kke-rtl .text { margin-left: auto; }
+        body.kke-rtl #hint { left: auto; right: 8%; }
         #hint { position: absolute; left: 8%; bottom: 3%; font-size: 14dp; color: #aab3cc; }
         #hint img { font-size: 14dp; }
         #capture { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: none; background-color: #05070ecc; }
@@ -275,6 +286,19 @@ std::vector<ModuleDependency> GameShellModule::dependencies() const {
              { std::type_index(typeid(SettingsModule)), false, "shares the settings when the game has them" },
              { std::type_index(typeid(LobbyModule)), false, "Play goes on to the lobby" },
              { std::type_index(typeid(DemoPanelModule)), false, "the pause menu opens the demo's panel" } };
+}
+
+// A menu string in the player's language (docs/LOCALIZATION.md): the key's text when a language file has it,
+// else the English written here; ready to show, so right-to-left text is shaped and ordered.
+std::string GameShellModule::L(const std::string& key, const std::string& english) const {
+    if (!m_localizerLooked && m_app) {
+        m_localizerLooked = true;
+        const auto found = m_app->findCapability<ILocalizer>();
+        if (!found.empty()) m_localizer = found.front();
+    }
+    if (!m_localizer) return english;
+    Localization& language = m_localizer->localization();
+    return Localization::visualOrder(language.has(key) ? language.tr(key) : english, language.rtl());
 }
 
 void GameShellModule::addPauseItem(std::string label, std::function<void()> onPress, std::function<bool()> visible) {
@@ -537,8 +561,8 @@ void GameShellModule::buildPage() {
     case Page::None:
         break;
     case Page::Title:
-        if (m_modes.empty()) button("Play", [play] { play(""); });
-        else button("Play", [push] { push(Page::Modes); });
+        if (m_modes.empty()) button(L("shell.play", "Play"), [play] { play(""); });
+        else button(L("shell.play", "Play"), [push] { push(Page::Modes); });
         for (const HostedGame& g : m_friends) {
             button(g.label, [this, g] {
                 closeMenu(); // to the game (a lobby game: its lobby, where the host's picks show)
@@ -547,12 +571,12 @@ void GameShellModule::buildPage() {
                 if (net && !net->join(g.address, g.port, &error)) log::get(name())->warn("Can't join {}: {}", g.label, error);
             });
         }
-        button("Settings", [push] { push(Page::Settings); });
-        button("Controls", [push] { push(Page::Controls); });
-        button("Quit", [this] { m_app->window().requestClose(); });
+        button(L("shell.settings", "Settings"), [push] { push(Page::Settings); });
+        button(L("shell.controls", "Controls"), [push] { push(Page::Controls); });
+        button(L("shell.quit", "Quit"), [this] { m_app->window().requestClose(); });
         break;
     case Page::Modes:
-        subtitle = "Choose a game";
+        subtitle = L("shell.choose_a_game", "Choose a game");
         for (const Mode& m : m_modes) {
             Row r;
             r.kind = Row::Kind::Button;
@@ -562,46 +586,46 @@ void GameShellModule::buildPage() {
             r.onChange = [play, id] { play(id); };
             addRow(std::move(r));
         }
-        button("Back", [this] { back(); });
+        button(L("shell.back", "Back"), [this] { back(); });
         break;
     case Page::Pause: {
-        title = "Paused";
+        title = L("shell.title.paused", "Paused");
         subtitle.clear();
         Row note;
         note.kind = Row::Kind::Text;
         note.live = [this] { return isOnline() ? std::string("Online: the game keeps running while this menu is open.") : std::string(); };
         addRow(std::move(note));
-        button("Resume", [this] { closeMenu(); });
+        button(L("shell.resume", "Resume"), [this] { closeMenu(); });
         addGameRows(m_gameRows, m_pauseRows.m_rows);
         if (m_panel) {
             // The demo's own panel, live: the game runs while it's used.
-            button("Demo settings", [this] {
+            button(L("shell.demo_settings", "Demo settings"), [this] {
                 closeMenu();
                 m_panel->setState(DemoPanelModule::State::Active);
             });
         }
-        button("Settings", [push] { push(Page::Settings); });
-        button("Controls", [push] { push(Page::Controls); });
-        button("Main menu", [this] {
+        button(L("shell.settings", "Settings"), [push] { push(Page::Settings); });
+        button(L("shell.controls", "Controls"), [push] { push(Page::Controls); });
+        button(L("shell.main_menu", "Main menu"), [this] {
             closeMenu();
             if (onMainMenu) onMainMenu();
             showTitle();
         });
-        button("Quit", [this] { m_app->window().requestClose(); });
+        button(L("shell.quit", "Quit"), [this] { m_app->window().requestClose(); });
         break;
     }
     case Page::Settings: {
-        title = "Settings";
+        title = L("shell.title.settings", "Settings");
         subtitle.clear();
         auto changed = [this] {
             m_settingsChanged = true;
             applySettings();
         };
-        heading("DISPLAY");
+        heading(L("shell.heading.display", "DISPLAY"));
         {
             Row r;
             r.kind = Row::Kind::Toggle;
-            r.label = "Full screen";
+            r.label = L("shell.full_screen", "Full screen");
             r.b = [&s] { return &s.graphics.fullscreen; };
             r.onChange = changed;
             addRow(std::move(r));
@@ -609,7 +633,7 @@ void GameShellModule::buildPage() {
         {
             Row r;
             r.kind = Row::Kind::Toggle;
-            r.label = "VSync";
+            r.label = L("shell.vsync", "VSync");
             r.b = [&s] { return &s.graphics.vsync; };
             r.onChange = changed;
             addRow(std::move(r));
@@ -618,8 +642,8 @@ void GameShellModule::buildPage() {
             m_frameCap = frameCapIndex(s.graphics.frameRateLimit);
             Row r;
             r.kind = Row::Kind::Choice;
-            r.label = "Frame cap";
-            for (int cap : frameCaps()) r.options.push_back(cap == 0 ? "Off" : std::to_string(cap) + " fps");
+            r.label = L("shell.frame_cap", "Frame cap");
+            for (int cap : frameCaps()) r.options.push_back(cap == 0 ? L("shell.opt.off", "Off") : std::to_string(cap) + " fps");
             r.i = [this] { return &m_frameCap; };
             r.onChange = [this, &s, changed] {
                 s.graphics.frameRateLimit = static_cast<float>(frameCaps()[static_cast<size_t>(m_frameCap)]);
@@ -630,7 +654,7 @@ void GameShellModule::buildPage() {
         {
             Row r;
             r.kind = Row::Kind::SliderF;
-            r.label = "Menu and HUD size";
+            r.label = L("shell.menu_and_hud_size", "Menu and HUD size");
             r.f = [&s] { return &s.graphics.uiScale; };
             r.min = 0.75f;
             r.max = 1.75f;
@@ -639,8 +663,8 @@ void GameShellModule::buildPage() {
             r.onChange = changed;
             addRow(std::move(r));
         }
-        heading("SOUND");
-        auto volume = [&](const char* label, int* v) {
+        heading(L("shell.heading.sound", "SOUND"));
+        auto volume = [&](const std::string& label, int* v) {
             Row r;
             r.kind = Row::Kind::SliderI;
             r.label = label;
@@ -652,22 +676,22 @@ void GameShellModule::buildPage() {
             r.onChange = changed;
             addRow(std::move(r));
         };
-        volume("Volume", &s.audio.master);
-        volume("Music", &s.audio.music);
-        volume("Effects", &s.audio.effects);
+        volume(L("shell.volume", "Volume"), &s.audio.master);
+        volume(L("shell.music", "Music"), &s.audio.music);
+        volume(L("shell.effects", "Effects"), &s.audio.effects);
         {
             Row r;
             r.kind = Row::Kind::Toggle;
-            r.label = "Quiet when in the background";
+            r.label = L("shell.quiet_when_in_the_background", "Quiet when in the background");
             r.b = [&s] { return &s.audio.muteWhenUnfocused; };
             r.onChange = changed;
             addRow(std::move(r));
         }
-        heading("LOOKING AROUND");
+        heading(L("shell.heading.looking_around", "LOOKING AROUND"));
         {
             Row r;
             r.kind = Row::Kind::SliderF;
-            r.label = "Look speed";
+            r.label = L("shell.look_speed", "Look speed");
             r.f = [&s] { return &s.controls.mouseSensitivity; };
             r.min = 0.1f;
             r.max = 3.0f;
@@ -679,8 +703,95 @@ void GameShellModule::buildPage() {
         {
             Row r;
             r.kind = Row::Kind::Toggle;
-            r.label = "Invert up and down";
+            r.label = L("shell.invert_up_and_down", "Invert up and down");
             r.b = [&s] { return &s.controls.invertY; };
+            r.onChange = changed;
+            addRow(std::move(r));
+        }
+        heading(L("shell.heading.accessibility", "ACCESSIBILITY"));
+        {
+            std::vector<std::string> codes{ "auto" };
+            Row r;
+            r.kind = Row::Kind::Choice;
+            r.label = L("shell.language", "Language");
+            r.options = { L("shell.opt.automatic", "Automatic") };
+            if (const auto found = m_app->findCapability<ILocalizer>(); !found.empty())
+                for (const LanguageInfo& language : found.front()->localization().languages()) {
+                    codes.push_back(language.code);
+                    r.options.push_back(Localization::visualOrder(language.name, false)); // Arabic and Hebrew names need shaping too
+                }
+            if (codes.size() > 2) { // "Automatic" and more than one language: a choice to make
+                const auto at = std::find(codes.begin(), codes.end(), s.gameplay.language);
+                m_languageChoice = at == codes.end() ? 0 : static_cast<int>(at - codes.begin());
+                r.i = [this] { return &m_languageChoice; };
+                r.onChange = [this, &s, changed, codes] {
+                    s.gameplay.language = codes[static_cast<size_t>(m_languageChoice)];
+                    changed();
+                };
+                addRow(std::move(r));
+            }
+        }
+        {
+            static const char* const modes[] = { "off", "protanopia", "deuteranopia", "tritanopia", "achromatopsia" };
+            m_colourBlindChoice = 0;
+            for (int i = 0; i < 5; ++i)
+                if (s.accessibility.colourBlind == modes[i]) m_colourBlindChoice = i;
+            Row r;
+            r.kind = Row::Kind::Choice;
+            r.label = L("shell.colour_blind_mode", "Colour-blind mode");
+            r.options = { L("shell.opt.off", "Off"), L("shell.opt.red_weak_protanopia", "Red-weak (protanopia)"), L("shell.opt.green_weak_deuteranopia", "Green-weak (deuteranopia)"), L("shell.opt.blue_weak_tritanopia", "Blue-weak (tritanopia)"), L("shell.opt.no_colour_achromatopsia", "No colour (achromatopsia)") };
+            r.i = [this] { return &m_colourBlindChoice; };
+            r.onChange = [this, &s, changed] {
+                s.accessibility.colourBlind = modes[m_colourBlindChoice];
+                changed();
+            };
+            addRow(std::move(r));
+        }
+        {
+            Row r;
+            r.kind = Row::Kind::SliderF;
+            r.label = L("shell.colour_blind_strength", "Colour-blind strength");
+            r.f = [&s] { return &s.accessibility.colourBlindStrength; };
+            r.min = 0.0f;
+            r.max = 1.0f;
+            r.step = 0.1f;
+            r.format = "%.1f";
+            r.onChange = changed;
+            addRow(std::move(r));
+        }
+        {
+            Row r;
+            r.kind = Row::Kind::Toggle;
+            r.label = L("shell.subtitles", "Subtitles");
+            r.b = [&s] { return &s.accessibility.subtitles; };
+            r.onChange = changed;
+            addRow(std::move(r));
+        }
+        {
+            Row r;
+            r.kind = Row::Kind::SliderF;
+            r.label = L("shell.subtitle_size", "Subtitle size");
+            r.f = [&s] { return &s.accessibility.subtitleScale; };
+            r.min = 0.5f;
+            r.max = 3.0f;
+            r.step = 0.25f;
+            r.format = "%.2fx";
+            r.onChange = changed;
+            addRow(std::move(r));
+        }
+        {
+            Row r;
+            r.kind = Row::Kind::Toggle;
+            r.label = L("shell.reduce_motion", "Reduce motion");
+            r.b = [&s] { return &s.accessibility.reduceMotion; };
+            r.onChange = changed;
+            addRow(std::move(r));
+        }
+        {
+            Row r;
+            r.kind = Row::Kind::Toggle;
+            r.label = L("shell.high_contrast_menus", "High contrast menus");
+            r.b = [&s] { return &s.accessibility.highContrast; };
             r.onChange = changed;
             addRow(std::move(r));
         }
@@ -691,24 +802,24 @@ void GameShellModule::buildPage() {
             addGameRows(m_gameRows, sec->rows.m_rows);
         }
         heading("");
-        button("Defaults", [this, &s, changed] {
+        button(L("shell.defaults", "Defaults"), [this, &s, changed] {
             const std::map<std::string, std::string> custom = s.custom;
             s = m_app->targetDefaultSettings();
             s.custom = custom;
             changed();
         });
-        button("Back", [this] { back(); });
+        button(L("shell.back", "Back"), [this] { back(); });
         break;
     }
     case Page::Controls: {
-        title = "Controls";
+        title = L("shell.title.controls", "Controls");
         subtitle.clear();
         if (m_input && m_input->promptStyle() != PromptStyle::Keyboard && m_controlsDevice == 0 && !m_bindingsChanged) m_controlsDevice = 1;
         {
             Row r;
             r.kind = Row::Kind::Choice;
-            r.label = "Buttons of";
-            r.options = { "Keyboard and mouse", "Controller" };
+            r.label = L("shell.buttons_of", "Buttons of");
+            r.options = { L("shell.opt.keyboard_and_mouse", "Keyboard and mouse"), L("shell.opt.controller", "Controller") };
             r.i = [this] { return &m_controlsDevice; };
             r.onChange = [this] { m_dirty = true; };
             addRow(std::move(r));
@@ -733,17 +844,17 @@ void GameShellModule::buildPage() {
         }
         heading("");
         // On-screen sticks and buttons: move, resize and rebind them on the game itself.
-        if (m_input) button("Touch controls", [this] { startTouchEdit(); });
-        button("Reset to defaults", [this] {
+        if (m_input) button(L("shell.touch_controls", "Touch controls"), [this] { startTouchEdit(); });
+        button(L("shell.reset_to_defaults", "Reset to defaults"), [this] {
             for (int p = 0; m_input && p < m_input->players(); ++p) m_input->map(p).restoreDefaults();
             definePauseAction();
             m_bindingsChanged = true;
         });
-        if (m_advanced) button("Advanced", [this] {
+        if (m_advanced) button(L("shell.advanced", "Advanced"), [this] {
             closeMenu();
             m_advanced();
         });
-        button("Back", [this] { back(); });
+        button(L("shell.back", "Back"), [this] { back(); });
         break;
     }
     }

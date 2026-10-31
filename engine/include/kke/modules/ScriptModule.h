@@ -3,6 +3,7 @@
 #include "kke/AssetCatalog.h"
 #include "kke/AudioMixer.h"
 #include "kke/Module.h"
+#include "kke/WorldStream.h"
 #include "kke/SceneLoader.h"
 #include "kke/ScriptCalls.h"
 #include "kke/CameraDirector.h"
@@ -163,7 +164,7 @@ private:
     struct Breakable { uint32_t handle; std::string source; bool broken = false; uint16_t netId = 0; uint16_t netKind = 0; std::vector<uint8_t> netDesc{}; };
     struct Document { int id; Rml::ElementDocument* doc; std::string source; };
     struct ClickHandler { int document; std::string element; int ref; std::string source; };
-    struct Scene { int id; LoadedScene loaded; std::string source; glm::vec3 spawn; float spawnYaw; };
+    struct Scene { int id; LoadedScene loaded; std::string source; glm::vec3 spawn; float spawnYaw; bool streamed = false; }; // streamed: a world cell's (no maxScenesPerScript)
 
     void bindAll();
     void bindModels();
@@ -178,6 +179,12 @@ private:
     void stepCreatures(float dt); // moves them, plays their clips, runs the ai hooks
     void forgetCreature(uint32_t instance);
     void bindCamera(); // ScriptCamera.cpp
+    // world.* streaming (ScriptWorld.cpp, kke/WorldStream.h, docs/WORLD_STREAMING.md).
+    void bindWorld();
+    void updateWorld(float dt);
+    void releaseWorld(const std::string& source);
+    int loadSceneByName(const std::string& name, const glm::vec3& origin, const std::string& source, std::string& error, size_t* missing);
+    void unloadSceneById(int id);
     // Multiplayer copies of what sv_ scripts spawn (ScriptReplication.cpp).
     void bindReplication();
     void syncNetRole();                    // hosting / joining / leaving changed what's replicated
@@ -219,6 +226,20 @@ private:
     std::vector<std::pair<int, std::string>> m_pendingClicks;
     std::unique_ptr<Rml::EventListener> m_clickListener;
     std::vector<Scene> m_scenes;
+    // The world streamer's cells: what loading one does (a scene at an origin, and/or the script's own functions).
+    struct WorldCell {
+        std::string source;
+        std::string scene;        // a scene to load, "" = only the functions
+        glm::vec3 origin{0.0f};
+        int sceneId = 0;          // while loaded
+        int loadRef = 0, unloadRef = 0; // script functions (registry refs), 0 = none
+        bool implicit = false;    // a grid cell
+    };
+    WorldStreamer m_world;
+    std::map<std::string, WorldCell> m_worldCells;
+    struct WorldGrid { std::string source; int loadRef = 0, unloadRef = 0, sceneRef = 0; bool active = false; } m_worldGrid;
+    std::vector<glm::vec3> m_worldObservers; // set by world.observer(s); empty = the camera
+    bool m_worldUsed = false;
     struct Sound { uint32_t voice; std::string source; };
     std::vector<Sound> m_sounds;                 // audio.play's voices, by script
     std::vector<SoundHandle> m_soundFiles;       // audio.sound ids - 1

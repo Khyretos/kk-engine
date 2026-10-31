@@ -153,6 +153,12 @@ nav:
       - Settings panel: DEMO_PANEL.md
       - Commands and orders: COMMANDS.md
       - Audio: AUDIO.md
+      - Localization: LOCALIZATION.md
+      - Accessibility: ACCESSIBILITY.md
+      - Facial animation: FACIAL_ANIMATION.md
+      - Levels of detail: LOD.md
+      - Animation compression: ANIMATION_COMPRESSION.md
+      - World streaming: WORLD_STREAMING.md
       - Networking: NETWORKING.md
       - Hosting a server: SERVER_HOSTING.md
       - The kke_ tools: TOOLS.md

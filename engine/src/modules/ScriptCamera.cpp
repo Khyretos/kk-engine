@@ -108,7 +108,8 @@ void ScriptModule::bindCamera() {
     });
     vm.registerFunction("camera", "directing", [this](lua_State* L) { lua_pushboolean(L, m_director.directing()); return 1; });
     vm.registerFunction("camera", "shake", [this](lua_State* L) {
-        m_director.shake(static_cast<float>(luaL_checknumber(L, 1)), static_cast<float>(luaL_optnumber(L, 2, 0.4)));
+        const float strength = static_cast<float>(luaL_checknumber(L, 1)), seconds = static_cast<float>(luaL_optnumber(L, 2, 0.4));
+        if (!m_app->reduceMotion()) m_director.shake(strength, seconds); // accessibility: reduced motion keeps the camera still
         return 0;
     });
 }

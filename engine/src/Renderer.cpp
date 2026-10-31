@@ -820,7 +820,7 @@ void Renderer::drawPostPass(VkCommandBuffer cmd) {
         config.cullMode = rhi::CullMode::None;
         config.depthTestEnable = false;
         config.depthWriteEnable = false;
-        config.pushConstantRange = { rhi::kFragment, 0, sizeof(PostParams) };
+        config.pushConstantRange = { rhi::kFragment, 0, sizeof(PostParams) + sizeof(glm::vec4) * 3 }; // + the colour matrix's rows
         config.descriptorSetLayouts = { m_postSetLayout };
         m_postPipeline = std::make_unique<Pipeline>(*m_device, m_swapChain->renderPass(), "shaders/rml_fullscreen.vert.spv",
                                                     "shaders/tonemap_post.frag.spv", config);
@@ -851,6 +851,12 @@ void Renderer::drawPostPass(VkCommandBuffer cmd) {
     post.lookPower.a = m_lutTexture ? static_cast<float>(m_lutTexture->size()) : 0.0f;
     post.tone.z = m_swapChain->encodesSrgb() ? 0.0f : 1.0f; // a UNORM (10-bit) swapchain: the shader encodes sRGB
     vkCmdPushConstants(cmd, m_postPipeline->layout(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PostParams), &post);
+    // The colour matrix's rows (w of the first row: 1 when it is not the identity, so the shader skips it otherwise).
+    const bool colourMatrix = m_colourMatrix != glm::mat3(1.0f);
+    const glm::vec4 rows[3] = { glm::vec4(m_colourMatrix[0][0], m_colourMatrix[1][0], m_colourMatrix[2][0], colourMatrix ? 1.0f : 0.0f),
+                                glm::vec4(m_colourMatrix[0][1], m_colourMatrix[1][1], m_colourMatrix[2][1], 0.0f),
+                                glm::vec4(m_colourMatrix[0][2], m_colourMatrix[1][2], m_colourMatrix[2][2], 0.0f) };
+    vkCmdPushConstants(cmd, m_postPipeline->layout(), VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(PostParams), sizeof(rows), rows);
     vkCmdDraw(cmd, 3, 1, 0, 0);
 }
 

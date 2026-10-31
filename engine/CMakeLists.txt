@@ -112,6 +112,14 @@ set(ENGINE_SOURCES
     src/PackSeal.cpp
     src/ContentPacks.cpp
     src/DataFile.cpp
+    src/Localization.cpp
+    src/ColourBlind.cpp
+    src/Subtitles.cpp
+    src/Morph.cpp
+    src/FaceRig.cpp
+    src/LodChain.cpp
+    src/AnimCompress.cpp
+    src/WorldStream.cpp
     src/DevTools.cpp
     src/InputMap.cpp
     src/ButtonPrompts.cpp
@@ -211,6 +219,8 @@ set(ENGINE_SOURCES
     src/modules/CharacterCreatorModule.cpp
     src/modules/OrbitCameraModule.cpp
     src/modules/UiModule.cpp
+    src/modules/LocalizationModule.cpp
+    src/modules/SubtitleModule.cpp
     src/modules/MarketplaceUiModule.cpp
     src/modules/LightingControlsModule.cpp
     src/modules/LobbyModule.cpp
@@ -359,6 +369,15 @@ foreach(shader logo.vert logo.frag logo_backdrop.vert logo_backdrop.frag logo_te
     engine_add_shader(kke_engine ${CMAKE_SOURCE_DIR}/shaders/${shader})
 endforeach()
 engine_copy_runtime_file(kke_engine ${CMAKE_SOURCE_DIR}/assets/fonts/NotoSans-Bold.ttf assets/fonts/NotoSans-Bold.ttf)
+# The Arabic and Hebrew fonts of the languages that need them (assets/lang/ar.json, he.json).
+foreach(font NotoSansArabic-Regular.ttf NotoSansHebrew-Regular.ttf)
+    engine_copy_runtime_file(kke_engine ${CMAKE_SOURCE_DIR}/assets/fonts/${font} assets/fonts/${font})
+endforeach()
+# The engine's own menu strings in every shipped language (kke::LocalizationModule, docs/LOCALIZATION.md).
+file(GLOB kke_lang_files RELATIVE ${CMAKE_SOURCE_DIR}/assets/lang CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/assets/lang/*.json)
+foreach(f ${kke_lang_files})
+    engine_copy_runtime_file(kke_engine ${CMAKE_SOURCE_DIR}/assets/lang/${f} assets/lang/${f})
+endforeach()
 # Quaternius' CC0 mannequin and its animations (docs/DEPENDENCIES.md): a
 # character without art is this, never a block, in every build and download.
 engine_copy_runtime_file(kke_engine ${CMAKE_SOURCE_DIR}/assets/animations/UAL1_Standard.fbx assets/animations/UAL1_Standard.fbx)
@@ -494,7 +513,7 @@ else()
 endif()
 
 if(ENGINE_ENABLE_LUA)
-    target_sources(kke_engine PRIVATE src/ScriptVM.cpp src/ScriptCalls.cpp src/ScriptTables.cpp src/ScriptStore.cpp src/modules/ScriptModule.cpp src/modules/ScriptBindings.cpp src/modules/ScriptCamera.cpp src/modules/ScriptReplication.cpp)
+    target_sources(kke_engine PRIVATE src/ScriptVM.cpp src/ScriptCalls.cpp src/ScriptTables.cpp src/ScriptStore.cpp src/modules/ScriptModule.cpp src/modules/ScriptBindings.cpp src/modules/ScriptCamera.cpp src/modules/ScriptWorld.cpp src/modules/ScriptReplication.cpp)
     if(KKE_ENABLE_NET)
         target_sources(kke_engine PRIVATE src/server/ServerScripts.cpp)
     endif()

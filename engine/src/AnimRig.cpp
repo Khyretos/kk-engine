@@ -713,8 +713,10 @@ std::vector<ModelAnimation> retargetAnimations(const ModelData& source, const Mo
         a.name = clip.name;
         a.duration = clip.duration;
         a.sampleRate = clip.sampleRate;
-        a.frames.reserve(clip.frames.size());
-        for (const auto& frame : clip.frames) {
+        a.frames.reserve(clip.frameCount());
+        std::vector<glm::mat4> frame;
+        for (size_t f = 0; f < clip.frameCount(); ++f) { // a packed clip (ENG-F63) is unpacked a frame at a time
+            clip.localsAt(f, frame);
             std::vector<glm::mat4> locals;
             retarget.apply(frame, locals);
             a.frames.push_back(std::move(locals));
@@ -735,12 +737,13 @@ size_t appendClipsByBoneName(ModelData& rig, const ModelData& source) {
         out.name = a.name;
         out.duration = a.duration;
         out.sampleRate = a.sampleRate;
-        out.frames.resize(a.frames.size());
-        for (size_t f = 0; f < a.frames.size(); ++f) {
+        out.frames.resize(a.frameCount());
+        std::vector<glm::mat4> src;
+        for (size_t f = 0; f < a.frameCount(); ++f) {
+            a.localsAt(f, src);
             out.frames[f].resize(rig.bones.size());
             for (size_t b = 0; b < rig.bones.size(); ++b)
-                out.frames[f][b] = from[b] >= 0 && static_cast<size_t>(from[b]) < a.frames[f].size() ? a.frames[f][static_cast<size_t>(from[b])]
-                                                                                                    : rig.bones[b].localRest;
+                out.frames[f][b] = from[b] >= 0 && static_cast<size_t>(from[b]) < src.size() ? src[static_cast<size_t>(from[b])] : rig.bones[b].localRest;
         }
         rig.animations.push_back(std::move(out));
     }

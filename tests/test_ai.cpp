@@ -787,7 +787,7 @@ TEST(AiLua, NodeGraphWhenScaredMakeANoise) {
 namespace {
 kke::ModelData withClips(std::initializer_list<const char*> names) {
     kke::ModelData d;
-    for (const char* n : names) d.animations.push_back({ n, 1.0f, 30.0f, {} });
+    for (const char* n : names) d.animations.push_back({ n, 1.0f, 30.0f, {}, nullptr });
     return d;
 }
 } // namespace

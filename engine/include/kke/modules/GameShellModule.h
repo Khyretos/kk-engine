@@ -2,6 +2,7 @@
 
 #include "kke/EngineSettings.h"
 #include "kke/InputMap.h"
+#include "kke/Capabilities.h"
 #include "kke/Module.h"
 
 #include <cstdint>
@@ -252,6 +253,12 @@ private:
     EngineSettings m_settings;
     std::string m_settingsPath = "settings.json";
     int m_frameCap = 0;          // index into frameCaps()
+    // A menu string in the player's language, or the English given (kke::LocalizationModule).
+    std::string L(const std::string& key, const std::string& english) const;
+    mutable ILocalizer* m_localizer = nullptr;
+    mutable bool m_localizerLooked = false;
+    int m_languageChoice = 0;    // settings: index into "Automatic" + the loaded languages
+    int m_colourBlindChoice = 0; // settings: index into the colour-blind modes
     int m_controlsDevice = 0;    // 0 keyboard and mouse, 1 controller
 
     Page m_page = Page::None;

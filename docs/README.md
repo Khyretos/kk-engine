@@ -16,6 +16,12 @@ pages, searchable, are at <https://khyretos.github.io/kk-engine/>. Start with th
 | [AI_ASSISTANTS.md](AI_ASSISTANTS.md) | Making games with any AI assistant: AGENTS.md, the skills, llms.txt, tools/check_game |
 | [HISTORY.md](HISTORY.md) | The development log: the original README, kept whole |
 | [AUDIO.md](AUDIO.md) | The audio engine: mixer, 3D sound, occlusion, impact synthesis, accessibility |
+| [LOCALIZATION.md](LOCALIZATION.md) | Text in the player's language: language files, plurals, `i18n` in RML and Lua, right-to-left |
+| [ACCESSIBILITY.md](ACCESSIBILITY.md) | Colour-blind modes, subtitles, reduced motion, high contrast |
+| [FACIAL_ANIMATION.md](FACIAL_ANIMATION.md) | Blend shapes, expressions, blinking and lip-sync on faces |
+| [LOD.md](LOD.md) | Automatic levels of detail for models |
+| [ANIMATION_COMPRESSION.md](ANIMATION_COMPRESSION.md) | Packed animation clips: 8x smaller, sampled without unpacking |
+| [WORLD_STREAMING.md](WORLD_STREAMING.md) | Streaming a big world and its levels: grid cells, level volumes, budgets |
 | [INPUT.md](INPUT.md) | Rebindable actions, devices, triggers and chords |
 | [TOUCH.md](TOUCH.md) | On-screen sticks and buttons in every game; players move, resize and rebind them |
 | [DEMO_PANEL.md](DEMO_PANEL.md) | A settings panel for a demo or tool that works with a controller, the keyboard and the mouse |
