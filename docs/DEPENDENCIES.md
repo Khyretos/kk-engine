@@ -152,6 +152,7 @@ you build with them.
 | GoogleTest | `googletest` | BSD-3-Clause | Unit tests only (`KKE_ENABLE_TESTS`) |
 | wayland-scanner | `wayland_scanner_src` | MIT | Built from source (1.26.0) to generate SDL's Wayland code; needs `expat` and optionally `libxml-2.0` (both MIT) |
 | CMake, Ninja | `cmake`, `ninja-build`, `ninja` | BSD-3-Clause, Apache-2.0 | `ninja` is the Chocolatey package on Windows CI |
+| ccache | `ccache` | GPL-3.0-or-later | Compiler cache for the Linux CI builds (`tools/ci/build_env.sh`); runs beside the compiler, nothing of it is linked |
 | GCC, Clang, MinGW-w64 | `build-essential`, `clang`, `mingw-w64`, `g++-mingw-w64-x86-64-posix`, `gcc-mingw-w64-x86-64-posix` | GPL-3 with the GCC Runtime Library Exception; Apache-2.0 with LLVM exception; MinGW-w64: ZPL/MIT/BSD | The compilers' licences don't reach your game (runtime exceptions) |
 | MSVC (Visual Studio Build Tools) | `ilammy/msvc-dev-cmd` | Microsoft's licence (proprietary) | Only the Windows build check in `platforms.yml`; releases use MinGW-w64, so no Microsoft runtime is shipped |
 | Vulkan SDK | `humbletim/setup-vulkan-sdk` | LunarG's SDK: mostly Apache-2.0 | `platforms.yml` only |
@@ -185,7 +186,7 @@ you build with them.
 
 | Action | Key | Licence |
 |---|---|---|
-| checkout, upload-artifact, download-artifact, setup-python | `actions/checkout`, `actions/upload-artifact`, `actions/download-artifact`, `actions/setup-python` | MIT |
+| checkout, upload-artifact, download-artifact, setup-python, cache | `actions/checkout`, `actions/upload-artifact`, `actions/download-artifact`, `actions/setup-python`, `actions/cache` | MIT |
 | msvc-dev-cmd | `ilammy/msvc-dev-cmd` | MIT |
 | setup-vulkan-sdk | `humbletim/setup-vulkan-sdk` | MIT |
 

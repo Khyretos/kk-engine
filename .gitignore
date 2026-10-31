@@ -43,3 +43,6 @@ docker/server/postgres/
 
 # ImGui window layout, written wherever a demo runs
 imgui.ini
+
+# ccache folders the CI jobs keep between runs (tools/ci/build_env.sh)
+.ccache/

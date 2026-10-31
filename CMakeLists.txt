@@ -51,8 +51,10 @@ if(KKE_ENABLE_COVERAGE)
     if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
         message(WARNING "KKE_ENABLE_COVERAGE is most meaningful with -DCMAKE_BUILD_TYPE=Debug (no optimization skewing line counts).")
     endif()
-    add_compile_options(--coverage -O0 -g)
-    add_link_options(--coverage)
+    # Atomic counters: the job system runs engine code on worker threads, and
+    # plain increments from two threads lose counts.
+    add_compile_options(--coverage -fprofile-update=atomic -O0 -g)
+    add_link_options(--coverage -fprofile-update=atomic)
 endif()
 
 include(FetchContent)

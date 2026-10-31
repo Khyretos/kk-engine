@@ -100,18 +100,26 @@ env:
   GIT_CONFIG_VALUE_24: https://github.com/zeux/volk.git
   GIT_CONFIG_KEY_25: url.https://git.kreative-kompas.com/khyretos/mirror-wayland.git.insteadOf
   GIT_CONFIG_VALUE_25: https://gitlab.freedesktop.org/wayland/wayland.git
-  KKE_JOBS: "8"   # soucouyant has 32 GB of RAM; see ci.yml
   VERSION: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}
 
 jobs:
   linux:
     runs-on: ubuntu-latest
-    env:
-      KKE_JOBS: "3" # a worker may have only 3 CPUs and 6 GB (a WSL VM); 8 parallel compiles ran one out of memory
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
       - uses: actions/checkout@v4
+
+      - name: Restore the compile cache (release)
+        uses: https://code.forgejo.org/actions/cache@v4
+        with:
+          path: .ccache/release
+          key: ccache-${{ runner.os }}-${{ github.job }}-release-${{ hashFiles('CMakeLists.txt', '*/CMakeLists.txt', '*/*/CMakeLists.txt', 'CMakePresets.json', 'cmake/**') }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-${{ github.job }}-release-${{ hashFiles('CMakeLists.txt', '*/CMakeLists.txt', '*/*/CMakeLists.txt', 'CMakePresets.json', 'cmake/**') }}-
+            ccache-${{ runner.os }}-${{ github.job }}-release-
+      - name: Parallel jobs for this worker, ccache
+        run: tools/ci/build_env.sh release
 
       # libstdc++/libgcc linked statically: the package then needs only
       # glibc, FreeType and the system's Vulkan loader/driver.
@@ -126,6 +134,7 @@ jobs:
         run: |
           set -o pipefail
           cmake --build build -j "$KKE_JOBS" 2>&1 | tee build.log
+          ccache --show-stats
 
       - name: No warnings anywhere
         run: tools/ci/check_warnings.sh configure.log build.log
@@ -181,12 +190,21 @@ jobs:
 
   windows:
     runs-on: ubuntu-latest
-    env:
-      KKE_JOBS: "3" # a worker may have only 3 CPUs and 6 GB (a WSL VM); 8 parallel compiles ran one out of memory
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
       - uses: actions/checkout@v4
+
+      - name: Restore the compile cache (mingw-release)
+        uses: https://code.forgejo.org/actions/cache@v4
+        with:
+          path: .ccache/mingw-release
+          key: ccache-${{ runner.os }}-${{ github.job }}-mingw-release-${{ hashFiles('CMakeLists.txt', '*/CMakeLists.txt', '*/*/CMakeLists.txt', 'CMakePresets.json', 'cmake/**') }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-${{ github.job }}-mingw-release-${{ hashFiles('CMakeLists.txt', '*/CMakeLists.txt', '*/*/CMakeLists.txt', 'CMakePresets.json', 'cmake/**') }}-
+            ccache-${{ runner.os }}-${{ github.job }}-mingw-release-
+      - name: Parallel jobs for this worker, ccache
+        run: tools/ci/build_env.sh mingw-release
 
       - name: Configure (MinGW-w64 cross)
         run: |
@@ -199,6 +217,7 @@ jobs:
         run: |
           set -o pipefail
           cmake --build build -j "$KKE_JOBS" 2>&1 | tee build.log
+          ccache --show-stats
 
       - name: No warnings anywhere
         run: tools/ci/check_warnings.sh configure.log build.log
@@ -229,12 +248,21 @@ jobs:
   # project key when the repository has it (ANDROID_KEYSTORE_* secrets).
   android:
     runs-on: ubuntu-latest
-    env:
-      KKE_JOBS: "3" # a worker may have only 3 CPUs and 6 GB (a WSL VM); 8 parallel compiles ran one out of memory
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
       - uses: actions/checkout@v4
+
+      - name: Restore the compile cache (android-arm64)
+        uses: https://code.forgejo.org/actions/cache@v4
+        with:
+          path: .ccache/android-arm64
+          key: ccache-${{ runner.os }}-${{ github.job }}-android-arm64-${{ hashFiles('CMakeLists.txt', '*/CMakeLists.txt', '*/*/CMakeLists.txt', 'CMakePresets.json', 'cmake/**') }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-${{ github.job }}-android-arm64-${{ hashFiles('CMakeLists.txt', '*/CMakeLists.txt', '*/*/CMakeLists.txt', 'CMakePresets.json', 'cmake/**') }}-
+            ccache-${{ runner.os }}-${{ github.job }}-android-arm64-
+      - name: Parallel jobs for this worker, ccache
+        run: tools/ci/build_env.sh android-arm64
 
       - name: Configure
         run: |
@@ -245,6 +273,7 @@ jobs:
         run: |
           set -o pipefail
           cmake --build build-android-arm64 -j "$KKE_JOBS" 2>&1 | tee build.log
+          ccache --show-stats
 
       - name: APK
         env:

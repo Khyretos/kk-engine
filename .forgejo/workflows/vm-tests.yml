@@ -98,7 +98,6 @@ env:
   GIT_CONFIG_VALUE_24: https://github.com/zeux/volk.git
   GIT_CONFIG_KEY_25: url.https://git.kreative-kompas.com/khyretos/mirror-wayland.git.insteadOf
   GIT_CONFIG_VALUE_25: https://gitlab.freedesktop.org/wayland/wayland.git
-  KKE_JOBS: "8"          # soucouyant has 32 GB of RAM; see ci.yml
   KKE_VM_DIR: /srv/kke-vm
   KKE_VM_CPUS: "8"       # of 16 threads; the job's own build is done by then
   KKE_VM_MEM_MB: "8192"
@@ -114,6 +113,17 @@ jobs:
       options: --device /dev/kvm --volume /srv/kke-vm:/srv/kke-vm
     steps:
       - uses: actions/checkout@v4
+
+      - name: Restore the compile cache (mingw-release)
+        uses: https://code.forgejo.org/actions/cache@v4
+        with:
+          path: .ccache/mingw-release
+          key: ccache-${{ runner.os }}-${{ github.job }}-mingw-release-${{ hashFiles('CMakeLists.txt', '*/CMakeLists.txt', '*/*/CMakeLists.txt', 'CMakePresets.json', 'cmake/**') }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-${{ github.job }}-mingw-release-${{ hashFiles('CMakeLists.txt', '*/CMakeLists.txt', '*/*/CMakeLists.txt', 'CMakePresets.json', 'cmake/**') }}-
+            ccache-${{ runner.os }}-${{ github.job }}-mingw-release-
+      - name: Parallel jobs for this worker, ccache
+        run: tools/ci/build_env.sh mingw-release
 
       - name: KVM and the VM tools are there
         run: python3 -W error tools/vm/kke_vm.py check --windows
@@ -135,6 +145,7 @@ jobs:
         run: |
           set -o pipefail
           cmake --build build -j "$KKE_JOBS" 2>&1 | tee build.log
+          ccache --show-stats
 
       - name: No warnings anywhere
         run: tools/ci/check_warnings.sh configure.log build.log
@@ -170,6 +181,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Restore the compile cache (android-x86_64)
+        uses: https://code.forgejo.org/actions/cache@v4
+        with:
+          path: .ccache/android-x86_64
+          key: ccache-${{ runner.os }}-${{ github.job }}-android-x86_64-${{ hashFiles('CMakeLists.txt', '*/CMakeLists.txt', '*/*/CMakeLists.txt', 'CMakePresets.json', 'cmake/**') }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-${{ github.job }}-android-x86_64-${{ hashFiles('CMakeLists.txt', '*/CMakeLists.txt', '*/*/CMakeLists.txt', 'CMakePresets.json', 'cmake/**') }}-
+            ccache-${{ runner.os }}-${{ github.job }}-android-x86_64-
+      - name: Parallel jobs for this worker, ccache
+        run: tools/ci/build_env.sh android-x86_64
+
       - name: KVM and the emulator are there
         run: python3 -W error tools/vm/kke_vm.py check --android
 
@@ -184,6 +206,7 @@ jobs:
         run: |
           set -o pipefail
           cmake --build build-android-x86_64 -j "$KKE_JOBS" 2>&1 | tee build.log
+          ccache --show-stats
 
       - name: APKs
         run: |
