@@ -1,7 +1,7 @@
 kke_add_game(melt_demo main.cpp MeltDemoModule.cpp)
 target_link_libraries(melt_demo PRIVATE kke_engine)
 engine_copy_runtime_file(melt_demo ${CMAKE_CURRENT_SOURCE_DIR}/game.json marketplace/melt_demo/game.json)
-foreach(shader cube.vert glow.frag impostor.vert impostor.frag shadow.vert shadow.frag sky.vert fluid_depth.frag fluid_blur.comp fluid_composite.frag)
+foreach(shader cube.vert glow.frag impostor.vert impostor.frag shadow.vert shadow.frag sky.vert fluid_depth.frag fluid_blur.comp fluid_composite.frag fluid_thickness.frag fluid_water.frag)
     engine_add_shader(melt_demo ${CMAKE_SOURCE_DIR}/shaders/${shader})
 endforeach()
 kke_use_ui(melt_demo)

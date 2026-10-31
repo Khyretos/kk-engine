@@ -42,6 +42,7 @@ Run any demo from `build/bin/` (building: [BUILDING.md](../BUILDING.md)).
 | Debug panels and tools for yourself | [ImGui demo](../../games/imgui_demo/README.md) | |
 | Breakable, bendable, squashable things | [physics_demo](../../games/physics_demo/README.md) | [physics bridge](../PHYSICS_BRIDGE.md), [ragdolls](../RAGDOLLS.md) |
 | Lava, melting and pouring | [melt_demo](../../games/melt_demo/README.md) | |
+| Water to splash in: pools, floods, dam breaks, crates that float | [water_demo](../../games/water_demo/README.md) | [optimization #46](../OPTIMIZATION.md) |
 | Fire, smoke, explosions, sparks, weather, confetti, magic | [particles_demo](../../games/particles_demo/README.md) | [particle effects](../PARTICLE_EFFECTS.md) |
 | Props that bend and break (any model pack) | [synty_demo](../../games/synty_demo/README.md), [Sandbox](../../games/sandbox/README.md) | [breakables](../BREAKABLES.md) |
 | Ships, naval battles, water, floating and sinking | [sea_demo](../../games/sea_demo/README.md) | [lobby](../LOBBY.md), [networking](../NETWORKING.md) |

@@ -1,0 +1,80 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+// kke::MpmWater on the GPU, pass 4 of 4: grid -> particles (MpmWater::substep
+// step 6): velocity and its gradient, volume, move, then out of the bodies (which
+// get what that stops: the next bodies pass takes it) and inside the walls.
+// On the step's last substep it also writes Out.
+layout(local_size_x = 64) in;
+#include "mpm_common.glsl"
+
+void main() {
+    uint p = flatIndex();
+    if (p >= uint(pc.dims.w)) return;
+    vec4 xJ = particles[p * 5u + 0u];
+    float dx = pc.origin.w, invDx = pc.wallLo.w, dt = pc.wallHi.w;
+    vec3 local = (xJ.xyz - pc.origin.xyz) * invDx;
+    ivec3 base = ivec3(floor(local - 0.5));
+    vec3 fx = local - vec3(base);
+    vec3 w[3] = vec3[3](weightsOf(fx.x), weightsOf(fx.y), weightsOf(fx.z));
+    vec3 v = vec3(0.0);
+    mat3 B = mat3(0.0);
+    for (int c = 0; c < 3; ++c)
+        for (int b = 0; b < 3; ++b)
+            for (int a = 0; a < 3; ++a) {
+                float weight = w[0][a] * w[1][b] * w[2][c];
+                int i = nodeIndex(base + ivec3(a, b, c)) * 4;
+                vec3 gv = vec3(intBitsToFloat(grid[i + 0]), intBitsToFloat(grid[i + 1]), intBitsToFloat(grid[i + 2]));
+                vec3 dpos = (vec3(a, b, c) - fx) * dx;
+                v += weight * gv;
+                B += weight * outerProduct(gv, dpos);
+            }
+    mat3 C = (4.0 * invDx * invDx) * B;
+    float J = clamp(xJ.w * (1.0 + dt * (C[0][0] + C[1][1] + C[2][2])), 0.6, 4.0);
+    vec3 x = xJ.xyz + dt * v;
+    int count = int(pc.misc2.y);
+    for (int b = 0; b < count; ++b) {
+        vec3 nrm;
+        float d = bodyDistance(b, x, nrm);
+        if (d >= 0.0) continue;
+        x -= nrm * d;
+        vec3 vb = bodies[b * 8 + 3].xyz + cross(bodies[b * 8 + 4].xyz, x - bodies[b * 8 + 0].xyz);
+        float vn = dot(v - vb, nrm);
+        if (vn < 0.0) {
+            v -= vn * nrm;
+            if (bodies[b * 8 + 2].w > 0.0) {
+                vec3 J = (pc.misc2.x * vn) * nrm;
+                vec3 L = cross(x - bodies[b * 8 + 0].xyz, J);
+                atomicAdd(impulses[b * 8 + 0], toFixed(J.x, kImpulseScale));
+                atomicAdd(impulses[b * 8 + 1], toFixed(J.y, kImpulseScale));
+                atomicAdd(impulses[b * 8 + 2], toFixed(J.z, kImpulseScale));
+                atomicAdd(impulses[b * 8 + 4], toFixed(L.x, kImpulseScale));
+                atomicAdd(impulses[b * 8 + 5], toFixed(L.y, kImpulseScale));
+                atomicAdd(impulses[b * 8 + 6], toFixed(L.z, kImpulseScale));
+            }
+        }
+    }
+    for (int a = 0; a < 3; ++a) {
+        if (x[a] < pc.wallLo[a]) {
+            x[a] = pc.wallLo[a];
+            v[a] = max(v[a], 0.0);
+        } else if (x[a] > pc.wallHi[a]) {
+            x[a] = pc.wallHi[a];
+            v[a] = min(v[a], 0.0);
+        }
+    }
+    float speed = length(v);
+    if (speed > pc.misc.w) {
+        v *= pc.misc.w / speed;
+        speed = pc.misc.w;
+    }
+    particles[p * 5u + 0u] = vec4(x, J);
+    particles[p * 5u + 1u] = vec4(v, 0.0);
+    particles[p * 5u + 2u] = vec4(C[0], 0.0);
+    particles[p * 5u + 3u] = vec4(C[1], 0.0);
+    particles[p * 5u + 4u] = vec4(C[2], 0.0);
+    if (pc.misc2.z > 0.5) {
+        outParticles[p * 2u + 0u] = vec4(x, J);
+        outParticles[p * 2u + 1u] = vec4(v, speed);
+        atomicMax(maxSpeedBits, floatBitsToUint(speed));
+    }
+}

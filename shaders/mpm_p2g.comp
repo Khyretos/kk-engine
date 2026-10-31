@@ -1,0 +1,35 @@
+#version 450
+#extension GL_GOOGLE_include_directive : require
+// kke::MpmWater on the GPU, pass 1 of 4 a substep: particles -> grid
+// (MpmWater::substep steps 1 and 4). One thread a particle adds its mass
+// and momentum to its 27 nodes with integer atomics.
+layout(local_size_x = 64) in;
+#include "mpm_common.glsl"
+
+void main() {
+    uint p = flatIndex();
+    if (p >= uint(pc.dims.w)) return;
+    vec4 xJ = particles[p * 5u + 0u];
+    vec3 v = particles[p * 5u + 1u].xyz;
+    mat3 C = mat3(particles[p * 5u + 2u].xyz, particles[p * 5u + 3u].xyz, particles[p * 5u + 4u].xyz);
+    float dx = pc.origin.w, invDx = pc.wallLo.w, dt = pc.wallHi.w;
+    vec3 local = (xJ.xyz - pc.origin.xyz) * invDx;
+    ivec3 base = ivec3(floor(local - 0.5));
+    vec3 fx = local - vec3(base);
+    vec3 w[3] = vec3[3](weightsOf(fx.x), weightsOf(fx.y), weightsOf(fx.z));
+    float k = dt * 4.0 * invDx * invDx;
+    float pressure = pc.gravity.w * max(1.0 - xJ.w, -pc.misc.y);
+    mat3 A = k * (mat3(pressure) - pc.misc.x * (C + transpose(C))) + C;
+    for (int c = 0; c < 3; ++c)
+        for (int b = 0; b < 3; ++b)
+            for (int a = 0; a < 3; ++a) {
+                float weight = w[0][a] * w[1][b] * w[2][c];
+                vec3 dpos = (vec3(a, b, c) - fx) * dx;
+                vec3 mom = weight * (v + A * dpos);
+                int i = nodeIndex(base + ivec3(a, b, c)) * 4;
+                atomicAdd(grid[i + 0], toFixed(mom.x, kGridScale));
+                atomicAdd(grid[i + 1], toFixed(mom.y, kGridScale));
+                atomicAdd(grid[i + 2], toFixed(mom.z, kGridScale));
+                atomicAdd(grid[i + 3], toFixed(weight, kGridScale));
+            }
+}

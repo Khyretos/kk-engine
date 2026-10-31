@@ -27,6 +27,7 @@
 #include "kke/BenchmarkReport.h"
 #include "kke/FracturePattern.h"
 #include "kke/ImpactSynth.h"
+#include "kke/MpmWater.h"
 #include "kke/ParticleFluid.h"
 #include "kke/ResourceGovernor.h"
 #include "kke/VoronoiFracture.h"
@@ -474,6 +475,23 @@ std::vector<Case> makeCases() {
         return std::function<double()>([f] {
             f->step(1.0f / 60.0f);
             return double(f->positions()[0].y);
+        });
+    } });
+
+    // MLS-MPM water (kke::MpmWater, docs/OPTIMIZATION.md #46): the water
+    // demo's tank on the CPU at 7 cm cells, ~28,000 particles a second
+    // after the dam broke (one 60 Hz step: its substeps, one thread).
+    cases.push_back({ "mpm_water_28k", "MLS-MPM water: one 60 Hz step of ~28,000 particles (dam break in a 3 m tank)", 20, [] {
+        kke::MpmWater::Params p;
+        p.boundsMin = glm::vec3(-1.5f, 0.0f, -0.75f);
+        p.boundsMax = glm::vec3(1.5f, 2.0f, 0.75f);
+        p.cellSize = 0.07f;
+        auto w = std::make_shared<kke::MpmWater>(p);
+        w->fill(glm::vec3(-1.5f, 0.0f, -0.75f), glm::vec3(-0.5f, 0.8f, 0.75f));
+        for (int i = 0; i < 60; ++i) w->step(1.0f / 60.0f);
+        return std::function<double()>([w] {
+            w->step(1.0f / 60.0f);
+            return double(w->positions()[0].y);
         });
     } });
 
