@@ -51,8 +51,18 @@ if(KKE_ENABLE_COVERAGE)
     if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
         message(WARNING "KKE_ENABLE_COVERAGE is most meaningful with -DCMAKE_BUILD_TYPE=Debug (no optimization skewing line counts).")
     endif()
-    add_compile_options(--coverage -O0 -g)
-    add_link_options(--coverage)
+    # Atomic counters: the job system runs engine code on worker threads, and
+    # plain increments from two threads lose counts.
+    add_compile_options(--coverage -fprofile-update=atomic -O0 -g)
+    add_link_options(--coverage -fprofile-update=atomic)
+endif()
+
+# Under ccache (CI: tools/ci/build_env.sh) no precompiled headers: GCC writes
+# a slightly different SDL3/Jolt/RmlUi .gch every build and ccache can't cache
+# making one, so every file using it missed (651 of 1328 in a warm rebuild,
+# none without them).
+if(CMAKE_C_COMPILER_LAUNCHER MATCHES "ccache" OR CMAKE_CXX_COMPILER_LAUNCHER MATCHES "ccache")
+    set(CMAKE_DISABLE_PRECOMPILE_HEADERS ON)
 endif()
 
 include(FetchContent)

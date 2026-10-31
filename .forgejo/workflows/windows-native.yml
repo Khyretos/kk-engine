@@ -82,19 +82,27 @@ env:
   GIT_CONFIG_VALUE_24: https://github.com/zeux/volk.git
   GIT_CONFIG_KEY_25: url.https://git.kreative-kompas.com/khyretos/mirror-wayland.git.insteadOf
   GIT_CONFIG_VALUE_25: https://gitlab.freedesktop.org/wayland/wayland.git
-  KKE_JOBS: "8"
   VERSION: windows-native
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    env:
-      KKE_JOBS: "3" # a worker may have only 3 CPUs and 6 GB (a WSL VM); 8 parallel compiles ran one out of memory
+    runs-on: linux-big
     timeout-minutes: 120
     container:
       image: git.kreative-kompas.com/khyretos/kke-vm:1
     steps:
       - uses: actions/checkout@v4
+
+      - name: Restore the compile cache (mingw-release)
+        uses: https://code.forgejo.org/actions/cache@v4
+        with:
+          path: .ccache/mingw-release
+          key: ccache-${{ runner.os }}-${{ github.job }}-mingw-release-${{ hashFiles('CMakeLists.txt', '*/CMakeLists.txt', '*/*/CMakeLists.txt', 'CMakePresets.json', 'cmake/**') }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-${{ github.job }}-mingw-release-${{ hashFiles('CMakeLists.txt', '*/CMakeLists.txt', '*/*/CMakeLists.txt', 'CMakePresets.json', 'cmake/**') }}-
+            ccache-${{ runner.os }}-${{ github.job }}-mingw-release-
+      - name: Parallel jobs for this worker, ccache
+        run: tools/ci/build_env.sh mingw-release
 
       - name: Configure (MinGW-w64 cross)
         run: |
@@ -107,6 +115,7 @@ jobs:
         run: |
           set -o pipefail
           cmake --build build -j "$KKE_JOBS" 2>&1 | tee build.log
+          ccache --show-stats
 
       - name: No warnings anywhere
         run: tools/ci/check_warnings.sh configure.log build.log

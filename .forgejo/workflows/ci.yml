@@ -9,8 +9,10 @@
 #   compilers, Vulkan, Xvfb, lcov and the Android SDK with NDK r28c, so no job
 #   installs packages. Changing the toolchain = edit that file, push a new
 #   image tag, then bump the `image:` lines here and in release.yml.
-# - KKE_JOBS caps parallel compiles. The heavy builds set it to 3, so they
-#   fit the smallest worker (a WSL VM with 3 CPUs and 6 GB).
+# - KKE_JOBS caps parallel compiles. tools/ci/build_env.sh sets it per
+#   worker from its CPUs and free memory (3 on the smallest, a WSL VM with 3
+#   CPUs and 6 GB), and puts ccache in front of the compilers; actions/cache
+#   keeps each build's .ccache/<build> folder between runs on that worker.
 # - Artifact actions are Forgejo's own v4 ports.
 name: CI
 
@@ -99,7 +101,6 @@ env:
   GIT_CONFIG_VALUE_24: https://github.com/zeux/volk.git
   GIT_CONFIG_KEY_25: url.https://git.kreative-kompas.com/khyretos/mirror-wayland.git.insteadOf
   GIT_CONFIG_VALUE_25: https://gitlab.freedesktop.org/wayland/wayland.git
-  KKE_JOBS: "8"
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -112,6 +113,9 @@ jobs:
   # (ubuntu-latest); the tests draw on lavapipe, so none needs a GPU. Kees picks
   # which PCs take shared jobs on the CI queue page. Only main's benchmarks (one
   # machine, comparable numbers) and the VM tests (KVM) stay on soucouyant.
+  # The heavy C++ builds (Kees, 2026-10-31) go to linux-big, the workers with
+  # room for them (kireserver, soucouyant): on the 3-CPU WSL VM the coverage
+  # job took 95 minutes against 39 on soucouyant.
   #
   # Every third-party library, tool, image, font and action must be listed,
   # with its licence, in docs/DEPENDENCIES.md: this fails when one is added
@@ -146,31 +150,59 @@ jobs:
   # warnings and its tests passing (DevTools.* checks the debug switches
   # really are ignored).
   shipping-build:
-    runs-on: ubuntu-latest
-    env:
-      KKE_JOBS: "3" # a worker may have only 3 CPUs and 6 GB (a WSL VM); 8 parallel compiles ran one out of memory
+    runs-on: linux-big
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
       - uses: actions/checkout@v4
+
+      - name: Restore the compile cache (shipping)
+        uses: https://code.forgejo.org/actions/cache@v4
+        with:
+          path: .ccache/shipping
+          key: ccache-${{ runner.os }}-${{ github.job }}-shipping-${{ hashFiles('CMakeLists.txt', '*/CMakeLists.txt', '*/*/CMakeLists.txt', 'CMakePresets.json', 'cmake/**') }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-${{ github.job }}-shipping-${{ hashFiles('CMakeLists.txt', '*/CMakeLists.txt', '*/*/CMakeLists.txt', 'CMakePresets.json', 'cmake/**') }}-
+            ccache-${{ runner.os }}-${{ github.job }}-shipping-
+      - name: Parallel jobs for this worker, ccache
+        run: tools/ci/build_env.sh shipping
 
       - name: Configure (shipping)
         run: cmake -B build-ship -G Ninja -DCMAKE_BUILD_TYPE=Release -DKKE_SHIPPING=ON -DKKE_WARNINGS_AS_ERRORS=ON -DKKE_ENABLE_VALIDATION=OFF -DKKE_ENABLE_BENCHMARKS=OFF
 
       - name: Build (shipping)
-        run: cmake --build build-ship -j "$KKE_JOBS" --target kke_tests starter_game sandbox kke_seal
+        run: |
+          cmake --build build-ship -j "$KKE_JOBS" --target kke_tests starter_game sandbox kke_seal
+          ccache --show-stats
 
       - name: Run unit tests (shipping)
         run: ./build-ship/bin/kke_tests
 
   build-test-and-coverage:
-    runs-on: ubuntu-latest
-    env:
-      KKE_JOBS: "3" # a worker may have only 3 CPUs and 6 GB (a WSL VM); 8 parallel compiles ran one out of memory
+    runs-on: linux-big
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
       - uses: actions/checkout@v4
+
+      - name: Restore the compile cache (plain)
+        uses: https://code.forgejo.org/actions/cache@v4
+        with:
+          path: .ccache/plain
+          key: ccache-${{ runner.os }}-${{ github.job }}-plain-${{ hashFiles('CMakeLists.txt', '*/CMakeLists.txt', '*/*/CMakeLists.txt', 'CMakePresets.json', 'cmake/**') }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-${{ github.job }}-plain-${{ hashFiles('CMakeLists.txt', '*/CMakeLists.txt', '*/*/CMakeLists.txt', 'CMakePresets.json', 'cmake/**') }}-
+            ccache-${{ runner.os }}-${{ github.job }}-plain-
+      - name: Restore the compile cache (coverage)
+        uses: https://code.forgejo.org/actions/cache@v4
+        with:
+          path: .ccache/coverage
+          key: ccache-${{ runner.os }}-${{ github.job }}-coverage-${{ hashFiles('CMakeLists.txt', '*/CMakeLists.txt', '*/*/CMakeLists.txt', 'CMakePresets.json', 'cmake/**') }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-${{ github.job }}-coverage-${{ hashFiles('CMakeLists.txt', '*/CMakeLists.txt', '*/*/CMakeLists.txt', 'CMakePresets.json', 'cmake/**') }}-
+            ccache-${{ runner.os }}-${{ github.job }}-coverage-
+      - name: Parallel jobs for this worker, ccache
+        run: tools/ci/build_env.sh plain coverage
 
       # --- Plain build: this is what a contributor/CI should catch first,
       # fast, before paying for a second coverage-instrumented build. ---
@@ -178,7 +210,9 @@ jobs:
         run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DKKE_WARNINGS_AS_ERRORS=ON
 
       - name: Build (plain)
-        run: cmake --build build -j "$KKE_JOBS"
+        run: |
+          cmake --build build -j "$KKE_JOBS"
+          ccache --show-stats
 
       - name: Run unit tests (plain)
         run: ./build/bin/kke_tests
@@ -294,10 +328,15 @@ jobs:
         run: cmake -B build-coverage -G Ninja -DCMAKE_BUILD_TYPE=Debug -DKKE_ENABLE_COVERAGE=ON
 
       - name: Build (coverage)
-        run: cmake --build build-coverage -j "$KKE_JOBS"
+        run: |
+          export CCACHE_DIR="$GITHUB_WORKSPACE/.ccache/coverage"
+          cmake --build build-coverage -j "$KKE_JOBS"
+          ccache --show-stats
 
+      # The same tests as one process, split over parallel shards: at -O0
+      # with gcov counters one process took 13 minutes.
       - name: Run unit tests (coverage)
-        run: ./build-coverage/bin/kke_tests
+        run: tools/ci/run_sharded_tests.sh build-coverage/bin/kke_tests "$KKE_JOBS"
 
       - name: Run headless demo (coverage) — exercises Vulkan/GPU code paths
         run: |
@@ -344,13 +383,22 @@ jobs:
   # configure or build log, whoever's code it is in. The Release workflow
   # (release.yml) packages this same configuration.
   release-build:
-    runs-on: ubuntu-latest
-    env:
-      KKE_JOBS: "3" # a worker may have only 3 CPUs and 6 GB (a WSL VM); 8 parallel compiles ran one out of memory
+    runs-on: linux-big
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
       - uses: actions/checkout@v4
+
+      - name: Restore the compile cache (release)
+        uses: https://code.forgejo.org/actions/cache@v4
+        with:
+          path: .ccache/release
+          key: ccache-${{ runner.os }}-${{ github.job }}-release-${{ hashFiles('CMakeLists.txt', '*/CMakeLists.txt', '*/*/CMakeLists.txt', 'CMakePresets.json', 'cmake/**') }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-${{ github.job }}-release-${{ hashFiles('CMakeLists.txt', '*/CMakeLists.txt', '*/*/CMakeLists.txt', 'CMakePresets.json', 'cmake/**') }}-
+            ccache-${{ runner.os }}-${{ github.job }}-release-
+      - name: Parallel jobs for this worker, ccache
+        run: tools/ci/build_env.sh release
 
       - name: Configure (Release, FEMFX)
         run: |
@@ -362,6 +410,7 @@ jobs:
         run: |
           set -o pipefail
           cmake --build build -j "$KKE_JOBS" 2>&1 | tee build.log
+          ccache --show-stats
 
       - name: No warnings anywhere
         run: tools/ci/check_warnings.sh configure.log build.log
@@ -373,13 +422,22 @@ jobs:
   # GCC in places) and packed into the demos APK, with zero warnings. The
   # APK is kept as a run artifact for trying on a phone (docs/ANDROID.md).
   android:
-    runs-on: ubuntu-latest
-    env:
-      KKE_JOBS: "3" # a worker may have only 3 CPUs and 6 GB (a WSL VM); 8 parallel compiles ran one out of memory
+    runs-on: linux-big
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
       - uses: actions/checkout@v4
+
+      - name: Restore the compile cache (android-arm64)
+        uses: https://code.forgejo.org/actions/cache@v4
+        with:
+          path: .ccache/android-arm64
+          key: ccache-${{ runner.os }}-${{ github.job }}-android-arm64-${{ hashFiles('CMakeLists.txt', '*/CMakeLists.txt', '*/*/CMakeLists.txt', 'CMakePresets.json', 'cmake/**') }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-${{ github.job }}-android-arm64-${{ hashFiles('CMakeLists.txt', '*/CMakeLists.txt', '*/*/CMakeLists.txt', 'CMakePresets.json', 'cmake/**') }}-
+            ccache-${{ runner.os }}-${{ github.job }}-android-arm64-
+      - name: Parallel jobs for this worker, ccache
+        run: tools/ci/build_env.sh android-arm64
 
       - name: Configure (android-arm64)
         run: |
@@ -390,6 +448,7 @@ jobs:
         run: |
           set -o pipefail
           cmake --build build-android-arm64 -j "$KKE_JOBS" 2>&1 | tee build.log
+          ccache --show-stats
 
       - name: APK
         env:

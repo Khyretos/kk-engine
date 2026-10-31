@@ -87,7 +87,6 @@ env:
   GIT_CONFIG_VALUE_24: https://github.com/zeux/volk.git
   GIT_CONFIG_KEY_25: url.https://git.kreative-kompas.com/khyretos/mirror-wayland.git.insteadOf
   GIT_CONFIG_VALUE_25: https://gitlab.freedesktop.org/wayland/wayland.git
-  KKE_JOBS: "8"   # soucouyant has 32 GB of RAM; see ci.yml
 
 jobs:
   benchmarks:
@@ -98,12 +97,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Restore the compile cache (release)
+        uses: https://code.forgejo.org/actions/cache@v4
+        with:
+          path: .ccache/release
+          key: ccache-${{ runner.os }}-${{ github.job }}-release-${{ hashFiles('CMakeLists.txt', '*/CMakeLists.txt', '*/*/CMakeLists.txt', 'CMakePresets.json', 'cmake/**') }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-${{ github.job }}-release-${{ hashFiles('CMakeLists.txt', '*/CMakeLists.txt', '*/*/CMakeLists.txt', 'CMakePresets.json', 'cmake/**') }}-
+            ccache-${{ runner.os }}-${{ github.job }}-release-
+      - name: Parallel jobs for this worker, ccache
+        run: tools/ci/build_env.sh release
+
 
       - name: Configure (Release, warnings are errors)
         run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DKKE_WARNINGS_AS_ERRORS=ON -DKKE_ENABLE_TESTS=OFF -DKKE_ENABLE_VALIDATION=OFF
 
       - name: Build kke_bench and the showcase
-        run: cmake --build build -j "$KKE_JOBS" --target kke_bench kke_demo
+        run: |
+          cmake --build build -j "$KKE_JOBS" --target kke_bench kke_demo
+          ccache --show-stats
 
       - name: kke_bench (headless CPU suite)
         run: |
