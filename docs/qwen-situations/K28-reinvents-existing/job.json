@@ -1,16 +1,14 @@
 [
- {
-  "name": "g04-apppass",
-  "role": "worker/cpp-games",
-  "mode": "patch",
-  "out": "engine/src/Application.cpp",
-  "prompt": "ENG-G04 point-light shadows. Until now only the directional key light (lights[0]) casts shadows, through cascaded shadow maps (class kke::ShadowMap). Now each point light that casts shadows gets a cube of 6 faces around it (+X, -X, +Y, -Y, +Z, -Z), each a perspective view a little wider than 90 degrees, drawn into its own tile of a second ShadowMap (the point map): tile = light * ShadowMap::kPointFaces + face. C++20, glm, Vulkan (depth 0..1, clip-space Y flipped by proj[1][1] *= -1.0f like computeLightViewProj). In Application::run's shadow pass, draw the point-light faces after every view's cascades. The variables anyPointShadow, pointViewProjs (index light * ShadowMap::kPointFaces + face) and m_pointShadowMap already exist. Your SEARCH block is exactly these lines:\n```\n                m_shadowMap->endRenderPass(cmd);\n```\nand your REPLACE block is those same lines followed by the new lines. Change nothing else; do not copy or move any other line.\nThe new lines (still inside the `if (drawScene) {` block):\n```\n                if (anyPointShadow) {\n                    m_pointShadowMap->beginRenderPass(cmd);\n                    shadowCtx.renderPass = m_pointShadowMap->renderPass();\n```\nthen `for (uint32_t l = 0; l < ShadowMap::kMaxPointShadows; ++l) {` with `if (!m_lighting.lights[l].castsPointShadow()) continue;` and an inner `for (uint32_t f = 0; f < ShadowMap::kPointFaces; ++f) {` holding, in order: `const uint32_t t = l * ShadowMap::kPointFaces + f;`, `m_pointShadowMap->beginTile(cmd, t);`, `shadowCtx.lightViewProj = pointViewProjs[t];`, `shadowCtx.viewIndex = 0;`, `shadowCtx.cascade = 0;`, `shadowCtx.pointLight = static_cast<int>(l);`, `shadowCtx.tile = kMaxViews * ShadowMap::kCascades + t;` and the loop `for (Module* m : m_initOrder) { safeInvoke(m, \"renderShadow\", [&] { m->renderShadow(shadowCtx); }); }`. Close both loops, then `m_pointShadowMap->endRenderPass(cmd);` and close the `if`.",
-  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g04.py apppass",
-  "precheck": false,
-  "context": [],
-  "max_tokens": 3000,
-  "focus": [
-   "m_shadowMap->endRenderPass\\(cmd\\);"
-  ]
- }
+  {
+    "name": "g04-apppass",
+    "role": "worker/cpp-games",
+    "mode": "patch",
+    "out": "engine/src/Application.cpp",
+    "prompt": "ENG-G04 point-light shadows. Until now only the directional key light (lights[0]) casts shadows, through cascaded shadow maps (class kke::ShadowMap). Now each point light that casts shadows gets a cube of 6 faces around it (+X, -X, +Y, -Y, +Z, -Z), each a perspective view a little wider than 90 degrees, drawn into its own tile of a second ShadowMap (the point map): tile = light * ShadowMap::kPointFaces + face. C++20, glm, Vulkan (depth 0..1, clip-space Y flipped by proj[1][1] *= -1.0f like computeLightViewProj). In Application::run's shadow pass, draw the point-light faces after every view's cascades. The variables anyPointShadow, pointViewProjs (index light * ShadowMap::kPointFaces + face) and m_pointShadowMap already exist. Your SEARCH block is exactly these lines:\n```\n                m_shadowMap->endRenderPass(cmd);\n```\nand your REPLACE block is those same lines followed by the new lines. Change nothing else; do not copy or move any other line.\nThe new lines (still inside the `if (drawScene) {` block):\n```\n                if (anyPointShadow) {\n                    m_pointShadowMap->beginRenderPass(cmd);\n                    shadowCtx.renderPass = m_pointShadowMap->renderPass();\n```\nthen `for (uint32_t l = 0; l < ShadowMap::kMaxPointShadows; ++l) {` with `if (!m_lighting.lights[l].castsPointShadow()) continue;` and an inner `for (uint32_t f = 0; f < ShadowMap::kPointFaces; ++f) {` holding, in order: `const uint32_t t = l * ShadowMap::kPointFaces + f;`, `m_pointShadowMap->beginTile(cmd, t);`, `shadowCtx.lightViewProj = pointViewProjs[t];`, `shadowCtx.viewIndex = 0;`, `shadowCtx.cascade = 0;`, `shadowCtx.pointLight = static_cast<int>(l);`, `shadowCtx.tile = kMaxViews * ShadowMap::kCascades + t;` and the loop `for (Module* m : m_initOrder) { safeInvoke(m, \"renderShadow\", [&] { m->renderShadow(shadowCtx); }); }`. Close both loops, then `m_pointShadowMap->endRenderPass(cmd);` and close the `if`.",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g04.py apppass",
+    "precheck": false,
+    "context": [],
+    "max_tokens": 3000,
+    "focus": ["m_shadowMap->endRenderPass\\(cmd\\);"]
+  }
 ]
