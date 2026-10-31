@@ -1,0 +1,66 @@
+Kreative Kompas Engine benchmark, 2026-10-31 05:10:43
+Engine windows-native (900f0c8998), Release build
+
+Machine
+  OS       Windows 10.0.19044
+  CPU      Intel(R) Core(TM) i5-4590 CPU @ 3.30GHz, 4 threads
+  RAM      16312 MB
+  GPU      llvmpipe (LLVM 22.1.8, 256 bits) (cpu (software), 16312 MB)
+  Driver   llvmpipe Mesa 26.2.4 (git-9a0169f2a7) (LLVM 22.1.8), Vulkan 1.4.354
+  Display  1920x1080 @ 60 Hz
+
+Demo                                        Result          FPS     1% low  p99 ms  Hitches  Warnings
+----------------------------------------------------------------------------------------------------
+Showcase: the course by autopilot           too slow        3.8     1.6     615.9   1        0
+Showcase: stress test (300 crates, impacts) too slow        3.7     1.6     633.1   1        0
+Physics: rigid bodies and soft bodies       struggles       22.6    20.9    45.3    0        0
+Melt: particle fluid                        too slow        9.0     7.6     123.2   0        0
+Jiggle: soft-body characters on tour        too slow        13.6    12.9    75.1    0        0
+Sea: ocean and floating bodies              too slow        17.7    7.6     58.9    1        0
+Audio: spatial sound tour                   too slow        11.2    6.1     93.8    0        0
+UI: RmlUi menus                             struggles       17.8    16.9    58.1    0        0
+UI: Dear ImGui panels                       struggles       25.6    23.3    40.5    0        0
+Sandbox: play mode                          struggles       25.4    23.9    40.7    0        0
+Synty scene                                 struggles       23.5    16.9    57.8    0        0
+Climb Race: a race with 3 CPU climbers      too slow        8.9     8.2     121.4   0        0
+Flying: six planes head-on at full speed, e~too slow        12.1    2.3     135.0   1        0
+Procedural animation: gaits, look-at, a rag~too slow        9.9     9.5     105.5   0        0
+Cloth: many sheets falling over balls       too slow        8.5     8.1     122.9   0        0
+Hair: strands in the wind                   too slow        0.1     0.1     7865.5  0        0
+Cloth and hair: all six scenes (14 s each)  too slow        9.6     6.5     153.1   0        0
+Farm: AI animals, farmer on autopilot       struggles       17.5    16.5    59.0    0        0
+Pet companion: orders demo                  struggles       21.2    17.9    51.6    0        0
+Platoon: squad orders demo                  too slow        6.9     5.7     174.8   0        0
+Duel: two bots fighting                     too slow        11.5    10.7    92.9    0        0
+Goblin horde: crowd AI and ragdolls, bot he~too slow        8.9     6.5     153.0   0        0
+Racing: worst case, 24 cars head-on at 108 ~too slow        5.4     1.7     574.5   26       0
+Tennis: busiest case, 100 people, 10 single~too slow        3.1     2.1     448.7   0        0
+Tennis: busiest case, 100 people, 10 double~too slow        3.0     1.7     582.7   0        0
+Cookbook: Lua recipes                       too slow        16.9    13.0    76.5    0        0
+
+Results: smooth = the slowest 1% of frames still >= 55 fps, playable >= 30, struggles >= 15, too slow below.
+The demos run uncapped (no vsync) to show what this machine can do.
+
+Details
+
+* Showcase: the course by autopilot: ok (normal exit)
+    hitch at 13.9 s: 615.9 ms (usually 258.5), present took 554.1 ms (usually 222.2 ms)
+
+* Showcase: stress test (300 crates, impacts): ok (normal exit)
+    hitch at 14.2 s: 633.1 ms (usually 260.1), present took 557.4 ms (usually 224.6 ms)
+
+* Sea: ocean and floating bodies: ok (normal exit)
+    hitch at 0.1 s: 257.8 ms (usually 73.4), present took 230.4 ms (usually 57.9 ms)
+
+* Flying: six planes head-on at full speed, every 7 s: ok (normal exit)
+    hitch at 6.0 s: 1035.7 ms (usually 70.6), present took 984.6 ms (usually 76.3 ms)
+
+* Racing: worst case, 24 cars head-on at 108 km/h: ok (normal exit)
+    hitch at 5.0 s: 283.4 ms (usually 117.9), present took 260.3 ms (usually 84.2 ms)
+    hitch at 6.4 s: 277.6 ms (usually 117.9), present took 261.4 ms (usually 92.8 ms)
+    hitch at 6.7 s: 344.9 ms (usually 118.1), present took 318.1 ms (usually 96.4 ms)
+    hitch at 7.5 s: 474.3 ms (usually 118.1), present took 434.8 ms (usually 101.0 ms)
+    hitch at 8.5 s: 574.5 ms (usually 118.2), present took 530.7 ms (usually 107.8 ms)
+    ... 21 more hitch(es) in the .json
+
+Please send the file kke-benchmark-20261031_051043.json (the .json next to this one) and kke-benchmark-20261031_051043-shots.zip (its screenshots) back.
