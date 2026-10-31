@@ -48,6 +48,10 @@ struct EngineSettings {
         bool motionBlur = false;
         // Occlusion culling (Renderer::setOcclusionCulling): models hidden behind others aren't drawn.
         bool occlusionCulling = false;
+        // Automatic levels of detail for models (kke::ModelModule, docs/LOD.md): simpler meshes for small, far objects.
+        // lodBias > 1 keeps detail to greater distances, < 1 drops it sooner.
+        bool autoLod = true;
+        float lodBias = 1.0f;
         // Ray-traced sun shadows (kke/ShadowRays.h): "off", "kke" (only past
         // the shadow map's reach) or "classic" (every pixel).
         std::string shadowRays = "off";
@@ -89,6 +93,29 @@ struct EngineSettings {
         float renderScale = 1.0f;         // 0.5..1: fewer pixels for the 3D view
         float backgroundFrameRate = 15.0f; // cap while unfocused (0 = no cap)
     } performance;
+
+    // Language and captions (docs/LOCALIZATION.md, docs/ACCESSIBILITY.md).
+    struct Text {
+        std::string language = "auto"; // "auto" = the system's language, else a code from kke::Localization ("nl", "pt-BR")
+        bool subtitles = true;         // captions for speech and sounds (kke::Subtitles)
+        float subtitleSize = 1.0f;     // 0.75..2.5, times the UI scale
+        float subtitleBackground = 0.6f; // 0..1: how dark the box behind the words is
+    } text;
+
+    // What lets more people play (docs/ACCESSIBILITY.md). Each is a switch the
+    // game and the engine read; none changes the rules of a game.
+    struct Accessibility {
+        std::string colorBlind = "off"; // "off" | "protanopia" | "deuteranopia" | "tritanopia": colours shifted so they tell apart
+        float colorBlindStrength = 1.0f; // 0..1
+        bool highContrast = false;       // UI: white on black, thicker outlines
+        bool reduceMotion = false;       // no screen shake, no motion blur, no camera sway
+        bool screenReader = false;       // menus and notices are spoken (kke::Accessibility)
+    } accessibility;
+
+    // What may leave the machine (docs/CRASH_REPORTS.md). Nothing does unless the player says so.
+    struct Privacy {
+        bool sendCrashReports = false; // crash reports are always written to disk; this lets a game's uploader send them
+    } privacy;
 
     // Game-specific extras, saved and loaded untouched.
     std::map<std::string, std::string> custom;

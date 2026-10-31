@@ -1,3 +1,14 @@
+#include <atomic>
+#include <algorithm>
+#include <cstring>
+#include <mutex>
+#ifdef _WIN32
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
+#include <spdlog/async.h>
+#include <spdlog/sinks/base_sink.h>
 #include "kke/Log.h"
 
 #include <spdlog/async.h>
@@ -32,6 +43,34 @@ bool g_exited = false;
 // statics, and registering before they were built ran the handler after
 // the registry was destroyed (heap corruption at exit, "malloc_consolidate():
 // unaligned fastbin chunk detected" in the Benchmarks workflow).
+// The last lines logged, in a fixed array a crash handler can read without a lock.
+constexpr size_t kRingLines = 128, kRingWidth = 256;
+struct Ring {
+    char lines[kRingLines][kRingWidth] = {};
+    std::atomic<unsigned> next{ 0 };
+};
+Ring g_ring;
+
+class RingSink : public spdlog::sinks::base_sink<std::mutex> {
+protected:
+    void sink_it_(const spdlog::details::log_msg& msg) override {
+        spdlog::memory_buf_t formatted;
+        formatter_->format(msg, formatted);
+        size_t n = std::min(formatted.size(), kRingWidth - 1);
+        while (n > 0 && (formatted.data()[n - 1] == '\n' || formatted.data()[n - 1] == '\r')) --n;
+        char* line = g_ring.lines[g_ring.next.fetch_add(1) % kRingLines];
+        line[0] = '\0'; // a reader that arrives now sees an empty line, not half of two
+        std::memcpy(line, formatted.data(), n);
+        line[n] = '\0';
+    }
+    void flush_() override {}
+};
+
+std::shared_ptr<RingSink> ringSink() {
+    static const std::shared_ptr<RingSink> sink = std::make_shared<RingSink>();
+    return sink;
+}
+
 void shutdownAtExit() {
     g_exited = true;
     spdlog::shutdown();
@@ -75,12 +114,42 @@ std::shared_ptr<spdlog::logger> get(const std::string& moduleName) {
         return logger;
     }
     registerExitShutdown();
-    auto logger = spdlog::create_async_nb<spdlog::sinks::stdout_color_sink_mt>(moduleName);
+    // What create_async_nb does, with a second sink: the ring of recent lines.
+    const std::vector<spdlog::sink_ptr> sinks{ std::make_shared<spdlog::sinks::stdout_color_sink_mt>(), ringSink() };
+    auto logger = std::make_shared<spdlog::async_logger>(moduleName, sinks.begin(), sinks.end(), spdlog::thread_pool(),
+                                                         spdlog::async_overflow_policy::overrun_oldest);
+    spdlog::register_logger(logger);
     logger->set_pattern(g_pattern);
     // The registry gives new loggers the global level (spdlog::set_level);
     // spdlog::get_level() would dereference the default logger, which
     // spdlog::shutdown() drops, so logging after shutdown() crashed here.
     return logger;
+}
+
+std::vector<std::string> recentLines() {
+    std::vector<std::string> out;
+    const unsigned next = g_ring.next.load();
+    for (size_t k = 0; k < kRingLines; ++k) {
+        const char* line = g_ring.lines[(next + k) % kRingLines];
+        if (line[0]) out.emplace_back(line);
+    }
+    return out;
+}
+
+void writeRecentLines(int fd) {
+    const unsigned next = g_ring.next.load();
+    for (size_t k = 0; k < kRingLines; ++k) {
+        const char* line = g_ring.lines[(next + k) % kRingLines];
+        const size_t n = strnlen(line, kRingWidth);
+        if (n == 0) continue;
+#ifdef _WIN32
+        _write(fd, line, static_cast<unsigned>(n));
+        _write(fd, "\n", 1);
+#else
+        if (write(fd, line, n) < 0) return;
+        if (write(fd, "\n", 1) < 0) return;
+#endif
+    }
 }
 
 void shutdown() {

@@ -58,6 +58,9 @@ public:
     // caller at binding 1, see ModelModule's instanced pipeline).
     void drawInstanced(VkCommandBuffer cmd, uint32_t instances, uint32_t firstInstance = 0) const;
 
+    // The vertex buffer, for a draw with another index list over the same vertices (a level of detail, kke/LodChain.h).
+    const rhi::Buffer& vertexBuffer() const { return *m_vertexBuffer; }
+
     static Mesh createCube(VulkanDevice& device);
 
 private:

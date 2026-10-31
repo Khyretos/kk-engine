@@ -266,6 +266,83 @@ void ScriptModule::bindModels() {
         models->playAnimation(inst, clip, lua_isnoneornil(L, 3) ? true : bool(lua_toboolean(L, 3)), float(luaL_optnumber(L, 4, 1.0)));
         return 0;
     });
+    // models.lod(instance) -> level of detail now (0 = full). models.autoLod([on]) -> whether automatic levels of
+    // detail are on (docs/LOD.md); models.lodStats() -> instances below full detail, triangles saved (last frame).
+    vm.registerFunction("models", "lod", [models, owned](lua_State* L) {
+        lua_pushinteger(L, models->lodOf(owned(L, 1, "models.lod")));
+        return 1;
+    });
+    vm.registerFunction("models", "autoLod", [models](lua_State* L) {
+        if (!lua_isnoneornil(L, 1)) models->setAutoLod(lua_toboolean(L, 1));
+        lua_pushboolean(L, models->autoLod());
+        return 1;
+    });
+    vm.registerFunction("models", "lodStats", [models](lua_State* L) {
+        lua_pushinteger(L, lua_Integer(models->lodInstancesLastFrame()));
+        lua_pushinteger(L, lua_Integer(models->lodTrianglesSavedLastFrame()));
+        return 2;
+    });
+    // ---- face.*: facial animation on a skinned model's blend shapes (docs/FACIAL_ANIMATION.md)
+    // face.expressions(instance) -> {"happy", "blink", "aa", ...}: what this model can do.
+    vm.registerFunction("face", "expressions", [models, owned](lua_State* L) {
+        const auto inst = owned(L, 1, "face.expressions");
+        const std::vector<std::string> list = models->face(inst).expressions();
+        lua_createtable(L, int(list.size()), 0);
+        int i = 1;
+        for (const std::string& e : list) {
+            lua_pushstring(L, e.c_str());
+            lua_rawseti(L, -2, i++);
+        }
+        return 1;
+    });
+    // face.morphs(instance) -> {"smile", "jawOpen", ...}: the model's blend shapes by their own names.
+    vm.registerFunction("face", "morphs", [models, owned](lua_State* L) {
+        const auto inst = owned(L, 1, "face.morphs");
+        const std::vector<std::string> list = models->morphNames(inst);
+        lua_createtable(L, int(list.size()), 0);
+        int i = 1;
+        for (const std::string& e : list) {
+            lua_pushstring(L, e.c_str());
+            lua_rawseti(L, -2, i++);
+        }
+        return 1;
+    });
+    // face.expression(instance, "happy" [, weight=1]) -> true, or false when the model cannot do it.
+    vm.registerFunction("face", "expression", [models, owned](lua_State* L) {
+        const auto inst = owned(L, 1, "face.expression");
+        lua_pushboolean(L, models->face(inst).setExpression(luaL_checkstring(L, 2), float(luaL_optnumber(L, 3, 1.0))));
+        return 1;
+    });
+    // face.morph(instance, "jawOpen", weight): one blend shape directly, by any spelling of its name.
+    vm.registerFunction("face", "morph", [models, owned](lua_State* L) {
+        const auto inst = owned(L, 1, "face.morph");
+        lua_pushboolean(L, models->face(inst).setMorph(luaL_checkstring(L, 2), float(luaL_checknumber(L, 3))));
+        return 1;
+    });
+    // face.say(instance, text, seconds): the mouth moves through the vowels of the text for that long.
+    vm.registerFunction("face", "say", [models, owned](lua_State* L) {
+        const auto inst = owned(L, 1, "face.say");
+        models->face(inst).say(FaceRig::lipSyncFromText(luaL_checkstring(L, 2), float(luaL_checknumber(L, 3))));
+        return 0;
+    });
+    // face.level(instance, 0..1): the mouth follows a voice's loudness (call it every frame while it talks).
+    vm.registerFunction("face", "level", [models, owned](lua_State* L) {
+        models->face(owned(L, 1, "face.level")).setSpeechLevel(float(luaL_checknumber(L, 2)));
+        return 0;
+    });
+    vm.registerFunction("face", "blink", [models, owned](lua_State* L) {
+        models->face(owned(L, 1, "face.blink")).blink();
+        return 0;
+    });
+    // face.autoBlink(instance, on): on by default.
+    vm.registerFunction("face", "autoBlink", [models, owned](lua_State* L) {
+        models->face(owned(L, 1, "face.autoBlink")).setAutoBlink(lua_toboolean(L, 2));
+        return 0;
+    });
+    vm.registerFunction("face", "clear", [models, owned](lua_State* L) {
+        models->face(owned(L, 1, "face.clear")).clear();
+        return 0;
+    });
     // models.event(model, clip, seconds, name): an animation event, the
     // "AnimEvent" hook for every script model of `model` playing `clip`.
     // models.event(model, clip, nil) removes that clip's events.
@@ -951,6 +1028,17 @@ void ScriptModule::bindAudio() {
         if (!s) *why = "'" + name + "' isn't a sound file this engine reads (WAV, FLAC or MP3)";
         return s;
     };
+    // Adaptive music (music.*, kke/ScriptMusic.h): its layers are files in the game's folder like audio.sound's.
+    m_music.attach(
+        &audio->mixer(),
+        [this, audio](const std::string& name) -> SoundHandle {
+            if (!safeRelativePath(name)) return nullptr;
+            const std::filesystem::path file = std::filesystem::path(baseDir()) / name;
+            std::error_code ec;
+            return std::filesystem::is_regular_file(file, ec) ? audio->cachedSound(file.string()) : nullptr;
+        },
+        m_dir);
+    m_music.bind(vm);
     // The voice a script started, or 0 for one that already ended; another
     // script's (or a made-up) id is an error.
     auto ownedVoice = [this](lua_State* L, int index, const char* fn) -> uint32_t {

@@ -1,5 +1,7 @@
 #include "kke/Animator.h"
 
+#include "kke/AnimCompress.h"
+
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/matrix_decompose.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -67,6 +69,28 @@ AnimationSet::AnimationSet(const ModelData& model) {
     }
 }
 
+void AnimationSet::unpack(Clip& c) {
+    if (!c.packed) return;
+    c.frames = c.packed->unpack();
+    c.packed.reset();
+}
+
+size_t AnimationSet::compress(const AnimCompressionOptions& options, AnimCompressionStats* stats) {
+    size_t packed = 0;
+    for (Clip& c : m_clips) {
+        if (c.packed || c.frames.empty()) continue;
+        PackedClip p;
+        AnimCompressionStats s;
+        if (!packFrames(c.frames, c.name, c.duration, c.sampleRate, options, p, &s)) continue;
+        c.packed = std::make_shared<const PackedClip>(std::move(p));
+        c.frames.clear();
+        c.frames.shrink_to_fit();
+        if (stats) *stats += s;
+        ++packed;
+    }
+    return packed;
+}
+
 int AnimationSet::find(const std::string& part) const {
     for (size_t i = 0; i < m_clips.size(); ++i)
         if (m_clips[i].name.find(part) != std::string::npos) return static_cast<int>(i);
@@ -74,11 +98,15 @@ int AnimationSet::find(const std::string& part) const {
 }
 
 void AnimationSet::sample(int clip, float time, bool loop, Pose& out) const {
-    if (clip < 0 || clip >= static_cast<int>(m_clips.size()) || m_clips[clip].frames.empty()) {
+    if (clip < 0 || clip >= static_cast<int>(m_clips.size()) || (m_clips[clip].frames.empty() && !m_clips[clip].packed)) {
         out = m_rest;
         return;
     }
     const Clip& c = m_clips[clip];
+    if (c.packed) {
+        c.packed->sample(time, loop, out);
+        return;
+    }
     const float t = clipTime(time, c.duration, loop);
     const float f = t * c.sampleRate;
     const size_t last = c.frames.size() - 1;
@@ -99,6 +127,7 @@ void AnimationSet::extractRootMotion(const ModelData& model, int bone) {
     const glm::mat4 toLocal = glm::inverse(parent);
     for (Clip& c : m_clips) {
         c.root.clear();
+        unpack(c);
         if (c.frames.empty()) continue;
         const glm::vec3 start = glm::vec3(parent * glm::vec4(c.frames[0][bone].t, 1.0f));
         for (Pose& f : c.frames) {
@@ -119,7 +148,8 @@ int AnimationSet::removeLift(const ModelData& model, int bone, const std::string
     const glm::mat4 toLocal = glm::inverse(parent);
     int changed = 0;
     for (Clip& c : m_clips) {
-        if (c.frames.empty() || c.name.find(clipPart) == std::string::npos) continue;
+        if ((c.frames.empty() && !c.packed) || c.name.find(clipPart) == std::string::npos) continue;
+        unpack(c);
         const float startY = (parent * glm::vec4(c.frames[0][bone].t, 1.0f)).y;
         for (Pose& f : c.frames) {
             glm::vec3 p = glm::vec3(parent * glm::vec4(f[bone].t, 1.0f));

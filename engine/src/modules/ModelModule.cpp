@@ -1,4 +1,10 @@
 #include "kke/modules/ModelModule.h"
+
+#include "kke/DevTools.h"
+#include "kke/LodChain.h"
+#include "kke/EngineSettings.h"
+#include "kke/Morph.h"
+#include "kke/modules/SettingsModule.h"
 #include "kke/DrawOrder.h"
 
 #include "kke/Application.h"
@@ -127,6 +133,17 @@ ModelModule::~ModelModule() = default;
 
 void ModelModule::init(Application& app) {
     m_app = &app;
+    // Automatic levels of detail: the model-wide switch sizes (kke/LodChain.h) and the developer's off switch.
+    if (const char* lod = dev::env("KKE_LOD"); lod && std::string(lod) == "0") m_autoLod = false;
+    if (auto* settings = app.getModule<SettingsModule>()) onSettingsChanged(settings->settings()); // it may have applied before this module existed
+    {
+        float last = 1.0f;
+        const size_t slots = std::min(m_lodSettings.ratios.size(), m_lodSettings.errors.size());
+        for (size_t k = 0; k < slots; ++k) {
+            last = std::min(last * 0.9f, m_lodSettings.pixelTolerance / (std::max(m_lodSettings.errors[k], 1e-4f) * m_lodSettings.referenceHeight));
+            m_lodSwitch.push_back(last);
+        }
+    }
     m_device = app.device().device();
     // ENG-G03: set 2 = albedo, normal, roughness and metallic maps (model.frag).
     rhi::BindingLayout bindings[4];
@@ -436,6 +453,8 @@ void ModelModule::remove(InstanceId id) {
         m_app->renderer().retire(std::shared_ptr<void>(std::move(buffers)));
         if (inst.gpuSkin) m_app->renderer().retire(std::shared_ptr<void>(std::move(inst.gpuSkin))); // its sets, same frames
     }
+    if (m_app && !inst.morphParts.empty()) // the blend-shape bind buffers: frames in flight may still read them
+        m_app->renderer().retire(std::shared_ptr<void>(std::make_shared<std::vector<MorphPart>>(std::move(inst.morphParts))));
     m_instances.erase(it);
 }
 
@@ -562,6 +581,28 @@ std::vector<glm::mat4> ModelModule::boneWorld(InstanceId id) const {
 
 void ModelModule::update(const UpdateContext& ctx) {
     advanceClips(ctx);
+    // Levels of detail are made the first time an instance of a model is small enough to want one, here, between
+    // frames (the upload waits for the GPU): a hitch of a few milliseconds once per big model.
+    if (m_autoLod && !m_lodSwitch.empty()) {
+        const Camera& cam = m_app->camera();
+        const float tanHalf = std::tan(glm::radians(cam.fovDegrees) * 0.5f);
+        for (auto& [id, inst] : m_instances) {
+            LoadedModel& lm = *m_models.at(inst.model);
+            if (lm.lodsBuilt || !inst.visible) continue;
+            const glm::vec3 centre = glm::vec3(inst.transform * glm::vec4(0.5f * (lm.data.boundsMin + lm.data.boundsMax), 1.0f));
+            const float radius = 0.5f * glm::length(lm.data.boundsMax - lm.data.boundsMin) * instanceScale(inst.transform);
+            if (lodScreenHeight(radius, glm::length(centre - cam.position), tanHalf) * m_lodBias < m_lodSwitch.front() * 1.3f) ensureLods(lm);
+        }
+    }
+    // Facial animation: each rig eases its expressions, and a changed face is applied as morph weights.
+    for (auto& [id, inst] : m_instances) {
+        if (!inst.face) continue;
+        inst.face->update(ctx.dt);
+        if (inst.face->version() != inst.faceVersion) {
+            inst.faceVersion = inst.face->version();
+            setMorphWeights(id, inst.face->weights());
+        }
+    }
     // Procedural layers on top of whatever the clip left.
     for (auto& [id, inst] : m_instances) {
         if (!inst.modifier || !inst.worldOverride.empty() || inst.locals.empty()) continue;
@@ -772,9 +813,12 @@ void ModelModule::writeSkinSets(Instance& inst, uint32_t slot) {
     size_t si = 0;
     for (const GpuMesh& gm : lm.meshes) {
         if (!gm.skinned) continue;
+        const size_t part = si;
         SkinnedBuffers& sb = inst.skinned[si++];
         if (!gm.skinBind) continue;
-        const VkDescriptorBufferInfo infos[3] = { { gm.skinBind->handle(), 0, VK_WHOLE_SIZE },
+        // A part with blend shapes at work reads its own morphed bind vertices.
+        const bool morphed = part < inst.morphParts.size() && inst.morphParts[part].useBind[slot] && inst.morphParts[part].bind[slot];
+        const VkDescriptorBufferInfo infos[3] = { { (morphed ? inst.morphParts[part].bind[slot].get() : gm.skinBind.get())->handle(), 0, VK_WHOLE_SIZE },
                                                   { inst.gpuSkin->data[slot]->handle(), 0, VK_WHOLE_SIZE },
                                                   { rhi::VulkanBuffer::handle(*sb.vertices[slot]), 0, VK_WHOLE_SIZE } };
         VkWriteDescriptorSet writes[3]{};
@@ -795,6 +839,7 @@ void ModelModule::writeSkinSets(Instance& inst, uint32_t slot) {
 // zones, into frame slot `slot`'s data buffer.
 void ModelModule::packSkin(Instance& inst, uint32_t slot) {
     const LoadedModel& lm = *m_models.at(inst.model); // no operator[]: this runs on several threads at once
+    if (inst.morphVersion != 0) uploadMorphBind(inst, slot);
     const std::vector<glm::mat4> world = currentBoneWorld(inst);
     std::vector<glm::mat4> skin(world.size());
     for (size_t b = 0; b < world.size(); ++b) skin[b] = world[b] * lm.data.bones[b].inverseBind;
@@ -867,6 +912,7 @@ void ModelModule::skinInstance(Instance& inst, uint32_t frameIndex) {
     if (m_gpuSkinning || inst.skinnedFrame == m_frame || inst.skinned.empty()) return; // GPU skinning: computeEveryFrame did it
     inst.skinnedFrame = m_frame;
     const LoadedModel& lm = *m_models.at(inst.model); // no operator[]: this runs on several threads at once
+    if (inst.morphVersion != 0) refreshMorph(inst);
     std::vector<glm::mat4> world = currentBoneWorld(inst);
     std::vector<glm::mat4> skin(world.size());
     for (size_t b = 0; b < world.size(); ++b) skin[b] = world[b] * lm.data.bones[b].inverseBind;
@@ -874,15 +920,180 @@ void ModelModule::skinInstance(Instance& inst, uint32_t frameIndex) {
     for (const GpuMesh& gm : lm.meshes) {
         if (!gm.skinned) continue;
         const ModelMesh& src = lm.data.meshes[gm.meshIndex];
+        const size_t part = si;
         SkinnedBuffers& sb = inst.skinned[si++];
-        for (size_t v = 0; v < src.vertices.size(); ++v) {
+        // Blend shapes: this part's vertices at the instance's weights, skinned like any others.
+        const std::vector<ModelVertex>& bindVertices = part < inst.morphParts.size() && inst.morphParts[part].active ? inst.morphParts[part].vertices : src.vertices;
+        for (size_t v = 0; v < bindVertices.size(); ++v) {
             glm::vec3 p, n;
-            skinVertex(src.vertices[v], skin, p, n);
+            skinVertex(bindVertices[v], skin, p, n);
             if (!inst.skinJiggle.empty()) p += skinJiggleDisplacement(inst.skinJiggle, p);
-            sb.cpu[v] = Vertex{ p, src.vertices[v].position, n, src.vertices[v].uv }; // overlay: bind pose
+            sb.cpu[v] = Vertex{ p, bindVertices[v].position, n, bindVertices[v].uv }; // overlay: bind pose
         }
         sb.vertices[frameIndex]->upload(sb.cpu.data(), sb.cpu.size() * sizeof(Vertex));
     }
+}
+
+// ---- Levels of detail (ENG-F62)
+
+const ModelModule::GpuLod* ModelModule::lodIndices(const GpuMesh& gm, int lod) {
+    if (lod <= 0 || static_cast<size_t>(lod) > gm.lodSlots.size()) return nullptr;
+    const int slot = gm.lodSlots[static_cast<size_t>(lod) - 1];
+    return slot >= 0 ? &gm.lods[static_cast<size_t>(slot)] : nullptr;
+}
+
+// A static part, `instances` copies of it, at a level of detail (the per-instance data is bound by the caller).
+void ModelModule::drawStatic(rhi::CommandList& list, const GpuMesh& gm, int lod, uint32_t instances) const {
+    if (const GpuLod* level = lodIndices(gm, lod)) {
+        list.bindVertexBuffer(0, gm.mesh->vertexBuffer().ref(), 0);
+        list.bindIndexBuffer(level->indices->ref(), 0, rhi::IndexType::U32);
+        list.drawIndexed(level->count, instances, 0, 0, 0);
+    } else {
+        gm.mesh->bind(list);
+        gm.mesh->drawInstanced(list, instances);
+    }
+}
+
+void ModelModule::onSettingsChanged(const EngineSettings& settings) {
+    // KKE_LOD=0 (a developer's off switch, init) wins over the setting being on.
+    const char* env = dev::env("KKE_LOD");
+    m_autoLod = settings.graphics.autoLod && !(env && std::string(env) == "0");
+    m_lodBias = settings.graphics.lodBias;
+}
+
+int ModelModule::lodOf(InstanceId id) const {
+    const auto it = m_instances.find(id);
+    return it == m_instances.end() ? 0 : it->second.lod;
+}
+
+// Each part's simpler index lists, built once per model. Level i of the model is the coarsest list of the part
+// whose error the level allows; a part that is too small (or simplifies no further) draws in full there.
+void ModelModule::ensureLods(LoadedModel& lm) {
+    if (lm.lodsBuilt) return;
+    lm.lodsBuilt = true;
+    const size_t slots = m_lodSwitch.size();
+    for (GpuMesh& gm : lm.meshes) {
+        const std::vector<LodLevel> chain = buildLodChain(lm.data.meshes[gm.meshIndex], m_lodSettings);
+        if (chain.empty()) continue;
+        for (const LodLevel& level : chain) {
+            GpuLod lod;
+            lod.count = static_cast<uint32_t>(level.indices.size());
+            lod.indices = m_app->vulkanGpu().createBuffer({ level.indices.size() * sizeof(uint32_t), rhi::kIndexBuffer, rhi::Memory::Device },
+                                                          level.indices.data(), 0);
+            gm.lods.push_back(std::move(lod));
+        }
+        gm.lodSlots.assign(slots, -1);
+        for (size_t i = 0; i < slots; ++i)
+            for (size_t k = 0; k < chain.size(); ++k)
+                if (chain[k].error <= m_lodSettings.errors[i] + 1e-6f) gm.lodSlots[i] = static_cast<int>(k);
+        lm.anyLod = true;
+    }
+}
+
+// Each instance's level for this view, from how much of the view's height it fills.
+void ModelModule::updateLods(const RenderContext& ctx) {
+    if (ctx.viewIndex == 0) m_lodInstances = m_lodSaved = 0;
+    const float tanHalf = ctx.proj[1][1] != 0.0f ? 1.0f / std::fabs(ctx.proj[1][1]) : 0.0f;
+    for (auto& [id, inst] : m_instances) {
+        const LoadedModel& lm = *m_models.at(inst.model);
+        if (!m_autoLod || !lm.anyLod || !inst.visible || !inst.deformed.empty() || !inst.worldOverride.empty()) {
+            inst.lod = 0;
+            continue;
+        }
+        const glm::vec3 centre = glm::vec3(inst.transform * glm::vec4(0.5f * (lm.data.boundsMin + lm.data.boundsMax), 1.0f));
+        const float radius = 0.5f * glm::length(lm.data.boundsMax - lm.data.boundsMin) * instanceScale(inst.transform);
+        inst.lod = selectLod(m_lodSwitch, lodScreenHeight(radius, glm::length(centre - ctx.cameraPos), tanHalf), inst.lod, m_lodBias);
+        if (inst.lod == 0) continue;
+        ++m_lodInstances;
+        for (const GpuMesh& gm : lm.meshes)
+            if (const GpuLod* level = lodIndices(gm, inst.lod)) m_lodSaved += (lm.data.meshes[gm.meshIndex].indices.size() - level->count) / 3;
+    }
+}
+
+// ---- Blend shapes (ENG-F25)
+
+std::vector<std::string> ModelModule::morphNames(InstanceId id) const {
+    const auto it = m_instances.find(id);
+    return it == m_instances.end() ? std::vector<std::string>{} : kke::morphNames(m_models.at(it->second.model)->data);
+}
+
+void ModelModule::setMorphWeights(InstanceId id, const std::map<std::string, float>& byName) {
+    const auto it = m_instances.find(id);
+    if (it == m_instances.end() || it->second.skinned.empty()) return;
+    Instance& inst = it->second;
+    if (inst.morphVersion != 0 && inst.morphByName == byName) return;
+    inst.morphByName = byName;
+    ++inst.morphVersion;
+    if (inst.morphParts.size() != inst.skinned.size()) inst.morphParts.resize(inst.skinned.size());
+}
+
+void ModelModule::setMorphWeight(InstanceId id, const std::string& name, float weight) {
+    const auto it = m_instances.find(id);
+    if (it == m_instances.end()) return;
+    std::map<std::string, float> weights = it->second.morphByName;
+    if (weight == 0.0f) weights.erase(name);
+    else weights[name] = weight;
+    setMorphWeights(id, weights);
+}
+
+std::map<std::string, float> ModelModule::morphWeights(InstanceId id) const {
+    const auto it = m_instances.find(id);
+    return it == m_instances.end() ? std::map<std::string, float>{} : it->second.morphByName;
+}
+
+FaceRig& ModelModule::face(InstanceId id) {
+    Instance& inst = m_instances.at(id);
+    if (!inst.face) {
+        inst.face = std::make_unique<FaceRig>();
+        inst.face->bind(kke::morphNames(m_models.at(inst.model)->data));
+    }
+    return *inst.face;
+}
+
+bool ModelModule::hasFace(InstanceId id) const {
+    const auto it = m_instances.find(id);
+    return it != m_instances.end() && it->second.face != nullptr;
+}
+
+// The parts' vertices at the instance's weights. Runs on a skinning thread for its own instance only.
+void ModelModule::refreshMorph(Instance& inst) {
+    const LoadedModel& lm = *m_models.at(inst.model);
+    if (inst.morphParts.size() != inst.skinned.size()) inst.morphParts.resize(inst.skinned.size());
+    const std::vector<std::vector<float>> weights = meshMorphWeights(lm.data, inst.morphByName);
+    size_t si = 0;
+    for (const GpuMesh& gm : lm.meshes) {
+        if (!gm.skinned) continue;
+        MorphPart& part = inst.morphParts[si++];
+        if (part.computed == inst.morphVersion) continue;
+        const ModelMesh& src = lm.data.meshes[gm.meshIndex];
+        part.active = morphActive(src, weights[gm.meshIndex]);
+        if (part.active) part.vertices = morphedVertices(src, weights[gm.meshIndex]);
+        else part.vertices.clear();
+        part.computed = inst.morphVersion;
+    }
+}
+
+// GPU skinning: frame slot `slot`'s bind buffer for each morphed part, when the weights changed since it
+// was written; a part whose weights went back to zero reads the model's shared bind buffer again.
+void ModelModule::uploadMorphBind(Instance& inst, uint32_t slot) {
+    refreshMorph(inst);
+    bool rewrite = false;
+    for (MorphPart& part : inst.morphParts) {
+        if (part.uploaded[slot] == part.computed) continue;
+        part.uploaded[slot] = part.computed;
+        rewrite = true;
+        if (!part.active) {
+            part.useBind[slot] = false;
+            continue;
+        }
+        const std::vector<glm::vec4> bind = packSkinBind(part.vertices);
+        const size_t bytes = bind.size() * sizeof(glm::vec4);
+        if (!part.bind[slot]) part.bind[slot] = std::make_unique<Buffer>(m_app->device(), bytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+        part.bind[slot]->upload(bind.data(), bytes);
+        part.useBind[slot] = true;
+    }
+    // Before the data buffer exists (the first frame) packSkin writes the sets itself, with this state in place.
+    if (rewrite && inst.gpuSkin && inst.gpuSkin->data[slot]) writeSkinSets(inst, slot);
 }
 
 void ModelModule::skinVisible(const Frustum& f, uint32_t frameIndex) {
@@ -936,8 +1147,8 @@ void ModelModule::buildBatches(const Frustum& f, std::vector<Batch>& out, std::v
     data.clear();
     if (!m_instancing) return;
     struct Key {
-        ModelId model; VkDescriptorSet tex; bool overlay;
-        bool operator<(const Key& o) const { return std::tie(model, tex, overlay) < std::tie(o.model, o.tex, o.overlay); }
+        ModelId model; VkDescriptorSet tex; bool overlay; int lod;
+        bool operator<(const Key& o) const { return std::tie(model, tex, overlay, lod) < std::tie(o.model, o.tex, o.overlay, o.lod); }
     };
     std::map<Key, std::vector<Instance*>> groups;
     for (auto& [id, inst] : m_instances) {
@@ -946,7 +1157,7 @@ void ModelModule::buildBatches(const Frustum& f, std::vector<Batch>& out, std::v
         bool anySkinned = false;
         for (const GpuMesh& gm : lm.meshes) anySkinned |= gm.skinned;
         if (anySkinned || !mightBeVisible(inst, f)) continue;
-        groups[{ inst.model, inst.textureOverride, inst.overlay }].push_back(&inst);
+        groups[{ inst.model, inst.textureOverride, inst.overlay, inst.lod }].push_back(&inst);
     }
     std::vector<std::pair<const Key*, std::vector<Instance*>*>> kept;
     for (auto& [key, list] : groups)
@@ -970,7 +1181,7 @@ void ModelModule::buildBatches(const Frustum& f, std::vector<Batch>& out, std::v
         kept.swap(byDistance);
     }
     for (auto& [key, list] : kept) {
-        Batch b{ key->model, key->tex, key->overlay, static_cast<uint32_t>(data.size()), static_cast<uint32_t>(list->size()) };
+        Batch b{ key->model, key->tex, key->overlay, key->lod, static_cast<uint32_t>(data.size()), static_cast<uint32_t>(list->size()) };
         for (Instance* inst : *list) {
             data.push_back({ inst->transform, glm::vec4(inst->tint, 1.0f) });
             if (markDrawn) inst->batchedFrame = m_viewPass;
@@ -1012,10 +1223,7 @@ void ModelModule::renderShadow(const ShadowRenderContext& ctx) {
                 const LoadedModel& lm = *m_models[b.model];
                 VkDeviceSize off = sizeof(InstanceGpu) * b.first;
                 ctx.list->bindVertexBuffer(1, ib, off);
-                for (const GpuMesh& gm : lm.meshes) {
-                    gm.mesh->bind(*ctx.list);
-                    gm.mesh->drawInstanced(*ctx.list, b.count);
-                }
+                for (const GpuMesh& gm : lm.meshes) drawStatic(*ctx.list, gm, b.lod, b.count);
             }
             m_shadowPipeline->bind(*ctx.list);
         }
@@ -1024,7 +1232,7 @@ void ModelModule::renderShadow(const ShadowRenderContext& ctx) {
     auto batched = [&](const Instance& inst) {
         if (m_batches.empty() || !inst.deformed.empty() || !inst.worldOverride.empty() || !inst.skinned.empty()) return false;
         for (const Batch& b : m_batches)
-            if (b.model == inst.model && b.textureOverride == inst.textureOverride && b.overlay == inst.overlay) return true;
+            if (b.model == inst.model && b.textureOverride == inst.textureOverride && b.overlay == inst.overlay && b.lod == inst.lod) return true;
         return false;
     };
     for (auto& [id, inst] : m_instances) {
@@ -1051,12 +1259,12 @@ void ModelModule::renderShadow(const ShadowRenderContext& ctx) {
         for (const GpuMesh& gm : lm.meshes) {
             if (gm.skinned) {
                 SkinnedBuffers& sb = inst.skinned[si++];
+                const GpuLod* lod = lodIndices(gm, inst.lod);
                 ctx.list->bindVertexBuffer(0, sb.vertices[ctx.frameIndex]->ref(), 0);
-                ctx.list->bindIndexBuffer(sb.indices->ref(), 0, rhi::IndexType::U32);
-                ctx.list->drawIndexed(sb.indexCount, 1, 0, 0, 0);
+                ctx.list->bindIndexBuffer((lod ? lod->indices.get() : sb.indices.get())->ref(), 0, rhi::IndexType::U32);
+                ctx.list->drawIndexed(lod ? lod->count : sb.indexCount, 1, 0, 0, 0);
             } else {
-                gm.mesh->bind(*ctx.list);
-                gm.mesh->draw(*ctx.list);
+                drawStatic(*ctx.list, gm, inst.lod, 1);
             }
         }
     }
@@ -1081,6 +1289,7 @@ void ModelModule::render(const RenderContext& ctx) {
     VkDescriptorSet sets[] = { ctx.lightingDescriptorSet, ctx.shadowMapDescriptorSet, m_defaultSurface, overlay };
     const uint32_t pcStages = rhi::kVertex | rhi::kFragment;
     if (m_showMeshes) {
+        updateLods(ctx);
         // Instancing (docs/OPTIMIZATION.md #25): 2+ visible copies of the same
         // rigid model (same texture/overlay) are one draw per mesh part.
         buildBatches(frustum, m_batches, m_instanceData, true, &ctx.cameraPos);
@@ -1105,8 +1314,7 @@ void ModelModule::render(const RenderContext& ctx) {
                     PushConstants pc{ glm::mat4(1.0f), glm::vec4(mat.metallic, mat.roughness, b.overlay ? m_overlayTile : 0.0f, m_overlayStrength),
                                       glm::vec4(mat.color, 0.0f) };
                     ctx.list->pushConstants(*m_instancedPipeline, pcStages, 0, sizeof(pc), &pc);
-                    gm.mesh->bind(*ctx.list);
-                    gm.mesh->drawInstanced(*ctx.list, b.count);
+                    drawStatic(*ctx.list, gm, b.lod, b.count);
                     ++m_drawCalls;
                 }
                 m_instancedCount += b.count;
@@ -1172,12 +1380,12 @@ void ModelModule::render(const RenderContext& ctx) {
                     }
                 } else if (gm.skinned) {
                     SkinnedBuffers& sb = inst.skinned[si++];
+                    const GpuLod* lod = lodIndices(gm, inst.lod);
                     ctx.list->bindVertexBuffer(0, sb.vertices[ctx.frameIndex]->ref(), 0);
-                    ctx.list->bindIndexBuffer(sb.indices->ref(), 0, rhi::IndexType::U32);
-                    ctx.list->drawIndexed(sb.indexCount, 1, 0, 0, 0);
+                    ctx.list->bindIndexBuffer((lod ? lod->indices.get() : sb.indices.get())->ref(), 0, rhi::IndexType::U32);
+                    ctx.list->drawIndexed(lod ? lod->count : sb.indexCount, 1, 0, 0, 0);
                 } else {
-                    gm.mesh->bind(*ctx.list);
-                    gm.mesh->draw(*ctx.list);
+                    drawStatic(*ctx.list, gm, inst.lod, 1);
                 }
                 ++m_drawCalls;
             }

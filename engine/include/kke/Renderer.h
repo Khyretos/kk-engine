@@ -255,6 +255,8 @@ public:
     // (kke::makePostParams); the Application sets them from its Lighting
     // every frame. Default: AgX at exposure 1, no look.
     void setPostParams(const PostParams& params);
+    // The colour-blind correction (kke::Accessibility::colorMatrixRows): three rows, w of the first = 1 when on.
+    void setColorRows(const std::array<glm::vec4, 3>& rows) { m_colorRows = rows; }
     const PostParams& postParams() const { return m_post; }
     // Inside the scene pass: clear color and depth of one part of the
     // image only (a picture-in-picture view drawn over another) and
@@ -284,6 +286,7 @@ private:
     glm::vec3 m_clearSrgb{0.152f, 0.152f, 0.248f}; // linear 0.02, 0.02, 0.05
     glm::vec3 m_clearScene{0.0f}; // sceneClearColor(m_clearSrgb, m_post)
     PostParams m_post;
+    std::array<glm::vec4, 3> m_colorRows{ glm::vec4(1, 0, 0, 0), glm::vec4(0, 1, 0, 0), glm::vec4(0, 0, 1, 0) };
 
     void createSyncObjects();
     void createCommandBuffers();

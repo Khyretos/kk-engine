@@ -3,6 +3,7 @@
 #include <spdlog/spdlog.h>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace kke::log {
 
@@ -31,6 +32,13 @@ void init(const std::string& gameName, spdlog::level::level_enum level = spdlog:
 // line under extreme spam, but you will never lose a frame waiting on
 // one.
 std::shared_ptr<spdlog::logger> get(const std::string& moduleName);
+
+// The last lines any logger wrote (formatted, oldest first, at most 128, each cut at 255 bytes), for
+// crash and bug reports (kke/CrashReporter.h). Lines still in the logger's queue are not there yet.
+std::vector<std::string> recentLines();
+// The same lines to a file descriptor, one per line, with only async-signal-safe calls: for a crash
+// handler. May show a line half-written by a thread that was in the middle of logging.
+void writeRecentLines(int fd);
 
 // Flushes every logger's queued messages and joins the background
 // thread. Call before process exit — Application's destructor already

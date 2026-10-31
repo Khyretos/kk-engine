@@ -1,3 +1,4 @@
+#include "kke/Accessibility.h"
 #include "kke/CameraDirector.h"
 
 #include <algorithm>
@@ -108,6 +109,7 @@ void CameraDirector::stop() {
 
 void CameraDirector::shake(float strength, float seconds) {
     if (strength <= 0.0f || seconds <= 0.0f) return;
+    if (Accessibility::get().reduceMotion()) return; // docs/ACCESSIBILITY.md
     // What is left of the current shake, plus the new one, at most 1.
     const float now = m_shakeLeft > 0.0f ? m_shake * (m_shakeLeft / m_shakeTotal) : 0.0f;
     m_shake = std::min(1.0f, now + strength);

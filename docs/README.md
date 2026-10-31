@@ -38,6 +38,10 @@ pages, searchable, are at <https://khyretos.github.io/kk-engine/>. Start with th
 | [RAGDOLLS.md](RAGDOLLS.md) | Humanoid and animal ragdolls, their joint limits and how to override them |
 | [NETWORKING.md](NETWORKING.md) | Transport, protocol, authority and replication |
 | [SAVING.md](SAVING.md) | Save slots: versions, migrations, the cloud hook |
+| [LOCALIZATION.md](LOCALIZATION.md) | Languages: string tables, plurals for 30+ languages, number formats, right-to-left text, fonts per language |
+| [TIMELINE.md](TIMELINE.md) | Timelines: tracks, events, markers, spans, animation clips and nested timelines, played, scrubbed and reversed (cutscenes, scripted sequences) |
+| [FACIAL_ANIMATION.md](FACIAL_ANIMATION.md) | Blend shapes, expressions, blinking and lip-sync on faces |
+| [LOD.md](LOD.md) | Automatic levels of detail for models |
 | [STORAGE.md](STORAGE.md) | Saving data: SQLite built in, Valkey and PostgreSQL optional |
 | [SERVER_HOSTING.md](SERVER_HOSTING.md) | Running a server: kke_server, Docker, roles, directories, security |
 | [ANTI_CHEAT.md](ANTI_CHEAT.md) | Fair games without invasive software: shipping builds, server authority, fog of war, game rules, input checks, sealed data |

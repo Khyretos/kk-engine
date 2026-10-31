@@ -1,3 +1,5 @@
+#include "kke/Accessibility.h"
+#include "kke/Localization.h"
 #include "kke/modules/GameShellModule.h"
 
 #include "kke/Application.h"
@@ -72,6 +74,15 @@ const char* kShellRml = R"(
         #capture { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: none; background-color: #05070ecc; }
         #capture div { position: absolute; left: 8%; top: 44%; font-size: 24dp; color: #ffffff; }
         #capture span { font-size: 15dp; color: #aab3cc; }
+        /* Right to left (docs/LOCALIZATION.md): the column on the right, rows and highlight mirrored. */
+        .rtl #menu { left: auto; right: 8%; text-align: right; }
+        .rtl .item { margin-left: auto; border-left: 0dp #00000000; border-right: 3dp #00000000; border-radius: 6dp 0 0 6dp; text-align: right;
+                     decorator: linear-gradient(270deg, #1b2440cc, #1b244000); transition: padding-right border-color color 0.15s cubic-out; }
+        .rtl .item:hover, .rtl .item.focused { padding-left: 20dp; padding-right: 32dp; border-right-color: #ffcf5c;
+                                               decorator: linear-gradient(270deg, #3a4a86ee, #3a4a8600); }
+        .rtl .item .value { float: left; }
+        .rtl .text { margin-left: auto; text-align: right; }
+        .rtl #hint { left: auto; right: 8%; }
         scrollbarvertical { width: 8dp; }
         scrollbarvertical slidertrack { background-color: #00000000; }
         scrollbarvertical sliderbar { background-color: #3a4670; border-radius: 4dp; min-height: 24dp; }
@@ -90,6 +101,9 @@ const char* kShellRml = R"(
 </body>
 </rml>
 )";
+
+// The player's word for an English UI word (kke::Localization); the word itself when there is none.
+std::string tr(const std::string& word) { return Localization::get().tr(word); }
 
 bool envIs(const char* value) {
     const char* v = dev::env("KKE_MAIN_MENU");
@@ -314,6 +328,7 @@ void GameShellModule::applySettings() {
     if (m_app->window().isFullscreen() != g.fullscreen) m_app->window().setFullscreen(g.fullscreen);
     m_app->renderer().setVSync(g.vsync);
     m_app->setResourceBudget(computeBudget(m_settings, usableCpuCount())); // the frame cap too
+    applyTextAndAccessibility(m_settings);
     for (ISettingsListener* listener : m_app->findCapability<ISettingsListener>()) listener->onSettingsChanged(m_settings);
 }
 
@@ -684,6 +699,112 @@ void GameShellModule::buildPage() {
             r.onChange = changed;
             addRow(std::move(r));
         }
+        heading("LANGUAGE AND ACCESSIBILITY");
+        {
+            // The languages the engine and the game have, each in its own words; "Automatic" follows the system.
+            m_languageCodes.clear();
+            Row r;
+            r.kind = Row::Kind::Choice;
+            r.label = "Language";
+            r.options.push_back("Automatic");
+            for (const Localization::Language& l : Localization::get().languages()) {
+                m_languageCodes.push_back(l.code);
+                r.options.push_back(l.name);
+            }
+            m_languageIndex = 0;
+            for (size_t k = 0; k < m_languageCodes.size(); ++k)
+                if (m_languageCodes[k] == s.text.language) m_languageIndex = static_cast<int>(k) + 1;
+            r.i = [this] { return &m_languageIndex; };
+            r.onChange = [this, &s, changed] {
+                s.text.language = m_languageIndex == 0 ? "auto" : m_languageCodes[static_cast<size_t>(m_languageIndex) - 1];
+                changed();
+                m_dirty = true; // the page is drawn again in the new language
+            };
+            addRow(std::move(r));
+        }
+        {
+            Row r;
+            r.kind = Row::Kind::Toggle;
+            r.label = "Subtitles";
+            r.b = [&s] { return &s.text.subtitles; };
+            r.onChange = changed;
+            addRow(std::move(r));
+        }
+        {
+            Row r;
+            r.kind = Row::Kind::SliderF;
+            r.label = "Subtitle size";
+            r.f = [&s] { return &s.text.subtitleSize; };
+            r.min = 0.75f;
+            r.max = 2.5f;
+            r.step = 0.25f;
+            r.format = "%.2fx";
+            r.onChange = changed;
+            r.visible = [&s] { return s.text.subtitles; };
+            addRow(std::move(r));
+        }
+        {
+            static const char* const modes[] = { "off", "protanopia", "deuteranopia", "tritanopia" };
+            m_colorBlindIndex = 0;
+            for (int k = 0; k < 4; ++k)
+                if (s.accessibility.colorBlind == modes[k]) m_colorBlindIndex = k;
+            Row r;
+            r.kind = Row::Kind::Choice;
+            r.label = "Colour-blind mode";
+            r.options = { "Off", "Protanopia (red)", "Deuteranopia (green)", "Tritanopia (blue)" };
+            r.i = [this] { return &m_colorBlindIndex; };
+            r.onChange = [this, &s, changed] {
+                s.accessibility.colorBlind = modes[std::clamp(m_colorBlindIndex, 0, 3)];
+                changed();
+            };
+            addRow(std::move(r));
+        }
+        {
+            Row r;
+            r.kind = Row::Kind::SliderF;
+            r.label = "Colour-blind strength";
+            r.f = [&s] { return &s.accessibility.colorBlindStrength; };
+            r.min = 0.0f;
+            r.max = 1.0f;
+            r.step = 0.1f;
+            r.format = "%.1f";
+            r.onChange = changed;
+            r.visible = [&s] { return s.accessibility.colorBlind != "off"; };
+            addRow(std::move(r));
+        }
+        {
+            Row r;
+            r.kind = Row::Kind::Toggle;
+            r.label = "High contrast";
+            r.b = [&s] { return &s.accessibility.highContrast; };
+            r.onChange = changed;
+            addRow(std::move(r));
+        }
+        {
+            Row r;
+            r.kind = Row::Kind::Toggle;
+            r.label = "Reduce motion";
+            r.b = [&s] { return &s.accessibility.reduceMotion; };
+            r.onChange = changed;
+            addRow(std::move(r));
+        }
+        {
+            Row r;
+            r.kind = Row::Kind::Toggle;
+            r.label = "Screen reader";
+            r.b = [&s] { return &s.accessibility.screenReader; };
+            r.onChange = changed;
+            addRow(std::move(r));
+        }
+        heading("PRIVACY");
+        {
+            Row r;
+            r.kind = Row::Kind::Toggle;
+            r.label = "Send crash reports";
+            r.b = [&s] { return &s.privacy.sendCrashReports; };
+            r.onChange = changed;
+            addRow(std::move(r));
+        }
         for (const auto& sec : m_sections) {
             std::string upper = sec->title;
             for (char& c : upper) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
@@ -898,9 +1019,11 @@ void GameShellModule::refresh() {
     if (m_focus < m_rows.size() && !m_rows[m_focus].format.empty() && m_page == Page::Modes) hint = escapeRmlText(m_rows[m_focus].format) + "<br/>";
     const bool canGoBack = m_page != Page::Title;
     if (keyboard)
-        hint += prompts(std::string("{key:Up}{key:Down} choose  {key:Left}{key:Right} change  {key:Enter} select") + (canGoBack ? "  {key:Escape} back" : ""));
+        hint += prompts("{key:Up}{key:Down} " + tr("choose") + "  {key:Left}{key:Right} " + tr("change") + "  {key:Enter} " + tr("select") +
+                        (canGoBack ? "  {key:Escape} " + tr("back") : ""));
     else
-        hint += prompts(std::string("{ui.up}{ui.down} choose  {ui.left}{ui.right} change  {ui.accept} select") + (canGoBack ? "  {ui.back} back" : ""));
+        hint += prompts("{ui.up}{ui.down} " + tr("choose") + "  {ui.left}{ui.right} " + tr("change") + "  {ui.accept} " + tr("select") +
+                        (canGoBack ? "  {ui.back} " + tr("back") : ""));
     if (hint != m_hintShown) {
         m_hintShown = hint;
         if (Rml::Element* e = m_doc->GetElementById("hint")) e->SetInnerRML(hint);

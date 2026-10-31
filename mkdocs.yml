@@ -154,6 +154,10 @@ nav:
       - Settings panel: DEMO_PANEL.md
       - Commands and orders: COMMANDS.md
       - Audio: AUDIO.md
+      - Profiling: PROFILING.md
+      - Languages and right to left: LOCALIZATION.md
+      - Accessibility: ACCESSIBILITY.md
+      - Crash reports: CRASH_REPORTS.md
       - Networking: NETWORKING.md
       - Hosting a server: SERVER_HOSTING.md
       - The kke_ tools: TOOLS.md
@@ -177,6 +181,9 @@ nav:
       - JSON or YAML data files: DATA_FILES.md
       - Optimization: OPTIMIZATION.md
       - Terrain: TERRAIN.md
+      - Timelines and cutscenes: TIMELINE.md
+      - Facial animation: FACIAL_ANIMATION.md
+      - Levels of detail: LOD.md
       - Moods (sky, fog, look): MOODS.md
       - Rendering principles: RENDERING_PRINCIPLES.md
       - Benchmarks: BENCHMARKS.md

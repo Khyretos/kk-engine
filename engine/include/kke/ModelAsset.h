@@ -52,6 +52,18 @@ struct ModelMaterial {
     std::string metallicTexture;
 };
 
+// A morph target (blend shape, ENG-F25): where it moves vertices from the
+// rest shape, for the vertices it moves. A face has dozens (smile, blink,
+// jaw open, a mouth shape for each vowel); at weight w the mesh is
+// rest + w * offset, summed over the targets (kke/Morph.h). Offsets are in
+// the mesh's own space, like its vertices.
+struct ModelMorphTarget {
+    std::string name;                 // "smile"; "target<N>" when the file names none
+    std::vector<uint32_t> vertices;   // ascending, each once
+    std::vector<glm::vec3> positions; // one offset per entry of `vertices`
+    std::vector<glm::vec3> normals;   // one per entry, or empty: the normals are then recomputed from the shape
+};
+
 struct ModelMesh {
     std::string name;
     std::vector<ModelVertex> vertices;
@@ -61,6 +73,10 @@ struct ModelMesh {
     // baked in). Skinned meshes: vertices are in the mesh's geometry
     // space, and ModelBone::inverseBind maps that space to each bone.
     bool skinned = false;
+    // Blend shapes (glTF morph targets); empty for most meshes. `morphWeights`
+    // are the file's default weights, one per target.
+    std::vector<ModelMorphTarget> morphs;
+    std::vector<float> morphWeights;
 };
 
 struct ModelBone {

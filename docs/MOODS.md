@@ -176,6 +176,68 @@ hook.Add("Hour", "bell", function(e) if e.hour == 12 then print("noon") end end)
 Not yet: stars and the moon drawn in the sky, clouds that move, weather
 (ENG-F81), and keeping every player's clock together in multiplayer.
 
+## Weather
+
+Rain that builds up, snow that settles, a storm that flashes and thunders a few
+seconds later: `kke::Weather` (`kke/Weather.h`, ENG-F81) is the weather of Unreal's Ultra
+Dynamic Weather and Unity's weather packs as a small system any game can run, with Lua as
+`weather.*`. It stays quiet until a script uses it, so a game with no weather is not touched.
+
+A weather *type* is a handful of numbers: `clouds`, `rain`, `snow`, `fog` (0 to 1), `wind`
+(m/s) and `gust` (how much it varies), `temperature` (degrees, at the warmest part of the day),
+`lightning` (strikes a minute), and how much `sunlight` and `ambient` sky light get through and
+how `saturation` is kept (grey days). `clear`, `partly_cloudy`, `overcast`, `drizzle`, `rain`,
+`storm`, `fog`, `snow`, `blizzard` and `heat` come with the engine.
+
+```lua
+weather.set("storm")                      -- blends to it over 30 seconds (weather.set("storm", 0) is at once)
+weather.random(120, 300)                  -- or let it change by itself: clear clouds over, rain eases to drizzle...
+weather.define{ name = "sandstorm", fog = 0.8, wind = 20, gust = 0.9, temperature = 38, sunlight = 0.4, saturation = 0.6 }
+weather.config{ transitions = { clear = { sandstorm = 1 }, sandstorm = { clear = 1 } } }   -- who may follow whom (weights)
+
+hook.Add("Thunder", "weather", function(e) audio.play(rumble, { volume = 1 - e.distance / 8000 }) end)   -- e.distance, e.delay
+hook.Add("RainStarted", "weather", function() ui.text(hud, "weather", "It begins to rain") end)
+hook.Add("WeatherChanging", "weather", function(e) print(e.from .. " -> " .. e.to) end)
+local s = weather.state()                 -- s.temperature, s.wetness, s.snowCover, s.windVector, s.visibility, s.flash ...
+```
+
+What it works out on top of the blend:
+
+- **What falls.** `rainFall` and `snowFall`: snow is rain above 2 degrees.
+- **Wind** that gusts around its mean (never beyond mean x (1 + gust)) and drifts a little in direction;
+  `weather.wind(degrees)` says which way it blows (0 = +z, 90 = +x).
+- **Temperature**, warmest at 15:00 and colder by night (`dailyRange`, 8 degrees by default). It
+  follows the `clock` when one runs; `weather.time(hour)` sets it by hand, `weather.time(nil)` goes
+  back to the clock.
+- **Wet ground and snow cover** (`s.wetness`, `s.snowCover`, 0 to 1) for your own surfaces. Rain soaks
+  the ground in about a minute of downpour; it dries slowly, faster in sun and wind, and not at all when
+  frozen. Snow builds in the cold (two minutes of blizzard) and melts as it warms, faster in sun and rain,
+  into wet ground.
+- **Lightning.** A storm strikes about as often as its `lightning` says (at random: a seed gives the
+  same storm), the flash flickers (two pulses, 0..1 in `s.flash`), and the thunder arrives
+  distance / 343 s later: `Lightning {distance, bearing, delay}` then `Thunder {distance}`.
+- **Visibility** in metres, from the fog, rain and snow.
+
+What the player sees, applied by the engine (each can be turned off: `weather.particles(false)`,
+`weather.lighting(false)`):
+
+- **Particles.** `rain` (one to three emitters by intensity), `downpour` for a cloudburst and `snow`,
+  born above the camera and falling to a floor below it, moving with it (the effects are the
+  ones in [PARTICLE_EFFECTS.md](PARTICLE_EFFECTS.md)); the wind drifts them.
+- **Lighting.** The sun dimmed and the sky's light, the colours greyed, a little fog added, the
+  lightning's flash on top. It does this without fighting the day/night clock or a mood: it remembers
+  what it wrote, field by field, and when something else changes a value that is the new base for it.
+  `weather.stop()` puts back what is still its own.
+
+A weather made by a script ends with it. Types and transitions also load from a JSON table
+(`weather.config`, `Weather::fromJson`), with errors that name the field.
+
+Not done: wet and snowy *surfaces* (the numbers are there for a game's own materials; the lit
+shader has no wetness or snow layer yet), a moon and stars (docs/GAPS.md ENG-F82), clouds you can see
+move, and a rainbow.
+
+Tests: `tests/test_weather.cpp`, `tests/test_script_weather.cpp`.
+
 ## In C++
 
 `app.setMood(name)` loads and applies a mood; `app.mood()` is the last one

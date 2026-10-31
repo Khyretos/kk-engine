@@ -101,11 +101,11 @@ by area. The goal is parity with the big engines and more.
 | ENG-F20 | XR | OpenXR (VR/AR) on the Vulkan renderer | ⬜ |
 | ENG-F21 | Animation | 2D blend trees (1D and 2D blend spaces; G19) | ✅ |
 | ENG-F22 | Animation | IK solver (two-bone, foot, hand, look, FABRIK and CCD with bend limits; G19) | ✅ |
-| ENG-F23 | Animation | Motion capture import and clean-up | ⬜ |
+| ENG-F23 | Animation | Motion capture import and clean-up: BVH files load as a skeleton with the motion as its clip (`loadModel("x.bvh")`, `kke::loadBvh`; channel order, units, Z-up, line-numbered errors) for the retargeter, and `cleanAnimation` trims, fixes quaternion flips, removes spikes, smooths, resamples, takes root travel out and crossfades a loop (`kke/Mocap.h`, docs/MOVEMENT.md "Motion capture"). Not yet: foot-contact clean-up. | ✅ |
 | ENG-F24 | Animation | Procedural animation (docs/PROCEDURAL_ANIMATION.md) | ✅ |
-| ENG-F25 | Animation | Facial animation, blend shapes | ⬜ |
+| ENG-F25 | Animation | Facial animation, blend shapes (docs/FACIAL_ANIMATION.md): glTF morph targets applied before skinning (GPU and CPU paths), `kke::FaceRig` (expressions, mouth shapes, blinking, text and voice lip-sync; ARKit, VRM, VRoid and Oculus names), Lua `face.*`. Not yet: weights animated inside a clip, VRM presets, morphs on unskinned meshes, eye look. | ✅ |
 | ENG-F26 | Animation | Retargeting between skeletons (by bone name, with rest-pose matching, ENG-G19) | ✅ |
-| ENG-F27 | Animation | Runtime sequencer and cutscenes from Lua or the node scripter (camera cutscenes from Lua: `camera.path/hold/release/shake`, kke/CameraDirector.h; a timeline for actors and the node scripter missing) | 🟡 |
+| ENG-F27 | Animation | Runtime sequencer and cutscenes from Lua or the node scripter: `kke::Timeline` (tracks of keyframes with eases for scalars, vectors, rotations and colours, events, markers, spans, animation clips, nested timelines; once, loop, ping-pong, reverse, scrub; JSON files) and Lua `timeline.*` with hooks, next to `camera.path` for the camera (`kke/Timeline.h`, docs/TIMELINE.md). Not yet: an editor, the node scripter's timeline node. | ✅ |
 | ENG-F28 | Animation | State machine with events and root motion (crossfading state machine, root motion, and animation events in `Animator`, `ModelModule` and Lua `models.event` + the `AnimEvent` hook) | ✅ |
 | ENG-F29 | Physics | Soft bodies: cloth and jelly (docs/CLOTH.md, docs/JIGGLE.md) | ✅ |
 | ENG-F30 | Physics | Fluid simulation (PBF liquids; G12 leftovers) | 🟡 |
@@ -116,8 +116,8 @@ by area. The goal is parity with the big engines and more.
 | ENG-F35 | Physics | Cloth-to-cloth collision | ✅ |
 | ENG-F36 | Physics | Strand hair (docs/HAIR.md) | ✅ |
 | ENG-F37 | Physics | Joints and constraints API in Lua (hinge, slider, spring, motor): `RigidWorld::addJoint` (fixed, ball, hinge, slider, spring/rope) with motors, Lua `physics.joint`/`motor`/`jointValue` | ✅ |
-| ENG-F38 | Audio | HRTF spatial audio | ⬜ |
-| ENG-F39 | Audio | Dynamic, adaptive music | ⬜ |
+| ENG-F38 | Audio | HRTF spatial audio: a built-in binaural mode (Woodworth's interaural delay and Brown & Duda's head shadow) and measured HRTFs through Steam Audio when built with `KKE_ENABLE_STEAM_AUDIO` (elevation, SOFA files) (docs/AUDIO.md "Binaural", "Steam Audio") | ✅ |
+| ENG-F39 | Audio | Dynamic, adaptive music: segments of layered stems that follow parameters, transitions on the beat, bar, grid or segment end (optionally through a bridge), stingers, and beat and bar events, with the moment found inside the mixer to the sample (`kke/MusicDirector.h`, `AudioMixer::playScheduled`, Lua `music.*`, docs/AUDIO.md "Adaptive music"). Not yet: tempo changes inside a segment, entering a segment part way. | ✅ |
 | ENG-F40 | Audio | Spatial voice chat (proximity voice exists) | ✅ |
 | ENG-F41 | Audio | Occlusion and diffraction (ray occlusion exists; diffraction missing) | 🟡 |
 | ENG-F42 | Audio | Mixer buses, snapshots, ducking, reverb zones. Done: buses on top of the player's volumes, gliding snapshots, ducking by what is heard, fades, pitch, and Lua sound files and crossfading music (docs/AUDIO.md). Not yet: authored reverb zones (the ray-traced room covers most). | 🟡 |
@@ -133,36 +133,36 @@ by area. The goal is parity with the big engines and more.
 | ENG-F52 | Scripting | Hot reload of scripts | ✅ |
 | ENG-F53 | Gameplay | Save and load: versioned files, slots, cloud hook. Done: save slots with titles, play time, versions and Lua migrations, self-checking files, and a cloud hook that keeps the newer save (docs/SAVING.md). | ✅ |
 | ENG-F54 | Gameplay | Replays of game sessions | 🟡 |
-| ENG-F55 | Networking | Rollback networking for fighting games (GGPO-style) | ⬜ |
+| ENG-F55 | Networking | Rollback networking for fighting games (GGPO-style): guesses the other players' inputs, rolls back and re-runs when wrong, loss-tolerant packets with validation, input delay, a prediction limit, checksum desync detection, time sync, disconnects, 1 to 8 players, a driver for games that save and load their state, and a sync test for determinism (`kke/Rollback.h`, docs/NETWORKING.md "Rollback"). Not yet: a peer-to-peer unreliable transport, spectators. | ✅ |
 | ENG-F56 | Networking | Client-side prediction | ✅ |
 | ENG-F57 | Networking | Dedicated servers (docs/SERVER_HOSTING.md) | ✅ |
 | ENG-F58 | Networking | Matchmaking (directory exists; relay and join codes #44) | 🟡 |
 | ENG-F59 | Networking | Cross-platform play | 🟡 |
 | ENG-F60 | Content | Texture compression ASTC/BCn (#39): BC7 in KTX2 done (`kke_texcook`, loaded instead of the PNG, decoded where the GPU lacks BC7); ASTC not yet | 🟡 |
 | ENG-F61 | Content | Texture streaming | ⬜ |
-| ENG-F62 | Content | LOD generation | ⬜ |
-| ENG-F63 | Content | Animation compression | ⬜ |
-| ENG-F64 | Content | Level streaming | ⬜ |
+| ENG-F62 | Content | LOD generation. `kke::simplifyModel` existed (crowds); now automatic: `kke/LodChain.h` builds up to three levels per big part over its own vertices (skinned and morphed parts work), `ModelModule` draws the one that suits the on-screen size, with hysteresis, in every pass (docs/LOD.md). Not yet: cross-fades, impostors, cooked levels. | ✅ |
+| ENG-F63 | Content | Animation compression: translation, rotation and scale tracks with only the keys the curve needs (a tolerance in mm and degrees) stored as 16-bit numbers (smallest-three rotations), a validated file format, and `AnimationSet::compress`: 17x smaller on the shipped animation library within 0.5 mm / 0.05 degrees (`kke/AnimCompress.h`, docs/PROCEDURAL_ANIMATION.md "Compression"). Not yet: `ModelModule`'s own playback from the packed form. | ✅ |
+| ENG-F64 | Content | Level streaming: cells load and unload around foci by radius with hysteresis, a load budget, retries and timeouts, persistent, pinned and forced cells, and progress for a loading screen (`kke/WorldStream.h`, Lua `world.*`, docs/SCENES.md "Streaming a big world"). Not yet: worker-thread loading inside the engine. | ✅ |
 | ENG-F65 | Platforms | Consoles (#69) | ⬜ |
 | ENG-F66 | Platforms | Steamworks: achievements, cloud saves (optional module) | ⬜ |
-| ENG-F67 | Tooling | Runtime CPU/GPU/memory profiler with capture files (frame stats exist) | 🟡 |
-| ENG-F68 | Tooling | Opt-in crash reporting | ⬜ |
+| ENG-F67 | Tooling | Runtime CPU/GPU/memory profiler with capture files: every module call timed every frame (Performance panel table), captures of zones from all threads plus GPU time and memory to a Perfetto trace (panel button, `KKE_PROFILE`, Lua `profile.*`, `KKE_PROFILE_SCOPE`); `kke::Profiler` (docs/PROFILING.md). Not yet: GPU time per pass, allocation tracking. | ✅ |
+| ENG-F68 | Tooling | Opt-in crash reporting: `kke::crash` writes a report (signal or uncaught exception, backtrace, context, last log lines) to the crash folder; sending needs the player's opt-in (`privacy.sendCrashReports`, off) and a game's uploader; docs/CRASH_REPORTS.md. Not yet: Windows, an engine-side server. | 🟡 |
 | ENG-F69 | Tooling | Game test harness: input playback, screenshot compare (virtual input and check_game exist) | 🟡 |
 | ENG-F70 | AI | Pathfinding around dynamic obstacles. Done: tiled navmeshes with box and cylinder obstacles (DetourTileCache), agents re-path when it changes (docs/AI.md); Lua `nav.*` builds one from the level's collision and finds paths, and Lua `ai.*` creatures walk it with their clips. Not yet: off-mesh links, area costs. | 🟡 |
-| ENG-F71 | AI | Behaviour trees | ⬜ |
+| ENG-F71 | AI | Behaviour trees: sequence, selector, reactive (pre-empting) variants, parallel, random, decorators (repeat, retry, cooldown, timeout, delay...) and leaves over a typed blackboard, built in C++ or from JSON with errors by path (`kke/ai/BehaviorTree.h`), and Lua `bt.*` with Lua functions as leaves (docs/AI.md "Behaviour trees"). Not yet: a node-graph editor, a utility selector node. | ✅ |
 | ENG-F72 | AI | Utility AI (docs/AI.md) | ✅ |
 | ENG-F73 | AI | Crowds of hundreds of agents (flocking exists) | 🟡 |
 | ENG-F74 | AI | Navmesh baking (Recast) | ✅ |
 | ENG-F75 | World | Terrain sculpting. Done: raise, lower, smooth, flatten and paint brushes, from Lua while the game runs (docs/TERRAIN.md). Not yet: an editor tool for them, saving sculpted terrain with the level. | 🟡 |
 | ENG-F76 | World | Heightmap terrain. Done: chunks with distance LOD and skirts, a Jolt height field for collision, four colour layers with rock on slopes, from a seed or a greyscale picture, Lua `terrain.*` (docs/TERRAIN.md). Not yet: textured layers, holes. | 🟡 |
 | ENG-F77 | World | Procedural terrain (ACTION_PLAN 4.1). Done: seeded gradient-noise hills or ridged mountains (docs/TERRAIN.md). Not yet: erosion, rivers, biomes. | 🟡 |
-| ENG-F78 | World | World streaming (ACTION_PLAN 3.6) | ⬜ |
+| ENG-F78 | World | World streaming for large worlds: the same cell streamer, plus `OriginShifter` (a floating origin that moves the world in whole steps so far travel keeps float precision). Not yet: streaming of the terrain's own chunks, view-direction priority. | ✅ |
 | ENG-F79 | World | Foliage. Done: trees, rocks and bushes scattered on the terrain by layer, slope and height, solid trunks, kept on the ground when sculpted (Lua `terrain.scatter`, docs/TERRAIN.md). Not yet: GPU grass, wind sway. | 🟡 |
 | ENG-F80 | World | Water with waves (ocean and buoyancy exist) | ✅ |
-| ENG-F81 | World | Snow and weather | ⬜ |
+| ENG-F81 | World | Snow and weather: types blended smoothly (clear to blizzard), random weather by transition weights, what falls (snow is rain above 2 degrees), gusting wind, day and night temperature, ground wetness and snow cover that build, dry and melt, lightning with flashes and thunder delayed by distance, rain, downpour and snow particles that follow the camera, and lighting, grey and fog that respect the day/night clock and moods (`kke/Weather.h`, `kke/ScriptWeather.h`, Lua `weather.*`, docs/MOODS.md "Weather"). Not yet: wet and snowy surfaces in the lit shader (the numbers are there), moon and stars, visible clouds. | ✅ |
 | ENG-F82 | World | Day/night cycle. Done: a clock that moves the sun, sky, light and exposure through dusk to moonlight, Lua `clock.*` with Dawn/Dusk/Hour hooks (docs/MOODS.md "Time of day"). Not yet: stars and moon in the sky, multiplayer clock sync. | 🟡 |
 | ENG-F83 | World | Biomes | ⬜ |
-| ENG-F84 | Localization | String tables, plurals, font fallback, RTL, language switch | ⬜ |
-| ENG-F85 | Accessibility | Subtitles, colour-blind modes, UI scale, remapping, screen-reader hooks (captions and remapping exist) | 🟡 |
+| ENG-F84 | Localization | String tables, plurals, font fallback, RTL, language switch: `kke::Localization` (JSON tables, CLDR plurals for ~70 languages, placeholders, fallback chain, locale numbers), `kke::bidi` (Arabic shaping, UAX #9 reordering), fonts per language, every UI text node translated through RmlUi's `TranslateString`, Lua `loc.*`, language row in Settings, mirrored menu (docs/LOCALIZATION.md). Shipped: en, nl, de, fr, es, ar, he. Not yet: CJK/Thai/Indic fonts, IME, a string-extraction tool. | ✅ |
+| ENG-F85 | Accessibility | Subtitles (`kke::Subtitles`, Lua `subtitles.*`), colour-blind modes (daltonisation matrix in the tone-map pass), UI scale, remapping (existing), high-contrast class, reduce motion, screen-reader hook with `spd-say`/`say` (docs/ACCESSIBILITY.md). Not yet: Windows speech, the platform accessibility tree (AT-SPI/UIA), focus announcements from the menu. | 🟡 |
 | ENG-F86 | Rendering | Ray-traced shadows without ray-tracing hardware: a compute-shader BVH tracer as the fallback where the GPU has no ray query (Kees, 2026-10-18; ideas from ThreatInteractive's Apache-2.0 SWRT prototype: 4-wide compressed nodes, binned SAH, GPU refits, per-tile caster lists), measured against ray query on the RX 9070 XT. After the RHI/web work. | ⬜ |
 | ENG-F87 | Content | Biome showcase scenes from Kees's Synty biome packs, each in its full glory with our water and ray tracing, and a comparison of every rendering mode (shadow map, KKE and classic rays, software rays, GI, reflections) with frame data and pictures: is each mode faster, does it look better (Kees, 2026-10-18). | ⬜ |
