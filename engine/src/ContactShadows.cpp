@@ -18,7 +18,7 @@ float contactShadowMarch(const float pos[3], const float toSun[3], const std::fu
         const float scene = sceneDepthAt(p);
         if (scene <= 0.0f) continue; // sky
         const float inFront = rayDepth - scene; // > 0: the frame drew something nearer than the ray
-        if (inFront > 0.002f + 0.0005f * rayDepth && inFront < settings.thickness) {
+        if (inFront > 0.01f + 0.002f * rayDepth && inFront < settings.thickness) {
             // Softer towards the end of the march, so the shadow fades with distance from the contact.
             lit = std::min(lit, static_cast<float>(i) / static_cast<float>(steps) * 0.6f);
             break;

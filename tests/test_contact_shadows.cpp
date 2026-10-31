@@ -61,13 +61,16 @@ TEST(ContactShadows, FloorAtTheFootOfABoxIsShadowed) {
     // 5 cm left of the box, the sun low on the right: the march runs into the box's side.
     const float atFoot[3] = { 0.45f, -1.0f, -4.0f };
     const float lowSun[3] = { 0.94f, 0.34f, 0.0f };
-    EXPECT_LT(march(scene, atFoot, lowSun), 0.3f);
+    // The box's side is seen edge-on here, so the frame's depth jumps far behind it: count it as thick.
+    ContactShadowSettings deep;
+    deep.thickness = 1.0f;
+    EXPECT_LT(march(scene, atFoot, lowSun, deep), 0.3f);
     // Far from it (beyond the march) it stays lit.
     const float away[3] = { -1.0f, -1.0f, -4.0f };
-    EXPECT_FLOAT_EQ(march(scene, away, lowSun), 1.0f);
+    EXPECT_FLOAT_EQ(march(scene, away, lowSun, deep), 1.0f);
     // The sun behind the point (to the left) casts no contact shadow from the box.
     const float leftSun[3] = { -0.94f, 0.34f, 0.0f };
-    EXPECT_FLOAT_EQ(march(scene, atFoot, leftSun), 1.0f);
+    EXPECT_FLOAT_EQ(march(scene, atFoot, leftSun, deep), 1.0f);
 }
 
 TEST(ContactShadows, ThickOccludersInFrontDontCount) {

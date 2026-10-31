@@ -76,7 +76,7 @@ void main() {
         imageStore(contactOut, p, vec4(1.0, -pos.z, 0.0, 0.0));
         return;
     }
-    vec3 start = pos + N * (0.01 + 0.0015 * dist) + pc.toSun.xyz * 0.005;
+    vec3 start = pos + N * (0.015 + 0.002 * dist) + pc.toSun.xyz * 0.01;
     float lit = 1.0;
     for (int i = 0; i < steps; ++i) {
         float t = (float(i) + jitter) * stepLen;
@@ -86,7 +86,7 @@ void main() {
         float scene = sceneDepthAt(q);
         if (scene <= 0.0) continue;
         float inFront = rayDepth - scene;
-        if (inFront > 0.002 + 0.0005 * rayDepth && inFront < pc.march.y) {
+        if (inFront > 0.01 + 0.002 * rayDepth && inFront < pc.march.y) {
             lit = float(i) / float(steps) * 0.6;
             break;
         }
