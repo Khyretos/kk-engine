@@ -9,8 +9,9 @@
 # one of them; this also checks that the shards together ran as many tests as
 # the binary lists. Coverage stays whole: libgcov locks each .gcda file while
 # it merges a process's counters into it. Each shard gets its own TMPDIR and
-# XDG folders, since tests of one fixture (same temp folder name) may now run
-# at the same time in two processes. A shard's output is printed in full when
+# HOME, since tests of one fixture (same temp folder name) may now run at the
+# same time in two processes. (Not XDG_*: setting them skips the $HOME
+# fallbacks a single run covers.) A shard's output is printed in full when
 # it fails, otherwise only its summary.
 set -uo pipefail
 
@@ -30,9 +31,8 @@ trap 'rm -rf "$work"' EXIT
 pids=()
 for ((i = 0; i < shards; i++)); do
   dir="$work/shard$i"
-  mkdir -p "$dir/tmp" "$dir/cache" "$dir/config" "$dir/data"
-  GTEST_TOTAL_SHARDS=$shards GTEST_SHARD_INDEX=$i TMPDIR="$dir/tmp" \
-    XDG_CACHE_HOME="$dir/cache" XDG_CONFIG_HOME="$dir/config" XDG_DATA_HOME="$dir/data" \
+  mkdir -p "$dir/tmp" "$dir/home"
+  GTEST_TOTAL_SHARDS=$shards GTEST_SHARD_INDEX=$i TMPDIR="$dir/tmp" HOME="$dir/home" \
     "$bin" "$@" > "$dir/log" 2>&1 &
   pids+=($!)
 done
