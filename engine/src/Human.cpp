@@ -157,6 +157,39 @@ float Human::get(const std::string& modifier) const {
 
 void Human::reset() { m_values.clear(); }
 
+float Human::shaping(const HumanModifier& mod) const {
+    const float v = get(mod.name);
+    if (m_style.empty()) return v;
+    const auto it = m_style.find(mod.name);
+    return it == m_style.end() ? v : std::clamp(v + it->second, mod.min, mod.max);
+}
+
+const std::map<std::string, float>& Human::animeFace() {
+    static const std::map<std::string, float> face = [] {
+        std::map<std::string, float> f;
+        for (const char* side : { "r", "l" }) {
+            const std::string e = std::string("eyes/") + side + "-eye-";
+            f[e + "scale-decr|incr"] = 0.9f;
+            f[e + "height1-decr|incr"] = 0.4f; // a taller opening
+            f[e + "height2-decr|incr"] = 0.6f;
+            f[e + "height3-decr|incr"] = 0.4f;
+            f[e + "trans-down|up"] = -0.25f;
+            f[std::string("cheek/") + side + "-cheek-bones-decr|incr"] = -0.4f;
+        }
+        f["nose/nose-scale-vert-decr|incr"] = -0.7f;
+        f["nose/nose-scale-horiz-decr|incr"] = -0.6f;
+        f["nose/nose-scale-depth-decr|incr"] = -0.5f;
+        f["nose/nose-point-width-decr|incr"] = -0.4f;
+        f["mouth/mouth-scale-horiz-decr|incr"] = -0.45f;
+        f["mouth/mouth-scale-vert-decr|incr"] = -0.35f;
+        f["chin/chin-width-decr|incr"] = -0.45f;
+        f["chin/chin-height-decr|incr"] = -0.3f;
+        f["forehead/forehead-scale-vert-decr|incr"] = 0.3f;
+        return f;
+    }();
+    return face;
+}
+
 void Human::setAll(const std::map<std::string, float>& values) {
     m_values.clear();
     for (const auto& [name, v] : values) {
@@ -203,7 +236,7 @@ std::vector<std::pair<int, float>> Human::targetWeights() const {
         if (const float w = macroWeight(m, value.data()); w > 1e-5f) out.emplace_back(m.target, w);
     for (const HumanModifier& mod : m_pack->modifiers()) {
         if (!mod.macro.empty() || mod.targets.empty()) continue;
-        const float v = get(mod.name);
+        const float v = shaping(mod);
         if (mod.targets.size() == 1) {
             if (v > 1e-5f) out.emplace_back(mod.targets[0], v);
         } else if (v < -1e-5f) {
@@ -236,7 +269,7 @@ std::vector<glm::vec3> Human::shapedPositions() const {
     std::vector<glm::vec3> p = m_macroShape;
     for (const HumanModifier& mod : m_pack->modifiers()) {
         if (!mod.macro.empty() || mod.targets.empty()) continue;
-        const float v = get(mod.name);
+        const float v = shaping(mod);
         int t = -1;
         float w = 0.0f;
         if (mod.targets.size() == 1 && v > 1e-5f) {

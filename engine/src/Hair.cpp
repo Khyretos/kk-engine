@@ -370,7 +370,7 @@ std::vector<glm::vec3> hairRestPose(const HairDesc& desc) {
     return out;
 }
 
-bool hairstyleOnHead(HairDesc& desc, const std::string& name, const glm::vec3& center, float radius, int guides, const glm::vec3& up, const glm::vec3& front) {
+bool hairstyleOnHead(HairDesc& desc, const std::string& name, const glm::vec3& center, float radius, int guides, const glm::vec3& up, const glm::vec3& front, float hairline) {
     const glm::vec3 root = desc.style.rootColor, tip = desc.style.tipColor;
     const glm::vec3 u = glm::normalize(up);
     const glm::vec3 f = glm::normalize(front - u * glm::dot(front, u));
@@ -386,7 +386,7 @@ bool hairstyleOnHead(HairDesc& desc, const std::string& name, const glm::vec3& c
     if (std::find(names.begin(), names.end(), name) != names.end()) {
         desc.style = hairStyle(name);
         keepColours();
-        hairScalp(desc, center, radius, guides, 1.9f, u, f);
+        hairScalp(desc, center, radius, guides, 1.9f, u, f, hairline);
         return true;
     }
     if (name == "afro") {
@@ -399,7 +399,7 @@ bool hairstyleOnHead(HairDesc& desc, const std::string& name, const glm::vec3& c
         desc.style.droop = 1.0f;
         desc.style.hold = 0.85f;
         desc.style.gravity = 0.4f;
-        hairScalp(desc, center, radius, guides, 1.9f, u, f);
+        hairScalp(desc, center, radius, guides, 1.9f, u, f, hairline);
         desc.comb = glm::vec3(0.0f);
         for (glm::vec3& d : desc.directions) {
             desc.lengths.push_back(0.75f + 0.25f * glm::dot(d, u));
@@ -417,7 +417,7 @@ bool hairstyleOnHead(HairDesc& desc, const std::string& name, const glm::vec3& c
         desc.style.spread = 0.5f;
         desc.style.droop = 0.6f;
         desc.style.hold = 0.6f;
-        hairScalp(desc, center, radius, guides, 1.9f, u, f);
+        hairScalp(desc, center, radius, guides, 1.9f, u, f, hairline);
         desc.comb = glm::vec3(0.0f);
         for (const glm::vec3& d : desc.directions) desc.lengths.push_back(0.85f + 0.15f * glm::dot(d, u));
     } else if (name == "puff") {
@@ -431,7 +431,7 @@ bool hairstyleOnHead(HairDesc& desc, const std::string& name, const glm::vec3& c
         desc.style.spread = 2.0f;
         desc.style.coilRadius = 0.004f;
         desc.style.definition = 0.0f;
-        hairScalp(desc, center, radius, guides, 1.9f, u, f);
+        hairScalp(desc, center, radius, guides, 1.9f, u, f, hairline);
         HairDesc::Tie t;
         t.at = center + glm::normalize(u - f * 0.3f) * radius;
         t.reach = 10.0f * radius;
@@ -458,7 +458,7 @@ bool hairstyleOnHead(HairDesc& desc, const std::string& name, const glm::vec3& c
         desc.style.definition = 0.9f;
         desc.style.clump = 0.8f;
         desc.style.spread = 0.7f;
-        hairScalp(desc, center, radius, guides, 1.9f, u, f);
+        hairScalp(desc, center, radius, guides, 1.9f, u, f, hairline);
         const glm::vec3 at[] = { u, glm::normalize(u + f * 0.8f + r * 0.5f), glm::normalize(u + f * 0.8f - r * 0.5f), glm::normalize(u * 0.3f + r),
                                  glm::normalize(u * 0.3f - r), glm::normalize(u * 0.4f - f + r * 0.45f), glm::normalize(u * 0.4f - f - r * 0.45f) };
         for (const glm::vec3& d : at) {
@@ -537,7 +537,7 @@ bool hairstyleOnHead(HairDesc& desc, const std::string& name, const glm::vec3& c
             s.hold = 0.5f;
         }
         s.thickness = std::max(s.thickness, s.plaitRadius);
-        hairScalp(desc, center, radius, guides, 1.9f, u, f);
+        hairScalp(desc, center, radius, guides, 1.9f, u, f, hairline);
         desc.comb = -f * 1.4f; // back off the face
         for (glm::vec3& d : desc.directions) d = glm::normalize(d - f * (0.6f * std::max(glm::dot(d, f), 0.0f)));
     } else if (name == "cornrows") {

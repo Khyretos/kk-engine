@@ -879,11 +879,24 @@ function(kke_use_character_creator TARGET)
     foreach(f creator.rml creator.rcss)
         engine_copy_runtime_file(${TARGET} ${CMAKE_SOURCE_DIR}/assets/ui/character_creator/${f} assets/ui/character_creator/${f})
     endforeach()
-    foreach(f makehuman.kkhpack credits.json)
+    # The clothes browser's pictures (tools/garment_thumbs makes them).
+    file(GLOB creator_thumbs RELATIVE ${CMAKE_SOURCE_DIR}/assets/ui/character_creator CONFIGURE_DEPENDS
+         ${CMAKE_SOURCE_DIR}/assets/ui/character_creator/thumbs/*.png)
+    foreach(f ${creator_thumbs})
+        engine_copy_runtime_file(${TARGET} ${CMAKE_SOURCE_DIR}/assets/ui/character_creator/${f} assets/ui/character_creator/${f})
+    endforeach()
+    foreach(f makehuman.kkhpack vitruvian.kkhpack credits.json skin_albedo.png skin_albedo_anime.png skin_normal.png skin_roughness.png
+             vitruvian_skin_albedo.jpg vitruvian_skin_normal.jpg vitruvian_skin_roughness.jpg)
         engine_copy_runtime_file(${TARGET} ${CMAKE_SOURCE_DIR}/assets/humans/${f} assets/humans/${f})
     endforeach()
+    # The anime style's bodies: VRoid's CC0 sample avatars (docs/ANIME.md).
+    foreach(f HairSample_Female.vrm HairSample_Male.vrm)
+        engine_copy_runtime_file(${TARGET} ${CMAKE_SOURCE_DIR}/assets/anime/${f} assets/anime/${f})
+    endforeach()
     foreach(shader cube.vert cube.frag glow.frag shadow.vert shadow.frag model.vert model_instanced.vert shadow_instanced.vert model.frag
-                   hair.vert hair.frag hair_shadow.vert hair_points.comp)
+                   hair.vert hair.frag hair_shadow.vert hair_points.comp cloth.frag
+                   model_toon.frag model_outline.vert model_outline.frag
+                   anime.vert anime.frag anime_outline.vert anime_outline.frag)
         engine_add_shader(${TARGET} ${CMAKE_SOURCE_DIR}/shaders/${shader})
     endforeach()
 endfunction()
@@ -976,6 +989,7 @@ add_subdirectory(engine)
 # here — this tool is what lets that be measured honestly on whatever
 # hardware actually has more than one.
 add_subdirectory(tools/model_info)
+add_subdirectory(tools/garment_thumbs)
 add_subdirectory(tools/seal)
 add_subdirectory(tools/license)
 add_subdirectory(tools/packs)

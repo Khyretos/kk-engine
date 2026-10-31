@@ -325,6 +325,16 @@ TEST(AnimRig, CanonicalNamesPairUalWithSynty) {
     EXPECT_EQ(kke::canonicalBoneName("indexFinger_02_r"), kke::canonicalBoneName("index_02_r"));
     EXPECT_EQ(kke::canonicalBoneName("finger_01_l"), kke::canonicalBoneName("middle_01_l"));
     EXPECT_EQ(kke::canonicalBoneName("mixamorig:Hips"), "pelvis");
+    // Mixamo's own names, as Vitruvian's rig has them: UAL's words for the same bones.
+    for (const auto& [mixamo, ual] : std::vector<std::pair<const char*, const char*>>{
+             { "mixamorig:Spine", "spine_01" },           { "mixamorig:Spine1", "spine_02" },         { "mixamorig:Spine2", "spine_03" },
+             { "mixamorig:Neck", "neck_01" },             { "mixamorig:Head", "head" },               { "mixamorig:LeftShoulder", "clavicle_l" },
+             { "mixamorig:LeftArm", "upperarm_l" },       { "mixamorig:RightForeArm", "lowerarm_r" }, { "mixamorig:LeftHand", "hand_l" },
+             { "mixamorig:RightHandIndex2", "index_02_r" }, { "mixamorig:LeftHandThumb1", "thumb_01_l" }, { "mixamorig:LeftHandPinky3", "pinky_03_l" },
+             { "mixamorig:LeftUpLeg", "thigh_l" },        { "mixamorig:RightLeg", "calf_r" },         { "mixamorig:LeftFoot", "foot_l" },
+             { "mixamorig:RightToeBase", "ball_r" } })
+        EXPECT_EQ(kke::canonicalBoneName(mixamo), ual) << mixamo;
+    EXPECT_EQ(kke::canonicalBoneName("Spine"), "spine"); // only a Mixamo rig takes the table
     EXPECT_EQ(kke::canonicalBoneName("ball_leaf_l"), kke::canonicalBoneName("ball_l"));
     // Synty's older rig (Goblin War Camp): Shoulder is the upper arm, Elbow
     // the forearm, UpperLeg / LowerLeg / Ankle the leg, one Neck.
@@ -777,4 +787,26 @@ TEST(AnimRig, HumanArmForearmTakesTheTwistWithinItsRange) {
             EXPECT_NEAR(got, 90.0f + 15.0f, 0.5f); // pronation plus the wrist's own twist
         }
     }
+}
+
+// VRM avatars (VRoid) and MakeHuman's rig pair with the UE-style names,
+// so the anime and the realistic person play the same clips.
+TEST(AnimRig, CanonicalNamesPairVrmAndMakeHuman) {
+    EXPECT_EQ(kke::canonicalBoneName("J_Bip_C_Hips"), "pelvis");
+    EXPECT_EQ(kke::canonicalBoneName("J_Bip_L_UpperArm"), "upperarm_l");
+    EXPECT_EQ(kke::canonicalBoneName("J_Bip_R_LowerLeg"), "calf_r");
+    EXPECT_EQ(kke::canonicalBoneName("J_Bip_L_Little2"), "pinky_02_l");
+    EXPECT_EQ(kke::canonicalBoneName("J_Bip_C_UpperChest"), "spine_03");
+    EXPECT_EQ(kke::canonicalBoneName("upperarm01.L"), "upperarm_l");
+    EXPECT_EQ(kke::canonicalBoneName("finger2-3.R"), "index_03_r");
+    EXPECT_EQ(kke::canonicalBoneName("wrist.L"), kke::canonicalBoneName("J_Bip_L_Hand"));
+    EXPECT_EQ(kke::canonicalBoneName("spine05"), kke::canonicalBoneName("J_Bip_C_Spine"));
+    EXPECT_EQ(kke::canonicalBoneName("root"), "root"); // UE's root stays the root
+    // MakeHuman's hips are its root: paired as the pelvis on a skeleton without one.
+    kke::ModelData mh, vrm;
+    for (const char* n : { "root", "spine05", "upperarm01.L" }) mh.bones.push_back({ n, -1 });
+    for (const char* n : { "J_Bip_C_Hips", "J_Bip_C_Spine", "J_Bip_L_UpperArm" }) vrm.bones.push_back({ n, -1 });
+    const kke::BoneMatch m = kke::matchBones(vrm, mh);
+    EXPECT_EQ(m.matched, 3);
+    EXPECT_EQ(m.sourceOf[0], 0);
 }

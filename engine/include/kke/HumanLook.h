@@ -7,6 +7,7 @@
 
 #include <map>
 #include <string>
+#include <vector>
 
 namespace kke {
 
@@ -24,6 +25,12 @@ struct HumanLook {
     glm::vec3 hairTip{ 0.35f, 0.24f, 0.13f };
     std::string hair;   // a hairstyle name (kke::hairStyle), "" = none
     float hairLength = 1.0f;
+    // What it wears (kke/HumanClothes.h): a garment id and its colour (sRGB).
+    struct Worn {
+        std::string id;
+        glm::vec3 colour{ 0.9f };
+    };
+    std::vector<Worn> clothes;
 };
 
 // The look's sliders as a body. Values are set as they are (the

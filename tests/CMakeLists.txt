@@ -40,6 +40,8 @@ add_executable(kke_tests
     test_inventory.cpp
     test_body_shape.cpp
     test_human.cpp
+    test_vrm_clothes.cpp
+    test_vrm.cpp
     test_procedural_anim.cpp
     test_climb_wall.cpp
     test_climb_mountains.cpp

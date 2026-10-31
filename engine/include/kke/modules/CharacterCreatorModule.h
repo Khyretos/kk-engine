@@ -5,6 +5,8 @@
 #include "kke/HumanLook.h"
 #include "kke/HumanPack.h"
 #include "kke/Module.h"
+#include "kke/Vrm.h"
+#include "kke/VrmClothes.h"
 #include "kke/modules/ModelModule.h"
 
 #include <RmlUi/Core/DataModelHandle.h>
@@ -22,16 +24,19 @@ class Event;
 
 namespace kke {
 
+class AnimeRenderer;
 class HairRenderer;
 class OrbitCameraModule;
 class RigidWorld;
 class UiModule;
+class VrmSprings;
 
 // A character creator screen (docs/HUMANS.md "The creator screen"): a
 // MakeHuman body in the middle, tabs of sliders on the right (body type,
 // shape, torso, arms and legs, head, eyes, nose, mouth, ears, skin,
 // hair: strands grown from the body's own scalp, simulated by the engine's
-// hair physics against the body),
+// hair physics against the body; clothes: tops, shorts, trousers, socks
+// and shoes that fit any body, skirts as the engine's cloth),
 // mirror, undo and redo, randomise, camera views, save, load and the
 // share code other players need to see this character.
 //
@@ -72,7 +77,7 @@ public:
     std::string shareCode() const;
     void setLook(const HumanLook& look);
     const HumanPack* pack() const { return m_pack.get(); }
-    // The current body as a skinned model (bones and weights), for a game
+    // The current body, dressed, as a skinned model (bones and weights), for a game
     // to add to its ModelModule and animate.
     ModelData bakeSkinned() const;
 
@@ -98,6 +103,11 @@ private:
     struct HairChoice {
         Rml::String id, label; // id "" = no hair
     };
+    struct GarmentView {
+        Rml::String id, label, slot, thumb;
+        bool worn = false;
+    };
+    struct WornPiece; // a garment on the figure: a model, or cloth and its renderer
 
     void buildModel();
     void loadDocument();
@@ -108,13 +118,26 @@ private:
     void spawnBody();
     void setStatus(const std::string& text);
     void applyColours();
+    void applyStyle();     // m_anime on every model of the figure
     void randomise(bool everything);
+    // A body type: "Average", "Slim", "Athletic", "Strong", "Curvy",
+    // "Heavy" (the build sliders only: gender, age and face stay).
+    void applyPreset(const std::string& preset);
+    void setBodyType(const std::string& name); // the build sliders and the archetype's extras, no undo step
+    void applyArchetype(bool male);          // Female / Male: the gender, with the body type cut for it
     void save();
     void load();
     void buildWorld();     // the physics world: the body as a collider
     void buildHair();      // m_look's hairstyle on the body as it is now
     void placeFigure();    // the body, its collider and the hair's head at m_yaw
     void moveCap();        // the scalp cap onto the body as it is now
+    void moveIrises();     // the pupils and irises onto the eyes as they are now
+    void moveBrows();      // the brows and lashes onto the face as it is now
+    void dressUp();        // m_look's clothes on the body as it is now
+    void moveClothes();    // the fitted clothes onto the body as it is now (a drag)
+    void undress();
+    void fillClothes();    // the Clothes tab's buttons
+    void wear(const std::string& id); // on, taking off what was in its slot; off if it was on
 
     Application* m_app = nullptr;
     UiModule* m_ui = nullptr;
@@ -122,6 +145,9 @@ private:
     OrbitCameraModule* m_orbit = nullptr;
     std::string m_saveName;
     std::unique_ptr<HumanPack> m_pack;
+    std::string m_humansDir; // assets/humans: the pack and the skin maps
+    std::string m_skinPrefix; // "vitruvian_" for the Vitruvian body's maps, "" for MakeHuman's
+    void skinMaterial(ModelData& model) const; // the skin maps on "Human_body"
     std::unique_ptr<Human> m_human;
     HumanLook m_look;
     Human::Bake m_bodyBake, m_partsBake;
@@ -131,6 +157,11 @@ private:
     ModelModule::InstanceId m_cap = 0;
     std::vector<uint32_t> m_capFrom; // cap vertex -> body model vertex
     ModelData m_capModel;
+    // Pupils and irises (kke/HumanEyes.h): white, tinted the eye colour.
+    ModelModule::InstanceId m_irises = 0;
+    ModelData m_irisModel;
+    ModelModule::InstanceId m_brows = 0;
+    ModelData m_browModel;
     bool m_shapeDirty = false;
     bool m_open = false;
     bool m_selfTested = false;
@@ -143,10 +174,34 @@ private:
     std::vector<SliderView> m_sliders;
     std::vector<SwatchView> m_skinSwatches, m_eyeSwatches, m_hairSwatches;
     std::vector<HairChoice> m_hairChoices;
+    std::vector<GarmentView> m_garments;
+    std::vector<Rml::String> m_presets;
+    Rml::String m_archetype = "female", m_bodyType = "Average";
+    std::vector<SwatchView> m_clothSwatches;
+    Rml::String m_clothSlot = "top", m_clothSlotLabel; // what a colour swatch dyes
     float m_hairLength = 1.0f, m_hairLengthShown = 1.0f;
     Rml::String m_hairStyle;
     bool m_mirror = true;
     bool m_turntable = false;
+    // The Anime style (docs/ANIME.md): a body of its own, VRoid's CC0
+    // avatar (female or male by the Gender slider), drawn by an
+    // AnimeRenderer, its hair swung by its spring bones. Only the
+    // skeleton's names are shared with the realistic body.
+    bool m_anime = false;
+    std::unique_ptr<VrmAvatar> m_vrm;
+    std::string m_vrmFile;
+    std::unique_ptr<VrmSprings> m_springs;
+    std::unique_ptr<AnimeRenderer> m_animeDrawn;
+    std::vector<float> m_expressions;
+    std::vector<std::vector<ModelVertex>> m_posed;
+    std::vector<glm::mat4> m_vrmLocals, m_vrmWorld;
+    float m_animeTime = 0.0f, m_nextBlink = 2.0f;
+    void showAnimeBody(); // loads the avatar for the archetype if it changed
+    void dressAnime();    // the avatar in m_look's clothes (VrmClothes.h), if it is not already
+    std::string outfitKey() const;
+    VrmStock m_vrmStock;
+    std::string m_animeOutfit; // outfitKey() of what the avatar wears
+    void poseAnime(float dt);
     Rml::String m_code, m_codeShort, m_status, m_view = "body";
     float m_statusTime = 0.0f;
 
@@ -161,6 +216,13 @@ private:
     bool m_hairDirty = false; // rebuild once the sliders rest
     float m_yaw = 0.0f;       // the turntable turns the figure, so the hair swings
     glm::mat4 m_figure{ 1.0f };
+
+    // Clothes (kke/HumanClothes.h): the body suit baked like the body, so
+    // the fitted garments follow every slider; skirts hang in m_world.
+    Human::Bake m_tightsBake;
+    std::vector<std::unique_ptr<WornPiece>> m_worn;
+    bool m_clothesDirty = false; // rebuild once the sliders rest
+    uint32_t m_garmentSerial = 0; // model keys: each fitting is a model of its own
 
     std::vector<std::map<std::string, float>> m_undo, m_redo;
     float m_sinceEdit = 1e9f;

@@ -1,0 +1,2 @@
+add_executable(kke_garment_thumbs main.cpp)
+target_link_libraries(kke_garment_thumbs PRIVATE kke_engine stb)

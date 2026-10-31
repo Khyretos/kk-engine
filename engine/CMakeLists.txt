@@ -52,9 +52,15 @@ set(ENGINE_SOURCES
     src/AnimRig.cpp
     src/BodyShape.cpp
     src/Human.cpp
+    src/HumanClothes.cpp
+    src/VrmClothes.cpp
+    src/HumanEyes.cpp
     src/HumanHair.cpp
     src/HumanLook.cpp
     src/HumanPack.cpp
+    src/Vrm.cpp
+    src/VrmSprings.cpp
+    src/AnimeRenderer.cpp
     src/CharacterIk.cpp
     src/Equipment.cpp
     src/Inventory.cpp
@@ -396,7 +402,7 @@ target_include_directories(kke_engine PUBLIC
 target_link_libraries(kke_engine PRIVATE yaml-cpp::yaml-cpp) # kke/DataFile.h only
 target_link_libraries(kke_engine PRIVATE meshoptimizer) # kke/MeshLod.h only
 # cgltf (MIT, one vendored header, external/cgltf/KKE_VENDORED.md): glTF 2.0
-# import in src/GltfAsset.cpp only. SYSTEM: its warnings are not ours.
+# import in src/GltfAsset.cpp, VRM avatars in src/Vrm.cpp. SYSTEM: its warnings are not ours.
 target_include_directories(kke_engine SYSTEM PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../external/cgltf)
 
 target_link_libraries(kke_engine PUBLIC

@@ -90,6 +90,14 @@ public:
     void setVisible(InstanceId instance, bool visible);
     // Multiplies the material color (e.g. to tell identical dummies apart).
     void setTint(InstanceId instance, const glm::vec3& tint);
+    // Toon shading (docs/HUMANS.md "Anime style"): model_toon.frag's
+    // two-tone light (MToon-like: lit or a cooler shade, split at a soft
+    // edge, a rim light, a small hard highlight) and an inverted-hull
+    // outline `outline` metres wide (0: none) in a darker shade of each
+    // material. Off by default; toon instances are drawn one at a time,
+    // never instanced. The game copies model_toon.frag, model_outline.vert
+    // and model_outline.frag (kke_use_character_creator does).
+    void setToon(InstanceId instance, bool toon, float outline = 0.0015f);
     // Draw this instance with another image in place of its materials'
     // albedo textures — Synty packs ship recoloured variants of one atlas
     // (PolygonPrototype_Texture_01..10) that share the same UVs. Only
@@ -232,6 +240,8 @@ private:
         bool overlay = true;
         VkDescriptorSet textureOverride = VK_NULL_HANDLE;
         std::string textureOverridePath;
+        bool toon = false;  // setToon
+        float outline = 0.0f;
         // skinned only
         std::vector<glm::mat4> locals;
         std::vector<glm::mat4> worldOverride;
@@ -316,6 +326,8 @@ private:
 
     Application* m_app = nullptr;
     std::unique_ptr<Pipeline> m_pipeline, m_shadowPipeline, m_bonePipeline;
+    std::unique_ptr<Pipeline> m_toonPipeline, m_outlinePipeline; // made by the first setToon
+    std::vector<Instance*> m_toons; // render(): this view's toon draws, reused
     std::unique_ptr<Mesh> m_boneMesh;
     VkDevice m_device = VK_NULL_HANDLE;
 

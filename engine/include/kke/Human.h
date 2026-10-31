@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <map>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace kke {
@@ -46,6 +47,17 @@ public:
     // Every value that differs from its default, by name (what a save holds).
     std::map<std::string, float> values() const;
 
+    // A style layer (docs/HUMANS.md "Anime style"): offsets added to the
+    // detail sliders when the body is shaped (each sum clamped to its
+    // slider's range), never part of values() or get(): the same person,
+    // drawn another way, and back again with an empty map. Body-type
+    // sliders (age, gender, ...) aren't offset.
+    void setStyle(std::map<std::string, float> offsets) { m_style = std::move(offsets); }
+    const std::map<std::string, float>& style() const { return m_style; }
+    // The anime face: bigger eyes set a little lower, a small nose and
+    // mouth, a narrower, softer jaw (MakeHuman's own face sliders).
+    static const std::map<std::string, float>& animeFace();
+
     // Each target that moves the body now, with its weight.
     std::vector<std::pair<int, float>> targetWeights() const;
     // Every pack vertex, shaped by the sliders (metres), the soles on y = 0.
@@ -83,6 +95,8 @@ private:
 
     const HumanPack* m_pack;
     std::map<std::string, float> m_values;
+    std::map<std::string, float> m_style; // setStyle
+    float shaping(const HumanModifier& mod) const; // get() plus the style's offset, clamped
     std::vector<MacroTarget> m_macroTargets;
     std::vector<uint32_t> m_bodyVerts; // the skin's vertices, to find the floor
     // The base mesh plus the body-type targets, for these body-type values.

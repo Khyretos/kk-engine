@@ -12,52 +12,94 @@
         <button data-class-on="view == 'profile'" data-event-click="view('profile')">Profile</button>
         <button data-class-on="view == 'back'" data-event-click="view('back')">Back</button>
         <button data-class-on="turntable" data-event-click="toggle_turntable">Turn</button>
+        <span class="gap"></span>
+        <button data-class-on="!anime" data-event-click="style('realistic')">Realistic</button>
+        <button data-class-on="anime" data-event-click="style('anime')">Anime</button>
     </div>
 
     <div id="panel">
-        <h1>Create your character</h1>
-        <div id="tabs">
-            <span class="tab" data-for="t : tabs" data-class-on="tab == t.id" data-event-click="set_tab(t.id)">{{ t.label }}</span>
-        </div>
-
-        <div class="tools" data-if="tab != 'skin' && tab != 'hair'">
-            <button data-class-on="mirror" data-event-click="toggle_mirror">Mirror sides</button>
-            <button data-event-click="randomise('tab')">Random</button>
-            <button data-event-click="reset_tab">Reset tab</button>
-        </div>
-
-        <div id="sliders" data-if="tab != 'skin' && tab != 'hair'">
-            <div class="slider" data-for="s, i : sliders">
-                <span class="label">{{ s.label }}</span>
-                <input type="range" data-attr-min="s.min" data-attr-max="s.max" step="0.01" data-value="s.value"/>
-                <span class="value">{{ s.value | format(2) }}</span>
-                <button class="reset" data-event-click="reset_slider(i)">Reset</button>
+        <div id="head">
+            <h1>Create your character</h1>
+            <div id="tabs">
+                <span class="tab" data-for="t : tabs" data-class-on="tab == t.id" data-event-click="set_tab(t.id)">{{ t.label }}</span>
+            </div>
+            <div class="tools" data-if="tab != 'skin' && tab != 'hair' && tab != 'clothes'">
+                <button data-class-on="mirror" data-event-click="toggle_mirror">Mirror sides</button>
+                <button data-event-click="randomise('tab')">Random</button>
+                <button data-event-click="reset_tab">Reset tab</button>
+            </div>
+            <div class="choices archetype" data-if="tab == 'body'">
+                <button data-class-on="archetype == 'female'" data-event-click="archetype('female')">Female</button>
+                <button data-class-on="archetype == 'male'" data-event-click="archetype('male')">Male</button>
+            </div>
+            <div class="choices presets" data-if="tab == 'body'">
+                <button data-for="p : presets" data-class-on="body_type == p" data-event-click="preset(p)">{{ p }}</button>
+            </div>
+            <div data-if="tab == 'clothes'">
+                <div class="choices slots">
+                    <button data-class-on="cloth_slot == 'top'" data-event-click="cloth_slot('top')">Tops</button>
+                    <button data-class-on="cloth_slot == 'outer'" data-event-click="cloth_slot('outer')">Outerwear</button>
+                    <button data-class-on="cloth_slot == 'bottom'" data-event-click="cloth_slot('bottom')">Bottoms</button>
+                    <button data-class-on="cloth_slot == 'dress'" data-event-click="cloth_slot('dress')">Dresses</button>
+                    <button data-class-on="cloth_slot == 'socks'" data-event-click="cloth_slot('socks')">Socks</button>
+                    <button data-class-on="cloth_slot == 'shoes'" data-event-click="cloth_slot('shoes')">Shoes</button>
+                    <button data-class-on="cloth_slot == 'gloves'" data-event-click="cloth_slot('gloves')">Gloves</button>
+                </div>
+                <div class="dye">
+                    <span class="dyelabel">{{ cloth_slot_label }}</span>
+                    <span class="swatch small" data-for="c, i : cloth_swatches" data-style-background-color="c.css" data-event-click="cloth_colour(i)"><span class="tip">{{ c.name }}</span></span>
+                </div>
             </div>
         </div>
 
-        <div id="colours" data-if="tab == 'skin'">
-            <h2>Skin tone</h2>
-            <div class="swatches">
-                <span class="swatch" data-for="c, i : skin_swatches" data-style-background-color="c.css" data-event-click="skin(i)"><span class="tip">{{ c.name }}</span></span>
+        <div id="scroll">
+            <div id="sliders" data-if="tab != 'skin' && tab != 'hair' && tab != 'clothes'">
+                <div class="slider" data-for="s, i : sliders">
+                    <span class="label">{{ s.label }}</span>
+                    <input type="range" data-attr-min="s.min" data-attr-max="s.max" step="0.01" data-value="s.value"/>
+                    <span class="value">{{ s.value | format(2) }}</span>
+                    <button class="reset" data-event-click="reset_slider(i)">Reset</button>
+                </div>
             </div>
-            <p class="note">Skin textures, eye colour and make-up arrive with the next steps of the creator.</p>
-        </div>
 
-        <div id="hair" data-if="tab == 'hair'">
-            <h2>Hairstyle</h2>
-            <div class="choices">
-                <button data-for="h : hair_choices" data-class-on="hair_style == h.id" data-event-click="hair_style(h.id)">{{ h.label }}</button>
+            <div id="colours" data-if="tab == 'skin'">
+                <h2>Skin tone</h2>
+                <div class="swatches">
+                    <span class="swatch" data-for="c, i : skin_swatches" data-style-background-color="c.css" data-event-click="skin(i)"><span class="tip">{{ c.name }}</span></span>
+                </div>
+                <h2>Eye colour</h2>
+                <div class="swatches">
+                    <span class="swatch" data-for="c, i : eye_swatches" data-style-background-color="c.css" data-event-click="eyes(i)"><span class="tip">{{ c.name }}</span></span>
+                </div>
+                <p class="note">Skin textures and make-up arrive with the next steps of the creator.</p>
             </div>
-            <h2>Colour</h2>
-            <div class="swatches">
-                <span class="swatch" data-for="c, i : hair_swatches" data-style-background-color="c.css" data-event-click="hair_colour(i)"><span class="tip">{{ c.name }}</span></span>
+
+            <div id="hair" data-if="tab == 'hair'">
+                <h2>Hairstyle</h2>
+                <div class="choices">
+                    <button data-for="h : hair_choices" data-class-on="hair_style == h.id" data-event-click="hair_style(h.id)">{{ h.label }}</button>
+                </div>
+                <h2>Colour</h2>
+                <div class="swatches">
+                    <span class="swatch" data-for="c, i : hair_swatches" data-style-background-color="c.css" data-event-click="hair_colour(i)"><span class="tip">{{ c.name }}</span></span>
+                </div>
+                <h2>Length</h2>
+                <div class="slider">
+                    <input type="range" min="0.4" max="1.8" step="0.05" data-value="hair_length"/>
+                    <span class="value">{{ hair_length | format(2) }}</span>
+                </div>
+                <p class="note">Every strand grows from this head's own scalp and moves with the engine's hair physics: press Turn to see it swing.</p>
             </div>
-            <h2>Length</h2>
-            <div class="slider">
-                <input type="range" min="0.4" max="1.8" step="0.05" data-value="hair_length"/>
-                <span class="value">{{ hair_length | format(2) }}</span>
+
+            <div id="clothes" data-if="tab == 'clothes'">
+                <div class="cards">
+                    <div class="card" data-for="g : garments" data-class-on="g.worn" data-event-click="wear(g.id)">
+                        <img data-attr-src="g.thumb"/>
+                        <div class="name">{{ g.label }}</div>
+                    </div>
+                </div>
+                <p class="note">Click a garment to put it on, click it again to take it off. Skirts, dresses and coat tails are the engine's cloth: press Turn to see them swing. A dress replaces the top and the bottom.</p>
             </div>
-            <p class="note">Every strand grows from this head's own scalp and moves with the engine's hair physics: press Turn to see it swing.</p>
         </div>
     </div>
 

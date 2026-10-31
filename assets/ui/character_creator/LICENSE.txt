@@ -1,0 +1,5 @@
+The character creator's screen (creator.rml, creator.rcss) and the garment
+pictures in thumbs/ are the project's own work, under the project's MIT
+licence (LICENSE at the top of the repository). The pictures are generated:
+tools/garment_thumbs draws every garment of kke::garments() from the
+engine's own cuts of MakeHuman's CC0 body, so they carry no third-party art.

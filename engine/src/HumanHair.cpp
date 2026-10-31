@@ -85,7 +85,7 @@ HumanScalp findScalp(const HumanPack& pack, const std::vector<glm::vec3>& shaped
         const float above = glm::dot(p, scalp.up) / span;
         const float forward = glm::dot(p, scalp.front) / span;
         const bool forehead = forward > -0.25f;
-        const bool grows = forehead ? above > 0.62f : above > 0.18f - 0.25f * std::clamp(-forward - 0.6f, 0.0f, 1.0f);
+        const bool grows = forehead ? above > 0.50f : above > 0.18f - 0.25f * std::clamp(-forward - 0.6f, 0.0f, 1.0f);
         if (!grows) continue;
         scalp.verts.push_back(v);
         points.push_back(shaped[v]);
@@ -104,7 +104,7 @@ bool hairOnHuman(HairDesc& desc, const std::string& style, const HumanPack& pack
     // scalp, so strands start out over the skin, not in it.
     float outer = 0.0f;
     for (uint32_t v : scalp.verts) outer = std::max(outer, glm::distance(shaped[v], scalp.centre));
-    if (!hairstyleOnHead(desc, style, scalp.centre, outer, guides, scalp.up, scalp.front)) return false;
+    if (!hairstyleOnHead(desc, style, scalp.centre, outer, guides, scalp.up, scalp.front, 1.3f)) return false;
     // A real face stands out in front of that sphere: hair combed back
     // (the loose styles) starts back and up from the hairline, or it would
     // fall over the eyes.
@@ -127,9 +127,8 @@ bool hairOnHuman(HairDesc& desc, const std::string& style, const HumanPack& pack
         tris.push_back({ shaped[q[0]], shaped[q[1]], shaped[q[2]] });
         if (q[3] != q[2]) tris.push_back({ shaped[q[0]], shaped[q[2]], shaped[q[3]] });
     }
-    std::vector<size_t> keep;
-    for (size_t r = 0; r < desc.roots.size(); ++r) {
-        const glm::vec3 d = glm::normalize(desc.roots[r] - scalp.centre);
+    // Distance from the centre to the skin along d (1e9: no scalp there).
+    auto skinAlong = [&](const glm::vec3& d) {
         float best = 1e9f;
         for (const auto& t : tris) { // Moller-Trumbore, either side
             const glm::vec3 e1 = t[1] - t[0], e2 = t[2] - t[0], p = glm::cross(d, e2);
@@ -144,10 +143,32 @@ bool hairOnHuman(HairDesc& desc, const std::string& style, const HumanPack& pack
             const float hit = glm::dot(e2, qv) / det;
             if (hit > 0.0f) best = std::min(best, hit);
         }
+        return best;
+    };
+    // Braids and rows (roots tied to ties) are laid along the head's
+    // sphere: make it the one fitted to the scalp, not the one round it,
+    // or they float a finger's width over the head.
+    const bool tied = !desc.ties.empty();
+    if (tied) {
+        desc.headCenter = scalp.centre;
+        desc.headRadius = scalp.radius;
+    }
+    std::vector<size_t> keep;
+    for (size_t r = 0; r < desc.roots.size(); ++r) {
+        glm::vec3 d = glm::normalize(desc.roots[r] - scalp.centre);
+        float best = skinAlong(d);
+        // A row starting at the temple (in front of the hairline): start it
+        // a little further back, where the scalp is, rather than lose it.
+        for (int step = 0; tied && best > 1e8f && step < 12; ++step) {
+            d = glm::normalize(d - scalp.front * 0.06f); // back along the row, not up: rows would bunch on the crown
+            best = skinAlong(d);
+        }
         if (best > 1e8f) continue;
         desc.roots[r] = scalp.centre + d * (best + 0.0015f); // just over the skin
         keep.push_back(r);
     }
+    for (HairDesc::Tie& t : desc.ties) // the ends onto the skin too
+        if (const glm::vec3 d = glm::normalize(t.at - scalp.centre); skinAlong(d) < 1e8f) t.at = scalp.centre + d * skinAlong(d);
     if (keep.empty()) return false;
     auto pick = [&](auto& list) {
         if (list.size() != desc.roots.size()) return;
@@ -161,6 +182,61 @@ bool hairOnHuman(HairDesc& desc, const std::string& style, const HumanPack& pack
     pick(desc.tiedTo);
     pick(desc.roots);
     return true;
+}
+
+ModelMesh hairLocks(const std::vector<glm::vec3>& guides, size_t perGuide, const glm::vec3& headCentre, float width) {
+    ModelMesh mesh;
+    mesh.name = "hair-locks";
+    if (perGuide < 2) return mesh;
+    const size_t count = guides.size() / perGuide;
+    constexpr uint32_t kSides = 4;
+    mesh.vertices.reserve(count * perGuide * kSides);
+    for (size_t g = 0; g < count; ++g) {
+        const glm::vec3* p = &guides[g * perGuide];
+        glm::vec3 out = p[0] - headCentre;
+        out = glm::length(out) > 1e-6f ? glm::normalize(out) : glm::vec3(0.0f, 1.0f, 0.0f);
+        const auto base = static_cast<uint32_t>(mesh.vertices.size());
+        for (size_t i = 0; i < perGuide; ++i) {
+            const glm::vec3 along = i + 1 < perGuide ? p[i + 1] - p[i] : p[i] - p[i - 1];
+            const glm::vec3 t = glm::length(along) > 1e-7f ? glm::normalize(along) : glm::vec3(0.0f, -1.0f, 0.0f);
+            // The broad side faces away from the head, wherever the lock hangs.
+            glm::vec3 o = out - t * glm::dot(out, t);
+            o = glm::length(o) > 1e-4f ? glm::normalize(o) : glm::normalize(glm::cross(t, std::abs(t.x) < 0.9f ? glm::vec3(1, 0, 0) : glm::vec3(0, 1, 0)));
+            const glm::vec3 s = glm::cross(t, o);
+            const float f = static_cast<float>(i) / static_cast<float>(perGuide - 1);
+            const float w = 0.5f * width * (1.0f - 0.95f * std::pow(f, 1.6f)); // half width, to a point
+            const float d = w * 0.35f;
+            const glm::vec3 c = p[i] - (i == 0 ? out * 0.004f : glm::vec3(0.0f)); // the root a little into the scalp
+            const glm::vec3 corner[kSides] = { s * w, o * d, -s * w, -o * d * 0.4f };
+            for (const glm::vec3& k : corner) {
+                ModelVertex v;
+                v.position = c + k;
+                v.normal = glm::normalize(k / glm::vec3(std::max(w, 1e-6f)) + o * 0.3f); // rounded, leaning out
+                v.uv = glm::vec2(0.5f, f);
+                mesh.vertices.push_back(v);
+            }
+        }
+        for (uint32_t i = 0; i + 1 < perGuide; ++i)
+            for (uint32_t k = 0; k < kSides; ++k) {
+                const uint32_t a = base + i * kSides + k, b = base + i * kSides + (k + 1) % kSides;
+                const uint32_t c = a + kSides, d = b + kSides;
+                // Seen from outside the lock: a, b down the ring, c, d the next ring.
+                mesh.indices.insert(mesh.indices.end(), { a, c, b, b, c, d });
+            }
+    }
+    return mesh;
+}
+
+float lockWidth(const std::vector<glm::vec3>& roots) {
+    if (roots.size() < 2) return 0.03f;
+    float sum = 0.0f;
+    for (size_t i = 0; i < roots.size(); ++i) {
+        float best = 1e9f;
+        for (size_t j = 0; j < roots.size(); ++j)
+            if (j != i) best = std::min(best, glm::length(roots[i] - roots[j]));
+        sum += best;
+    }
+    return std::clamp(2.6f * sum / static_cast<float>(roots.size()), 0.008f, 0.07f);
 }
 
 } // namespace kke

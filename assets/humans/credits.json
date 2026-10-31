@@ -11,6 +11,17 @@
         "repo": "https://github.com/makehumancommunity/makehuman",
         "commit": "a8bc2d54ff0ac92e78ff71431b1023eda42bf482"
       }
+    },
+    {
+      "what": "Vitruvian body mesh and 4K skin maps (the realistic body of the character creator)",
+      "authors": "Sean Buckley (shape, morphs, UVs, textures, rigging), Olaf Delgado-Friedrichs (the original Antonia Polygon version, topology), SirMaxim (skin LUT), Upliner, AgentA1CR, Benjamin McDonnell, Mindfront; Antonia Polygon used with its author's permission to relicense",
+      "licence": "CC0-1.0",
+      "url": "https://github.com/Upliner/CharMorph-Vitruvian",
+      "source": {
+        "repo": "https://github.com/Upliner/CharMorph-Vitruvian",
+        "branch": "main",
+        "licenceStated": "config.yaml: license: CC0"
+      }
     }
   ]
 }

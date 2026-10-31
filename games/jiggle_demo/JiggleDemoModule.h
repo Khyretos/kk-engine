@@ -24,7 +24,7 @@ namespace kke_jiggle {
 // Jiggle physics, two scenes (Tab switches, or KKE_JIGGLE_SCENE=jelly|body):
 //  - Jelly: a strawberry jelly on a plate (kke::JellyBody) with balls
 //    raining onto it; they dent it, it wobbles, and it throws them back.
-//  - Body: a Synty character given extra curves and soft-tissue bones
+//  - Body: our Vitruvian woman (assets/bodies, auto-rigged) with soft-tissue bones
 //    (kke::addHumanoidSoftTissue), jogging, jumping and stopping on UAL
 //    clips, jiggling through kke::JiggleRig + kke::JiggleSkin. A twin
 //    without jiggle can run alongside for comparison.

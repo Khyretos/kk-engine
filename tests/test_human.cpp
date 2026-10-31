@@ -1,4 +1,7 @@
+#include "kke/Cloth.h"
 #include "kke/Human.h"
+#include "kke/HumanClothes.h"
+#include "kke/HumanEyes.h"
 #include "kke/HumanHair.h"
 #include "kke/HumanLook.h"
 #include "kke/HumanPack.h"
@@ -9,6 +12,7 @@
 #include <chrono>
 #include <cmath>
 #include <filesystem>
+#include <set>
 #include <stdexcept>
 
 // MakeHuman's CC0 human (assets/humans/makehuman.kkhpack, cooked by
@@ -209,8 +213,12 @@ TEST(HumanLook, JsonKeepsEverything) {
     look.skin = { 0.4f, 0.3f, 0.2f };
     look.hair = "wavy";
     look.hairLength = 0.6f;
+    look.clothes = { { "t-shirt", { 1.0f, 0.0f, 0.0f } }, { "tennis skirt", { 1.0f, 1.0f, 1.0f } } };
     kke::HumanLook back;
     ASSERT_TRUE(kke::lookFromJson(kke::lookToJson(look), back));
+    ASSERT_EQ(back.clothes.size(), 2u);
+    EXPECT_EQ(back.clothes[1].id, "tennis skirt");
+    EXPECT_FLOAT_EQ(back.clothes[0].colour.r, 1.0f);
     EXPECT_EQ(back.shape, look.shape);
     EXPECT_NEAR(back.skin.r, 0.4f, 0.003f);
     EXPECT_EQ(back.hair, "wavy");
@@ -239,13 +247,17 @@ TEST(HumanLook, ShareCodeIsShortAndBuildsTheSameBody) {
     kke::HumanLook look;
     kke::takeShape(h, look);
     look.hair = "afro";
+    look.clothes = { { "shorts", { 0.2f, 0.4f, 0.8f } } };
     const std::string code = kke::shareCode(look, pack());
     EXPECT_EQ(code.rfind("kh1.", 0), 0u);
-    EXPECT_LT(code.size(), 100u);
+    EXPECT_LT(code.size(), 110u);
 
     kke::HumanLook theirs;
     ASSERT_TRUE(kke::fromShareCode(code, pack(), theirs));
     EXPECT_EQ(theirs.hair, "afro");
+    ASSERT_EQ(theirs.clothes.size(), 1u);
+    EXPECT_EQ(theirs.clothes[0].id, "shorts");
+    EXPECT_NEAR(theirs.clothes[0].colour.b, 0.8f, 0.003f);
     for (const auto& [k, v] : look.shape) EXPECT_NEAR(theirs.shape.at(k), v, 2.0f / 254.0f + 1e-6f) << k;
     // The player's own body uses the rounded look too, so both machines
     // bake exactly the same vertices.
@@ -311,7 +323,7 @@ TEST(HumanHair, RootsSitOnTheSkin) {
         kke::HairDesc d;
         ASSERT_TRUE(kke::hairOnHuman(d, style, pack(), shaped, 160)) << style;
         kke::HairDesc sphere; // the same style on the scalp's sphere: most roots have skin under them
-        ASSERT_TRUE(kke::hairstyleOnHead(sphere, style, scalp.centre, scalp.radius, 160, scalp.up, scalp.front));
+        ASSERT_TRUE(kke::hairstyleOnHead(sphere, style, scalp.centre, scalp.radius, 160, scalp.up, scalp.front, 1.3f));
         EXPECT_GE(d.roots.size(), sphere.roots.size() * 6 / 10) << style;
         EXPECT_EQ(d.directions.size(), d.roots.size());
         if (!d.lengths.empty()) {
@@ -328,4 +340,476 @@ TEST(HumanHair, RootsSitOnTheSkin) {
     }
     kke::HairDesc d;
     EXPECT_FALSE(kke::hairOnHuman(d, "no such style", pack(), shaped, 160));
+}
+
+// Clothes are cut from the body suit and the long skirt every body
+// carries: each garment has vertices, a top stays on the torso and arms,
+// shoes on the feet, and a skirt is cloth pinned at its waistband.
+TEST(HumanClothes, EveryGarmentHasItsPart) {
+    NEED_PACK();
+    kke::Human h(pack());
+    const std::vector<glm::vec3> shaped = h.shapedPositions();
+    EXPECT_GE(kke::garments().size(), 100u); // a wardrobe, not a sample
+    for (const kke::GarmentInfo& g : kke::garments()) {
+        const std::vector<kke::GarmentShape> pieces = kke::garmentPieces(pack(), shaped, g.id);
+        ASSERT_FALSE(pieces.empty()) << g.id;
+        EXPECT_EQ(kke::garmentShape(pack(), shaped, g.id).verts, pieces[0].verts) << g.id;
+        for (const kke::GarmentShape& s : pieces) {
+            EXPECT_GT(s.verts.size(), 20u) << g.id;
+            EXPECT_EQ(s.cloth, !s.pinned.empty()) << g.id;
+            EXPECT_EQ(s.group == "body", g.slot == "gloves") << g.id; // gloves alone are cut from the skin
+        }
+        if (g.slot == "dress") { EXPECT_EQ(pieces.size(), 2u) << g.id; }
+        EXPECT_EQ(kke::clothFabric(g.fabric).name, g.fabric) << g.id; // a preset that exists
+        EXPECT_TRUE(std::find(kke::garmentSlots().begin(), kke::garmentSlots().end(), g.slot) != kke::garmentSlots().end()) << g.id;
+    }
+    // A dress is a bodice and a skirt; a long coat a jacket and its tails.
+    EXPECT_EQ(kke::garmentPieces(pack(), shaped, "sundress").size(), 2u);
+    EXPECT_TRUE(kke::garmentPieces(pack(), shaped, "sundress")[1].cloth);
+    EXPECT_EQ(kke::garmentPieces(pack(), shaped, "long coat").size(), 2u);
+    EXPECT_EQ(kke::garmentPieces(pack(), shaped, "denim jacket").size(), 1u);
+    // Necklines and sleeves take cloth away from the same suit.
+    const auto count = [&](const char* id) { return kke::garmentShape(pack(), shaped, id).verts.size(); };
+    EXPECT_LT(count("v-neck tee"), count("t-shirt"));
+    EXPECT_LT(count("deep-v tee"), count("v-neck tee"));
+    EXPECT_GT(count("turtleneck"), count("long sleeve"));
+    EXPECT_LT(count("tank top"), count("t-shirt"));
+    EXPECT_LT(count("t-shirt"), count("three-quarter tee"));
+    EXPECT_LT(count("three-quarter tee"), count("long sleeve"));
+    EXPECT_LT(count("tube top"), count("tank top"));
+    EXPECT_LT(count("ankle socks"), count("socks"));
+    EXPECT_LT(count("socks"), count("knee socks"));
+    EXPECT_LT(count("gloves"), count("long gloves"));
+    EXPECT_LT(count("fingerless gloves"), count("gloves"));
+    EXPECT_GT(count("arm warmers"), 20u);
+    // Slots: one per slot, and a dress takes the top's and the bottom's place.
+    EXPECT_TRUE(kke::garmentSlotsClash("top", "top"));
+    EXPECT_TRUE(kke::garmentSlotsClash("dress", "top"));
+    EXPECT_TRUE(kke::garmentSlotsClash("bottom", "dress"));
+    EXPECT_FALSE(kke::garmentSlotsClash("dress", "outer"));
+    EXPECT_FALSE(kke::garmentSlotsClash("top", "outer"));
+    EXPECT_EQ(kke::findGarment("jeans")->fabric, "denim");
+    const auto lowest = [&](const char* id) {
+        float y = 1e9f;
+        for (uint32_t v : kke::garmentShape(pack(), shaped, id).verts) y = std::min(y, shaped[v].y);
+        return y;
+    };
+    const auto highest = [&](const char* id) {
+        float y = -1e9f;
+        for (uint32_t v : kke::garmentShape(pack(), shaped, id).verts) y = std::max(y, shaped[v].y);
+        return y;
+    };
+    EXPECT_LT(highest("shoes"), 0.15f);                 // feet
+    EXPECT_GT(lowest("t-shirt"), 0.7f);                 // down to the hips
+    EXPECT_LT(lowest("trousers"), lowest("shorts") - 0.3f);
+    EXPECT_LT(lowest("long skirt"), lowest("tennis skirt") - 0.4f);
+    EXPECT_GT(lowest("tennis skirt"), 0.6f);            // above the knee
+    EXPECT_GT(lowest("crop top"), lowest("t-shirt") + 0.05f); // the belly shows
+    EXPECT_TRUE(kke::garmentShape(pack(), shaped, "no such garment").verts.empty());
+}
+
+// A game gets the person dressed as one skinned model: a mesh per
+// garment on the body's own bones, in the garment's colour, every vertex
+// outside the skin it covers.
+TEST(HumanClothes, DressedBakeIsOneSkinnedModel) {
+    NEED_PACK();
+    kke::Human h(pack());
+    h.set("macrodetails/Gender", 0.0f);
+    kke::Human::Bake b = h.bake();
+    const size_t bodyMeshes = b.model.meshes.size();
+    const std::vector<kke::HumanLook::Worn> clothes = { { "t-shirt", { 1.0f, 0.0f, 0.0f } }, { "tennis skirt", {} }, { "shoes", {} } };
+    kke::dress(b.model, h, clothes);
+    ASSERT_EQ(b.model.meshes.size(), bodyMeshes + clothes.size());
+    for (size_t i = 0; i < clothes.size(); ++i) {
+        const kke::ModelMesh& m = b.model.meshes[bodyMeshes + i];
+        EXPECT_EQ(m.name, clothes[i].id);
+        EXPECT_TRUE(m.skinned);
+        EXPECT_GT(m.indices.size(), 60u) << m.name;
+        for (const kke::ModelVertex& v : m.vertices) {
+            ASSERT_LT(v.joints.x, b.model.bones.size());
+            ASSERT_NEAR(v.weights.x + v.weights.y + v.weights.z + v.weights.w, 1.0f, 1e-4f) << m.name;
+        }
+    }
+    EXPECT_EQ(b.model.materials[b.model.meshes[bodyMeshes].material].baseColor, glm::vec3(1.0f, 0.0f, 0.0f));
+    kke::dress(b.model, h, {}); // nothing worn: nothing added
+    EXPECT_EQ(b.model.meshes.size(), bodyMeshes + clothes.size());
+    // A dress gives two meshes (bodice and skirt), gloves one from the
+    // skin's own hands; the material is the fabric's: satin shinier than wool.
+    const size_t before = b.model.meshes.size();
+    kke::dress(b.model, h, { { "slip dress", {} }, { "gloves", {} } });
+    ASSERT_EQ(b.model.meshes.size(), before + 3);
+    EXPECT_EQ(b.model.meshes[before].name, "slip dress");
+    EXPECT_EQ(b.model.meshes[before + 1].name, "slip dress");
+    EXPECT_EQ(b.model.meshes[before + 2].name, "gloves");
+    EXPECT_TRUE(b.model.meshes[before + 2].skinned);
+    EXPECT_LT(b.model.materials[b.model.meshes[before].material].roughness, 0.6f);
+    kke::dress(b.model, h, { { "sweater", {} } });
+    EXPECT_GT(b.model.materials.back().roughness, 0.8f);
+}
+
+// The helper eyes are white balls: addIrises gives each a pupil, an iris
+// and a rim, on the ball's front, skinned like the eye, and moves them
+// again after a reshape instead of adding more.
+TEST(HumanEyes, IrisesSitOnTheFrontOfEachEye) {
+    NEED_PACK();
+    kke::Human h(pack());
+    kke::Human::Bake b = h.bake();
+    const size_t before = b.model.meshes.size();
+    ASSERT_TRUE(kke::addIrises(b.model, glm::vec3(0.2f, 0.4f, 0.7f)));
+    ASSERT_EQ(b.model.meshes.size(), before + 3);
+    float eyeFront = -1e9f;
+    for (const kke::ModelMesh& m : b.model.meshes)
+        if (m.name == "helper-l-eye")
+            for (const kke::ModelVertex& v : m.vertices) eyeFront = std::max(eyeFront, v.position.z);
+    const kke::ModelMesh& pupil = b.model.meshes[before];
+    EXPECT_EQ(pupil.name, "eye-pupil");
+    EXPECT_TRUE(pupil.skinned);
+    float pupilFront = -1e9f;
+    for (const kke::ModelVertex& v : pupil.vertices) {
+        pupilFront = std::max(pupilFront, v.position.z);
+        EXPECT_NEAR(v.weights.x + v.weights.y + v.weights.z + v.weights.w, 1.0f, 1e-4f);
+    }
+    EXPECT_GT(pupilFront, eyeFront);              // in front of the ball
+    EXPECT_LT(pupilFront, eyeFront + 0.002f);     // but on it
+    EXPECT_LT(b.model.materials[pupil.material].baseColor.b, 0.05f); // near black
+    EXPECT_EQ(b.model.materials[b.model.meshes[before + 1].material].baseColor, glm::vec3(0.2f, 0.4f, 0.7f));
+
+    h.set("macrodetails-height/Height", 1.0f);
+    h.reshape(b);
+    ASSERT_TRUE(kke::addIrises(b.model, glm::vec3(1.0f), /*update=*/true));
+    EXPECT_EQ(b.model.meshes.size(), before + 3);
+    float eyeTop = -1e9f, pupilTop = -1e9f;
+    for (const kke::ModelVertex& v : b.model.meshes[before].vertices) pupilTop = std::max(pupilTop, v.position.y);
+    for (const kke::ModelMesh& m : b.model.meshes)
+        if (m.name == "helper-l-eye" || m.name == "helper-r-eye")
+            for (const kke::ModelVertex& v : m.vertices) eyeTop = std::max(eyeTop, v.position.y);
+    EXPECT_LT(pupilTop, eyeTop); // moved up with the taller body's eyes
+    EXPECT_GT(pupilTop, eyeTop - 0.03f);
+}
+
+// addBrows grows each brow over its eye and the lashes along the lid,
+// skinned like the face, the same count after a reshape so update moves
+// them instead of adding more.
+TEST(HumanEyes, BrowsAndLashesSitOverEachEye) {
+    NEED_PACK();
+    kke::Human h(pack());
+    kke::Human::Bake b = h.bake();
+    kke::ModelMesh skin;
+    glm::vec3 eyeMin(1e9f), eyeMax(-1e9f);
+    for (const kke::ModelMesh& m : b.model.meshes) {
+        if (m.name == "body") skin = m;
+        if (m.name == "helper-l-eye" || m.name == "helper-r-eye")
+            for (const kke::ModelVertex& v : m.vertices) {
+                eyeMin = glm::min(eyeMin, v.position);
+                eyeMax = glm::max(eyeMax, v.position);
+            }
+    }
+    const size_t before = b.model.meshes.size();
+    ASSERT_TRUE(kke::addBrows(b.model, skin, glm::vec3(0.3f, 0.2f, 0.1f)));
+    ASSERT_EQ(b.model.meshes.size(), before + 2);
+    const kke::ModelMesh& brows = b.model.meshes[before];
+    const kke::ModelMesh& lashes = b.model.meshes[before + 1];
+    EXPECT_EQ(brows.name, "brows");
+    EXPECT_EQ(lashes.name, "lashes");
+    EXPECT_TRUE(brows.skinned);
+    EXPECT_GT(brows.indices.size(), 1000u);
+    EXPECT_GT(lashes.indices.size(), 300u);
+    for (const kke::ModelVertex& v : brows.vertices) {
+        EXPECT_GT(v.position.y, eyeMax.y - 0.002f); // above the eyes
+        EXPECT_LT(v.position.y, eyeMax.y + 0.04f);  // but on the brow, not the forehead
+        EXPECT_NEAR(v.weights.x + v.weights.y + v.weights.z + v.weights.w, 1.0f, 1e-4f);
+    }
+    for (const kke::ModelVertex& v : lashes.vertices) {
+        EXPECT_GT(v.position.z, eyeMin.z); // in front of the eyes' backs
+        EXPECT_GT(v.position.y, (eyeMin.y + eyeMax.y) * 0.5f - 0.004f); // the upper lids
+    }
+    EXPECT_EQ(b.model.materials[brows.material].baseColor, glm::vec3(0.3f, 0.2f, 0.1f));
+
+    h.set("macrodetails-height/Height", 1.0f);
+    h.reshape(b);
+    for (const kke::ModelMesh& m : b.model.meshes)
+        if (m.name == "body") skin = m;
+    const glm::vec3 first = b.model.meshes[before].vertices[0].position;
+    ASSERT_TRUE(kke::addBrows(b.model, skin, glm::vec3(1.0f), /*update=*/true));
+    EXPECT_EQ(b.model.meshes.size(), before + 2);
+    EXPECT_GT(b.model.meshes[before].vertices[0].position.y, first.y); // up with the taller face
+}
+
+// keepOutside lifts a garment pushed into the skin back over it.
+TEST(HumanClothes, KeepOutsideLiftsClothOffTheSkin) {
+    kke::ModelMesh skin, cloth;
+    for (int i = 0; i < 4; ++i) {
+        kke::ModelVertex v;
+        v.position = glm::vec3(static_cast<float>(i), 0.0f, 0.0f);
+        v.normal = glm::vec3(0.0f, 0.0f, 1.0f);
+        skin.vertices.push_back(v);
+        v.position.z = i % 2 ? 0.01f : -0.005f; // two inside, two well clear
+        cloth.vertices.push_back(v);
+    }
+    const std::vector<uint32_t> under = kke::skinUnder(cloth, skin);
+    ASSERT_EQ(under, (std::vector<uint32_t>{ 0, 1, 2, 3 }));
+    kke::keepOutside(cloth, skin, under, 0.003f);
+    EXPECT_NEAR(cloth.vertices[0].position.z, 0.003f, 1e-6f);
+    EXPECT_NEAR(cloth.vertices[1].position.z, 0.01f, 1e-6f);
+    EXPECT_NEAR(cloth.vertices[2].position.z, 0.003f, 1e-6f);
+}
+
+// The anime face is a style layer: every name is a slider the pack has,
+// it reshapes the face without touching the person's own values, and an
+// empty style gives the realistic face back exactly.
+TEST(HumanStyle, AnimeFaceReshapesWithoutChangingTheLook) {
+    NEED_PACK();
+    for (const auto& [name, offset] : kke::Human::animeFace()) EXPECT_GE(pack().findModifier(name), 0) << name;
+    kke::Human h(pack());
+    h.set("nose/nose-hump-decr|incr", 0.4f);
+    const std::vector<glm::vec3> real = h.shapedPositions();
+    const auto values = h.values();
+    h.setStyle(kke::Human::animeFace());
+    const std::vector<glm::vec3> anime = h.shapedPositions();
+    EXPECT_EQ(h.values(), values);
+    float moved = 0.0f;
+    for (size_t i = 0; i < real.size(); ++i) moved = std::max(moved, glm::length(anime[i] - real[i]));
+    EXPECT_GT(moved, 0.003f);
+    h.setStyle({});
+    EXPECT_EQ(h.shapedPositions(), real);
+}
+
+// hairLocks: one closed, tapered lock per guide, the same counts for the
+// same guides (so a game copies new positions in each frame), wide at the
+// root and a point at the tip.
+TEST(HumanHair, LocksTaperFromRootToTip) {
+    std::vector<glm::vec3> guides;
+    for (int g = 0; g < 3; ++g)
+        for (int i = 0; i < 5; ++i) guides.emplace_back(0.03f * static_cast<float>(g), 1.7f - 0.04f * static_cast<float>(i), 0.08f);
+    const kke::ModelMesh a = kke::hairLocks(guides, 5, glm::vec3(0.03f, 1.6f, 0.0f), 0.03f);
+    EXPECT_EQ(a.vertices.size(), 3u * 5u * 4u);
+    EXPECT_EQ(a.indices.size(), 3u * 4u * 4u * 6u);
+    const float root = glm::length(a.vertices[0].position - a.vertices[2].position);
+    const float tip = glm::length(a.vertices[16].position - a.vertices[18].position);
+    EXPECT_NEAR(root, 0.03f, 1e-3f);
+    EXPECT_LT(tip, root * 0.1f);
+    guides[4].x += 0.05f; // it swings
+    const kke::ModelMesh b = kke::hairLocks(guides, 5, glm::vec3(0.03f, 1.6f, 0.0f), 0.03f);
+    EXPECT_EQ(b.vertices.size(), a.vertices.size());
+    EXPECT_EQ(b.indices, a.indices);
+    EXPECT_NEAR(kke::lockWidth({ { 0, 0, 0 }, { 0.01f, 0, 0 } }), 0.026f, 1e-4f);
+}
+
+// Open necklines are curves round the base of the neck, not whatever bone each
+// vertex leans on: a crew sits at the neck, scoops and Vs drop in front, and
+// none of them leaves a torn collar (a vertex above the curve inside it).
+TEST(HumanClothes, NecklinesAreCurvesRoundTheNeck) {
+    NEED_PACK();
+    for (float gender : { 0.0f, 1.0f }) {
+        kke::Human h(pack());
+        h.set("macrodetails/Gender", gender);
+        const auto shaped = h.shapedPositions();
+        const glm::vec3 neck = h.jointPosition("neck01____head", shaped);
+        auto topFront = [&](const char* id, size_t* count) { // the neckline: the highest cloth in front, in the middle
+            float top = -1e9f;
+            *count = 0;
+            for (const kke::GarmentShape& piece : kke::garmentPieces(pack(), shaped, id))
+                for (uint32_t v : piece.verts) {
+                    const glm::vec3& p = shaped[v];
+                    if (std::abs(p.x) > 0.2f) continue; // the arms
+                    ++*count;
+                    // Nothing of the cloth stands over the base of the neck.
+                    EXPECT_LE(p.y, neck.y + 0.0125f) << id;
+                    if (p.z > neck.z && std::abs(p.x) < 0.02f) top = std::max(top, p.y);
+                }
+            return top;
+        };
+        size_t crewN = 0, scoopN = 0, vN = 0, deepN = 0;
+        const float crew = topFront("t-shirt", &crewN), scoop = topFront("scoop tee", &scoopN);
+        const float v = topFront("v-neck tee", &vN), deep = topFront("deep-v tee", &deepN);
+        // Crew at the neck, scoop lower, V lower, deep V lowest.
+        EXPECT_GT(crew, scoop - 1e-4f);
+        EXPECT_GT(scoop, v - 0.02f);
+        EXPECT_GT(v, deep + 0.02f);
+        EXPECT_GT(crew - deep, 0.1f) << "a deep V opens at least a hand's width below a crew";
+        EXPECT_GT(crewN, scoopN);
+        EXPECT_GT(scoopN, deepN);
+        EXPECT_GT(crewN, vN);
+    }
+}
+
+// spine05 carries the belly and the groin: trousers cut by bone left a hole
+// there (the bare patch between the legs).
+TEST(HumanClothes, TrousersCoverTheHipsAndTheGroin) {
+    NEED_PACK();
+    for (float gender : { 0.0f, 1.0f }) {
+        kke::Human h(pack());
+        h.set("macrodetails/Gender", gender);
+        const auto shaped = h.shapedPositions();
+        const auto pieces = kke::garmentPieces(pack(), shaped, "jeans");
+        ASSERT_EQ(pieces.size(), 1u);
+        const std::set<uint32_t> worn(pieces[0].verts.begin(), pieces[0].verts.end());
+        float top = -1e9f;
+        for (uint32_t v : pieces[0].verts) top = std::max(top, shaped[v].y);
+        const kke::HumanGroup& g = pack().groups()[static_cast<size_t>(pack().findGroup("helper-tights"))];
+        std::set<uint32_t> suit;
+        for (uint32_t f = g.firstFace; f < g.firstFace + g.faceCount; ++f)
+            for (uint32_t v : pack().quads()[f].verts) suit.insert(v);
+        int bare = 0, checked = 0;
+        for (uint32_t v : suit) {
+            const glm::vec3& p = shaped[v];
+            if (std::abs(p.x) > 0.2f || p.y > top - 0.005f || p.y < top - 0.3f) continue; // not an arm; the hips and the thighs
+            ++checked;
+            if (!worn.count(v)) ++bare;
+        }
+        EXPECT_GT(checked, 100);
+        EXPECT_EQ(bare, 0) << "gender " << gender;
+    }
+}
+
+// An open neckline is a curve: the cut keeps whole quads, so the vertices
+// just under it are recorded to be slid up onto it (garmentMesh()).
+TEST(HumanClothes, OpenNecklinesRecordTheirLift) {
+    NEED_PACK();
+    kke::Human h(pack());
+    const auto shaped = h.shapedPositions();
+    for (const char* id : { "t-shirt", "scoop tee", "v-neck tee", "deep-v tee" }) {
+        const auto pieces = kke::garmentPieces(pack(), shaped, id);
+        ASSERT_FALSE(pieces.empty()) << id;
+        EXPECT_GT(pieces[0].neckLift.size(), 10u) << id;
+        for (const auto& [v, up] : pieces[0].neckLift) {
+            EXPECT_GT(up, 0.0f) << id;
+            EXPECT_LT(up, 0.03f) << id;
+        }
+    }
+    EXPECT_TRUE(kke::garmentPieces(pack(), shaped, "turtleneck")[0].neckLift.empty());
+}
+
+// CharMorph's Vitruvian body on MakeHuman's terms (assets/humans/vitruvian.kkhpack,
+// tools/makehuman/vitruvian_pack.py): the same sliders, rig, helper meshes and
+// groups, so everything that reads a pack works on the finer body.
+namespace {
+const kke::HumanPack& vitPack() {
+    static const kke::HumanPack p = [] {
+        namespace fs = std::filesystem;
+        const fs::path path = fs::path(KKE_SOURCE_DIR) / "assets/humans/vitruvian.kkhpack";
+        return fs::exists(path) ? kke::HumanPack::load(path.string()) : kke::HumanPack{};
+    }();
+    return p;
+}
+} // namespace
+#define NEED_VIT_PACK()                                                                                                \
+    if (vitPack().positions().empty()) GTEST_SKIP() << "assets/humans/vitruvian.kkhpack missing"
+
+TEST(VitruvianBody, HasMakeHumansSlidersAndRigOnAFinerBody) {
+    NEED_VIT_PACK();
+    NEED_PACK();
+    const kke::HumanPack& v = vitPack();
+    EXPECT_EQ(v.targets().size(), pack().targets().size());
+    EXPECT_EQ(v.modifiers().size(), pack().modifiers().size());
+    EXPECT_EQ(v.bones().size(), pack().bones().size());
+    EXPECT_EQ(v.joints().size(), pack().joints().size());
+    ASSERT_EQ(v.groups().size(), pack().groups().size());
+    for (size_t g = 0; g < v.groups().size(); ++g) EXPECT_EQ(v.groups()[g].name, pack().groups()[g].name);
+    // A body twice as fine: its skin has far more faces than MakeHuman's.
+    const int body = v.findGroup("body");
+    ASSERT_GE(body, 0);
+    EXPECT_GT(v.groups()[static_cast<size_t>(body)].faceCount, 40000u);
+    EXPECT_NE(v.licence().find("Vitruvian"), std::string::npos);
+    // Skin UVs are one atlas: nothing outside 0..1.
+    for (const auto& uv : v.uvs()) {
+        EXPECT_GE(uv.x, -1e-4f);
+        EXPECT_LE(uv.x, 1.0001f);
+        EXPECT_GE(uv.y, -1e-4f);
+        EXPECT_LE(uv.y, 1.0001f);
+    }
+}
+
+TEST(VitruvianBody, DefaultSlidersGiveAPersonAndTheArchetypesDiffer) {
+    NEED_VIT_PACK();
+    kke::Human h(vitPack());
+    const kke::Human::Bake mid = h.bake();
+    const float tall = mid.model.boundsMax.y - mid.model.boundsMin.y;
+    EXPECT_GT(tall, 1.55f);
+    EXPECT_LT(tall, 1.85f);
+    EXPECT_NEAR(mid.model.boundsMin.y, 0.0f, 0.01f); // feet on the floor
+    auto build = [&](float gender) {
+        kke::Human b(vitPack());
+        b.set("macrodetails/Gender", gender);
+        const auto shaped = b.shapedPositions();
+        const glm::vec3 l = b.jointPosition("upperarm01.L____head", shaped), r = b.jointPosition("upperarm01.R____head", shaped);
+        return std::pair<float, float>(std::abs(l.x - r.x), b.jointPosition("head____head", shaped).y);
+    };
+    const auto female = build(0.0f), male = build(1.0f);
+    EXPECT_GT(male.first, female.first + 0.03f) << "a man's shoulders are wider";
+    EXPECT_GT(male.second, female.second) << "and he stands taller";
+    // The rig is on it: every skinned vertex has weights that add up.
+    for (const kke::ModelMesh& m : mid.model.meshes)
+        for (const kke::ModelVertex& vtx : m.vertices)
+            ASSERT_NEAR(vtx.weights.x + vtx.weights.y + vtx.weights.z + vtx.weights.w, 1.0f, 1e-3f) << m.name;
+}
+
+TEST(VitruvianBody, EyesBrowsAndHairSitOnTheFace) {
+    NEED_VIT_PACK();
+    kke::Human h(vitPack());
+    kke::Human::Bake b = h.bake();
+    kke::ModelMesh skin;
+    glm::vec3 eyeMin(1e9f), eyeMax(-1e9f);
+    for (const kke::ModelMesh& m : b.model.meshes) {
+        if (m.name == "body") skin = m;
+        if (m.name == "helper-l-eye" || m.name == "helper-r-eye")
+            for (const kke::ModelVertex& v : m.vertices) {
+                eyeMin = glm::min(eyeMin, v.position);
+                eyeMax = glm::max(eyeMax, v.position);
+            }
+    }
+    // The eyeballs were fitted to Vitruvian's own: round, about 2.4 cm.
+    const float eyeHeight = eyeMax.y - eyeMin.y;
+    EXPECT_GT(eyeHeight, 0.018f);
+    EXPECT_LT(eyeHeight, 0.032f);
+    const size_t before = b.model.meshes.size();
+    ASSERT_TRUE(kke::addBrows(b.model, skin, glm::vec3(0.3f, 0.2f, 0.1f)));
+    for (const kke::ModelVertex& v : b.model.meshes[before].vertices) {
+        EXPECT_GT(v.position.y, eyeMax.y - 0.002f);
+        EXPECT_LT(v.position.y, eyeMax.y + 0.04f);
+    }
+    const auto shaped = h.shapedPositions();
+    const kke::HumanScalp scalp = kke::findScalp(vitPack(), shaped);
+    ASSERT_GT(scalp.verts.size(), 200u);
+    EXPECT_GT(scalp.radius, 0.06f);
+    EXPECT_LT(scalp.radius, 0.14f);
+    for (const char* style : { "short", "long", "afro", "cornrows" }) {
+        kke::HairDesc d;
+        ASSERT_TRUE(kke::hairOnHuman(d, style, vitPack(), shaped, 160)) << style;
+        kke::HairDesc sphere; // the same style on the scalp's sphere: most roots have skin under them
+        ASSERT_TRUE(kke::hairstyleOnHead(sphere, style, scalp.centre, scalp.radius, 160, scalp.up, scalp.front, 1.3f));
+        EXPECT_GE(d.roots.size(), sphere.roots.size() * 6 / 10) << style;
+        EXPECT_GT(d.roots.size(), 5u) << style;
+    }
+}
+
+TEST(VitruvianBody, EveryGarmentFitsIt) {
+    NEED_VIT_PACK();
+    kke::Human h(vitPack());
+    const auto shaped = h.shapedPositions();
+    for (const kke::GarmentInfo& g : kke::garments()) {
+        const auto pieces = kke::garmentPieces(vitPack(), shaped, g.id);
+        ASSERT_FALSE(pieces.empty()) << g.id;
+        for (const kke::GarmentShape& piece : pieces) {
+            EXPECT_FALSE(piece.verts.empty()) << g.id;
+            for (uint32_t v : piece.verts) ASSERT_LT(v, shaped.size()) << g.id;
+        }
+    }
+    // Trousers still reach the groin: the suit was carried onto the finer skin, not recut.
+    EXPECT_FALSE(kke::garmentPieces(vitPack(), shaped, "jeans")[0].verts.empty());
+    const kke::Human::Bake dressed = h.bake();
+    EXPECT_GT(dressed.model.meshes.size(), 3u);
+}
+
+// The clothes browser (assets/ui/character_creator/thumbs, made by
+// tools/garment_thumbs) shows a picture of every garment: add a garment and
+// the pictures have to be made again.
+TEST(HumanClothes, EveryGarmentHasAThumbnail) {
+    namespace fs = std::filesystem;
+    const fs::path dir = fs::path(KKE_SOURCE_DIR) / "assets/ui/character_creator/thumbs";
+    for (const kke::GarmentInfo& g : kke::garments()) {
+        std::string file = g.id;
+        std::replace(file.begin(), file.end(), ' ', '_');
+        EXPECT_TRUE(fs::exists(dir / (file + ".png"))) << g.id << ": run kke_garment_thumbs (see tools/garment_thumbs/main.cpp)";
+    }
 }
