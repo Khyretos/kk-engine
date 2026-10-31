@@ -683,6 +683,10 @@ private:
     // the newest picture of each kind (written with the report).
     struct BenchShots;
     std::unique_ptr<BenchShots> m_benchShots;
+    // The test harness (kke/TestHarness.h): fixed frame time, input tape,
+    // screenshots at chosen frames. Null unless a KKE_ switch asks for it.
+    struct Harness;
+    std::unique_ptr<Harness> m_harness;
     void writeBenchmarkShots(const std::filesystem::path& dir, const std::string& name);
 };
 

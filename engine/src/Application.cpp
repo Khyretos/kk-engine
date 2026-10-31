@@ -1,4 +1,5 @@
 #include "kke/Application.h"
+#include "kke/TestHarness.h"
 #include "kke/SkyRenderer.h"
 #include "BehindPass.h"
 #include "ClusterLightPass.h"
@@ -39,6 +40,7 @@
 #include <cmath>
 #include <chrono>
 #include <filesystem>
+#include <optional>
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <system_error>
@@ -610,6 +612,93 @@ struct Application::BenchShots {
     }
 };
 
+struct Application::Harness {
+    static constexpr uint64_t kTag = 1ull << 62; // capture tags that are ours, not the benchmark's
+    std::optional<float> fixedDt;
+    std::string recordPath;
+    harness::InputTape tape;     // being recorded
+    harness::InputTape playback; // being played
+    bool recording = false, playing = false;
+    std::vector<harness::ShotPlan> shots;
+    size_t nextShot = 0, savedShots = 0;
+    uint64_t quitAt = 0;
+    uint64_t frame = 0; // frames run so far (the one running now)
+
+    static std::unique_ptr<Harness> fromEnvironment() {
+        auto logger = log::get("TestHarness");
+        auto h = std::make_unique<Harness>();
+        bool any = false;
+        if (const char* v = dev::env("KKE_FIXED_DT"); v && *v) {
+            h->fixedDt = harness::parseFixedDt(v);
+            if (h->fixedDt) logger->info("fixed frame time {:.6f} s", *h->fixedDt);
+            else logger->error("KKE_FIXED_DT='{}': expected frames a second (60) or seconds (0.0166)", v);
+            any = true;
+        }
+        if (const char* v = dev::env("KKE_INPUT_RECORD"); v && *v) {
+            h->recordPath = v;
+            h->recording = any = true;
+            logger->info("recording input to {}", v);
+        }
+        if (const char* v = dev::env("KKE_INPUT_PLAYBACK"); v && *v) {
+            std::string error;
+            if (h->playback.load(v, &error)) {
+                h->playing = true;
+                logger->info("playing input from {}: {} event(s) up to frame {}", v, h->playback.events().size(), h->playback.lastFrame());
+            } else {
+                logger->error("KKE_INPUT_PLAYBACK: {}", error);
+            }
+            any = true;
+        }
+        if (const char* v = dev::env("KKE_SHOTS"); v && *v) {
+            std::string error;
+            if (auto plan = harness::parseShotPlan(v, &error)) h->shots = std::move(*plan);
+            else logger->error("KKE_SHOTS: {}", error);
+            any = true;
+        }
+        if (const char* v = dev::env("KKE_QUIT_AT_FRAME"); v && *v) {
+            h->quitAt = std::strtoull(v, nullptr, 10);
+            any = true;
+        }
+        return any ? std::move(h) : nullptr;
+    }
+
+    // Pushes this frame's recorded events into SDL's queue: the next poll reads them.
+    void pushDue(SDL_Window* window) {
+        if (!playing) return;
+        const SDL_WindowID id = SDL_GetWindowID(window);
+        for (harness::TapeEvent* t : playback.due(frame)) {
+            SDL_Event e = t->event;
+            e.common.timestamp = SDL_GetTicksNS();
+            switch (e.type) {
+            case SDL_EVENT_KEY_DOWN:
+            case SDL_EVENT_KEY_UP: e.key.windowID = id; break;
+            case SDL_EVENT_TEXT_INPUT: e.text.windowID = id; break;
+            case SDL_EVENT_MOUSE_MOTION: e.motion.windowID = id; break;
+            case SDL_EVENT_MOUSE_BUTTON_DOWN:
+            case SDL_EVENT_MOUSE_BUTTON_UP: e.button.windowID = id; break;
+            case SDL_EVENT_MOUSE_WHEEL: e.wheel.windowID = id; break;
+            default: e.tfinger.windowID = id; break;
+            }
+            SDL_PushEvent(&e);
+        }
+    }
+
+    void save(const Renderer::FrameCapture& c) {
+        const size_t index = static_cast<size_t>(c.tag & ~kTag);
+        if (index >= shots.size()) return;
+        const std::filesystem::path path(shots[index].path);
+        std::error_code ec;
+        if (path.has_parent_path()) std::filesystem::create_directories(path.parent_path(), ec);
+        const int w = static_cast<int>(c.width), hgt = static_cast<int>(c.height);
+        if (stbi_write_png(path.string().c_str(), w, hgt, 4, c.rgba.data(), w * 4)) {
+            ++savedShots;
+            log::get("TestHarness")->info("frame {}: screenshot {} ({}x{})", shots[index].frame, path.generic_string(), w, hgt);
+        } else {
+            log::get("TestHarness")->error("frame {}: can't write {}", shots[index].frame, path.generic_string());
+        }
+    }
+};
+
 void Application::startBenchmark(const BenchOptions& options) {
     m_bench = std::make_unique<BenchRecorder>(options);
     if (options.screenshots) {
@@ -814,6 +903,12 @@ void Application::run() {
     if (dev::flag("KKE_HIDE_UI"))
         for (Module* m : m_initOrder) m->setUiVisible(false);
 
+    m_harness = Harness::fromEnvironment();
+    if (m_harness) {
+        if (!m_harness->shots.empty()) m_renderer->enableCapture();
+        m_harness->pushDue(m_window.handle());
+    }
+
     auto startTime = std::chrono::high_resolution_clock::now();
     auto lastFrameTime = startTime;
     float accumulator = 0.0f;
@@ -824,6 +919,7 @@ void Application::run() {
     bool benchCopyThisFrame = false;
     bool benchFrameOpen = false;
     while (m_window.pollEvents([this](const SDL_Event& e) {
+        if (m_harness && m_harness->recording) m_harness->tape.record(m_harness->frame, e);
         if (m_bench) {
             if (e.type == SDL_EVENT_WINDOW_FOCUS_LOST) m_bench->addEvent("window lost focus");
             else if (e.type == SDL_EVENT_WINDOW_FOCUS_GAINED) m_bench->addEvent("window got focus back");
@@ -841,6 +937,10 @@ void Application::run() {
         auto now = std::chrono::high_resolution_clock::now();
         float dt = std::chrono::duration<float>(now - lastFrameTime).count();
         float totalTime = std::chrono::duration<float>(now - startTime).count();
+        if (m_harness && m_harness->fixedDt) { // repeatable runs: frame time from the frame count
+            dt = *m_harness->fixedDt;
+            totalTime = static_cast<float>(static_cast<double>(m_harness->frame) * dt);
+        }
         m_now = totalTime;
         lastFrameTime = now;
 
@@ -878,6 +978,14 @@ void Application::run() {
             // This frame copies a screenshot: not a measure of the game.
             if (benchCopyThisFrame) m_bench->excludeFrame();
             benchCopyThisFrame = false;
+        }
+
+        if (m_harness) {
+            Harness& h = *m_harness;
+            if (h.nextShot < h.shots.size() && h.shots[h.nextShot].frame <= h.frame && !m_renderer->canCapture())
+                log::get("TestHarness")->warn("this swapchain can't be read back: no screenshots");
+            for (; h.nextShot < h.shots.size() && h.shots[h.nextShot].frame <= h.frame; ++h.nextShot)
+                if (m_renderer->canCapture()) m_renderer->requestCapture(Harness::kTag | h.nextShot);
         }
 
         // --- Pause/step: see Application.h for the full reasoning.
@@ -1089,12 +1197,15 @@ void Application::run() {
         // so they only ever run for a frame guaranteed to complete.
         const auto benchBeforeBegin = BenchClock::now();
         const bool frameBegun = m_renderer->beginFrame();
-        if (m_benchShots) {
+        if (m_benchShots || m_harness) {
             // beginFrame() read back an earlier frame's screenshot: this
             // frame paid for the copy, so it isn't measured either.
             std::vector<Renderer::FrameCapture> captures = m_renderer->takeCaptures();
-            if (!captures.empty()) m_bench->excludeFrame();
-            for (Renderer::FrameCapture& c : captures) m_benchShots->keep(c.tag, std::move(c));
+            if (m_bench && !captures.empty()) m_bench->excludeFrame();
+            for (Renderer::FrameCapture& c : captures) {
+                if (m_harness && (c.tag & Harness::kTag)) m_harness->save(c);
+                else if (m_benchShots) m_benchShots->keep(c.tag, std::move(c));
+            }
         }
         const auto benchAfterBegin = BenchClock::now();
         auto benchBeforeEnd = benchAfterBegin, benchAfterEnd = benchAfterBegin;
@@ -1434,8 +1545,31 @@ void Application::run() {
             if (how == "throw") throw std::runtime_error("KKE_TEST_CRASH: a test exception nobody catches");
             *static_cast<volatile int*>(nullptr) = 1;
         }
+        if (m_harness) {
+            ++m_harness->frame;
+            m_harness->pushDue(m_window.handle());
+            // Quit once the frame count is reached and the last screenshot has come back from the GPU.
+            const bool shotsDone = m_harness->savedShots >= m_harness->shots.size() || m_harness->frame >= m_harness->quitAt + 10;
+            if (m_harness->quitAt && m_harness->frame >= m_harness->quitAt && shotsDone) {
+                SDL_Event quit{};
+                quit.type = SDL_EVENT_QUIT;
+                SDL_PushEvent(&quit);
+                m_harness->quitAt = 0;
+            }
+        }
     }
     Accessibility::get().removeOnChange(accessibilityListener);
+    if (m_harness) {
+        auto logger = log::get("TestHarness");
+        if (m_harness->recording) {
+            if (m_harness->tape.save(m_harness->recordPath))
+                logger->info("input tape {}: {} event(s) over {} frame(s)", m_harness->recordPath, m_harness->tape.events().size(), m_harness->frame);
+            else
+                logger->error("can't write input tape {}", m_harness->recordPath);
+        }
+        if (m_harness->savedShots < m_harness->shots.size())
+            logger->warn("{} of {} screenshot(s) not taken (the game quit first?)", m_harness->shots.size() - m_harness->savedShots, m_harness->shots.size());
+    }
     if (Profiler::get().capturing()) {
         std::string error;
         if (Profiler::get().stopCapture(&error)) log::get("Profiler")->info("capture saved to {}\n{}", Profiler::get().lastCapturePath(), Profiler::get().lastCaptureSummary());

@@ -10,6 +10,13 @@ assistant that can run commands but can't see a window (docs/AI_ASSISTANTS.md).
     tools/check_game my_game --keys "space w"      # press keys while it runs
     tools/check_game my_game --pad --headless      # virtual gamepad, Xvfb even on a desktop
 
+Repeatable test runs (docs/TEST_HARNESS.md): a fixed frame count at
+1/60 s a frame, input recorded or played back, screenshots compared:
+
+    tools/check_game my_game --frames 600 --record walk.tape --headless
+    tools/check_game my_game --frames 600 --replay walk.tape \
+        --shots 300:mid.png,590:end.png --expect tests/refs/my_game
+
 It prints what the scripts printed, every warning and error, then one
 last line: "OK" or "FAILED". Exit code 0 means no errors. Build the game
 first (cmake --build build --target my_game). With no DISPLAY (or with
@@ -64,6 +71,11 @@ def main():
     ap.add_argument("--headless", action="store_true", help="run inside Xvfb even when a desktop is there")
     ap.add_argument("--pad", action="store_true", help="plug in a virtual gamepad that moves its sticks")
     ap.add_argument("--log", help="also save the game's whole log here")
+    ap.add_argument("--frames", type=int, help="run exactly this many frames at a fixed 1/60 s each, then quit (repeatable runs; --seconds becomes the time limit)")
+    ap.add_argument("--record", help="write the run's keyboard/mouse input to this tape (docs/TEST_HARNESS.md)")
+    ap.add_argument("--replay", help="play this input tape back, frame for frame")
+    ap.add_argument("--shots", help="screenshots at frames, e.g. 60:start.png,240:end.png (PNG, taken by the engine)")
+    ap.add_argument("--expect", help="folder of reference pictures: compare the --shots with them (kke_imgdiff)")
     ap.add_argument("--arg", action="append", default=[], help="pass this to the game on its command line (repeat for more), e.g. sandbox --arg games/my_game")
     args = ap.parse_args()
 
@@ -83,6 +95,25 @@ def main():
     if args.pad:
         env.update(KKE_VIRTUAL_INPUT="pad", KKE_VIRTUAL_INPUT_ANIMATE="1")
     env.setdefault("KKE_MAIN_MENU", "0")  # straight into the game, past the title (docs/GAME_SHELL.md)
+    shot_files = []
+    if args.frames:
+        env.update(KKE_FIXED_DT="60", KKE_QUIT_AT_FRAME=str(args.frames))
+        if args.seconds == ap.get_default("seconds"):
+            args.seconds = max(30.0, args.frames / 10.0)
+    if args.record:
+        env["KKE_INPUT_RECORD"] = str(pathlib.Path(args.record).resolve())
+    if args.replay:
+        env["KKE_INPUT_PLAYBACK"] = str(pathlib.Path(args.replay).resolve())
+    if args.shots:
+        plan = []
+        for item in filter(None, args.shots.split(",")):
+            frame, _, name = item.partition(":")
+            path = pathlib.Path(name).resolve()
+            shot_files.append(path)
+            plan.append(f"{frame}:{path}")
+        env["KKE_SHOTS"] = ",".join(plan)
+    if args.expect and not args.shots:
+        sys.exit("check_game: --expect compares the --shots: give --shots too")
     if args.scripts:
         env["KKE_SCRIPTS_DIR"] = str(pathlib.Path(args.scripts).resolve())
     try:
@@ -94,7 +125,13 @@ def main():
                 if args.keys:
                     time.sleep(3)
                     xdisplay.press(env["DISPLAY"], None, args.keys, hold=0.4, pid=proc.pid)
-                time.sleep(max(0.0, args.seconds - (time.monotonic() - started) - (0.5 if args.shot else 0)))
+                if args.frames:
+                    # The game quits by itself after --frames; --seconds is only the limit.
+                    try:
+                        proc.wait(max(0.0, args.seconds - (time.monotonic() - started)))
+                    except subprocess.TimeoutExpired:
+                        print(f"-- still running after {args.seconds:g} s: it never reached frame {args.frames}")
+                time.sleep(max(0.0, args.seconds - (time.monotonic() - started) - (0.5 if args.shot else 0)) if not args.frames else 0)
                 if args.shot and proc.poll() is not None:
                     print("-- no screenshot: the game had already quit")
                     args.shot = None
@@ -142,6 +179,24 @@ def main():
         if lines:
             print(f"-- {title} ({len(lines)}):")
             print("\n".join("  " + line for line in lines[-40:]))
+    for path in shot_files:
+        if not path.exists():
+            errors.append(f"screenshot {path.name} was not taken")
+    if args.expect and shot_files and all(p.exists() for p in shot_files):
+        tool = pathlib.Path(args.bin) / "kke_imgdiff"
+        if not tool.exists():
+            errors.append(f"{tool} not found: cmake --build build --target kke_imgdiff")
+        for path in shot_files:
+            ref = pathlib.Path(args.expect) / path.name
+            if not tool.exists():
+                break
+            if not ref.exists():
+                print(f"-- no reference {ref}: copy {path} there once it looks right")
+                continue
+            out = subprocess.run([str(tool), "--diff", str(path.parent / "diff"), str(ref), str(path)], capture_output=True, text=True)
+            print("-- " + out.stdout.strip().splitlines()[0] if out.stdout.strip() else f"-- kke_imgdiff: {out.stderr.strip()}")
+            if out.returncode != 0:
+                errors.append(f"{path.name} differs from {ref}")
     if exited is not None and exited != 0:
         errors.append(f"the game stopped by itself with exit code {exited}")
         print(f"-- the game stopped by itself with exit code {exited}; last lines:")
@@ -151,7 +206,11 @@ def main():
         print("-- it did not quit within 10 s of being asked to (killed)")
     if args.shot:
         print(f"-- screenshot: {args.shot}")
-    print("FAILED" if errors else f"OK: {args.game} ran {args.seconds:g} s with no errors" +
+    for path in shot_files:
+        if path.exists():
+            print(f"-- screenshot: {path}")
+    ran = f"{args.frames} frames" if args.frames else f"{args.seconds:g} s"
+    print("FAILED" if errors else f"OK: {args.game} ran {ran} with no errors" +
           (f" ({len(warnings)} warning(s) to fix)" if warnings else ""))
     return 1 if errors else 0
 

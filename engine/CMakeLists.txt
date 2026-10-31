@@ -27,6 +27,7 @@ set(ENGINE_SOURCES
     src/Ragdoll.cpp
     src/BenchmarkReport.cpp
     src/BenchRecorder.cpp
+    src/TestHarness.cpp
     src/AssetCatalog.cpp
     src/KnownPacks.cpp
     src/SpriteCatalog.cpp

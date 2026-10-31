@@ -78,6 +78,7 @@ add_executable(kke_tests
     test_accessibility.cpp
     test_crash_reporter.cpp
     test_bench_recorder.cpp
+    test_test_harness.cpp
     test_cooked_file.cpp
     test_viewports.cpp
     test_lobby.cpp
