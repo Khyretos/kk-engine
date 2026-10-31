@@ -1,16 +1,14 @@
 [
- {
-  "name": "g07-bset",
-  "role": "worker/cpp-games",
-  "mode": "patch",
-  "out": "engine/src/modules/ScriptModule.cpp",
-  "prompt": "ENG-G07: the engine goes from 4 lights to 16 (kke::Lighting::kMaxLights). Light 0 stays the sun (directional, cascaded shadows). Point lights gain an optional range (Light::range, 0 = reaches everywhere as before) with a smooth falloff; at most ShadowMap::kMaxPointShadows (4) point lights cast shadows, each in a point-shadow slot (Lighting::pointShadowSlots: the first 4 casting lights in order). Lua scripts place lamps with light.*. C++20, glm, Vulkan, GLSL 450 std140. ScriptModule::bindAll: light.move and light.set, right after the light.point binding. Your SEARCH block is exactly these lines:\n```\n        lua_pushinteger(L, slot);\n        return 1;\n    });\n```\nand your REPLACE block is those same lines, unchanged and first, followed by these, in order:\n1. A helper lambda `auto ownLight = [this](lua_State* L, const char* what) -> int { ... };`: `const int slot = static_cast<int>(luaL_checkinteger(L, 1));`; when `!m_lights.owns(slot, m_vm->currentSource())` call `luaL_error(L, \"%s: %d is not a light this script placed\", what, slot);`; return slot.\n2. `vm.registerFunction(\"light\", \"move\", [app, ownLight](lua_State* L) { ... });`: `app->lighting().lights[ownLight(L, \"light.move\")].position = ScriptVM::toVec3(L, 2);` and return 0.\n3. `vm.registerFunction(\"light\", \"set\", [app, ownLight](lua_State* L) { ... });`: `Light& l = app->lighting().lights[ownLight(L, \"light.set\")];`, `luaL_checktype(L, 2, LUA_TTABLE);`, then each field kept when missing: `l.color = ScriptVM::fieldVec3(L, 2, \"color\", l.color);`, `l.intensity = ScriptVM::fieldNumber(L, 2, \"intensity\", l.intensity);`, `l.range = ScriptVM::fieldNumber(L, 2, \"range\", l.range);`, `l.castsShadows = ScriptVM::fieldBool(L, 2, \"shadows\", l.castsShadows);`, `l.enabled = ScriptVM::fieldBool(L, 2, \"on\", l.enabled);`; return 0.\nChange nothing else; do not copy or move any other line.\n",
-  "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g07.py bset",
-  "precheck": false,
-  "context": [],
-  "max_tokens": 2500,
-  "focus": [
-   "lua_pushinteger\\(L, slot\\);"
-  ]
- }
+  {
+    "name": "g07-bset",
+    "role": "worker/cpp-games",
+    "mode": "patch",
+    "out": "engine/src/modules/ScriptModule.cpp",
+    "prompt": "ENG-G07: the engine goes from 4 lights to 16 (kke::Lighting::kMaxLights). Light 0 stays the sun (directional, cascaded shadows). Point lights gain an optional range (Light::range, 0 = reaches everywhere as before) with a smooth falloff; at most ShadowMap::kMaxPointShadows (4) point lights cast shadows, each in a point-shadow slot (Lighting::pointShadowSlots: the first 4 casting lights in order). Lua scripts place lamps with light.*. C++20, glm, Vulkan, GLSL 450 std140. ScriptModule::bindAll: light.move and light.set, right after the light.point binding. Your SEARCH block is exactly these lines:\n```\n        lua_pushinteger(L, slot);\n        return 1;\n    });\n```\nand your REPLACE block is those same lines, unchanged and first, followed by these, in order:\n1. A helper lambda `auto ownLight = [this](lua_State* L, const char* what) -> int { ... };`: `const int slot = static_cast<int>(luaL_checkinteger(L, 1));`; when `!m_lights.owns(slot, m_vm->currentSource())` call `luaL_error(L, \"%s: %d is not a light this script placed\", what, slot);`; return slot.\n2. `vm.registerFunction(\"light\", \"move\", [app, ownLight](lua_State* L) { ... });`: `app->lighting().lights[ownLight(L, \"light.move\")].position = ScriptVM::toVec3(L, 2);` and return 0.\n3. `vm.registerFunction(\"light\", \"set\", [app, ownLight](lua_State* L) { ... });`: `Light& l = app->lighting().lights[ownLight(L, \"light.set\")];`, `luaL_checktype(L, 2, LUA_TTABLE);`, then each field kept when missing: `l.color = ScriptVM::fieldVec3(L, 2, \"color\", l.color);`, `l.intensity = ScriptVM::fieldNumber(L, 2, \"intensity\", l.intensity);`, `l.range = ScriptVM::fieldNumber(L, 2, \"range\", l.range);`, `l.castsShadows = ScriptVM::fieldBool(L, 2, \"shadows\", l.castsShadows);`, `l.enabled = ScriptVM::fieldBool(L, 2, \"on\", l.enabled);`; return 0.\nChange nothing else; do not copy or move any other line.\n",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g07.py bset",
+    "precheck": false,
+    "context": [],
+    "max_tokens": 2500,
+    "focus": ["lua_pushinteger\\(L, slot\\);"]
+  }
 ]
