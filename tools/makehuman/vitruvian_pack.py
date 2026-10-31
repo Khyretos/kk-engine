@@ -412,11 +412,15 @@ def build_pack(P, vit_npz, vit_dir, log):
 
     def level(var, lv):
         if var == "Gender":
-            return own("Gender_Female" if lv == 0 else "Gender_Male")
+            # Vitruvian's gender morphs are gentle (a man's shoulders 1 cm wider): pushed 1.4x, with the
+            # shoulders and ribs on top, so the two archetypes read at a glance.
+            if lv == 0:
+                return 1.4 * own("Gender_Female") - 0.3 * own("Shoulders_ShoulderWidth")
+            return 1.4 * own("Gender_Male") + 0.8 * own("Shoulders_ShoulderWidth") + 0.3 * own("Torso_RibWidth")
         if var == "Age":
             return [own("Age_Baby"), 0.45 * own("Age_Baby"), None, own("Age_Old")][lv]
         if var == "Muscle":
-            return {0: 0.5 * own("BodyType_Lean"), 2: own("BodyType_Muscular")}.get(lv)
+            return {0: 0.5 * own("BodyType_Lean"), 2: 0.7 * own("BodyType_Muscular")}.get(lv)
         if var == "Weight":
             return {0: own("BodyType_Lean") + 0.4 * own("BodyType_Emaciated"), 2: own("BodyType_Fat")}.get(lv)
         if var == "Height":
@@ -424,7 +428,7 @@ def build_pack(P, vit_npz, vit_dir, log):
         if var == "Proportions":
             return {0: -0.3 * own("BodyType_LongProportions"), 2: 0.8 * own("BodyType_LongProportions")}.get(lv)
         if var == "Cup":
-            return {0: own("Chest_FemaleFlatChested"), 2: 1.4 * own("Chest_Breast_Size")}.get(lv)
+            return {0: own("Chest_FemaleFlatChested"), 2: 1.1 * own("Chest_Breast_Size")}.get(lv)
         if var in ANCESTRY:
             return own({"African": "Race_African", "Asian": "Race_EastAsian", "Caucasian": "Race_White"}[var])
         return None  # firmness: no morph of Vitruvian's

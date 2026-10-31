@@ -569,12 +569,47 @@ std::string vrmOrMakeHumanBone(const std::string& n) {
     return {};
 }
 
+// Mixamo's own names (lowercase, "mixamorig:" already gone): Hips, Spine,
+// Spine1, Spine2, Neck, Head; LeftShoulder, LeftArm, LeftForeArm, LeftHand,
+// LeftHandIndex1..3; LeftUpLeg, LeftLeg, LeftFoot, LeftToeBase. UAL's words
+// for them; empty for what has none (HeadTop_End, the *4 finger ends).
+std::string mixamoBone(std::string n) {
+    char side = 0;
+    if (n.rfind("left", 0) == 0) {
+        side = 'l';
+        n = n.substr(4);
+    } else if (n.rfind("right", 0) == 0) {
+        side = 'r';
+        n = n.substr(5);
+    }
+    if (!side) {
+        static const std::pair<const char*, const char*> kCentre[] = { { "hips", "pelvis" },   { "spine", "spine_01" }, { "spine1", "spine_02" },
+                                                                         { "spine2", "spine_03" }, { "neck", "neck_01" },   { "head", "head" } };
+        for (const auto& [from, to] : kCentre)
+            if (n == from) return to;
+        return {};
+    }
+    static const std::pair<const char*, const char*> kLimb[] = { { "shoulder", "clavicle" }, { "arm", "upperarm" }, { "forearm", "lowerarm" }, { "hand", "hand" },
+                                                                  { "upleg", "thigh" },       { "leg", "calf" },      { "foot", "foot" },       { "toebase", "ball" } };
+    for (const auto& [from, to] : kLimb)
+        if (n == from) return std::string(to) + "_" + side;
+    if (n.rfind("hand", 0) == 0 && n.size() > 5 && n.back() >= '1' && n.back() <= '3') {
+        const std::string finger = n.substr(4, n.size() - 5);
+        for (const char* f : { "thumb", "index", "middle", "ring", "pinky" })
+            if (finger == f) return finger + "_0" + n.back() + "_" + side;
+    }
+    return {};
+}
+
 } // namespace
 
 std::string canonicalBoneName(const std::string& name) {
     std::string n;
     for (char c : name) n += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    const bool mixamo = n.find("mixamorig") != std::string::npos;
     if (auto colon = n.rfind(':'); colon != std::string::npos) n = n.substr(colon + 1); // "mixamorig:Hips"
+    if (mixamo)
+        if (const std::string m = mixamoBone(n); !m.empty()) return m;
     for (const char* prefix : { "bip01_", "bip01 ", "def-", "b_" })
         if (n.rfind(prefix, 0) == 0) n = n.substr(std::string(prefix).size());
     auto replace = [&](const std::string& from, const std::string& to) {

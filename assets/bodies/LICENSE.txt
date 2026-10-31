@@ -1,0 +1,18 @@
+vitruvian_voluptuous.glb
+========================
+A full-figured woman for the jiggle demo (games/jiggle_demo): the Vitruvian body
+from CharMorph (https://github.com/Upliner/CharMorph-Vitruvian), shaped with its
+own morphs (female, endomorph, breast size, glutes, hips, thighs; the breast,
+glute and hip morphs pushed to 1.7x their slider range), its scanned skin colour
+(light, 1024 px tiles in one 2048 atlas), eyes and mouth textures, and the
+bandeau and shorts that mark its "censor" material.
+
+Source licence: CC0 (public domain), "license: CC0" in the repository's
+config.yaml.
+Authors: Sean Buckley, Olaf Delgado-Friedrichs (+ SirMaxim, Upliner, AgentA1CR,
+Benjamin McDonnell, Mindfront). Based on a modified Antonia Polygon, relicensed
+with its author's permission (the repository's README).
+The .glb itself: built by tools/vitruvian/build_body.py. It carries Vitruvian's own
+Mixamo skeleton (52 bones, placed on this body's shape) and skin weights
+(weights/mixamo.npz), the bandeau and shorts as cloth shells cut from its skin.
+Credit is welcome, not required.
