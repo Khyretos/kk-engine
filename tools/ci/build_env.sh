@@ -13,6 +13,7 @@
 #   pointed at .ccache/<cache> in the workspace, which actions/cache keeps
 #   between runs. The first <cache> is the default; a build that needs
 #   another (the coverage build) sets CCACHE_DIR=.ccache/<name> itself.
+#   Sloppiness lets it cache files built with a precompiled header.
 #   Statistics are zeroed here, so `ccache -s` after a build shows that run.
 #
 # Everything goes to $GITHUB_ENV for the job's later steps.
@@ -60,6 +61,9 @@ ccache --version | head -n 1
   echo "CCACHE_BASEDIR=$ws"
   echo "CCACHE_COMPILERCHECK=content"
   echo "CCACHE_MAXSIZE=2G"
+  # SDL3 builds with a precompiled header; without these ccache can't cache
+  # any file that uses it (654 of 1625 calls in a coverage build).
+  echo "CCACHE_SLOPPINESS=pch_defines,time_macros,include_file_mtime,include_file_ctime"
   echo "CMAKE_C_COMPILER_LAUNCHER=ccache"
   echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache"
 } >> "$GITHUB_ENV"

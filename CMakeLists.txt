@@ -57,6 +57,14 @@ if(KKE_ENABLE_COVERAGE)
     add_link_options(--coverage -fprofile-update=atomic)
 endif()
 
+# Under ccache (CI: tools/ci/build_env.sh) no precompiled headers: GCC writes
+# a slightly different SDL3/Jolt/RmlUi .gch every build and ccache can't cache
+# making one, so every file using it missed (651 of 1328 in a warm rebuild,
+# none without them).
+if(CMAKE_C_COMPILER_LAUNCHER MATCHES "ccache" OR CMAKE_CXX_COMPILER_LAUNCHER MATCHES "ccache")
+    set(CMAKE_DISABLE_PRECOMPILE_HEADERS ON)
+endif()
+
 include(FetchContent)
 
 # FEMFX's SIMD code needs AVX2 + FMA, and everything that includes its
