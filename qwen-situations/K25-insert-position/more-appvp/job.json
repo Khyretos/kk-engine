@@ -1,0 +1,17 @@
+[
+  {
+    "name": "g04-appvp",
+    "role": "worker/cpp-games",
+    "mode": "patch",
+    "out": "engine/src/Application.cpp",
+    "prompt": "ENG-G04 point-light shadows. Until now only the directional key light (lights[0]) casts shadows, through cascaded shadow maps (class kke::ShadowMap). Now each point light that casts shadows gets a cube of 6 faces around it (+X, -X, +Y, -Y, +Z, -Z), each a perspective view a little wider than 90 degrees, drawn into its own tile of a second ShadowMap (the point map): tile = light * ShadowMap::kPointFaces + face. C++20, glm, Vulkan (depth 0..1, clip-space Y flipped by proj[1][1] *= -1.0f like computeLightViewProj). In Application::run's frame, compute the point-light faces and hand them to the lighting buffers. Two edits, nothing else:\n1. Your SEARCH block is exactly these lines:\n```\n        const glm::mat4& lightViewProj = lightViewProjs[0];\n```\nand your REPLACE block is those same lines followed by the new lines. Change nothing else; do not copy or move any other line.\nThe new lines, in order:\n   a. A comment: point-light shadows: each point light that casts shadows (Light::castsPointShadow, and shadows on) gets six faces around it, each in its own tile of the point map: tile = light * ShadowMap::kPointFaces + face. The map shrinks to one tile when no light casts point shadows.\n   b. `bool anyPointShadow = false;` and a loop `for (const Light& l : m_lighting.lights) anyPointShadow = anyPointShadow || (m_lighting.shadowsEnabled && l.castsPointShadow());`\n   c. `if (m_pointShadowMap->setTiles(anyPointShadow ? ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces : 1)) writeShadowMapDescriptor();`\n   d. `std::array<glm::mat4, ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces> pointViewProjs{};` and `std::array<glm::vec4, ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces> pointTiles{};`\n   e. Two nested loops: `for (uint32_t l = 0; l < ShadowMap::kMaxPointShadows; ++l)` holding `const Light& light = m_lighting.lights[l];` and an inner `for (uint32_t f = 0; f < ShadowMap::kPointFaces; ++f)` that sets `const uint32_t t = l * ShadowMap::kPointFaces + f;`, `pointTiles[t] = m_pointShadowMap->tileRect(t);` and, only when `light.castsPointShadow()`, `pointViewProjs[t] = ShadowMap::pointFaceViewProj(light.position, f, light.shadowRange, m_pointShadowMap->tileResolution());`.\n2. In the call that starts `drawViews[i].lighting->update(m_lighting, drawViews[i].camera.position, lightViewProjs[i],`, its last line `                                              cascadeTiles[i].data(), cascadeScaleOffsets[i].data());` becomes `                                              cascadeTiles[i].data(), cascadeScaleOffsets[i].data(), anyPointShadow ? pointViewProjs.data() : nullptr, pointTiles.data());`",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g04.py appvp",
+    "precheck": false,
+    "context": ["engine/include/kke/ShadowMap.h"],
+    "max_tokens": 3000,
+    "focus": [
+      "const glm::mat4& lightViewProj = lightViewProjs\\[0\\];",
+      "cascadeTiles\\[i\\]\\.data\\(\\), cascadeScaleOffsets\\[i\\]\\.data\\(\\)\\);"
+    ]
+  }
+]

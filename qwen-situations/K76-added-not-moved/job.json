@@ -1,0 +1,16 @@
+[
+  {
+    "mode": "patch",
+    "focus": [
+      "^\\ \\ \\ \\ //\\ \\(kke::EnvMap\\)\\ along\\ the\\ reflection,\\ weighted\\ by\\ the\\ environment\\ BRDF:$"
+    ],
+    "name": "f01-pbrcommon1",
+    "role": "worker/cpp-games",
+    "out": "shaders/pbr_common.glsl",
+    "prompt": "Kreative Kompas Engine (C++20, Vulkan, forward renderer): ENG-F01 adds optional screen-space global illumination: after the scene pass a compute shader reads the frame's depth and light and writes, at half resolution, each pixel's bounce light and visibility (a visibility bitmask over fixed directions, no noise); the next frame's lit shaders read it, reprojected, in place of the flat sky ambient.  Make these 1 edits in shaders/pbr_common.glsl, each its own SEARCH/REPLACE block.\nEdit 1. Your SEARCH block is exactly these lines:\n```\n    // (kke::EnvMap) along the reflection, weighted by the environment BRDF:\n    // metals and glancing angles mirror the sky, and what is reflected is\n    // not also scattered (the split sum, Karis 2013).\n    float NdotV = max(dot(N, V), 1e-4);\n    vec3 envSpecular = envBRDFApprox(F0, roughness, NdotV);\n    vec3 ambient = ambientIrradiance(N) * albedo * (vec3(1.0) - envSpecular) * (1.0 - metallic)\n                 + skyReflection(reflect(-V, N), roughness) * envSpecular;\n\n    vec3 color = ambient + Lo;\n    return applyFog(color, fragPosWorld);\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n    // (kke::EnvMap) along the reflection, weighted by the environment BRDF:\n    // metals and glancing angles mirror the sky, and what is reflected is\n    // not also scattered (the split sum, Karis 2013).\n    // With screen-space GI (ENG-F01) the sky is shaded by what hides it and\n    // the light bounced off what is near is added.\n    float NdotV = max(dot(N, V), 1e-4);\n    vec3 envSpecular = envBRDFApprox(F0, roughness, NdotV);\n    vec4 gi = screenGiAt(fragPosWorld);\n    vec3 ambient = (ambientIrradiance(N) * gi.a + gi.rgb) * albedo * (vec3(1.0) - envSpecular) * (1.0 - metallic)\n                 + skyReflection(reflect(-V, N), roughness) * envSpecular * gi.a;\n    if (lighting.gi.w > 0.5) return vec3(gi.a); // KKE_GI_VIEW=1: the visibility alone (grey: no light to bounce)\n\n    vec3 color = ambient + Lo;\n    return applyFog(color, fragPosWorld);\n```\nChange nothing else; do not copy or move any other line.\n",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g09.py f01pbrcommon1",
+    "precheck": false,
+    "context": [],
+    "max_tokens": 1305
+  }
+]

@@ -1,0 +1,19 @@
+[
+  {
+    "name": "r1h-ctor-r1",
+    "role": "worker/cpp-games",
+    "mode": "patch",
+    "out": "engine/src/Pipeline.cpp",
+    "prompt": "Kreative Kompas Engine (C++20, Vulkan): R1h moves shader and pipeline creation behind the render hardware interface (docs/plans/rhi.md). rhi::Device has createShaderModule(SPIR-V words) and createGraphicsPipeline(rhi::GraphicsPipelineDesc) (kke/rhi/GraphicsPipeline.h, kke/rhi/Device.h); VulkanGpuDevice (kke/rhi/VulkanDevice.h) implements them on Vulkan. The pipelines must come out exactly as kke::Pipeline's constructor in engine/src/Pipeline.cpp made them before: that code is the reference. In engine/src/Pipeline.cpp replace the R1h stubs under the comment line \"R1h stubs: the Coder's run replaces them.\" : the constructor, Pipeline::layout() and Pipeline::bind(VkCommandBuffer). The includes are already there; add none and declare no class or function. The constructor, with m_device(device) in its init list, does exactly this, in this order: (1) `rhi::VulkanGpuDevice gpu(device);` (2) `auto vert = gpu.createShaderModule(loadSpirv(vertPath));` and the same for `frag` with fragPath; (3) a std::vector<std::unique_ptr<rhi::VulkanBindGroupLayout>> `owned` and a std::vector<const rhi::BindGroupLayout*> `layouts`: for each VkDescriptorSetLayout l in config.descriptorSetLayouts push rhi::VulkanBindGroupLayout::borrowed(l) into owned and owned.back().get() into layouts; (4) `rhi::GraphicsPipelineDesc desc = describe(config, layouts);` then desc.vertex = vert.get(); desc.fragment = frag.get(); desc.pass = { rhi::VulkanCommandList::toHandle(renderPass) }; desc.samples = static_cast<uint32_t>(device.renderPassSamples(renderPass)); (5) `m_pipeline = gpu.createGraphicsPipeline(desc);`. Pipeline::layout() returns static_cast<const rhi::VulkanGraphicsPipeline&>(*m_pipeline).layout(). Pipeline::bind(VkCommandBuffer cmd) calls vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, static_cast<const rhi::VulkanGraphicsPipeline&>(*m_pipeline).pipeline()). Use only these names. Leave the destructor and describe() and bind(rhi::CommandList&) as they are.",
+    "check": "sh /home/khyretos/kk-engine-scratch/kchk.sh /home/khyretos/Docker/Personal-projects/kk-wt-r1h 'RhiPipelineState.*:RhiGraphicsPipeline.*:RhiDevice.*'",
+    "precheck": false,
+    "context": [
+      "engine/include/kke/Pipeline.h",
+      "engine/include/kke/rhi/VulkanDevice.h",
+      "engine/include/kke/rhi/VulkanCommandList.h",
+      "engine/src/Pipeline.cpp"
+    ],
+    "max_tokens": 2500,
+    "focus": "// R1h stubs: the Coder's run replaces them."
+  }
+]

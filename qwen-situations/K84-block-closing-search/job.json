@@ -1,0 +1,17 @@
+[
+  {
+    "mode": "patch",
+    "focus": [
+      "^\\}\\ lighting;$",
+      "^layout\\(set\\ =\\ 0,\\ binding\\ =\\ 4\\)\\ uniform\\ sampler2D\\ reflLight;$"
+    ],
+    "name": "f02c-lightingub1",
+    "role": "worker/cpp-games",
+    "out": "shaders/lighting_ubo.glsl",
+    "prompt": "Kreative Kompas Engine (C++20, Vulkan, forward renderer): ENG-F02 part 4 adds refraction: with reflections on, the 3D pass pauses before the see-through surfaces, a compute pass (kke::BehindPass) copies the scene drawn so far with each pixel's distance from the camera, and drawTranslucent's first pass reads that copy where the refracted ray leads (translucent_refract.frag).  Make these 2 edits in shaders/lighting_ubo.glsl, each its own SEARCH/REPLACE block.\nEdit 1. Your SEARCH block is exactly these lines:\n```\n} lighting;\n\n// The sky prefiltered for reflections (kke::EnvMap, kke::LightingBuffer::setEnvironmentMap):\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n    vec4 behind;       // x = 1 when this frame's behind image is there (refraction), yz = its size in pixels\n} lighting;\n\n// The sky prefiltered for reflections (kke::EnvMap, kke::LightingBuffer::setEnvironmentMap):\n```\nEdit 2. Your SEARCH block is exactly these lines:\n```\nlayout(set = 0, binding = 4) uniform sampler2D reflLight;\nlayout(set = 0, binding = 5) uniform sampler2D reflDepth;\n\n// The four nearest texels of a half-resolution screen image made with camera\n// `viewProj`, weighted by bilinear distance and by how close their depth is\n// to this surface's; (0, 0, 0, 0) and total 0 where none matches.\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\nlayout(set = 0, binding = 4) uniform sampler2D reflLight;\nlayout(set = 0, binding = 5) uniform sampler2D reflDepth;\n\n// Refraction (ENG-F02 part 4, kke::BehindPass): this frame's scene drawn\n// before the see-through surfaces, with the distance from the camera in\n// alpha (0 = sky). Only translucent_refract.frag reads it.\nlayout(set = 0, binding = 6) uniform sampler2D behindImage;\n\n// The four nearest texels of a half-resolution screen image made with camera\n// `viewProj`, weighted by bilinear distance and by how close their depth is\n// to this surface's; (0, 0, 0, 0) and total 0 where none matches.\n```\nCareful: `layout(set = 0, binding = 4) uniform sampler2D reflLight;` and `layout(set = 0, binding = 5) uniform sampler2D reflDepth;` are two different lines; copy each one exactly where it is.\nCareful: `layout(set = 0, binding = 4) uniform sampler2D reflLight;` and `layout(set = 0, binding = 6) uniform sampler2D behindImage;` are two different lines; copy each one exactly where it is.\nChange nothing else; do not copy or move any other line.\n",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g09.py f02clightingub1",
+    "precheck": false,
+    "context": [],
+    "max_tokens": 1233
+  }
+]

@@ -1,0 +1,16 @@
+[
+  {
+    "mode": "patch",
+    "focus": [
+      "^\\ \\ \\ \\ \\ \\ \\ \\ if\\ \\(!m_batches\\.empty\\(\\)\\)\\ \\{$"
+    ],
+    "name": "r1c-modelmodul5",
+    "role": "worker/cpp-games",
+    "out": "engine/src/modules/ModelModule.cpp",
+    "prompt": "Kreative Kompas Engine (C++20, Vulkan, forward renderer): R1c puts the draw buffers behind the render hardware interface's device (docs/plans/rhi.md): kke::rhi::Device makes rhi::Buffer objects (rhi::BufferDesc: size, usage bits rhi::kVertexBuffer, kIndexBuffer, kUniformBuffer, kStorageBuffer, and rhi::Memory::Upload or Device), Application::gpu() is that device, and a draw names a buffer by ref(). rhi::VulkanGpuDevice and rhi::VulkanBuffer are its Vulkan side.  Make these 1 edits in engine/src/modules/ModelModule.cpp, each its own SEARCH/REPLACE block.\nEdit 1. Your SEARCH block is exactly these lines:\n```\n        if (!m_batches.empty()) {\n            m_instancedPipeline->bind(*ctx.list);\n            ctx.list->bindGroups(*m_instancedPipeline, 0, rhi::VulkanCommandList::groups(sets, 4));\n            VkBuffer ib = m_instanceBuffers[pass][ctx.frameIndex]->handle();\n            VkDescriptorSet bound = m_defaultSurface;\n            for (const Batch& b : m_batches) {\n                const LoadedModel& lm = *m_models[b.model];\n                VkDeviceSize off = sizeof(InstanceGpu) * b.first;\n                ctx.list->bindVertexBuffer(1, rhi::VulkanCommandList::buffer(ib), off);\n                for (const GpuMesh& gm : lm.meshes) {\n                    const GpuMaterial& mat = lm.materials[gm.material];\n                    VkDescriptorSet tex = mat.textureSet ? mat.textureSet : m_defaultSurface;\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n        if (!m_batches.empty()) {\n            m_instancedPipeline->bind(*ctx.list);\n            ctx.list->bindGroups(*m_instancedPipeline, 0, rhi::VulkanCommandList::groups(sets, 4));\n            const rhi::BufferRef ib = m_instanceBuffers[pass][ctx.frameIndex]->ref();\n            VkDescriptorSet bound = m_defaultSurface;\n            for (const Batch& b : m_batches) {\n                const LoadedModel& lm = *m_models[b.model];\n                VkDeviceSize off = sizeof(InstanceGpu) * b.first;\n                ctx.list->bindVertexBuffer(1, ib, off);\n                for (const GpuMesh& gm : lm.meshes) {\n                    const GpuMaterial& mat = lm.materials[gm.material];\n                    VkDescriptorSet tex = mat.textureSet ? mat.textureSet : m_defaultSurface;\n```\nChange nothing else; do not copy or move any other line.\n",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g09.py r1cmodelmodul5",
+    "precheck": false,
+    "context": [],
+    "max_tokens": 1383
+  }
+]

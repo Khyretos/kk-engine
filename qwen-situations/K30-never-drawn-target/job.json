@@ -1,0 +1,17 @@
+[
+  {
+    "name": "g04-layout",
+    "role": "worker/cpp-games",
+    "mode": "patch",
+    "out": "engine/src/Application.cpp",
+    "prompt": "ENG-G04 point-light shadows. Until now only the directional key light (lights[0]) casts shadows, through cascaded shadow maps (class kke::ShadowMap). Now each point light that casts shadows gets a cube of 6 faces around it (+X, -X, +Y, -Y, +Z, -Z), each a perspective view a little wider than 90 degrees, drawn into its own tile of a second ShadowMap (the point map): tile = light * ShadowMap::kPointFaces + face. C++20, glm, Vulkan (depth 0..1, clip-space Y flipped by proj[1][1] *= -1.0f like computeLightViewProj). Bug: when no point light casts shadows, the point map's render pass never runs, so its image is never moved out of VK_IMAGE_LAYOUT_UNDEFINED, yet every lit shader samples it as SHADER_READ_ONLY_OPTIMAL (Vulkan validation error). Fix: the point map's pass runs every frame (it clears the map and leaves it readable); only the faces inside it depend on anyPointShadow. Two edits in Application::run's shadow pass, nothing else:\n1. Your SEARCH block is exactly these two lines:\n```\n                if (anyPointShadow) {\n                    m_pointShadowMap->beginRenderPass(cmd);\n```\nand your REPLACE block is exactly these five lines:\n```\n                // The point map's pass runs every frame, even when no point light casts:\n                // it clears the map and leaves it readable for the shaders.\n                m_pointShadowMap->beginRenderPass(cmd);\n                if (anyPointShadow) {\n```\n(that is the comment, the beginRenderPass line moved above the `if`, and the `if` line; the line after it, `shadowCtx.renderPass = ...`, stays as it is).\n2. Your SEARCH block is exactly these three lines (the end of that `if` and of `if (drawScene)`):\n```\n                    m_pointShadowMap->endRenderPass(cmd);\n                }\n            }\n```\nand your REPLACE block is exactly these three lines:\n```\n                }\n                m_pointShadowMap->endRenderPass(cmd);\n            }\n```\n",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g04.py layout",
+    "precheck": false,
+    "context": [],
+    "max_tokens": 2500,
+    "focus": [
+      "if \\(anyPointShadow\\) \\{",
+      "m_pointShadowMap->endRenderPass\\(cmd\\);"
+    ]
+  }
+]

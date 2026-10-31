@@ -1,0 +1,14 @@
+[
+  {
+    "name": "g07-appb",
+    "role": "worker/cpp-games",
+    "mode": "patch",
+    "out": "engine/src/Application.cpp",
+    "prompt": "ENG-G07: the engine goes from 4 lights to 16 (kke::Lighting::kMaxLights). Light 0 stays the sun (directional, cascaded shadows). Point lights gain an optional range (Light::range, 0 = reaches everywhere as before) with a smooth falloff; at most ShadowMap::kMaxPointShadows (4) point lights cast shadows, each in a point-shadow slot (Lighting::pointShadowSlots: the first 4 casting lights in order). Lua scripts place lamps with light.*. C++20, glm, Vulkan, GLSL 450 std140. Application::run's frame: fill the point map's face matrices by slot. pointSlots (std::array<int, Lighting::kMaxLights>, -1 = no slot) is already computed above (K35: dictated in full; the described version passed needles but left both loops mixed). Your SEARCH block is exactly these lines:\n```\n        for (uint32_t l = 0; l < ShadowMap::kMaxPointShadows; ++l) {\n            const Light& light = m_lighting.lights[l];\n            for (uint32_t f = 0; f < ShadowMap::kPointFaces; ++f) {\n                const uint32_t t = l * ShadowMap::kPointFaces + f;\n                pointTiles[t] = m_pointShadowMap->tileRect(t);\n                if (light.castsPointShadow())\n                    pointViewProjs[t] = ShadowMap::pointFaceViewProj(light.position, f, light.shadowRange, m_pointShadowMap->tileResolution());\n            }\n        }\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n        for (uint32_t t = 0; t < ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces; ++t) pointTiles[t] = m_pointShadowMap->tileRect(t);\n        for (int l = 0; l < Lighting::kMaxLights; ++l) {\n            if (pointSlots[l] < 0) continue;\n            const Light& light = m_lighting.lights[l];\n            for (uint32_t f = 0; f < ShadowMap::kPointFaces; ++f)\n                pointViewProjs[static_cast<uint32_t>(pointSlots[l]) * ShadowMap::kPointFaces + f] =\n                    ShadowMap::pointFaceViewProj(light.position, f, light.shadowRange, m_pointShadowMap->tileResolution());\n        }\n```\nChange nothing else; do not copy or move any other line.\n",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g07.py appb",
+    "precheck": false,
+    "context": [],
+    "max_tokens": 2500,
+    "focus": ["const Light& light = m_lighting\\\\.lights\\\\[l\\\\];"]
+  }
+]

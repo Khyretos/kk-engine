@@ -1,0 +1,13 @@
+[
+  {
+    "name": "g05-ubo",
+    "role": "worker/cpp-games",
+    "mode": "patch",
+    "out": "shaders/lighting_ubo.glsl",
+    "prompt": "ENG-G05 (cascaded shadow maps for the directional key light: 4 cascades per view, each in its own tile of the shadow map). Replace exactly one line of the LightingUBO block: the last field, `vec4 shadowTile;` with its comment. In its place put these two lines (one field each, nothing after them before `} lighting;`):\n`    vec4 shadowTiles[SHADOW_CASCADES];        // each cascade's tile of the shadow map: xy = top left, zw = size (0..1)`\n`    vec4 cascadeScaleOffset[SHADOW_CASCADES]; // cascade c's clip xy = lightViewProj's (the far cascade's) xy * .xy + .zw`\nThen, directly before the line `struct GPULight {`, add `#define SHADOW_CASCADES 4 // kke::ShadowMap::kCascades` and a blank line. Change nothing else.",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g05b.py ubo",
+    "precheck": false,
+    "context": [],
+    "max_tokens": 4000
+  }
+]

@@ -1,0 +1,13 @@
+[
+  {
+    "name": "g07-pipefix2",
+    "role": "worker/python",
+    "mode": "patch",
+    "out": "tools/qwen/pipeline.py",
+    "prompt": "In apply_patch, an answer whose last edit block has no closing marker line (the model stopped right after its replacement lines; lesson K34) must still apply. Your SEARCH block is exactly these lines:\n```\n    blocks = BLOCK.findall(answer)\n    if not blocks:\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n    # K34 (kk-engine 2026-10-13): the model may stop right after its last REPLACE line; close that block.\n    # The markers are built from pieces so this file can itself be edited by patch (K36).\n    opener, closer = \"<\" * 7 + \" SEARCH\", \">\" * 7 + \" REPLACE\"\n    if answer.count(opener) > answer.count(closer):\n        answer = answer.rstrip().removesuffix(\"```\").rstrip() + \"\\n\" + closer\n    blocks = BLOCK.findall(answer)\n    if not blocks:\n```\nChange nothing else.",
+    "check": "python3 -c \"import sys; sys.path.insert(0, 'tools/qwen'); import pipeline as p; t, e = p.apply_patch('a\\nb\\nc\\n', '<<<<<<< SEARCH\\nb\\n=======\\nB'); t2, e2 = p.apply_patch('a\\nb\\nc\\n', '<<<<<<< SEARCH\\nb\\n=======\\nB\\n>>>>>>> REPLACE\\n'); ok = (e is None and t == 'a\\nB\\nc\\n' and e2 is None and t2 == 'a\\nB\\nc\\n'); print('' if ok else 'error: tools/qwen/pipeline.py: apply_patch must close an unterminated last block: got %r %r / %r %r' % (t, e, t2, e2)); sys.exit(0 if ok else 1)\"",
+    "precheck": false,
+    "focus": ["^def apply_patch"],
+    "max_tokens": 800
+  }
+]

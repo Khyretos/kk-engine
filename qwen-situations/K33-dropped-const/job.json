@@ -1,0 +1,14 @@
+[
+  {
+    "name": "g07-lbslot",
+    "role": "worker/cpp-games",
+    "mode": "patch",
+    "out": "engine/src/LightingBuffer.cpp",
+    "prompt": "ENG-G07: the engine goes from 4 lights to 16 (kke::Lighting::kMaxLights). Light 0 stays the sun (directional, cascaded shadows). Point lights gain an optional range (Light::range, 0 = reaches everywhere as before) with a smooth falloff; at most ShadowMap::kMaxPointShadows (4) point lights cast shadows, each in a point-shadow slot (Lighting::pointShadowSlots: the first 4 casting lights in order). Lua scripts place lamps with light.*. C++20, glm, Vulkan, GLSL 450 std140. In LightingBuffer::update, the lights loop needs the point-shadow slots. Your SEARCH block is exactly these lines:\n```\n    for (int i = 0; i < Lighting::kMaxLights; ++i) {\n        const Light& src = lighting.lights[i];\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n    const std::array<int, Lighting::kMaxLights> slots = lighting.pointShadowSlots();\n    for (int i = 0; i < Lighting::kMaxLights; ++i) {\n        const Light& src = lighting.lights[i];\n```\nChange nothing else; do not copy or move any other line.\n",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g07.py lbslot",
+    "precheck": false,
+    "context": [],
+    "max_tokens": 2500,
+    "focus": ["for \\(int i = 0; i < Lighting::kMaxLights; \\+\\+i\\) \\{"]
+  }
+]

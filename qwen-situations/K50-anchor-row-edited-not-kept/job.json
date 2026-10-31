@@ -1,0 +1,14 @@
+[
+  {
+    "name": "b090-mrow",
+    "role": "worker/docs",
+    "mode": "patch",
+    "out": "docs/qwen-log/README.md",
+    "prompt": "kk-engine BUG-090 (C++20, Jolt Physics vehicles in engine/src/RigidWorld.cpp): Jolt's VehicleConstraint passes an anti-roll bar's impulse (stiffness * suspension length difference * dt) to the suspension constraint as a velocity bias, and the solver multiplies a bias by the suspension's softened effective mass (about 58 kg for the test car), so a bar given in N/m acted about 58 times stiffer. With a flat tyre the bar lifted that wheel off the ground, let go, dropped it and lifted it again: the car rocked for ever. The fix divides the stiffness by that mass. Docs only: the metrics table gets this task's row after the ENG-G07 row. Your SEARCH block is exactly these lines:\n```\n| ENG-G07 16 lights + Lua `light.*` | pending | +247 / -54 in 23 code files (engine, 10 shaders), tests +177, docs 9 files, recipe lamps.lua, lessons K31-K44 | 54 planned units + 6 repair or tool jobs: 47 passed on attempt 1, 5 on attempt 2; 5 finished by Claude after 3 attempts (K31, K33, K34, K40, K41); 4 that passed were wrong and caught later (K35 by a build, K38 by a new test, K42 and K44 by the picture check), 3 of those repaired by the Coder | about 330 drafted / about 300 kept | 177 tests + about 30 fixes | 18,631 out + 244,079 prompt in 70 calls, 423 s GPU (soucouyant) | unmeasured per task | pending | none |\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n| ENG-G07 16 lights + Lua `light.*` | pending | +247 / -54 in 23 code files (engine, 10 shaders), tests +177, docs 9 files, recipe lamps.lua, lessons K31-K44 | 54 planned units + 6 repair or tool jobs: 47 passed on attempt 1, 5 on attempt 2; 5 finished by Claude after 3 attempts (K31, K33, K34, K40, K41); 4 that passed were wrong and caught later (K35 by a build, K38 by a new test, K42 and K44 by the picture check), 3 of those repaired by the Coder | about 330 drafted / about 300 kept | 177 tests + about 30 fixes | 18,631 out + 244,079 prompt in 70 calls, 423 s GPU (soucouyant) | unmeasured per task | pending | none |\n| ENG-B090/B091 anti-roll bars in N/m, portable voice-test noise | pending | +105 / -22: RigidWorld.cpp +15, Vehicle.h, racing Cars.cpp, tests +62 (Claude), VEHICLES.md, BUGS.md and GAPS.md rows | 7 units: 7 passed on attempt 1 | about 30 drafted / about 30 kept | 62 (tests, written first) | 1,864 out + 19,297 prompt in 6 calls, 44 s GPU (soucouyant), plus this row | unmeasured per task | pending | none |\n```\nChange nothing else; do not copy or move any other line.\n",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_b090.py mrow",
+    "precheck": false,
+    "context": [],
+    "max_tokens": 1500,
+    "focus": ["^\\| ENG-G07 16 lights"]
+  }
+]

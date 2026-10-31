@@ -1,0 +1,14 @@
+[
+  {
+    "name": "g06-dhist",
+    "role": "worker/cpp-games",
+    "mode": "patch",
+    "out": "docs/HISTORY.md",
+    "prompt": "ENG-G06: lit surfaces reflect the sky. kke::EnvMap holds the sky prefiltered for reflections: an equirectangular RGB image (u = 0.5 + atan(x, -z) / 2pi, v = acos(y) / pi, kke::equirectUv / kke::equirectDir in kke/Sky.h) in several levels, each half as wide as the one before; level i is the sky seen in a surface of perceptual roughness i / (levels - 1), convolved with GGX by importance sampling with N = V = R (Karis, \"Real Shading in Unreal Engine 4\", 2013, the split sum). The shaders weight it by Karis's analytic environment BRDF (\"Physically Based Shading on Mobile\", 2014). C++20, glm, Vulkan, GLSL 450 std140. Docs only (Markdown). Your SEARCH block is exactly these lines:\n```\n## What's still ahead for lighting\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n## What's still ahead for lighting\n\n> Update, 2026-10-13: most of the list below has been built since; docs/GAPS.md\n> tracks what is left. The sky now lights the scene through spherical\n> harmonics and shiny surfaces reflect it from a prefiltered environment\n> map (`kke::EnvMap`, ENG-G06).\n```\nChange nothing else; do not copy or move any other line.\n",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g06.py dhist",
+    "precheck": false,
+    "context": [],
+    "max_tokens": 700,
+    "focus": ["^## What's still ahead for lighting"]
+  }
+]

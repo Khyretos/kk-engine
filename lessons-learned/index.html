@@ -1,0 +1,5270 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A modular, open-source Vulkan game engine in C++17, with Lua scripting.">
+      
+      
+      
+        <link rel="canonical" href="https://khyretos.github.io/kk-engine/lessons-learned/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="https://raw.githubusercontent.com/Khyretos/kk-engine/main/assets/branding/logo-128.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>Lessons learned: the local Coder on kk-engine - Kreative Kompas Engine</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="deep-orange" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#lessons-learned-the-local-coder-on-kk-engine" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Kreative Kompas Engine" class="md-header__button md-logo" aria-label="Kreative Kompas Engine" data-md-component="logo">
+      
+  <img src="https://raw.githubusercontent.com/Khyretos/kk-engine/main/assets/branding/logo-128.png" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Kreative Kompas Engine
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Lessons learned: the local Coder on kk-engine
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="deep-orange" data-md-color-accent="amber"  aria-label="Dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="deep-orange" data-md-color-accent="amber"  aria-label="Light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Khyretos/kk-engine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Khyretos/kk-engine
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href=".." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../BUILDING/" class="md-tabs__link">
+          
+  
+  
+  Getting started
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../tutorials/" class="md-tabs__link">
+          
+  
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../cookbook/" class="md-tabs__link">
+          
+  
+  
+  Cookbook
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../demos/" class="md-tabs__link">
+          
+  
+  
+  Demos
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../PLAY_TO_MAKE/" class="md-tabs__link">
+          
+  
+  
+  Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../reference/lua-api/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../devlog/" class="md-tabs__link">
+          
+  
+  
+  Project
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Kreative Kompas Engine" class="md-nav__button md-logo" aria-label="Kreative Kompas Engine" data-md-component="logo">
+      
+  <img src="https://raw.githubusercontent.com/Khyretos/kk-engine/main/assets/branding/logo-128.png" alt="logo">
+
+    </a>
+    Kreative Kompas Engine
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Khyretos/kk-engine" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Khyretos/kk-engine
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../BUILDING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Install and build
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Make your own game
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../AI_ASSISTANTS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Make games with an AI assistant
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tutorials
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/01-walk-around/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    1. Walk around
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/02-break-things/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    2. Break things
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/03-pickups/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    3. Script a pickup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tutorials/04-sound/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    4. Add sound
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cookbook
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Cookbook
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cookbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cookbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cookbook/first-steps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First steps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cookbook/input/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Input
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cookbook/moving/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Moving things
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cookbook/cameras/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cameras
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cookbook/gameplay/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gameplay
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cookbook/algorithms/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Algorithms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cookbook/animation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Animation and IK
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cookbook/physics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cookbook/audio/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sound
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cookbook/networking/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multiplayer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cookbook/play-to-make/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Play to make
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cookbook/cpp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    C++
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Demos
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Demos
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The demos
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_2" id="__nav_5_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start here
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Start here
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/template/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Starter game
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/first_lua_game/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    First Lua game
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/cookbook/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cookbook player
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_3" id="__nav_5_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Games
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Games
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/climb_race/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Climb Race
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/racing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Racing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/flying_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Flying
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/party/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Party
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/duel/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Duel
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/tennis/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tennis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/goblin_horde/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Goblin Horde
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_4" id="__nav_5_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AI and companions
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    AI and companions
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/farm_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Farm
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/pet_companion/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pet companion
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/platoon/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Platoon
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/command_kit/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command kit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/procedural_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Procedural animation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/anim_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Animation (blend spaces, retargeting, IK)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/character_creator/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Character creator
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_5" id="__nav_5_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics, water and sound
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Physics, water and sound
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/physics_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics (FEMFX)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/melt_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Melting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/particles_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/sea_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sea
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/jiggle_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jiggle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/cloth_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloth and hair
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/audio_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sound
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/synty_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Synty characters and ragdolls
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_6" id="__nav_5_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Showcases and tools
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Showcases and tools
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/showcase/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    kke_demo showcase
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/sandbox/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sandbox
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/rmlui_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RmlUi demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../demos/imgui_demo/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ImGui demo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PLAY_TO_MAKE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Play to make
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SCRIPTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scripting in Lua
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MOVEMENT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Movement
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../AI/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AI (animals, enemies, companions)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../COMBAT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Melee combat and crowds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PROCEDURAL_ANIMATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Procedural animation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../EQUIPMENT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Equipment and body awareness
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../INPUT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Input
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TOUCH/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Touch controls
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../GAME_SHELL/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Menus, pause and settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../LOBBY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Start menu and joining
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../OUTFITS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Outfits
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../HUMANS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Humans
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DEMO_PANEL/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Settings panel
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../COMMANDS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Commands and orders
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../AUDIO/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Audio
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../NETWORKING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Networking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SERVER_HOSTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hosting a server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TOOLS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The kke_ tools
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../STORAGE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Saving data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ANTI_CHEAT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anti-cheat
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DRM/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kreative DRM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MODDING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    DLC and mods
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ASSETS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Asset folders and naming
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SCENES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scenes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SHOWCASE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The kke_demo showcase
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../JIGGLE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jiggle physics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../AUTO_RIG/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Auto-rigging a body
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PHYSICS_BRIDGE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Physics bridge
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../BREAKABLES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Breakable props
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PARTICLE_EFFECTS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Particle effects
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../RAGDOLLS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ragdolls
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CLOTH/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cloth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../HAIR/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hair
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/lua-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lua API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DATA_FILES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    JSON or YAML data files
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../OPTIMIZATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Optimization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TERRAIN/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Terrain
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MOODS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Moods (sky, fog, look)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../RENDERING_PRINCIPLES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rendering principles
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../BENCHMARKS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../BAKING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Baking every download (one command)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../COOKED_ART/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cooked art (private builds with Synty art)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../BAKING_FOR_FRIENDS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Baking the benchmark with the art, for friends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PERFORMANCE_NOTES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PLATFORMS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Platforms and hardware targets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ANDROID/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Android
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../VM_TESTS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Windows and Android in VMs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SCALING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scaling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DEPENDENCIES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dependencies and licences
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../HARDWARE_TESTS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardware tests
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PLAYTEST_CHECKLIST/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Playtest checklist
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Project
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Project
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../devlog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Devlog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../GO_TO_MARKET/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Going to market
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../RELEASES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Downloadable builds
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../HISTORY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development history
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DOCS_SITE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    This site
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/Khyretos/kk-engine/edit/main/docs/lessons-learned.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="lessons-learned-the-local-coder-on-kk-engine">Lessons learned: the local Coder on kk-engine<a class="headerlink" href="#lessons-learned-the-local-coder-on-kk-engine" title="Permanent link">&para;</a></h1>
+<p>Every correction Claude makes to a Coder draft becomes a numbered lesson
+here, with its exact situation (job prompt, input, wrong output, corrected
+output) in <code>docs/qwen-situations/&lt;number&gt;-&lt;slug&gt;/</code>, so the same situation
+can be rerun after the models improve. Numbers are kk-engine's own
+(K1, K2, ...); the Kreative Kompanion repo keeps its own list.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Date</th>
+<th>Task / unit</th>
+<th>What went wrong</th>
+<th>Rule for the next job</th>
+<th>Situation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>K1</td>
+<td>2026-10-12</td>
+<td>ENG-B068 <code>b068-readme</code></td>
+<td>Asked to delete one bullet and edit an earlier one, the Coder replaced the deleted bullet with a copy of the earlier one and left the earlier one stale; both repair rounds returned no edit blocks. Claude's own part: the job's check also tested a file the next job edits, so the repair rounds were fed another file's error.</td>
+<td>One job edits one place: split "delete X" and "edit Y" into two patch jobs, each with <code>focus</code> on its own lines. A job's check tests only that job's file.</td>
+<td><a href="qwen-situations/K1-rewrote-the-wrong-bullet/">K1</a></td>
+</tr>
+<tr>
+<td>K2</td>
+<td>2026-10-12</td>
+<td>ENG-B068 <code>b068-bugs</code></td>
+<td>The Status cell got an extra unrequested sentence, and file, function and test names were bare text.</td>
+<td>Give the exact sentence shape in the prompt and say "nothing else"; say "code names in backticks"; the check rejects extra sentences and bare names.</td>
+<td><a href="qwen-situations/K2-extra-sentence-bare-names/">K2</a></td>
+</tr>
+<tr>
+<td>K3</td>
+<td>2026-10-12</td>
+<td>CI-5 <code>hair-stats-field</code></td>
+<td>A new struct field went in first (changes brace-initialiser order), with a <code>///</code> comment in a <code>//</code> file and a braced one-line <code>if</code>.</td>
+<td>Say where a new member goes ("after the last member") and "match the file's comment and brace style"; show a neighbouring member in <code>focus</code>.</td>
+<td><a href="qwen-situations/K3-new-field-first-other-style/">K3</a></td>
+</tr>
+<tr>
+<td>K4</td>
+<td>2026-10-13</td>
+<td>ENG-B074 <code>b074-climb</code></td>
+<td>Told to swap <code>std::getenv</code> for <code>kke::dev::env</code> and change nothing else, the Coder also dropped <code>&amp;&amp; *v</code> from the next line, so an empty variable gave 0 instead of the default. The check only looked for the new calls.</td>
+<td>A "replace X with Y" job's check diffs the file and allows only lines that differ by X to Y; quote the lines that must stay.</td>
+<td><a href="qwen-situations/K4-drops-a-condition/">K4</a></td>
+</tr>
+<tr>
+<td>K5</td>
+<td>2026-10-13</td>
+<td>ENG-B076 <code>b076-checker</code></td>
+<td>A new 170-line checker read <code>games/*.json</code> instead of <code>games/&lt;game&gt;/game.json</code> (so it checked nothing and said ok), compared class names with module names and swapped missing and extra; both repair rounds were empty one-line patches.</td>
+<td>Give a new script's file layout as a literal example path, and split a script over 100 lines into one job per function, each with a behaviour test that fails on "checked nothing".</td>
+<td><a href="qwen-situations/K5-checker-wrong-layout/">K5</a></td>
+</tr>
+<tr>
+<td>K6</td>
+<td>2026-10-13</td>
+<td>ENG-B075 <code>b075-doc-trunk</code>, <code>b075-doc-scan</code></td>
+<td>Markdown bullets came back as one 190-character line each; repair rounds fed "under 80 characters" returned the same line. Claude's check for the second job again read the whole file (K1).</td>
+<td>Wrap Coder-written Markdown by script after the job (<code>textwrap.fill</code>, width 72, two-space indent) and check the words, not the wrapping; scope each check to its own lines.</td>
+<td><a href="qwen-situations/K6-long-markdown-lines/">K6</a></td>
+</tr>
+<tr>
+<td>K7</td>
+<td>2026-10-13</td>
+<td>ENG-G03 <code>g03-pbr</code></td>
+<td>All three new <code>resolveTexture(..., searchDirs)</code> calls passed <code>options.textureSearchPaths</code>, the field <code>searchDirs</code> is built from, although every step named <code>searchDirs</code>; each repair round was fed one compiler error and fixed two of the three calls between them.</td>
+<td>When a named local has a look-alike field nearby, quote its declaration line in the prompt ("pass this, not <code>options.textureSearchPaths</code>") and give the check a negative needle that counts every wrong use at once, so one repair round sees them all.</td>
+<td><a href="qwen-situations/K7-similar-variable-swapped/">K7</a></td>
+</tr>
+<tr>
+<td>K8</td>
+<td>2026-10-13</td>
+<td>ENG-G03 <code>g03-frag</code></td>
+<td>Given a six-line GLSL block to insert, the Coder left out its first line (<code>vec3 N = normalize(fragNormalWorld);</code>) and passed <code>fragNormalWorld</code> to the next line. Claude's part: there was no needle for the declaration, so the error named the next line, and the block was literal code that Claude should have pasted itself (lesson 75).</td>
+<td>Paste literal blocks yourself. When a job must write one anyway, give every declaration its own needle so the error names the missing line.</td>
+<td><a href="qwen-situations/K8-dropped-declaration/">K8</a></td>
+</tr>
+<tr>
+<td>K9</td>
+<td>2026-10-13</td>
+<td>ENG-G03 <code>g03-surf</code></td>
+<td>The check wanted <code>set = m_defaultSurface;</code> in the failed-allocation branch. The draft returned the default there instead (also right), and the repair round added <code>else { set = m_defaultSurface; }</code>, which threw away every good set. It compiled and passed.</td>
+<td>Check a branch by its shape (regex over the whole if/else, plus a count of the fallback), not by one line it contains. Read every repair-round diff before accepting a pass.</td>
+<td><a href="qwen-situations/K9-needle-chasing/">K9</a></td>
+</tr>
+<tr>
+<td>K10</td>
+<td>2026-10-13</td>
+<td>ENG-G03 <code>g03-pixels</code>, <code>g03-load</code>, <code>g03-applin</code>, <code>g03-mips</code></td>
+<td>The <code>focus</code> hid a line the job had to change, so the Coder copied the <code>// ...</code> marker into its edit blocks. Its repair rounds broke <code>Texture.cpp</code>, and because four dependent jobs ran in one call, the other jobs' checks failed on that file and their repair rounds changed code that was right. Claude's mistake.</td>
+<td>Every edited line must match a focus regex. Jobs that need another job's file to compile go in separate pipeline calls, each gated on the one before.</td>
+<td><a href="qwen-situations/K10-focus-and-cascade/">K10</a></td>
+</tr>
+<tr>
+<td>K11</td>
+<td>2026-10-13</td>
+<td>ENG-G03 <code>g03-applin</code></td>
+<td>Told that a failed load is remembered as nullptr, the Coder added <code>return nullptr;</code> in the catch block, so the failure was never stored and the file was loaded again each time. The needles passed.</td>
+<td>Say "the catch block only logs" and give the check a negative regex for <code>return</code> inside that catch.</td>
+<td><a href="qwen-situations/K11-early-return-in-catch/">K11</a></td>
+</tr>
+<tr>
+<td>K12</td>
+<td>2026-10-13</td>
+<td>Windows runner <code>win-workflow</code></td>
+<td>In a <code>shell: cmd</code> step, the Coder split a long <code>powershell</code> call over lines that end in PowerShell's backtick, so cmd would run the first line with no arguments. The needle was only the first line, so it passed.</td>
+<td>Name the step's shell in the prompt and say "one line". The check rejects a backtick at the end of a line in a cmd step.</td>
+<td><a href="qwen-situations/K12-cmd-line-continuation/">K12</a></td>
+</tr>
+<tr>
+<td>K13</td>
+<td>2026-10-13</td>
+<td>Windows runner <code>win-tests</code></td>
+<td>The spec named the test process <code>$tests</code>, but the script already had a <code>-Tests</code> parameter, and PowerShell names ignore case. Assigning the process turned it into a string, so <code>.WaitForExit()</code> failed on the PC. It parsed, and every needle passed. Claude's mistake.</td>
+<td>In PowerShell specs, check every new variable name against the param block, ignoring case. The check needles the exact variable name (<code>$testRun</code>).</td>
+<td>(no situation: the spec was wrong, not the draft)</td>
+</tr>
+<tr>
+<td>K14</td>
+<td>2026-10-13</td>
+<td>Windows runner <code>win-doc</code></td>
+<td>The section was right on attempt 1, but Claude's needles wanted <code>`windows-native.yml`</code> while the dictated facts said <code>`.forgejo/workflows/windows-native.yml`</code>. The repair rounds then added a junk "Files mentioned" row to an unrelated table.</td>
+<td>Run every check on a hand-made correct answer before the job (skipped here). Needles accept the form the prompt dictates, and the check also rejects edits outside the section.</td>
+<td><a href="qwen-situations/K14-strict-needle-junk-row/">K14</a></td>
+</tr>
+<tr>
+<td>K15</td>
+<td>2026-10-13</td>
+<td>ENG-G05 <code>g05-hdr</code>, <code>g05-classdoc</code></td>
+<td>Comments were the prompt's facts copied word for word: lower-case fragments on 130-character lines, and once a repeated phrase ("remain out of scope still: point-light shadows"). The checks passed. Claude's part: the facts were given as fragments.</td>
+<td>Dictate comment text as finished sentences, or wrap and capitalise the Coder's comments by script (like K6).</td>
+<td><a href="qwen-situations/K15-comment-fragments/">K15</a></td>
+</tr>
+<tr>
+<td>K16</td>
+<td>2026-10-13</td>
+<td>ENG-G05 <code>g05-snap</code></td>
+<td>Moving a block into a helper, the Coder deleted the six-line comment above it that the prompt said to keep, and put the helper's own comment inside its body. The needles did not cover comments.</td>
+<td>When a block with a comment is replaced, name the comment's first words in the prompt and needle them.</td>
+<td><a href="qwen-situations/K16-dropped-kept-comment/">K16</a></td>
+</tr>
+<tr>
+<td>K17</td>
+<td>2026-10-13</td>
+<td>ENG-G05 <code>g05-split</code></td>
+<td>The draft built a <code>glm::vec4</code> from a vec3 and three floats; GCC reported it inside glm's header, and the check dropped the <code>required from here</code> line naming ShadowMap.cpp. Both repair rounds edited the nearest glm call of their own instead and defined <code>snapToTexels</code> twice.</td>
+<td>kchk.sh now passes <code>required from here</code> lines to the repair rounds.</td>
+<td><a href="qwen-situations/K17-glm-template-error/">K17</a></td>
+</tr>
+<tr>
+<td>K18</td>
+<td>2026-10-13</td>
+<td>ENG-G05 <code>g05-grid</code></td>
+<td>Asked to add one member to the constructor's initializer list, the Coder rewrote the list without <code>m_device(device)</code>; the repair rounds renamed <code>m_device</code> to <code>device</code> across the file and listed every member out of order. Claude's part: the spec left two locals unused without saying to delete them.</td>
+<td>Dictate the whole new initializer line; when a rewrite leaves locals unused, say to delete them.</td>
+<td><a href="qwen-situations/K18-initializer-list-member/">K18</a></td>
+</tr>
+<tr>
+<td>K19</td>
+<td>2026-10-13</td>
+<td>ENG-G05 <code>g05-ubo</code></td>
+<td>A <code>#define</code> meant for "before <code>struct GPULight {</code>" went before the nearest preprocessor line (<code>#include</code>), after its use; the repair rounds broke the include guard and pasted the fields twice.</td>
+<td>Give an insertion's anchor as the exact line to SEARCH for; the check rejects changes to include guards.</td>
+<td><a href="qwen-situations/K19-define-near-include/">K19</a></td>
+</tr>
+<tr>
+<td>K20</td>
+<td>2026-10-13</td>
+<td>ENG-G05 <code>g05-pbr</code>, <code>g05-app</code></td>
+<td>Twice a right draft failed exact needles: it split a dictated <code>vec4 tile</code> into two <code>vec2</code>s, and it added a sensible near-plane guard. The repair rounds only added noise. Claude's mistake.</td>
+<td>Needle only lines whose exact text matters (names other code uses, constants); the compile, tests and picture check gate the rest.</td>
+<td><a href="qwen-situations/K20-strict-needles-equivalent/">K20</a></td>
+</tr>
+<tr>
+<td>K21</td>
+<td>2026-10-13</td>
+<td>ENG-G05 <code>g05-lbcpp</code></td>
+<td>"Replace the final <code>+ 16</code> with ..." in a static_assert became an extra appended term, and the assert failed; the repairs did not fix it.</td>
+<td>Never ask for a replacement inside a line; dictate the whole new line.</td>
+<td><a href="qwen-situations/K21-replace-inside-line/">K21</a></td>
+</tr>
+<tr>
+<td>K22</td>
+<td>2026-10-13</td>
+<td>ENG-G05 <code>g05-bug</code></td>
+<td>Appending a BUGS row after a 1,500-character row, the Coder's SEARCH block could not retype that row exactly; the last repair round wrote the check's own error message into BUGS.md as the new row.</td>
+<td>Never anchor on a long line: append rows by script after a short anchor, or have the Coder write only the new row for a script to insert.</td>
+<td><a href="qwen-situations/K22-long-row-anchor/">K22</a></td>
+</tr>
+<tr>
+<td>K23</td>
+<td>2026-10-13</td>
+<td>NET-LOOP <code>loop-use</code></td>
+<td>The prompt gave <code>boundAddress()</code>'s body verbatim; the Coder wrote its own (<code>std::to_string(a.host) + ":" + ...</code>, giving "16777343:58440"), without the null check. The test said what it wanted; both repair rounds kept the body.</td>
+<td>When code is dictated, the check diffs the function against the dictated text as well as running the test.</td>
+<td><a href="qwen-situations/K23-own-body-for-dictated-code/">K23</a></td>
+</tr>
+<tr>
+<td>K24</td>
+<td>2026-10-13</td>
+<td>SHADOW-SIZE <code>ssz-presets</code></td>
+<td>Asked to mention "1024 shadow tiles" in five preset descriptions "where it reads naturally", the Coder changed two, and both then read "no shadows, 1024 shadow tiles". The check covered only the JSON. Claude's part: the wording was left open.</td>
+<td>Give each changed sentence verbatim; never "where it reads naturally".</td>
+<td><a href="qwen-situations/K24-where-it-reads-naturally/">K24</a></td>
+</tr>
+<tr>
+<td>K25</td>
+<td>2026-10-13</td>
+<td>ENG-G04 <code>g04-light</code></td>
+<td>Asked to add lines after an anchor line (<code>float intensity = 1.0f;</code> at the end of struct Light), the Coder put them before it, or above the anchor. The same error occurred in four units: <code>g04-hdr</code> (below gridFor when told above), <code>g04-light</code>, <code>g04-apph</code> (above m_shadowMap), and <code>g04-appvp</code> (above the <code>lightViewProj</code> line). Repair rounds did not move them to the correct position.</td>
+<td>Never describe where new lines go; dictate the whole REPLACE block (anchor included) in its final order, and the check tests the order.</td>
+<td><a href="qwen-situations/K25-insert-position/">K25</a></td>
+</tr>
+<tr>
+<td>K26</td>
+<td>2026-10-13</td>
+<td>ENG-G04 <code>g04-ctx</code></td>
+<td><code>g04-ctx</code> asked for two edits in struct <code>ShadowRenderContext</code>; the draft replaced the <code>tile</code> field instead of adding after it and wrote <code>// //</code>. The repair rounds then added the new field twice and a stray <code>};</code>. In <code>g04-hdr</code> the repair rounds pasted copies of five existing declarations, and in <code>g04-apppass</code> a repair round added <code>} // Application class</code> at the end of the file to balance a brace it had dropped.</td>
+<td>Checks count landmark lines (each existing declaration and closing brace exactly once) and say which one is doubled; one edit per job inside a struct.</td>
+<td><a href="qwen-situations/K26-repair-duplicates/">K26</a></td>
+</tr>
+<tr>
+<td>K27</td>
+<td>2026-10-13</td>
+<td>ENG-G04 <code>g04-lbs</code></td>
+<td>The prompt asked for <code>//</code> comments on new struct members and above new functions, but the Coder omitted them; the checks passed because they only validated code structure, not comment presence. Additionally, <code>g04-pfn</code> placed braces on their own line, violating the existing file style.</td>
+<td>When comments are required, dictate their exact text (K15) and ensure the check explicitly validates their presence; a missing check requirement allows the Coder to skip the task.</td>
+<td><a href="qwen-situations/K27-dropped-comments/">K27</a></td>
+</tr>
+<tr>
+<td>K28</td>
+<td>2026-10-13</td>
+<td>ENG-G04 <code>g04-apppass</code></td>
+<td>The point pass needed the face matrices <code>pointViewProjs</code>, computed earlier in the same function but outside the Coder's view. The draft built its own, wrong ones (glm::rotate around made-up axes, <code>position()</code> that does not exist), put the pass inside the key light's render pass, and in g04-apph it invented a separate descriptor layout, pool and set the design did not have.</td>
+<td>Name the variables and objects that already exist outside the focus, and say what not to create.</td>
+<td><a href="qwen-situations/K28-reinvents-existing/">K28</a></td>
+</tr>
+<tr>
+<td>K29</td>
+<td>2026-10-13</td>
+<td>ENG-G04 <code>g04-apppass</code></td>
+<td>Run 2 of <code>g04-apppass</code> got the verbatim block right but dropped the <code>}</code> that closed <code>if (drawScene)</code> right after the one-line SEARCH anchor; the repair round balanced it with <code>} // Application class</code> at the end of the file. Calls 4 and 5 in calls.json.gz are run 2.</td>
+<td>When the anchor is followed by a closing brace, put that brace in both SEARCH and REPLACE.</td>
+<td><a href="qwen-situations/K29-line-after-search/">K29</a></td>
+</tr>
+<tr>
+<td>K30</td>
+<td>2026-10-13</td>
+<td>ENG-G04 <code>g04-layout</code></td>
+<td>Claude's design ran the point map's render pass only when a point light cast shadows, so in every other game the map stayed in <code>VK_IMAGE_LAYOUT_UNDEFINED</code> while every lit shader sampled it. The unit checks and the whole test suite passed; only the picture check with shadows off showed it, as Vulkan validation errors.</td>
+<td>Every new render target is picture-checked with its feature on AND off, and the run's log must have no validation errors.</td>
+<td><a href="qwen-situations/K30-never-drawn-target/">K30</a></td>
+</tr>
+<tr>
+<td>K31</td>
+<td>2026-10-13</td>
+<td>ENG-G07 <code>g07-alg</code></td>
+<td>A one-line insert described as "those same lines, followed by the new line" landed ABOVE the anchor; both repairs then ran out of tokens (K32).</td>
+<td>K25 holds for one line too: write the whole REPLACE block, anchor first. <code>after()</code> in g07.py now does it for every one-line insert.</td>
+<td><a href="qwen-situations/K31-one-line-insert-above/">K31</a></td>
+</tr>
+<tr>
+<td>K32</td>
+<td>2026-10-13</td>
+<td>ENG-G07 <code>g07-alg#fix1</code></td>
+<td>pipeline.py's repair rounds dropped the job's <code>focus</code>, so a repair saw all of Application.h (8,799 prompt tokens) and ran to the 2,500-token limit.</td>
+<td>Repairs keep the draft's <code>focus</code> (pipeline.py check_loop, job g07-pipefix).</td>
+<td><a href="qwen-situations/K32-fix-round-without-focus/">K32</a></td>
+</tr>
+<tr>
+<td>K33</td>
+<td>2026-10-13</td>
+<td>ENG-G07 <code>g07-lbslot</code></td>
+<td>A dictated line came back without <code>const</code>; the check only said "missing <whole block>", so the repair could not see the one word.</td>
+<td>A needle error names the nearest line the model wrote (chk_g07.py).</td>
+<td><a href="qwen-situations/K33-dropped-const/">K33</a></td>
+</tr>
+<tr>
+<td>K34</td>
+<td>2026-10-13</td>
+<td>ENG-G07 <code>g07-apps</code></td>
+<td>Right answers ended after the last REPLACE line with no closing marker, so pipeline.py found "no edit blocks" and threw them away; repair 2 then dropped a line.</td>
+<td>apply_patch closes an unterminated last block (job g07-pipefix2).</td>
+<td><a href="qwen-situations/K34-unterminated-block/">K34</a></td>
+</tr>
+<tr>
+<td>K35</td>
+<td>2026-10-13</td>
+<td>ENG-G07 <code>g07-appa</code>, <code>g07-appb</code></td>
+<td>A described two-loop rewrite was woven into the old loop (with tabs), and the unit before had already rewritten that loop outside its SEARCH; needles matched, no build ran.</td>
+<td>A unit that replaces a block builds, counts each key line once and rejects tabs; dictate the block.</td>
+<td><a href="qwen-situations/K35-needles-on-mixed-loop/">K35</a></td>
+</tr>
+<tr>
+<td>K36</td>
+<td>2026-10-13</td>
+<td>ENG-G07 <code>g07-pipefix2</code></td>
+<td>Code that itself contained <code>&gt;&gt;&gt;&gt;&gt;&gt;&gt; REPLACE</code> cut the patch block short: half a line and a syntax error, three times.</td>
+<td>Build the patch markers from pieces in dictated code.</td>
+<td><a href="qwen-situations/K36-markers-in-code/">K36</a></td>
+</tr>
+<tr>
+<td>K37</td>
+<td>2026-10-13</td>
+<td>ENG-G07 <code>g07-appb</code> (Claude)</td>
+<td>Claude's focus regex had doubled backslashes and matched nothing; the Coder rightly said the code was not shown.</td>
+<td>drive_g07.sh stops before a unit whose focus matches no line.</td>
+<td><a href="qwen-situations/K37-empty-focus/">K37</a></td>
+</tr>
+<tr>
+<td>K38</td>
+<td>2026-10-13</td>
+<td>ENG-G07 <code>g07-slc</code></td>
+<td>ScriptLights::add skipped only the SAME owner's slots, a condition the spec never had; the tests used one owner only.</td>
+<td>For every "any X" in a spec, a test where X belongs to someone else.</td>
+<td><a href="qwen-situations/K38-extra-owner-condition/">K38</a></td>
+</tr>
+<tr>
+<td>K39</td>
+<td>2026-10-13</td>
+<td>ENG-G07 <code>g07-cm</code> (Claude)</td>
+<td>The unit's test filter ran a test that only holds after a later unit, so a right CMake line failed and its repairs chased the wrong file.</td>
+<td>Run a unit's filter on the tree as it is after that unit.</td>
+<td><a href="qwen-situations/K39-filter-needs-later-unit/">K39</a></td>
+</tr>
+<tr>
+<td>K40</td>
+<td>2026-10-13</td>
+<td>ENG-G07 <code>g07-bset</code></td>
+<td>Three bindings described line by line went into a later lambda (<code>'vm' is not captured</code>), with double calls and <code>lua_getfield</code> stack leaks, in all three runs.</td>
+<td>Dictate anchor plus new code verbatim; described inserts failed every time in this task.</td>
+<td><a href="qwen-situations/K40-described-insert-wrong-lambda/">K40</a></td>
+</tr>
+<tr>
+<td>K41</td>
+<td>2026-10-13</td>
+<td>ENG-G07 <code>g07-rel</code></td>
+<td>The anchor line moved into scene.unload, which ends with a near twin of it; releaseScript kept only the new line. The next unit's build showed it.</td>
+<td>An anchor with a near twin gets a second, unique anchor line in SEARCH.</td>
+<td><a href="qwen-situations/K41-anchor-moved/">K41</a></td>
+</tr>
+<tr>
+<td>K42</td>
+<td>2026-10-13</td>
+<td>ENG-G07 <code>g07-recipefix</code></td>
+<td>A repair dropped <code>ring[i] = id</code> and an <code>end</code>; test_cookbook embeds recipes at configure time, so the check compiled the stale first version.</td>
+<td>Checks reconfigure before testing a .lua unit.</td>
+<td><a href="qwen-situations/K42-repair-drops-lines-stale-check/">K42</a></td>
+</tr>
+<tr>
+<td>K43</td>
+<td>2026-10-13</td>
+<td>ENG-G07 survey (Claude)</td>
+<td>Claude's list of shaders with their own UBO copy missed model_instanced.vert; all tests passed, the picture check lost the instanced fence.</td>
+<td>Test Lights.EveryShaderCopyOfTheUboHasAllLights reads every shader; turn "must match" comments into tests.</td>
+<td><a href="qwen-situations/K43-missed-shader-copy/">K43</a></td>
+</tr>
+<tr>
+<td>K44</td>
+<td>2026-10-13</td>
+<td>ENG-G07 <code>g07-bpoint</code></td>
+<td><code>ScriptVM::fieldVec3(...)</code> calls without the assignment (<code>d.position = ...</code>): every script lamp got the defaults. Needles matched the call text; only the picture check (and a UBO dump) showed it.</td>
+<td>Needles hold the whole statement; bindings get a run-time check.</td>
+<td><a href="qwen-situations/K44-call-not-assignment/">K44</a></td>
+</tr>
+<tr>
+<td>K45</td>
+<td>2026-10-13</td>
+<td>BUG-087 <code>b087-bug87</code> (Claude)</td>
+<td>The job spec built the wanted BUGS.md row from the working copy at import time and asserted it changed; the check imports the spec after the Coder's edit, so it crashed and both repair rounds were fed a traceback, though the first draft was right.</td>
+<td>A job spec reads the committed file (<code>git show HEAD:path</code>), never the file the job edits.</td>
+<td><a href="qwen-situations/K45-spec-read-the-edited-file/">K45</a></td>
+</tr>
+<tr>
+<td>K46</td>
+<td>2026-10-13</td>
+<td>macOS <code>mac-docker</code></td>
+<td>The Coder copied <code>--strip-components=3</code> from the Node step of the context Dockerfile into the LLVM extract, so the file landed elsewhere and the <code>mv</code> failed; the repair, shown only the RUN echo (K47), shortened the member path.</td>
+<td>When a context file has a similar step, say which of its options not to copy, or dictate the whole RUN line.</td>
+<td><a href="qwen-situations/K46-strip-components-copied/">K46</a></td>
+</tr>
+<tr>
+<td>K47</td>
+<td>2026-10-13</td>
+<td>macOS <code>mac-docker</code> (Claude)</td>
+<td>Claude's docker build check printed the last 30 lines, which only repeat the RUN command and the exit code; the failing command's own message was cut, so the repair guessed the cause.</td>
+<td>A check prints the failing command's own message first (<code>--progress=plain</code>, lines with cannot / not found / no such / error).</td>
+<td><a href="qwen-situations/K47-check-showed-the-echo/">K47</a></td>
+</tr>
+<tr>
+<td>K48</td>
+<td>2026-10-13</td>
+<td>macOS <code>mac-wf</code></td>
+<td>The Coder put <code>tar -xf dist/src.tar -C /tmp/</code>, a blank line and three comments before the test step's one command; the check only looked for that command, so the unit passed. Claude removed them in review.</td>
+<td>A check on a step or block compares its whole command list, not a needle.</td>
+<td><a href="qwen-situations/K48-extra-command-in-step/">K48</a></td>
+</tr>
+<tr>
+<td>K49</td>
+<td>2026-10-13</td>
+<td>macOS <code>mac-wf2</code></td>
+<td>The check said the Package step runs only the package.sh line; repair 1 pasted the job's own check command into the step and repair 2 changed nothing.</td>
+<td>A check error says what to remove, never only what the result should be; repair prompts do not show the check command as code.</td>
+<td><a href="qwen-situations/K49-repair-pasted-the-check/">K49</a></td>
+</tr>
+<tr>
+<td>K50</td>
+<td>2026-10-13</td>
+<td>BUG-090 <code>b090-mrow</code></td>
+<td>Asked to replace the ENG-G07 metrics row with itself plus a new row, the Coder edited the first cell of the ENG-G07 row and dropped the new row; both repairs returned no edit.</td>
+<td>An anchor row over about 500 characters is too long to copy: anchor on a short line, or let the Coder write the row alone and a script append it.</td>
+<td><a href="qwen-situations/K50-anchor-row-edited-not-kept/">K50</a></td>
+</tr>
+<tr>
+<td>K51</td>
+<td>2026-10-13</td>
+<td>ENG-G06 <code>g06-hdr</code></td>
+<td>A new-file job (dictated header, comments to add) came back as <code>cat &gt; EnvMap.h &lt;&lt; 'EOF'</code> ... <code>EOF</code> and then a second, unasked file; the file comment was the job's own preamble pasted whole. Both repairs were cut off at 2,000 tokens.</td>
+<td>A "new" job says: the file's contents only, in one fence, no shell and no other file; its token cap is at least twice the file; a file comment is dictated as its lines.</td>
+<td><a href="qwen-situations/K51-new-file-as-heredoc/">K51</a></td>
+</tr>
+<tr>
+<td>K52</td>
+<td>2026-10-13</td>
+<td>ENG-G06 <code>g06-math</code></td>
+<td>Every dictated statement was right, but none of the three asked function comments was written; the check had no needle for comments, so it passed on run 1.</td>
+<td>A comment asked for is checked like code (<code>commented</code>: a <code>//</code> line right above each named definition).</td>
+<td><a href="qwen-situations/K52-asked-comments-left-out/">K52</a></td>
+</tr>
+<tr>
+<td>K53</td>
+<td>2026-10-13</td>
+<td>ENG-G06 <code>g06-prefilter</code></td>
+<td>The dictated half vector <code>hv</code> became <code>h</code> (the paper's name), shadowing the level's height <code>h</code> two scopes up; it compiled (-Wshadow is off) and both repairs kept the rename.</td>
+<td>When a dictated name avoids a clash, the prompt says why ("hv, not h: h is the height").</td>
+<td><a href="qwen-situations/K53-renamed-to-textbook-name/">K53</a></td>
+</tr>
+<tr>
+<td>K54</td>
+<td>2026-10-13</td>
+<td>ENG-G06 <code>g06-skyfield</code> (Claude)</td>
+<td>Claude wrote one job with two numbered SEARCH/REPLACE edits, against the one-edit rule; only the second was applied and both repairs added empty lines instead of the first.</td>
+<td>One edit per patch job, also for two one-line inserts in one file.</td>
+<td><a href="qwen-situations/K54-two-edits-one-applied/">K54</a></td>
+</tr>
+<tr>
+<td>K55</td>
+<td>2026-10-13</td>
+<td>ENG-G06 <code>g06-lbwenv</code></td>
+<td>A new function to go "directly before" update() (place described, not dictated) was pasted inside update()'s loop; repair 1 then added an empty stub with a wrong signature to pass the order check, repair 2 swapped it for a comment.</td>
+<td>A new function's place is a dictated SEARCH of the line it goes before (K25); an order check also needles the body.</td>
+<td><a href="qwen-situations/K55-function-inside-function/">K55</a></td>
+</tr>
+<tr>
+<td>K56</td>
+<td>2026-10-13</td>
+<td>ENG-G06 <code>g06-dhist</code> (Claude)</td>
+<td>A four-line quote under a heading, with the SEARCH block dictated and the REPLACE block described ("those same lines, then these"), replaced the heading and the 24-line paragraph below it with an empty line; both repairs returned no edit.</td>
+<td>Never describe a REPLACE block: write it out whole (K25); the job helper now does so for every insert.</td>
+<td><a href="qwen-situations/K56-described-insert-deleted-paragraph/">K56</a></td>
+</tr>
+<tr>
+<td>K57</td>
+<td>2026-10-13</td>
+<td>ENG-G08 <code>g08-data</code></td>
+<td>Asked to add one function after another (body described statement by statement, SEARCH block left to the model), the Coder spent attempt 1 on an <code>#include</code> the header already had and attempt 2 on redeclaring the header's constants, one with a wrong value (<code>kSkinVec4sPerBone = 1</code>, not 4); only attempt 3 added the function, and the earlier edits stayed.</td>
+<td>An "add a function" job dictates both blocks (the file's last lines as SEARCH, the whole new text as REPLACE) and says "declare nothing else: the header's constants and includes are already visible". The rerun passed on attempt 1, and so did the next one.</td>
+<td><a href="qwen-situations/K57-setup-before-function/">K57</a></td>
+</tr>
+<tr>
+<td>K58</td>
+<td>2026-10-13</td>
+<td>ENG-G08 <code>g08-mcspawn</code> (Claude)</td>
+<td>Claude's <code>focus</code> regex spanned three lines; the pipeline matches focus line by line, so the excerpt of ModelModule.cpp was only <code>// ...</code>. All three attempts rightly answered that the lines to SEARCH were not shown, one asked to <code>cat</code> the file.</td>
+<td>A focus regex is one line (anchored with <code>^</code> and <code>$</code> where it helps); with that the rerun passed on attempt 1.</td>
+<td><a href="qwen-situations/K58-focus-across-lines-empty-excerpt/">K58</a></td>
+</tr>
+<tr>
+<td>K59</td>
+<td>2026-10-13</td>
+<td>ENG-G08 <code>g08-mcrecord</code>, <code>g08-mcevery</code></td>
+<td>Two dictated functions came back without their comment blocks; told "missing <code>// ...</code>", the repair pasted the lines where it could: inside the function before the dispatch, and below the function above the next one. The check flattens the file, so both passed; Claude moved them in review.</td>
+<td>Every new function's check also names the line its comment block must be directly above (<code>commented</code>), so a misplaced comment fails with that message.</td>
+<td><a href="qwen-situations/K59-repair-placed-comment-anywhere/">K59</a></td>
+</tr>
+<tr>
+<td>K60</td>
+<td>2026-10-13</td>
+<td>ENG-G08 follow-up (Claude)</td>
+<td>Claude's picture check ran the validation layer without its synchronization checks, so a missing write-after-read barrier (skin.comp writing a vertex buffer the slot's previous frame drew from) passed locally and failed CI's smoke run in 8 demos; #43 was merged before CI finished. The Coder drafted what the spec said; the spec lacked the barrier.</td>
+<td>A GPU picture check uses CI's validation settings (<code>VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation</code>, <code>VK_LAYER_ENABLES=...SYNCHRONIZATION_VALIDATION_EXT</code>) and runs CI's smoke loop before the PR; a spec for a compute pass names the barrier on both sides (before: earlier readers; after: the next readers).</td>
+<td>none (Claude's check, not a Coder answer)</td>
+</tr>
+<tr>
+<td>K61</td>
+<td>2026-10-14</td>
+<td>ENG-G09 <code>g09-cbegin</code> (Claude's spec)</td>
+<td>One job replaced a whole 60-line function (SEARCH 60 lines, REPLACE 75). Attempt 1 copied only the first 6 lines of each block (the signature), and the job's <code>focus</code> was that signature line, which attempt 1 had just changed: both repair rounds got an empty excerpt and answered without edit blocks (asked for the file, guessed SEARCH lines with tabs).</td>
+<td>Dictate several short blocks in one job (no SEARCH longer than about 12 lines) and focus on lines no block changes. The rerun as two blocks passed on attempt 1, and so did the two other multi-block jobs.</td>
+<td><a href="qwen-situations/K61-long-block-and-moving-focus/">K61</a></td>
+</tr>
+<tr>
+<td>K62</td>
+<td>2026-10-14</td>
+<td>ENG-G09 <code>g09-cgeom</code> (Claude's spec)</td>
+<td>A dictated SEARCH block ended in half a line (<code>void ...::ReleaseGeometry(</code>). The pipeline matches whole lines, so the Coder's exact copy of all three blocks did not apply, and the repair rounds edited look-alike lines in another function.</td>
+<td>Every dictated block is whole lines; the dry run now refuses any that is not. The rerun passed on attempt 1.</td>
+<td><a href="qwen-situations/K62-search-ends-mid-line/">K62</a></td>
+</tr>
+<tr>
+<td>K63</td>
+<td>2026-10-14</td>
+<td>ENG-G09 <code>g09-l12</code></td>
+<td>In a 51-line dictated function, the Coder copied <code>static_cast&lt;float&gt;(x + static_cast&lt;int32_t&gt;(w))</code> as <code>... + static&lt;int32_t&gt;(w)</code>, twice: the inner <code>_cast</code> of a nested cast was dropped. The check's nearest-line hint (K33) was enough; attempt 2 fixed both.</td>
+<td>No change needed; nested casts are a known copy risk, so a check that names the wanted line beside the written one stays in every job.</td>
+<td><a href="qwen-situations/K63-nested-cast-dropped/">K63</a></td>
+</tr>
+<tr>
+<td>K64</td>
+<td>2026-10-14</td>
+<td>ENG-G09 follow-up <code>g09b-rmlvulkanl4</code></td>
+<td>A dictated block whose SEARCH and REPLACE both began with a blank context line: the Coder kept the blank line in REPLACE only, so two blank lines ended up between two functions. Needles and the compile could not see it; Claude removed the line in review.</td>
+<td>diffjobs.py (dictated jobs straight from Claude's checked diff) trims blank lines at both ends of every block.</td>
+<td><a href="qwen-situations/K64-leading-blank-line/">K64</a></td>
+</tr>
+<tr>
+<td>K65</td>
+<td>2026-10-14</td>
+<td>winpub <code>windowsnat1</code></td>
+<td>A dictated 2-line SEARCH block (the last two lines of the upload-artifact step) came back widened by the three lines above it while the REPLACE block stayed as dictated, so the step's <code>- uses:</code>, <code>if: always()</code> and <code>with:</code> lines were deleted. The check only looked for the added lines and passed.</td>
+<td>diffjobs.py records the lines each job may remove; chk_g09.py fails when any other line is deleted and says which must stay.</td>
+<td><a href="qwen-situations/K65-widened-search/">K65</a></td>
+</tr>
+<tr>
+<td>K66</td>
+<td>2026-10-14</td>
+<td>winpub <code>windowsnat1</code> (rerun of K65)</td>
+<td>The dictated REPLACE block held two lines that differ by one character, <code>path: results/</code> (the kept upload step) and <code>path: results</code> (the new download step). All three attempts copied one spelling for both, and the repair rounds re-added the whole upload step instead of the slash.</td>
+<td>diffjobs.py names such near-identical pairs in the prompt ("two different lines; copy each one exactly"). The rerun with that note passed on attempt 1, identical to the reference.</td>
+<td><a href="qwen-situations/K66-near-duplicate-lines/">K66</a></td>
+</tr>
+<tr>
+<td>K67</td>
+<td>2026-10-14</td>
+<td>ENG-G17 <code>g17-renderingp2</code></td>
+<td>A dictated Markdown block whose first line starts mid-sentence ("(the min-spec reference) run at 1x. With MSAA ..."): every attempt cut the SEARCH line at the sentence boundary, so it was not a whole line and did not apply; the repair rounds then mixed the job's two blocks. A note to copy lines whole did not help.</td>
+<td>diffjobs.py extends a Markdown block up to its paragraph's first line (at most 6 lines). The rerun passed on attempt 1.</td>
+<td><a href="qwen-situations/K67-prose-cut-at-sentence/">K67</a></td>
+</tr>
+<tr>
+<td>K68</td>
+<td>2026-10-14</td>
+<td>ENG-G17 <code>g17-lightingub1</code></td>
+<td>Attempt 1 "corrected" a comment it had to copy (<code>binding 0</code> to <code>binding = 0</code>, as in the code line below it); the repair rounds then paraphrased the new comment and put a blank line where two deleted blocks were. Failed after 3 attempts; Claude applied the dictated blocks.</td>
+<td>diffjobs.py tells a block that only deletes lines to leave nothing in their place. The rerun passed on attempt 3 (the check's nearest-line hint fixed the comment).</td>
+<td><a href="qwen-situations/K68-comment-corrected-deletions-blanked/">K68</a></td>
+</tr>
+<tr>
+<td>K69</td>
+<td>2026-10-14</td>
+<td>ENG-G17 <code>g17-swapchain1</code>, <code>g17-thumbnailm3</code></td>
+<td>Dictated deletions skipped while the check passed: <code>canBlitTo()</code> and its member stayed (the member even became <code>= true</code>), and two tile-slot lines stayed in the thumbnail render loop. The check looked only for the added lines; the final compare with Claude's reference found them.</td>
+<td>chk_g09.py now fails when a dictated deleted line is still there, and when a REPLACE block is not in the file as one piece (whole-file line counts, so git's alignment does not matter). swapchain1's rerun passed on attempt 1; Claude removed the two loop lines.</td>
+<td><a href="qwen-situations/K69-deletions-skipped/">K69</a></td>
+</tr>
+<tr>
+<td>K70</td>
+<td>2026-10-14</td>
+<td>ENG-G17 <code>g17-thumbnails1x</code></td>
+<td>A new function to insert just above <code>} // namespace kke</code> was put near the top of the file instead, with its two local lambdas moved out to namespace scope. Needles and the compile passed. The rerun with the K69 block check failed 3 attempts (wrong anchor, then an answer cut off at the context limit); Claude applied the dictated blocks.</td>
+<td>The K69 block check catches a block placed elsewhere. An insertion at the end of a file is dictated with the last function's closing lines as its anchor.</td>
+<td><a href="qwen-situations/K70-function-placed-elsewhere/">K70</a></td>
+</tr>
+<tr>
+<td>K71</td>
+<td>2026-10-14</td>
+<td>ENG-G18 <code>g18a-gameplay1</code> (Claude's tool)</td>
+<td>A dictated block of Markdown held a <code>lua code fence of its own, which closed the prompt's</code> fence early: the dictated REPLACE was cut after the fence line. The dry run caught it before any Coder run (its clean check deleted the next heading).</td>
+<td>diffjobs.py puts text that holds ``` inside a four-backtick fence; dry09.py and clean09.py read both.</td>
+<td>none (caught by the dry run)</td>
+</tr>
+<tr>
+<td>K72</td>
+<td>2026-10-14</td>
+<td>ENG-G18 <code>g18a-scriptfx1x</code></td>
+<td>A dictated new 40-line file came back with a helper of the model's own (<code>ScriptFx::forgetOwner</code>, sharing one line between two functions) that the header does not declare, so it did not compile; the repair rounds rewrote a function around it instead of deleting it. Failed after 3 attempts; Claude removed the helper.</td>
+<td>A new-file prompt says to add no function, member or helper of its own, and the check turns "no declaration matches" into "delete that function".</td>
+<td><a href="qwen-situations/K72-invented-helper/">K72</a></td>
+</tr>
+<tr>
+<td>K73</td>
+<td>2026-10-14</td>
+<td>ENG-G18 <code>g18c-effect1</code> (Claude's reference)</td>
+<td>Claude's reference re-wrapped a 6-line comment paragraph to add a few words, so every dictated line changed by a word or two. Attempt 1 joined two new lines into one; the repair rounds pasted the paragraph a second time. Failed after 3 attempts; Claude applied the dictated block.</td>
+<td>A reference change to prose comments adds or replaces whole sentences without re-wrapping the lines around them.</td>
+<td><a href="qwen-situations/K73-rewrapped-comment/">K73</a></td>
+</tr>
+<tr>
+<td>K74</td>
+<td>2026-10-17</td>
+<td>ENG-G19 <code>g19b-procedural1xx</code></td>
+<td>A job of three blocks that moves solveFabrik's body into a shared template: attempt 1 left out the closing brace after the new solveFabrik; the repair rounds, given "must be removed" / "must stay" errors, searched the rest of the 600-line file and rewrote an unrelated function (<code>return Gait::Walk;</code> to <code>Gait::Auto</code>), one with a <code>// ...</code> placeholder. Failed after 3 attempts; Claude restored the brace and the line.</td>
+<td>A job that moves a function's body keeps the moved code and the new call in separate jobs, and a repair round's errors name the block they belong to.</td>
+<td><a href="qwen-situations/K74-repair-wandered/">K74</a></td>
+</tr>
+<tr>
+<td>K75</td>
+<td>2026-10-17</td>
+<td>cloth flake <code>clothpass-clothsyste1x</code></td>
+<td>A job of three one-line additions: attempt 1 put <code>++m_passes;</code> one line before <code>load(c, *body);</code> instead of after it (the other two right). Told only that the block "is not in the file as one piece", the repair rounds split and rejoined the <code>if</code> above it instead of moving the line. Failed after 3 attempts; Claude moved the line.</td>
+<td>When a dictated block is out of place, the error names the first misplaced line and the line it must follow (chk_g09 now does).</td>
+<td><a href="qwen-situations/K75-line-one-early/">K75</a></td>
+</tr>
+<tr>
+<td>K76</td>
+<td>2026-10-17</td>
+<td>ENG-F01 <code>f01-pbrcommon1</code></td>
+<td>A block adding a two-line comment above <code>float NdotV</code>: attempt 1 put it two lines lower. Told "put <code>...</code> on the line right after <code>...</code>" (the K75 message), each repair round added one more copy in the right place and left the first, so the comment ended up twice. Failed after 3 attempts; Claude removed the 2 misplaced lines.</td>
+<td>When the misplaced line is already in the file, the error says move it and delete it where it is (chk_g09 now does).</td>
+<td><a href="qwen-situations/K76-added-not-moved/">K76</a></td>
+</tr>
+<tr>
+<td>K77</td>
+<td>2026-10-17</td>
+<td>ENG-F01 <code>f01-renderer3</code></td>
+<td>A job of three blocks moving beginOverlayPass's first half into a new endScenePass: attempt 1 kept the old barrier's last four lines in both places and invented a two-line comment elsewhere; the repair rounds chased the first error only. Failed after 3 attempts; Claude removed the 10 stray lines.</td>
+<td>K74 again: a block that takes out 4 or more lines is a job of its own (diffjobs now does this).</td>
+<td><a href="qwen-situations/K77-move-left-lines/">K77</a></td>
+</tr>
+<tr>
+<td>K78</td>
+<td>2026-10-17</td>
+<td>ENG-F02 <code>f02a-cmakelists1</code></td>
+<td>A block adding lines inside engine_add_shader: the Coder's SEARCH started one line lower and its REPLACE repeated the function's first three lines, so they ended up twice. Every check passed (needles there, the block in one piece, nothing deleted). Passed on attempt 1; Claude removed the 3 copied lines.</td>
+<td>The check counts the lines a job may add; any line the file gained beyond them is a copy and fails (diffjobs <code>added</code>, chk_g09).</td>
+<td><a href="qwen-situations/K78-copied-neighbours/">K78</a></td>
+</tr>
+<tr>
+<td>K79</td>
+<td>2026-10-18</td>
+<td>ENG-F02 <code>f02k-reflect2</code></td>
+<td>A block adding one line after <code>float prev = 0.0, hitT = -1.0;</code>: the Coder put it one line too early; the check then named the old <code>float prev</code> line as out of place and said "move" it, and the Coder deleted it. Failed after 3 attempts; Claude put the line back.</td>
+<td>When the out-of-order line is an old one, the check names the first new line of the block (diffjobs <code>added</code>), so a repair moves only what the job added (chk_g09).</td>
+<td><a href="qwen-situations/K79-moved-the-old-line/">K79</a></td>
+</tr>
+<tr>
+<td>K80</td>
+<td>2026-10-18</td>
+<td>ENG-F02 <code>f02k-cmakelists1</code></td>
+<td>A block adding two shaders to a list of 150-character lines: twice the Coder typed <code>effect_spark</code> for <code>effect_smoke</code> in an unchanged long line, so its SEARCH missed; then it joined two lines and lost the new shaders. Failed after 3 attempts; with the rule the rerun passed on attempt 1.</td>
+<td>While a block holds an unchanged line over 100 characters, its ends are trimmed as long as the rest is still unique in the file (diffjobs <code>trim_long</code>).</td>
+<td><a href="qwen-situations/K80-long-lines-mistyped/">K80</a></td>
+</tr>
+<tr>
+<td>K81</td>
+<td>2026-10-18</td>
+<td>ENG-F02 <code>f02k-rayscene2x</code></td>
+<td>One block added about 100 lines and, past one context line, changed a bounds check; the Coder copied the 100 lines and left the check as it was, then searched three times for code not in the file. Failed after 3 attempts.</td>
+<td>A hunk that adds 20 or more lines and changes something else is split at the context between its changes (diffjobs <code>split_long</code>).</td>
+<td><a href="qwen-situations/K81-change-after-long-insert/">K81</a></td>
+</tr>
+<tr>
+<td>K82</td>
+<td>2026-10-18</td>
+<td>ENG-F02 <code>f02k-reflection2x</code></td>
+<td>A job with a new 66-line function and two small edits: the function landed one function too late and a small edit deleted a line; told to "move" the function's first line, the Coder moved lines one at a time and rewrote the body from its near twin. Failed after 3 attempts; Claude applied the blocks.</td>
+<td>A block that adds 20 or more lines is a job of its own (diffjobs <code>longadd</code>), from the next task on.</td>
+<td><a href="qwen-situations/K82-long-insert-own-job/">K82</a></td>
+</tr>
+<tr>
+<td>K83</td>
+<td>2026-10-18</td>
+<td>ENG-F02 <code>f02k-sphereimpo3</code></td>
+<td>A SEARCH starting with a lone <code>}</code>: the Coder put the added line into the wrong one of two alike functions, then moved braces around. Failed after 3 attempts.</td>
+<td>A SEARCH that starts with a lone <code>}</code> is extended upward to the code line above it (diffjobs <code>lift_brace</code>).</td>
+<td><a href="qwen-situations/K83-lone-brace-search/">K83</a></td>
+</tr>
+<tr>
+<td>K84</td>
+<td>2026-10-18</td>
+<td>ENG-F02 <code>f02c-lightingub1</code></td>
+<td>A SEARCH starting at <code>} lighting;</code>: the Coder searched one line higher and put the new member before the old last one; the check then named the old closing line, and the Coder changed nothing. Failed after 3 attempts.</td>
+<td>A SEARCH starting with a block-closing line is lifted to the code line above (diffjobs <code>lift_brace</code>); the check also looks before an old out-of-place line for the new one to name (chk_g09).</td>
+<td><a href="qwen-situations/K84-block-closing-search/">K84</a></td>
+</tr>
+<tr>
+<td>K85</td>
+<td>2026-10-18</td>
+<td>ENG-F02 <code>f02c-applicatio1</code></td>
+<td>A forward declaration one line too early: told to "move" it, the Coder deleted it; told to put it back, it also wrote a comment twice. Failed after 3 attempts.</td>
+<td>When an out-of-order block's first and last lines stand a few lines apart, the check hands over the exact SEARCH/REPLACE edit (chk_g09).</td>
+<td><a href="qwen-situations/K85-exact-repair-edit/">K85</a></td>
+</tr>
+<tr>
+<td>K86</td>
+<td>2026-10-18</td>
+<td>ENG-F02 <code>f02c-applicatio2</code></td>
+<td>A one-line SEARCH (<code>if (i == 0 &amp;&amp; reflReady)</code>, long neighbours trimmed by K80): the Coder searched a dozen lines from its near twin <code>if (i == 0 &amp;&amp; giReady)</code> and rewrote them. Failed after 3 attempts.</td>
+<td>A one-line SEARCH is called that one line alone, and a near twin line of the file is named as a different line (diffjobs).</td>
+<td><a href="qwen-situations/K86-one-line-search/">K86</a></td>
+</tr>
+<tr>
+<td>K87</td>
+<td>2026-10-18</td>
+<td>ENG-F02 <code>f02c-lightingbu2</code></td>
+<td>A line written the Coder's own way (an <code>if</code> instead of the dictated <code>?:</code>); the repair rounds saw only the errors, said they did not have the file, guessed, and ran into the token limit. Failed after 3 attempts.</td>
+<td>A broken block's error also prints what the file reads around it, to copy SEARCH lines from (chk_g09).</td>
+<td><a href="qwen-situations/K87-repair-sees-the-file/">K87</a></td>
+</tr>
+<tr>
+<td>K88</td>
+<td>2026-10-18</td>
+<td>ENG-F02 <code>f02t-reflect1</code></td>
+<td>A block deleting 80 lines (code moved to its own file) asked for all 80 in one SEARCH; the Coder never matched them. Failed after 3 attempts.</td>
+<td>A removed run over 12 lines is split into pieces of 12, each its own block in order (diffjobs <code>split_deletions</code>).</td>
+<td><a href="qwen-situations/K88-long-deletion-pieces/">K88</a></td>
+</tr>
+<tr>
+<td>K89</td>
+<td>2026-10-18</td>
+<td>ENG-F02 <code>f02t-reflect2</code></td>
+<td>A deletion piece ending at a function's first line: the Coder kept the last two lines; told they must go, the repairs asked to <code>cat</code> the file and gave no edit. Failed after 3 attempts.</td>
+<td>Errors about lines to remove or lines there twice also print the file around them (chk_g09).</td>
+<td><a href="qwen-situations/K89-repair-sees-removals/">K89</a></td>
+</tr>
+<tr>
+<td>K90</td>
+<td>2026-10-18</td>
+<td>ENG-F02 <code>f02t-reflect2</code></td>
+<td>K89's excerpt never reached the Coder: the pipeline cuts an error at its first blank line, and the fix round's excerpt followed focus lines the bad draft had deleted, so it was empty.</td>
+<td>A fix round's excerpt also centres on every line the errors quote (tools/qwen/pipeline.py <code>check_loop</code>; kreative-kompanion owns the pipeline).</td>
+<td><a href="qwen-situations/K89-repair-sees-removals/">K89</a></td>
+</tr>
+<tr>
+<td>K91</td>
+<td>2026-10-18</td>
+<td>ENG-F07 <code>f07-shadowrays1x</code></td>
+<td>A new .glsl file asked for in a <code>cpp fence (the job builder knew .frag/.vert/.comp only): the Coder refused, and the repairs could not see the file. Failed after 3 attempts. | .glsl is GLSL to the job builder (diffjobs KIND): a</code>glsl fence.</td>
+<td><a href="qwen-situations/K91-glsl-fence/">K91</a></td>
+<td></td>
+</tr>
+<tr>
+<td>K92</td>
+<td>2026-10-18</td>
+<td>ENG-F10 <code>f10-renderingp1</code> (and f05b)</td>
+<td>A paragraph added before a heading, anchored on the paragraph above, which reads like several others: the Coder put it after a look-alike. Failed after 3 attempts.</td>
+<td>A Markdown insertion followed by a heading is anchored on the heading (diffjobs).</td>
+<td><a href="qwen-situations/K92-markdown-heading-anchor/">K92</a></td>
+</tr>
+<tr>
+<td>K93</td>
+<td>2026-10-18</td>
+<td>ENG-F10 <code>f10b-renderer2</code></td>
+<td>A block starting with an unchanged setting, <code>si.maxLod = 0.0f;</code>: the Coder rewrote it to <code>VK_LOD_CLAMP_NONE</code> on every attempt. Failed after 3 attempts.</td>
+<td>Unchanged edge lines that set something to a plain number are dropped from the SEARCH while it stays unique (diffjobs <code>trim_values</code>).</td>
+<td><a href="qwen-situations/K93-number-setting-rewritten/">K93</a></td>
+</tr>
+<tr>
+<td>K94</td>
+<td>2026-10-18</td>
+<td>ENG-F10 <code>f10b-renderer2</code> (rerun)</td>
+<td>Three lines that each change one number (<code>i &lt; 2</code> to <code>i &lt; 3</code>): the Coder's SEARCH left one out and kept the old number; a repair then added a comment of its own. Failed after 3 attempts.</td>
+<td>Each line whose only change is a number is named in the prompt with its old and new form (diffjobs).</td>
+<td><a href="qwen-situations/K94-number-only-change/">K94</a></td>
+</tr>
+<tr>
+<td>K95</td>
+<td>2026-10-18</td>
+<td>ENG-F10 <code>f10b-renderer2</code> (all three runs; also f10 BloomPass.cpp)</td>
+<td>A changed line with a new line right after it: the Coder wrote the new line first every time; given the exact edit, the repairs invented a sampler member and a comment instead. Failed after 3 attempts.</td>
+<td>When a changed line is followed by a new line, the prompt says the new line comes right after it, not before (diffjobs).</td>
+<td><a href="qwen-situations/K95-new-line-after-changed/">K95</a></td>
+</tr>
+<tr>
+<td>K96</td>
+<td>2026-10-18</td>
+<td>ENG-F10 <code>f10b-renderer4</code></td>
+<td>A new line added above a one-line SEARCH: the Coder widened the SEARCH and put the line one too high; given the exact edit, the repairs copied a neighbour twice and never moved it. Failed after 3 attempts.</td>
+<td>When new lines go above a SEARCH, the prompt also names the file's line above: the new lines go between the two (diffjobs).</td>
+<td><a href="qwen-situations/K96-insert-between-neighbours/">K96</a></td>
+</tr>
+<tr>
+<td>K97</td>
+<td>2026-10-18</td>
+<td>ENG-F10 <code>f10b-applicatio1x</code></td>
+<td>A new line went one too high (as in K96); a repair moved the old line above it down past three others, and the check, which counts lines, passed it on attempt 3. Claude found it against the reference.</td>
+<td>The check also requires the lines that stay to keep their order, and names a moved line and the line it must follow (chk_g09).</td>
+<td><a href="qwen-situations/K97-moved-line-passed/">K97</a></td>
+</tr>
+<tr>
+<td>K98</td>
+<td>2026-10-18</td>
+<td>ENG-F11 <code>f11-particleli1x</code></td>
+<td>A SEARCH that ended in the middle of a three-line statement (K80 had trimmed its long continuation lines): the Coder replaced the whole statement, deleting lines it never saw, and repairs duplicated braces. Failed after 3 attempts; Claude applied it.</td>
+<td>K80 trims a line off a block only where a statement ends (diffjobs <code>trim_long</code>).</td>
+<td><a href="qwen-situations/K98-statement-cut-in-two/">K98</a></td>
+</tr>
+<tr>
+<td>K99</td>
+<td>2026-10-18</td>
+<td>ENG-F12 <code>f12-lightingbu4</code></td>
+<td>K96's note named the line above the block, but that line stands in two functions; the Coder worked at the other one and pasted its neighbours across. Failed after 3 attempts; Claude applied it.</td>
+<td>K96's neighbour note only names a line found once in the file (diffjobs).</td>
+<td><a href="qwen-situations/K99-twin-neighbour-line/">K99</a></td>
+</tr>
+<tr>
+<td>K100</td>
+<td>2026-10-18</td>
+<td>R1a <code>r1a-rhi1</code></td>
+<td>A new Markdown file asked for in a ```cpp fence came back with a paragraph about not writing C++ around the text, and the check passed (every line was there).</td>
+<td>A new file's fence names its kind and the no-helpers line is for code only (diffjobs); a new file must be exactly the dictated text (chk_g09). Rerun: attempt 1.</td>
+<td><a href="qwen-situations/K100-new-file-fence/">K100</a></td>
+</tr>
+<tr>
+<td>K101</td>
+<td>2026-10-18</td>
+<td>R1b <code>r1b-rhi1</code></td>
+<td>A Markdown SEARCH ended mid list item (its wrapped lines cut after "Grid, Ocean,"): the Coder finished the item in its SEARCH but not in its REPLACE, so the item's last two lines were lost, in three runs (one with the bullets reordered, one with the edit split in two).</td>
+<td>A Markdown block is extended down to its paragraph's or item's last line, as K67 does upward (diffjobs para_end); the reference also replaces the old bullet in place. Rerun: see the R1b row.</td>
+<td><a href="qwen-situations/K101-paragraph-end/">K101</a></td>
+</tr>
+<tr>
+<td>K102</td>
+<td>2026-10-18</td>
+<td>R1b <code>r1b-particleef2</code></td>
+<td>A unit changing drawGpu's draw calls also converted drawBatch, 260 lines on, whose look-alike lines were the next unit's: wrongly (a <code>vertexBuffers</code> call that doesn't exist), and the repairs deleted a line there. A note saying "a later step changes those" did not stop it (second run, same).</td>
+<td>Neighbouring units in a file that change the same line (<code>pipe.bind(ctx.cmd);</code>) are one unit, up to 6 edits (diffjobs), so the twin is dictated, not guessed. Rerun: see the R1b row.</td>
+<td><a href="qwen-situations/K102-later-twin/">K102</a></td>
+</tr>
+<tr>
+<td>K103</td>
+<td>2026-10-18</td>
+<td>R1b <code>r1b-vulkancomm1</code>, <code>r1b-physicsmod</code></td>
+<td>Three units passed with a stray blank line each; the needles and the line multisets skip blank lines.</td>
+<td>A unit's blank lines added or taken out must match the dictation (diffjobs blank_delta, chk_g09). Claude removed the three by hand.</td>
+<td><a href="qwen-situations/K103-blank-lines/">K103</a></td>
+</tr>
+<tr>
+<td>K104</td>
+<td>2026-10-19</td>
+<td>R1c <code>r1c-particleef1x</code></td>
+<td>Three lines replaced by one (a buffer bind) landed above the unchanged <code>bindGroups</code> line it follows, and three repairs could not move it although the check named the line to move.</td>
+<td>When an edit shrinks lines to fewer, the prompt names the line the new one comes right after (diffjobs, as K95 does for growing changes). Rerun: see the R1c row.</td>
+<td><a href="qwen-situations/K104-shrink-order/">K104</a></td>
+</tr>
+<tr>
+<td>K105</td>
+<td>2026-10-19</td>
+<td>R1c <code>r1c-modelmodul5</code></td>
+<td>Nine lines passed the check indented four spaces deeper than dictated: every check compared lines with whitespace squeezed out.</td>
+<td>Each dictated REPLACE block must stand in the file exactly, indentation too, and the check hands over the one edit that fixes it (chk_g09). Claude put the text back by hand.</td>
+<td><a href="qwen-situations/K105-indentation/">K105</a></td>
+</tr>
+<tr>
+<td>K106</td>
+<td>2026-10-19</td>
+<td>R1d <code>r1d-applicatio2</code> and 8 more</td>
+<td>An empty REPLACE (a piece of a long deletion, K88) left a blank line where the lines were, in the Coder pipeline's applier and in the dry and clean runs; K103's blank-line count made it visible. Two workarounds in the job tool made it worse: anchoring each piece on the lines before the run, then making the pieces one unit, gave SEARCH blocks the Coder could not follow (it deleted whole runs, then lines it should keep).</td>
+<td>An empty REPLACE now deletes whole lines, newline too (tools/qwen/pipeline.py apply_patch, dry09, clean09, blank count); K88's pieces are back. The 9 units of R1d that failed under the workarounds were applied by Claude as dictated.</td>
+<td><a href="qwen-situations/K106-long-deletion/">K106</a></td>
+</tr>
+<tr>
+<td>K107</td>
+<td>2026-10-17</td>
+<td>F08 <code>f08-scriptligh2</code></td>
+<td>Dictated: the many-lights condition in ScriptLights::remove and releaseAll. The Coder also rewrote the look-alike condition in clear() (the next unit's) and its repairs lost one old line and kept a copy of the new one; Claude applied the unit. Filed late, in the report audit of 2026-10-19.</td>
+<td>K102's rule covers it: neighbouring units that change the same kind of line are one unit.</td>
+<td><a href="qwen-situations/K107-f08-third-twin/">K107</a></td>
+</tr>
+<tr>
+<td>K108</td>
+<td>2026-10-19</td>
+<td>R1e <code>r1e-texture5</code>, <code>r1e-texture7</code></td>
+<td>Dropping Texture::createImage (about 100 lines) and rewriting the samplers around it failed all three attempts even with K106's fix, as nine R1d units had: too much deleted, or too little. Claude applied both.</td>
+<td>A unit removing more than 24 lines is Claude's from the start: diffjobs marks it, seq17 applies it as dictated (jobs/handunit.py) and runs its check. It catches 2 of R1d's and R1e's 11 Claude-applied units; shorter rewrites stay with the Coder.</td>
+<td><a href="qwen-situations/K108-long-removal/">K108</a></td>
+</tr>
+<tr>
+<td>K109</td>
+<td>2026-10-19</td>
+<td>CI runners <code>ci1-ci1</code></td>
+<td>A comment block inserted between <code>jobs:</code> and the first job's comment went after that comment instead, and the repairs moved <code>cancel-in-progress: true</code> above its own comment.</td>
+<td>For every run of lines a block inserts between two existing lines, the prompt names both lines (diffjobs; K96 did this only above a one-line SEARCH). Rerun: see the CI runners row.</td>
+<td><a href="qwen-situations/K109-insert-between/">K109</a></td>
+</tr>
+<tr>
+<td>K110</td>
+<td>2026-10-19</td>
+<td>R1f <code>r1f-mesh1x</code> and 3 more</td>
+<td>Four rewrites (Vertex's attribute function 30 lines to 8, Pipeline's vertex input and push constants, RmlUi's stencil and vertex layout) failed all three attempts; Claude applied them. K108's mark (more than 24 removed lines) had caught 2 of R1d to R1f's 15 Claude-applied units.</td>
+<td>A unit removing 16 or more lines is Claude's from the start (diffjobs): 6 of the 15, and 1 unit the Coder passed.</td>
+<td><a href="qwen-situations/K110-rewrite-threshold/">K110</a></td>
+</tr>
+<tr>
+<td>K111</td>
+<td>2026-10-19</td>
+<td>R1g <code>r1g-lightingbu2</code> and 4 more</td>
+<td>LightingBuffer's 100-line set code rewritten as bind-group calls, in 12-line pieces: five pieces failed all three attempts; Claude applied them.</td>
+<td>Marking every piece of a big hunk as Claude's was measured and dropped: no threshold separates them (at 30 removed lines it takes 13 units the Coder passes). K110 stays; a failed unit goes to Claude after its attempts.</td>
+<td><a href="qwen-situations/K111-big-rewrites/">K111</a></td>
+</tr>
+<tr>
+<td>440</td>
+<td>2026-10-20</td>
+<td>R1h <code>r1h-state</code></td>
+<td>Defining the functions a header declares, the Coder kept the old anonymous-namespace helpers and wrote a one-line forwarder for each (3 of 3 runs, tests passed).</td>
+<td>When a job turns private helpers into declared public functions, say "define each declared function directly; no anonymous helper, no forwarder".</td>
+<td><a href="qwen-situations/440-forwarders/">440</a></td>
+</tr>
+<tr>
+<td>441</td>
+<td>2026-10-20</td>
+<td>R1h <code>r1h-shader</code></td>
+<td>Left out the <code>#include</code> the prompt named (3 of 3 runs); "incomplete type" fed back twice did not fix it; one run added a wrong forward declaration.</td>
+<td>Put required includes in the prompt as literal lines; tell repairs "incomplete type X: add the include of X's header, never forward-declare it".</td>
+<td><a href="qwen-situations/441-missing-include/">441</a></td>
+</tr>
+<tr>
+<td>442</td>
+<td>2026-10-20</td>
+<td>R1h <code>r1h-pipeline</code></td>
+<td>A 150-line function move: an invented member function and a redeclared class, a call in the wrong namespace, an extra <code>*</code>, members that do not exist, stencil state set with the test off (3 of 3 failed the build).</td>
+<td>A unit is one function of at most about 60 lines; split big moves; list the exact names the code may call and say "declare no class or function"; name the old block's special cases.</td>
+<td><a href="qwen-situations/442-invented-helper/">442</a></td>
+</tr>
+<tr>
+<td>443</td>
+<td>2026-10-20</td>
+<td>R1h <code>r1h-describe</code></td>
+<td>A function returning spans built them over local vectors (dangling), ignoring "function-local statics" in the prompt (3 of 3 runs); a test caught it.</td>
+<td>When a function returns views, give the owner of the data as code lines and say "never a local owner".</td>
+<td><a href="qwen-situations/443-dangling-span/">443</a></td>
+</tr>
+<tr>
+<td>444</td>
+<td>2026-10-20</td>
+<td>R1h <code>r1h-ctor</code></td>
+<td>Wrapped factory results that are already <code>std::unique_ptr</code> in <code>std::make_unique</code> again (2 of 3 runs); the third invented a struct field.</td>
+<td>Say "returns a std::unique_ptr: assign or push_back it directly, no make_unique" and list the struct fields the code sets.</td>
+<td><a href="qwen-situations/444-make-unique-twice/">444</a></td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      MIT licence. KKE is written by Claude (Anthropic) working in the repository.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+        
+<div class="md-social">
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://github.com/Khyretos/kk-engine" target="_blank" rel="noopener" title="github.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M173.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6m-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3m44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9M252.8 8C114.1 8 8 113.3 8 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C436.2 457.8 504 362.9 504 252 504 113.3 391.5 8 252.8 8M105.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1m-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7m32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1m-11.4-14.7c-1.6 1-1.6 3.6 0 5.9s4.3 3.3 5.6 2.3c1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2"/></svg>
+    </a>
+  
+    
+    
+    
+    
+      
+      
+    
+    <a href="https://ko-fi.com/khyretos" target="_blank" rel="noopener" title="ko-fi.com" class="md-social__link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M11.351 2.715c-2.7 0-4.986.025-6.83.26C2.078 3.285 0 5.154 0 8.61c0 3.506.182 6.13 1.585 8.493 1.584 2.701 4.233 4.182 7.662 4.182h.83c4.209 0 6.494-2.234 7.637-4a9.5 9.5 0 0 0 1.091-2.338C21.792 14.688 24 12.22 24 9.208v-.415c0-3.247-2.13-5.507-5.792-5.87-1.558-.156-2.65-.208-6.857-.208m0 1.947c4.208 0 5.09.052 6.571.182 2.624.311 4.13 1.584 4.13 4v.39c0 2.156-1.792 3.844-3.87 3.844h-.935l-.156.649c-.208 1.013-.597 1.818-1.039 2.546-.909 1.428-2.545 3.064-5.922 3.064h-.805c-2.571 0-4.831-.883-6.078-3.195-1.09-2-1.298-4.155-1.298-7.506 0-2.181.857-3.402 3.012-3.714 1.533-.233 3.559-.26 6.39-.26m6.547 2.287c-.416 0-.65.234-.65.546v2.935c0 .311.234.545.65.545 1.324 0 2.051-.754 2.051-2s-.727-2.026-2.052-2.026m-10.39.182c-1.818 0-3.013 1.48-3.013 3.142 0 1.533.858 2.857 1.949 3.897.727.701 1.87 1.429 2.649 1.896a1.47 1.47 0 0 0 1.507 0c.78-.467 1.922-1.195 2.623-1.896 1.117-1.039 1.974-2.364 1.974-3.897 0-1.662-1.247-3.142-3.039-3.142-1.065 0-1.792.545-2.338 1.298-.493-.753-1.246-1.298-2.312-1.298"/></svg>
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "navigation.footer", "search.suggest", "search.highlight", "content.code.copy", "content.action.edit"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+    
+  </body>
+</html>
