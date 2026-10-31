@@ -176,6 +176,8 @@ nav:
       - JSON or YAML data files: DATA_FILES.md
       - Optimization: OPTIMIZATION.md
       - Terrain: TERRAIN.md
+      - Localization: LOCALIZATION.md
+      - Timelines and cutscenes: TIMELINE.md
       - Moods (sky, fog, look): MOODS.md
       - Rendering principles: RENDERING_PRINCIPLES.md
       - Benchmarks: BENCHMARKS.md

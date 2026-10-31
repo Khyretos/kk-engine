@@ -6,6 +6,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -26,6 +27,10 @@ struct BoneTRS {
     glm::vec3 s{1.0f};
 };
 using Pose = std::vector<BoneTRS>;
+
+class PackedClip;
+struct AnimCompressionOptions;
+struct AnimCompressionStats;
 
 void blendPoses(const Pose& a, const Pose& b, float weight, Pose& out); // weight 0 = a, 1 = b
 void poseToLocals(const Pose& pose, std::vector<glm::mat4>& locals);
@@ -59,6 +64,14 @@ public:
     // doesn't lift the body twice. Returns how many clips it changed.
     int removeLift(const ModelData& model, int bone, const std::string& clipPart);
     bool hasRootMotion() const { return m_rootBone >= 0; }
+
+    // Packs every clip (kke/AnimCompress.h): translation, rotation and scale
+    // tracks with only the keys the curve needs, 16 bits each. The frames
+    // are freed; sample() plays the packed clip within the tolerance. Root
+    // motion and lift removal still work: they unpack the clips they edit.
+    // Returns how many clips were packed; `stats` adds up their sizes.
+    size_t compress(const AnimCompressionOptions& options, AnimCompressionStats* stats = nullptr);
+    bool isPacked(int clip) const { return clip >= 0 && clip < static_cast<int>(m_clips.size()) && m_clips[clip].packed != nullptr; }
     // Model-space travel between two clip times (seconds, unwrapped:
     // a looping clip adds a whole cycle's travel per wrap).
     glm::vec3 rootTravel(int clip, float from, float to, bool loop) const;
@@ -67,9 +80,11 @@ private:
     struct Clip {
         std::string name;
         float duration = 0.0f, sampleRate = 30.0f;
-        std::vector<Pose> frames;
+        std::vector<Pose> frames;     // empty once the clip is packed
+        std::shared_ptr<const PackedClip> packed;
         std::vector<glm::vec3> root; // travel since frame 0, per frame (root motion)
     };
+    static void unpack(Clip& c); // back to frames, to edit them
     glm::vec3 rootAt(const Clip& c, float time) const; // time within [0, duration]
     std::vector<Clip> m_clips;
     Pose m_rest;

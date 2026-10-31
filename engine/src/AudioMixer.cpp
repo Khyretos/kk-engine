@@ -144,6 +144,65 @@ uint32_t AudioMixer::play(const VoiceDesc& desc) {
     return v.id;
 }
 
+std::vector<uint32_t> AudioMixer::playScheduled(const std::vector<VoiceDesc>& descs, const VoiceSchedule& when) {
+    std::vector<uint32_t> ids(descs.size(), 0);
+    std::lock_guard<std::mutex> lock(m_mutex);
+    for (size_t i = 0; i < descs.size(); ++i) {
+        const VoiceDesc& desc = descs[i];
+        if (!desc.stream && (!desc.sound || desc.sound->samples.empty() || desc.sound->sampleRate <= 0)) continue;
+        Voice v;
+        v.id = m_nextId++;
+        if (m_nextId == 0) m_nextId = 1;
+        v.desc = desc;
+        v.estLoudness = estimate(desc);
+        v.transmission = std::clamp(desc.transmission, 0.0f, 1.0f);
+        v.desc.pitch = std::isfinite(desc.pitch) ? std::clamp(desc.pitch, 0.25f, 4.0f) : 1.0f;
+        if (desc.fadeIn > 0.0f && std::isfinite(desc.fadeIn)) {
+            v.fade = 0.0f;
+            v.fadeRate = 1.0f / desc.fadeIn;
+        }
+        v.waiting = true;
+        v.waitRef = when.reference;
+        v.waitAt = std::isfinite(when.atSeconds) ? when.atSeconds : 0.0;
+        v.waitFade = when.fadeOut;
+        v.waitFadeSeconds = when.fadeOutSeconds;
+        // A music group is not cut for the budget: the quietest other voice goes instead.
+        if (int(m_voices.size()) >= m_maxVoices) {
+            size_t quietest = m_voices.size();
+            float q = 1e30f;
+            for (size_t k = 0; k < m_voices.size(); ++k) {
+                const Voice& o = m_voices[k];
+                if (o.waiting) continue;
+                const float l = (o.started ? o.lastPeak : o.estLoudness) * o.desc.priority;
+                if (l < q) { q = l; quietest = k; }
+            }
+            if (quietest == m_voices.size()) { ++m_dropped; continue; }
+            if (m_spatializer) m_spatializer->release(m_voices[quietest].id);
+            m_voices.erase(m_voices.begin() + std::ptrdiff_t(quietest));
+            ++m_stolen;
+        }
+        ids[i] = v.id;
+        m_voices.push_back(std::move(v));
+    }
+    return ids;
+}
+
+double AudioMixer::voiceSeconds(uint32_t id) const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    for (const Voice& v : m_voices)
+        if (v.id == id && !v.desc.stream && v.desc.sound && v.desc.sound->sampleRate > 0)
+            return double(v.cursor) / 65536.0 / double(v.desc.sound->sampleRate);
+    return 0.0;
+}
+
+double AudioMixer::voiceLength(uint32_t id) const {
+    std::lock_guard<std::mutex> lock(m_mutex);
+    for (const Voice& v : m_voices)
+        if (v.id == id && !v.desc.stream && v.desc.sound && v.desc.sound->sampleRate > 0)
+            return double(v.desc.sound->samples.size()) / double(v.desc.sound->sampleRate);
+    return 0.0;
+}
+
 void AudioMixer::stop(uint32_t id) {
     std::lock_guard<std::mutex> lock(m_mutex);
     if (m_spatializer) m_spatializer->release(id);
@@ -395,7 +454,54 @@ void AudioMixer::mix(float* out, int frames) {
         if (std::fabs(m_duck[c] - want) < 1e-4f) m_duck[c] = want;
     }
     std::fill(std::begin(m_categoryPeak), std::end(m_categoryPeak), 0.0f);
+    // Voices waiting for a musical moment (playScheduled): they start, to the sample, in the
+    // block in which their reference voice reaches it.
+    for (Voice& w : m_voices) {
+        if (!w.waiting) continue;
+        const Voice* ref = nullptr;
+        if (w.waitRef)
+            for (const Voice& r : m_voices)
+                if (r.id == w.waitRef && !r.desc.stream && r.desc.sound && r.desc.sound->sampleRate > 0) {
+                    ref = &r;
+                    break;
+                }
+        if (ref && ref->waiting) continue; // its reference has not started: neither does this (a bridge, then what follows it)
+        int delay = 0;
+        bool start = true;
+        if (ref) {
+            const double rate = double(ref->desc.sound->sampleRate);
+            const double length = double(ref->desc.sound->samples.size()) / rate;
+            const double pos = double(ref->cursor) / 65536.0 / rate;
+            double until = w.waitAt - pos;
+            if (ref->desc.loop && length > 0.0) { // the next time round
+                double at = std::fmod(w.waitAt, length);
+                if (at < 0.0) at += length;
+                until = at - pos;
+                if (until < 0.0) until += length;
+            }
+            // a reference that started part way into this block has not played yet: its delay counts
+            const double untilFrames = std::max(0.0, until / double(ref->desc.pitch) * double(m_sampleRate)) + double(ref->delayFrames);
+            start = untilFrames < double(frames);
+            delay = int(untilFrames);
+        }
+        if (!start) continue;
+        w.waiting = false;
+        w.delayFrames = delay;
+        for (uint32_t id : w.waitFade)
+            for (Voice& o : m_voices)
+                if (o.id == id) {
+                    o.fadeTarget = 0.0f;
+                    o.stopWhenSilent = true;
+                    if (!(w.waitFadeSeconds > 0.0f)) {
+                        o.fade = 0.0f;
+                        o.fadeRate = 0.0f;
+                    } else {
+                        o.fadeRate = std::fabs(0.0f - o.fade) / w.waitFadeSeconds;
+                    }
+                }
+    }
     for (Voice& v : m_voices) {
+        if (v.waiting) continue;
         v.fade = approach(v.fade, v.fadeTarget, v.fadeRate, blockSeconds);
         if (v.stopWhenSilent && v.fade <= 0.0f && v.fadeTarget <= 0.0f) v.faded = true;
         const bool streamed = v.desc.stream != nullptr;
@@ -460,7 +566,11 @@ void AudioMixer::mix(float* out, int frames) {
         const size_t n = buf.samples.size();
         double pos = double(v.cursor) / 65536.0;
         float peak = 0.0f;
-        int f = 0;
+        // A scheduled voice starts part way into the block (the frames before it are silent).
+        const int skip = streamed ? 0 : std::min(v.delayFrames, frames);
+        v.delayFrames -= skip;
+        if (hrtf && skip > 0) std::fill(m_hrtfBlock.begin(), m_hrtfBlock.begin() + skip, 0.0f);
+        int f = skip;
         for (; f < frames; ++f) {
             float x;
             if (streamed) {

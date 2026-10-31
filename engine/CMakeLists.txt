@@ -49,6 +49,13 @@ set(ENGINE_SOURCES
     src/BreakGraph.cpp
     src/AnimEvents.cpp
     src/Animator.cpp
+    src/AnimCompress.cpp
+    src/Mocap.cpp
+    src/Timeline.cpp
+    src/MusicDirector.cpp
+    src/Rollback.cpp
+    src/WorldStream.cpp
+    src/Weather.cpp
     src/AnimRig.cpp
     src/BodyShape.cpp
     src/Human.cpp
@@ -79,6 +86,9 @@ set(ENGINE_SOURCES
     src/ai/Steering.cpp
     src/ai/Perception.cpp
     src/ai/Utility.cpp
+    src/ai/BehaviorTree.cpp
+    src/Localization.cpp
+    src/Bidi.cpp
     src/ai/NavMesh.cpp
     src/ai/Species.cpp
     src/ai/AiWorld.cpp
@@ -494,7 +504,7 @@ else()
 endif()
 
 if(ENGINE_ENABLE_LUA)
-    target_sources(kke_engine PRIVATE src/ScriptVM.cpp src/ScriptCalls.cpp src/ScriptTables.cpp src/ScriptStore.cpp src/modules/ScriptModule.cpp src/modules/ScriptBindings.cpp src/modules/ScriptCamera.cpp src/modules/ScriptReplication.cpp)
+    target_sources(kke_engine PRIVATE src/ScriptVM.cpp src/ScriptBehavior.cpp src/ScriptLocalization.cpp src/ScriptTimeline.cpp src/ScriptMusic.cpp src/ScriptWorld.cpp src/ScriptWeather.cpp src/ScriptCalls.cpp src/ScriptTables.cpp src/ScriptStore.cpp src/modules/ScriptModule.cpp src/modules/ScriptBindings.cpp src/modules/ScriptCamera.cpp src/modules/ScriptReplication.cpp)
     if(KKE_ENABLE_NET)
         target_sources(kke_engine PRIVATE src/server/ServerScripts.cpp)
     endif()

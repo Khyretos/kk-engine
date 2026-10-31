@@ -1,4 +1,6 @@
 #include "kke/ModelAsset.h"
+
+#include "kke/Mocap.h"
 #include "kke/CookedFile.h"
 #include "ModelAssetDetail.h"
 
@@ -174,6 +176,7 @@ ModelData loadModel(const std::string& path, const ModelLoadOptions& options) {
     {
         const std::string ext = toLower(fs::path(path).extension().string());
         if (ext == ".gltf" || ext == ".glb") return detail::loadGltfModel(path, options);
+        if (ext == ".bvh") return loadBvh(path); // motion capture: a skeleton and its clip (kke/Mocap.h)
     }
     ufbx_load_opts opts{};
     opts.target_axes = ufbx_axes_right_handed_y_up;

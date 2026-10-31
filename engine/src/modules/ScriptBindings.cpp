@@ -951,6 +951,17 @@ void ScriptModule::bindAudio() {
         if (!s) *why = "'" + name + "' isn't a sound file this engine reads (WAV, FLAC or MP3)";
         return s;
     };
+    // Adaptive music (music.*, kke/ScriptMusic.h): its layers are files in the game's folder like audio.sound's.
+    m_music.attach(
+        &audio->mixer(),
+        [this, audio](const std::string& name) -> SoundHandle {
+            if (!safeRelativePath(name)) return nullptr;
+            const std::filesystem::path file = std::filesystem::path(baseDir()) / name;
+            std::error_code ec;
+            return std::filesystem::is_regular_file(file, ec) ? audio->cachedSound(file.string()) : nullptr;
+        },
+        m_dir);
+    m_music.bind(vm);
     // The voice a script started, or 0 for one that already ended; another
     // script's (or a made-up) id is an error.
     auto ownedVoice = [this](lua_State* L, int index, const char* fn) -> uint32_t {

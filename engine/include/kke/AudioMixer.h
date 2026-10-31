@@ -170,6 +170,29 @@ public:
 
     // 0 when the sound was dropped (budget, silent, out of range).
     uint32_t play(const VoiceDesc& desc);
+
+    // Voices that start together at a musical moment (adaptive music, ENG-F39).
+    // `descs` are all started at the same sample, when the voice `reference`
+    // has played `atSeconds` of its own sound (looping: the next time round;
+    // pitch counted). The moment is found inside the mixer, block by block, so
+    // it is exact to the sample whatever the game's frame rate does. With no
+    // reference (0), or one that is gone or already past it, they start
+    // together at the next block. `fadeOut` voices begin fading to silence
+    // then, over `fadeOutSeconds`, and end. Streamed voices are not delayed.
+    // Returns an id per desc in order (0 for one that was dropped); a waiting
+    // voice is isPlaying() and can be stopped before it starts.
+    struct VoiceSchedule {
+        uint32_t reference = 0;
+        double atSeconds = 0.0;
+        std::vector<uint32_t> fadeOut;
+        float fadeOutSeconds = 0.05f;
+    };
+    std::vector<uint32_t> playScheduled(const std::vector<VoiceDesc>& descs, const VoiceSchedule& when);
+    // Where a voice is in its own sound, in seconds (a looping voice: within
+    // the loop); 0 for a streamed or unknown voice.
+    double voiceSeconds(uint32_t id) const;
+    // The length of a voice's sound, in seconds; 0 for a streamed or unknown voice.
+    double voiceLength(uint32_t id) const;
     void stop(uint32_t id);
     void stopAll();
     bool isPlaying(uint32_t id) const;
@@ -282,6 +305,13 @@ private:
         float shelfX[2] = {0.0f, 0.0f}, shelfY[2] = {0.0f, 0.0f};
         float fade = 1.0f, fadeTarget = 1.0f, fadeRate = 0.0f; // fadeRate: gain per second
         bool stopWhenSilent = false, faded = false;
+        // playScheduled: not mixed until `waitRef` reaches `waitAt`; then it starts `delayFrames` into the block.
+        bool waiting = false;
+        uint32_t waitRef = 0;
+        double waitAt = 0.0;
+        std::vector<uint32_t> waitFade;
+        float waitFadeSeconds = 0.05f;
+        int delayFrames = 0;
     };
     float estimate(const VoiceDesc& d) const;
     void mixEchoes(float* out, int frames);    // under m_mutex, after the voices filled m_send

@@ -372,6 +372,65 @@ These run the same with or without any asset pack: `climb_race`, `tennis`,
 `kke_demo` dresses its course with the art listed under "Showcase course
 art" above when the packs are there, and plays the same without them.
 
+## Streaming a big world
+
+A world that does not fit in memory is cut into cells; the ones near the player load,
+the ones far away unload, and the game never stops to load a level. That is Unreal's
+World Partition and level streaming, or Unity's additive scenes. `kke::WorldStreamer`
+(`kke/WorldStream.h`, ENG-F64 and ENG-F78) decides what to load and unload; the game
+does the work, so a cell can be a scene file, objects spawned from a table, terrain
+built on the spot, anything, in the background or at once.
+
+| Rule | |
+|---|---|
+| **Load** | a cell loads when a *focus* (the player, the camera, a second player) comes within its `loadRadius` of the cell's edge |
+| **Unload** | only when *every* focus is beyond its `unloadRadius` (at least the load radius). The gap between them is the hysteresis: standing on a border does not load and unload every frame |
+| **Order and budget** | nearest first (a cell's `bias` takes metres off its distance: a cell that matters more); at most `maxStarts` loads begun per frame and `maxLoading` in flight; unloads farthest first |
+| **Failure** | a load that fails, or takes longer than `loadTimeout`, is retried after `retryDelay`, up to `maxRetries` times, then given up on (and not waited for by `ready()`) |
+| **Loading screens** | cells within `requiredRadius` of a focus are the ones to wait for: `progress()` is 0 to 1, `ready()` is true when they are all in |
+| **Always there** | `persistent` cells load first and never unload; `pin` keeps a cell once it is in; `force` loads a cell from anywhere |
+
+```lua
+world.stream{
+  grid = { prefix = "tile", size = 128, x = { -8, 8 }, z = { -8, 8 } },       -- or cells = { { name, min = {x, z}, max = {x, z} }, ... }
+  loadRadius = 200, unloadRadius = 260, requiredRadius = 100,
+  followCamera = true,                                                      -- or world.focus("player", pos) every frame
+  load = function(cell)                                                     -- cell.name, cell.data, cell.minX .. cell.maxZ, cell.x, cell.z (the middle)
+    local s = scene.load("tiles/" .. cell.name, Vec(cell.x, 0, cell.z))
+    if not s then return false, "no such tile" end
+    tiles[cell.name] = s
+    -- return "pending" to take your time, then call world.done(cell.name) (or world.failed(cell.name, why))
+  end,
+  unload = function(cell) scene.unload(tiles[cell.name]) tiles[cell.name] = nil end,
+}
+
+hook.Add("CellLoaded", "streaming", function(e) print("in:", e.name) end)      -- CellUnloaded, CellFailed (e.reason)
+hook.Add("Think", "loading", function() showBar(world.progress()) if world.ready() then startGame() end end)   -- a loading screen
+```
+
+`world.state(name)` is `"unloaded"`, `"loading"`, `"loaded"` or `"failed"`; `world.loaded()` and
+`world.loading()` list cells; `world.distance(name)`, `world.pin(name [, on])`,
+`world.force(name [, on])`, `world.unfocus(id)`, `world.stop()` (everything unloads through your
+`unload`). A new `world.stream` replaces the old world (its cells go through the old `unload`
+first); a mistake in the description is refused with a reason and the old world carries on. A
+script's world goes when the script is unloaded. 100,000 cells at most, 16 foci.
+
+**Floating origin.** Floats lose precision far from zero (a float step is 1 mm at 10 km and
+8 mm at 100 km: physics jitters). `kke::OriginShifter` moves the world instead of the player
+travelling out: `update(focusInWorldCoordinates)` returns the shift to apply to everything
+(zero most frames), always a whole number of steps (default 1000 m), so nothing is rounded;
+`toWorld` and `toLocal` convert in double precision. 100 km of travel keeps every local number
+under 3 km and recovers world positions to a centimetre.
+
+From C++: subclass `StreamBackend` (`begin`, `poll`, `activate`, `unload`) and give it to a
+`WorldStreamer`; `addGrid` or `addCell`, `setFocus`, `update(dt)` every frame, `takeEvents()`.
+
+Not done: loading on a worker thread (the backend decides; the streamer only asks), cell
+priority from the view direction (the player looking at a far cell should load it before one
+behind), and streaming of the terrain's own chunks (they have distance LOD already).
+
+Tests: `tests/test_world_stream.cpp`, `tests/test_script_world.cpp`.
+
 ## Moods
 
 Every demo sets a mood ([MOODS.md](MOODS.md)): the sky, sun, fog, colour

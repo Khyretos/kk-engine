@@ -143,6 +143,79 @@ audio.bus("ui", 0.5)                                 -- one category's volume
   `VoiceDesc::pitch` and `fadeIn`; `AudioModule::cachedSound`,
   `playMusic` and `stopMusic`.
 
+## Adaptive music
+
+`audio.music(file)` plays one looping track and crossfades to the next. A score
+that follows the game needs more: layers that come in with the tension, a
+change of tune that lands on the beat, a sting over the top. `kke::MusicDirector`
+(`kke/MusicDirector.h`, ENG-F39) is what Wwise's and FMOD's music systems and
+Unreal's MetaSounds music do, as data, with Lua as `music.*`.
+
+| Part | Is |
+|---|---|
+| **Segment** | a piece of music with a `bpm`, `beatsPerBar` and a length in `bars` (0 takes the stems' length), made of layers that play in sync and loop together. A segment with `loop = false` plays once, then goes to its `next` |
+| **Layer** | a stem (a sound file) with a *parameter band*: it is silent below `from`, rises to full at `full` (no `full`: it switches on at `from`), and falls to silence between `fadeFrom` and `to`. `parameter` says which value drives it (default `"intensity"`); `gain` and `fade` (seconds a change takes) tune it. Every layer always plays, silent ones at gain 0, so a layer that fades in is already in time |
+| **Transition** | how to get from one segment to another: `when` = `immediate`, `next_beat`, `next_bar` (the default), `grid` (every `gridBars` bars) or `end` (when the segment ends); `fadeOut` and `fadeIn`; `via` names a bridge segment played in between (explore, then a sting, then combat). Rules match `from` and `to` (`"*"` for any); the first match wins |
+| **Stinger** | a one-shot on the next beat or bar (or at once), over the music |
+
+```lua
+music.define{
+  segments = {
+    { name = "explore", bpm = 100, bars = 8, layers = {
+        { sound = "music/explore_pad.ogg" },
+        { sound = "music/explore_drums.ogg", from = 0.3, full = 0.6 },          -- drums come in as tension rises
+        { sound = "music/explore_lead.ogg", fadeFrom = 0.8, to = 1.0 } } },       -- and the lead gives way to combat
+    { name = "combat", bpm = 140, bars = 8, layers = {
+        { sound = "music/combat_bass.ogg" },
+        { sound = "music/combat_lead.ogg", parameter = "danger", from = 0.5 } } },
+    { name = "victory", bpm = 120, bars = 2, loop = false, next = "explore",
+      layers = { { sound = "music/victory.ogg" } } },
+  },
+  transitions = {
+    { from = "explore", to = "combat", when = "next_beat", fadeOut = 0.3 },
+    { to = "victory", when = "end" },
+    { when = "next_bar" },                                                       -- anything else: the next bar line
+  },
+  stingers = { { name = "hit", sound = "music/hit.ogg", when = "next_beat" } },
+}
+
+music.play("explore")
+hook.Add("Think", "score", function() music.intensity(threat()) end)          -- 0 to 1, from the game
+hook.Add("PlayerSpotted", "score", function() music.play("combat") end)        -- lands on the next beat
+hook.Add("MusicBar", "score", function(e) print("bar", e.bar, e.segment) end)
+```
+
+The moment of a transition is found **inside the mixer, to the sample**
+(`AudioMixer::playScheduled`): the new segment's voices wait until the playing
+one has reached the boundary, then all start in the same sample, whatever the
+game's frame rate does. A bridge segment starts what follows it the same way,
+from its own end. A request made while one is waiting replaces it (the waiting
+voices are dropped and nothing is faded); asking for the segment that is
+playing cancels it.
+
+| Function | Does |
+|---|---|
+| `music.define{segments, transitions, stingers}` | the score (more calls add to it); true, or false and where it is wrong |
+| `music.load(file)` | the same from a JSON file inside the game's folder |
+| `music.play(segment)`, `music.playNow(segment [, fadeIn])`, `music.stop([fade])` | by the transition rules / at once / fade out |
+| `music.stinger(name)` | a one-shot on its beat or bar |
+| `music.intensity([v])`, `music.param(name [, v])` | the numbers the layers follow |
+| `music.current()`, `music.pending()`, `music.playing()`, `music.beat()`, `music.bar()`, `music.position()` | where it is |
+
+Hooks: `MusicBeat {segment, beat, bar}`, `MusicBar {segment, bar}`,
+`MusicSegment {segment}` (one began), `MusicEnded {segment}`, `MusicStinger {name}`.
+The music belongs to the script that started it: unloading it stops the music and
+takes the score away. Limits: 256 segments, 16 layers each, 1,024 transitions.
+
+From C++: `kke::MusicDirector` over a `MusicBackend` (`MixerMusicBackend` is the
+mixer; the tests use one with a clock), and `AudioMixer::playScheduled(descs,
+{reference, atSeconds, fadeOut, fadeOutSeconds})` and `voiceSeconds(id)` for your
+own scheduling.
+
+Not done: tempo changes inside a segment, a transition that lands in the middle of
+the new segment (it always starts at its beginning), and ducking the music under a
+stinger (the Music bus can be ducked by category: "Buses, ducking and snapshots").
+
 ## How it works
 
 ### Output: miniaudio, mixing: ours
