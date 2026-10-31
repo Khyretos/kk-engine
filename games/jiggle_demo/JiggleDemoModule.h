@@ -61,6 +61,7 @@ private:
     void readInput();
     void buildPanel();
     kke::JiggleRig* jiggleRig();
+    kke::JiggleSkin* jiggleSkin(); // the jiggling dancer's skin zones
     // Hair on the realistic body's bald head (kke::Hair, Jolt soft bodies).
     void findHead(const kke::ModelData& body);
     void buildHair();
@@ -143,6 +144,7 @@ private:
 #endif
     kke::ModelModule::InstanceId m_staticBody = 0; // a body with no skeleton, standing
     size_t m_bones = 0, m_zones = 0;
+    std::vector<size_t> m_breastZones; // which of the skin zones are her breasts (left, right)
 };
 
 } // namespace kke_jiggle

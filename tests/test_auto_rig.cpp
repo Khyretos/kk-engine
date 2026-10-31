@@ -7,6 +7,7 @@
 #include <gtest/gtest.h>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <string>
@@ -214,4 +215,79 @@ TEST(VitruvianBody, ShippedBodyIsRiggedAndTakesTheAnimationLibrary) {
     const kke::HumanoidJiggleSetup setup = kke::addHumanoidSoftTissue(body, tissue);
     EXPECT_GE(setup.chains.size(), 4u) << "two breast and two glute bones";
     EXPECT_GE(setup.zones.size(), 2u);
+}
+
+namespace {
+
+// How far the front of her left breast travels (metres) when she bounces
+// `amplitude` m at `hz`, with the jiggle bones and (zones) the skin zones.
+struct BreastTravel { float bone = 0, zone = 0, together = 0; size_t zones = 0, breastZones = 0; };
+BreastTravel breastTravel(const ModelData& shipped, bool zones, float amplitude, float hz) {
+    ModelData body = shipped;
+    kke::HumanoidSoftTissue tissue;
+    tissue.bust = tissue.glutes = tissue.hips = 0.0f; // her shape is in the mesh
+    tissue.breastZones = zones;
+    const kke::HumanoidJiggleSetup setup = kke::addHumanoidSoftTissue(body, tissue);
+    kke::JiggleRig rig(body, setup.chains);
+    kke::JiggleSkin skin(body, setup.zones, setup.zonePositions);
+    const kke::Pose rest = kke::AnimationSet(body).restPose();
+    const std::vector<glm::mat4> restModel = kke::poseToModel(body, rest);
+    // The probe: the most forward vertex of her left breast.
+    const glm::vec3 fwd = kke::modelForward(body);
+    const kke::ModelVertex* probe = nullptr;
+    float best = -1e9f;
+    for (const kke::ModelMesh& m : body.meshes)
+        for (const kke::ModelVertex& v : m.vertices)
+            if (v.position.y > 1.15f && v.position.y < 1.4f && v.position.x > 0.03f && glm::dot(v.position, fwd) > best) {
+                best = glm::dot(v.position, fwd);
+                probe = &v;
+            }
+    BreastTravel out;
+    out.zones = setup.zones.size();
+    out.breastZones = setup.breastZones.size();
+    if (!probe) return out;
+    auto skinned = [&](const std::vector<glm::mat4>& bones) {
+        glm::vec3 p(0.0f);
+        for (int k = 0; k < 4; ++k)
+            if (probe->weights[k] > 0.0f) p += glm::vec3(bones[probe->joints[k]] * body.bones[probe->joints[k]].inverseBind * glm::vec4(probe->position, 1.0f)) * probe->weights[k];
+        return p;
+    };
+    const glm::vec3 at0 = skinned(restModel);
+    for (int f = 0; f < 360; ++f) {
+        const float t = static_cast<float>(f) / 60.0f;
+        kke::Pose pose = rest;
+        const glm::mat4 toWorld = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, amplitude * std::sin(t * 6.2831853f * hz), 0.0f));
+        rig.apply(body, pose, toWorld, 1.0f / 60.0f);
+        skin.apply(body, pose, toWorld, 1.0f / 60.0f);
+        const glm::vec3 p = skinned(kke::poseToModel(body, pose));
+        const glm::vec3 d = kke::skinJiggleDisplacement(skin.offsets(), p);
+        out.bone = std::max(out.bone, glm::length(p - at0));
+        out.zone = std::max(out.zone, glm::length(d));
+        out.together = std::max(out.together, glm::length(p + d - at0));
+    }
+    return out;
+}
+
+} // namespace
+
+// Her breasts have to move when she jogs: a bone alone swings them about a
+// point inside the breast (a centimetre of skin at most), the skin zones carry
+// them as a whole and let them lag.
+TEST(VitruvianBody, BreastsTravelWhenSheBounces) {
+    namespace fs = std::filesystem;
+    const fs::path bodyFile = fs::path(KKE_SOURCE_DIR) / "assets/bodies/vitruvian_voluptuous.glb";
+    ASSERT_TRUE(fs::exists(bodyFile)) << bodyFile;
+    const ModelData shipped = kke::loadModel(bodyFile.string());
+    for (float hz : { 2.0f, 3.0f }) {
+        const BreastTravel bones = breastTravel(shipped, false, 0.035f, hz);
+        const BreastTravel both = breastTravel(shipped, true, 0.035f, hz);
+        EXPECT_EQ(bones.breastZones, 0u);
+        ASSERT_EQ(both.breastZones, 2u) << "a skin zone on each breast";
+        EXPECT_EQ(both.zones, bones.zones + 2u);
+        EXPECT_GT(bones.bone, 0.004f) << "the bones alone move the skin a little (measured 6-9 mm)";
+        EXPECT_GT(both.zone, 0.004f) << "the zones move it too (measured 6-9 mm)";
+        EXPECT_GT(both.together, 1.5f * bones.bone) << "the zones add at least half again to the bones' motion (measured about 1.8x)";
+        EXPECT_GT(both.together, 0.010f) << "a centimetre of travel at " << hz << " Hz in a plain 3.5 cm bounce (the tour's sprint gives 2-3 cm)";
+        EXPECT_LT(both.together, 0.06f) << "inside the zone's travel limit plus the bone's swing";
+    }
 }

@@ -541,6 +541,7 @@ void JiggleDemoModule::setupBodies() {
     m_rig.animations = kke::retargetAnimations(ual, body, match);
     m_bones = setup.chains.size();
     m_zones = setup.zones.size();
+    m_breastZones = setup.breastZones;
     log->info("'{}': {} jiggle bones, {} skin zones, {} of {} bones take the UAL clips", m_characterName, m_bones, m_zones, match.matched,
               body.bones.size());
 
@@ -654,7 +655,13 @@ void JiggleDemoModule::updateBodies(float dt) {
             m_models->setSkinJiggle(d.instance, d.skin.offsets());
             m_swing = std::max(d.rig.maxSwingDegrees(), m_swing * std::exp(-dt));
             m_stretchNow = std::max(d.rig.maxStretchNow(), m_stretchNow * std::exp(-dt));
-            if (std::getenv("KKE_JIGGLE_TRACE")) kke::log::get(name())->info("t={:.2f} speed={:.2f} y={:.2f} swing={:.1f} stretch={:.3f}", m_tourTime, m_speed, m_jumpY, d.rig.maxSwingDegrees(), d.rig.maxStretchNow());
+            if (std::getenv("KKE_JIGGLE_TRACE")) {
+                // The left breast's skin zone: its offset in model space (mm), x y z.
+                glm::vec3 br(0.0f);
+                if (!m_breastZones.empty() && m_breastZones[0] < d.skin.offsets().size()) br = d.skin.offsets()[m_breastZones[0]].offset * 1000.0f;
+                kke::log::get(name())->info("t={:.2f} speed={:.2f} y={:.2f} swing={:.1f} stretch={:.3f} breast_mm={:.1f},{:.1f},{:.1f}", m_tourTime, m_speed, m_jumpY,
+                                            d.rig.maxSwingDegrees(), d.rig.maxStretchNow(), br.x, br.y, br.z);
+            }
         }
         if (std::vector<glm::mat4>* locals = m_models->boneLocals(d.instance)) {
             kke::poseToLocals(pose, *locals);
@@ -802,6 +809,13 @@ void JiggleDemoModule::readInput() {
 
 void JiggleDemoModule::squish() { m_jelly.poke(glm::vec3(0.0f, m_jelly.params().max.y, 0.0f), glm::vec3(0.0f, -6.0f, 0.0f), 0.35f); }
 
+kke::JiggleSkin* JiggleDemoModule::jiggleSkin() {
+    if (m_scene != Scene::Body || !m_bodiesReady) return nullptr;
+    for (Dancer& d : m_dancers)
+        if (d.jiggle && d.skin.valid()) return &d.skin;
+    return nullptr;
+}
+
 kke::JiggleRig* JiggleDemoModule::jiggleRig() {
     if (m_scene != Scene::Body || !m_bodiesReady) return nullptr;
     for (Dancer& d : m_dancers)
@@ -897,6 +911,35 @@ void JiggleDemoModule::buildPanel() {
     b.slider("Drag", zone(0, &kke::JiggleSettings::drag), 0.0f, 0.6f, "%.2f", share, 0.02f);
     b.slider("Gravity", zone(0, &kke::JiggleSettings::gravity), 0.0f, 2.0f, "%.2f", share, 0.05f);
     b.slider("Blend", zone(0, &kke::JiggleSettings::blend), 0.0f, 1.0f, "%.2f", share, 0.02f);
+    // The skin zones on the breasts: they move the breast as a whole (the bones only
+    // swing it about a point inside it). Both breasts share one setting.
+    auto breastSkin = [this](float kke::JiggleSettings::*field) {
+        return Panel::Ref<float>([this, field]() -> float* {
+            kke::JiggleSkin* skin = jiggleSkin();
+            if (!skin || m_breastZones.empty() || m_breastZones[0] >= skin->zoneCount()) return nullptr;
+            return &(skin->settings(m_breastZones[0]).*field);
+        });
+    };
+    auto shareSkin = [this] {
+        kke::JiggleSkin* skin = jiggleSkin();
+        if (!skin || m_breastZones.empty()) return;
+        for (size_t i = 1; i < m_breastZones.size() && m_breastZones[i] < skin->zoneCount(); ++i) {
+            skin->settings(m_breastZones[i]) = skin->settings(m_breastZones[0]);
+            skin->zone(m_breastZones[i]).maxOffset = skin->zone(m_breastZones[0]).maxOffset;
+        }
+    };
+    const auto hasBreastZones = [this] { return jiggleSkin() != nullptr && !m_breastZones.empty(); };
+    b.heading("Breast skin").showIf(hasBreastZones);
+    b.slider("Stiffness", breastSkin(&kke::JiggleSettings::stiffness), 0.02f, 1.0f, "%.2f", shareSkin, 0.02f).showIf(hasBreastZones);
+    b.slider("Drag", breastSkin(&kke::JiggleSettings::drag), 0.0f, 0.6f, "%.2f", shareSkin, 0.02f).showIf(hasBreastZones);
+    b.slider("Gravity", breastSkin(&kke::JiggleSettings::gravity), 0.0f, 2.0f, "%.2f", shareSkin, 0.05f).showIf(hasBreastZones);
+    b.slider("Blend", breastSkin(&kke::JiggleSettings::blend), 0.0f, 2.0f, "%.2f", shareSkin, 0.05f).showIf(hasBreastZones);
+    b.slider("Travel (m)", Panel::Ref<float>([this]() -> float* {
+                 kke::JiggleSkin* skin = jiggleSkin();
+                 if (!skin || m_breastZones.empty() || m_breastZones[0] >= skin->zoneCount()) return nullptr;
+                 return &skin->zone(m_breastZones[0]).maxOffset;
+             }),
+             0.0f, 0.12f, "%.3f", shareSkin, 0.005f).showIf(hasBreastZones);
     b.heading("Glutes").showIf([this] { return jiggleRig() != nullptr && m_bones >= 4; });
     b.slider("Stiffness", zone(2, &kke::JiggleSettings::stiffness), 0.02f, 1.0f, "%.2f", share, 0.02f);
     b.slider("Drag", zone(2, &kke::JiggleSettings::drag), 0.0f, 0.6f, "%.2f", share, 0.02f);

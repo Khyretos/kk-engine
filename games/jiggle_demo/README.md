@@ -136,7 +136,7 @@ Rows that belong to one scene hide in the other (`sectionIf`, `showIf`):
 |---|---|
 | Jiggle physics | Scene (Jelly / Body); a Tab / LB prompt, shown in the jelly scene |
 | Jelly | controls line; Rain balls; Every (0.15 to 2 s); Big ball; Squish; Reset; Firmness (0.03 to 1); Iterations (1 to 8); Damping (0 to 0.2); Look: Flavour, Translucent, Fruit inside, Density (0 to 4), Milkiness (0 to 1); status (particles, triangles, balls, deformation in mm, solve time) |
-| Body | the character's name, or why it could not load; controls line; Hair (Bald, box braids, afro, puff, high-top fade, twist-out, bantu knots, cornrows, locs, two-strand twists, straight, long, wavy, curly, short); Hair colour (black, dark brown, auburn, blonde), the realistic body only; Twin without jiggle; Move; Jump; Show points; Camera follows; Side view; Breasts: Stiffness, Soften, Stretch, Drag, Gravity, Blend; Glutes: Stiffness, Drag, Blend; status (bones, zones, points, time per frame, asleep, peak swing, stretch) |
+| Body | the character's name, or why it could not load; controls line; Hair (Bald, box braids, afro, puff, high-top fade, twist-out, bantu knots, cornrows, locs, two-strand twists, straight, long, wavy, curly, short); Hair colour (black, dark brown, auburn, blonde), the realistic body only; Twin without jiggle; Move; Jump; Show points; Camera follows; Side view; Breasts (the bones): Stiffness, Soften, Stretch, Drag, Gravity, Blend; Breast skin (the skin zones that move the breast as a whole): Stiffness, Drag, Gravity, Blend, Travel; Glutes: Stiffness, Drag, Blend; status (bones, zones, points, time per frame, asleep, peak swing, stretch) |
 
 When no character could be loaded, the Body section shows only the reason
 (the other rows return a null value and hide).
@@ -276,8 +276,11 @@ This runs once, at start:
    `hips = 0.03`, metres of extra volume); the Vitruvian body keeps the
    shape it was built with (all 0). It finds the chest, pelvis and thighs by bone
    name, adds two breast and two glute bones, moves the nearby skin onto
-   them, and returns the rig chains and the skin zones (belly and
-   thighs). Anything it cannot find is logged at info: a character
+   them, and returns the rig chains and the skin zones (belly, thighs, and
+   one on each breast: the bones swing a breast about a point inside it, a
+   few millimetres of skin; the zones carry it as a whole and let it lag,
+   centimetres of travel; on the tour the left one logs 16-24 mm median,
+   `KKE_JIGGLE_TRACE=1`). Anything it cannot find is logged at info: a character
    without a breast or belly bone just jiggles less.
 5. Retarget the UAL clips onto the reshaped body (`kke::matchBones`,
    `kke::retargetAnimations`). This comes after step 4 on purpose: the
@@ -402,7 +405,7 @@ if (m_bones >= 4) rig->settings(3) = rig->settings(2);
 | `kMaxBalls = 14` | [JiggleDemoModule.cpp](JiggleDemoModule.cpp) | the ball budget |
 | `kLooks`: tint, density, milkiness | [JiggleDemoModule.cpp](JiggleDemoModule.cpp) | the flavours; density is absorption, milkiness is cloudiness |
 | `m_tissue.bust = 0.075`, `glutes = 0.06`, `hips = 0.03` | `init` | extra volume in metres; 0 keeps the artist's shape |
-| `HumanoidSoftTissue::breast` / `glute` / `skin` settings | [kke/JigglePhysics.h](../../engine/include/kke/JigglePhysics.h) | the starting jiggle; the panel changes breasts and glutes live |
+| `HumanoidSoftTissue::breast` / `glute` / `skin` settings | [kke/JigglePhysics.h](../../engine/include/kke/JigglePhysics.h) | the starting jiggle (`breastSkin`, `breastTravel`: the breast skin zones); the panel changes breasts, breast skin and glutes live |
 | `kWalkSpeed 1.6`, `kJogSpeed 3.6`, `kSprintSpeed 6.2` | [JiggleDemoModule.cpp](JiggleDemoModule.cpp) | must match the UAL clips' own speeds, or the feet slide |
 | acceleration 5, deceleration 9 m/s2 | `updateBodies` | faster stops = bigger jiggle |
 | jump speed 3.6 m/s | `jump` | higher jumps = bigger landings |
@@ -492,7 +495,7 @@ Pitfalls the code shows:
 - Draw translucent things after everything opaque.
 - The body panel's sliders assume the chain order breasts left, right,
   then glutes left, right, which is what `addHumanoidSoftTissue` returns
-  when it finds both.
+  when it finds both; the breast skin rows use `HumanoidJiggleSetup::breastZones`.
 - Cap the frame time (`std::min(ctx.dt, 0.1f)` here) so a hitch does not
   hand a huge step to the soft body.
 
