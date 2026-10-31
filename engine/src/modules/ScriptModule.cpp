@@ -746,6 +746,7 @@ void ScriptModule::bindAll() {
     bindStore();
     bindAudio();
     bindNav();
+    bindCrowd();
     bindCreatures();
 }
 
@@ -851,6 +852,7 @@ void ScriptModule::update(const UpdateContext& ctx) {
     m_terrain->update(ctx.dt, shownCamera().position); // chunks for the camera shown (a cutscene's shot); collision after sculpting
     if (m_nav && m_nav->dynamic()) m_nav->update(); // obstacles nav.obstacle added or removed
     stepCreatures(ctx.dt);
+    stepCrowd(ctx.dt);
     m_clock->update(ctx.dt, *m_vm);                         // time of day: the sun, the sky, Dawn/Dusk/Hour hooks
     m_music.update(ctx.dt, *m_vm);                          // adaptive music: beats, bars, segments, stingers
     m_world.update(ctx.dt, *m_vm, m_app->camera().position);   // streamed worlds: cells load and unload around the foci

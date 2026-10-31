@@ -1283,6 +1283,10 @@ void ScriptModule::bindNav() {
         }
         const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
         m_nav = std::move(mesh);
+        // A crowd walks one mesh: the old one's agents go with it.
+        if (!m_crowdMembers.empty()) log::get("Scripts")->warn("nav.build: the crowd's {} agent(s) are gone with the old navmesh", m_crowdMembers.size());
+        m_crowd.reset();
+        m_crowdMembers.clear();
         m_ai->setNavMesh(m_nav.get());
         m_navSource = m_vm->currentSource();
         lua_pushboolean(L, 1);
@@ -1409,6 +1413,155 @@ void ScriptModule::bindNav() {
     });
 }
 
+// ---------------------------------------------------------------- crowd.* (ENG-F73, kke/ai/Crowd.h)
+void ScriptModule::bindCrowd() {
+    ScriptVM& vm = *m_vm;
+    auto* models = m_app->getModule<ModelModule>();
+    auto member = [this](lua_State* L, int idx, const char* fn) -> CrowdMember& {
+        const auto id = ai::Crowd::AgentId(checkId(L, idx, fn));
+        for (CrowdMember& c : m_crowdMembers)
+            if (c.id == id) return c;
+        luaL_error(L, "%s: %d is not a crowd agent (crowd.add)", fn, int(id));
+        return m_crowdMembers.front(); // not reached: luaL_error doesn't return
+    };
+    // crowd.add(pos, {radius, height, speed, accel, separation, quality, model, walk, idle}) -> id; or nil, reason.
+    vm.registerFunction("crowd", "add", [this, models](lua_State* L) {
+        if (!m_nav || !m_nav->valid()) return luaL_error(L, "crowd.add: there's no navmesh yet (call nav.build first)");
+        if (!m_crowd) m_crowd = std::make_unique<ai::Crowd>(*m_nav, 1024, 2.0f);
+        if (!m_crowd->valid()) return luaL_error(L, "crowd.add: the crowd couldn't start on this navmesh");
+        const glm::vec3 pos = ScriptVM::toVec3(L, 1);
+        ai::CrowdAgentParams p;
+        CrowdMember c;
+        if (lua_istable(L, 2)) {
+            auto field = [L](const char* k, float fallback, float lo, float hi) {
+                const float v = ScriptVM::fieldNumber(L, 2, k, fallback);
+                return std::isfinite(v) ? std::clamp(v, lo, hi) : fallback;
+            };
+            p.radius = field("radius", p.radius, 0.05f, 2.0f);
+            p.height = field("height", p.height, 0.2f, 10.0f);
+            p.maxSpeed = field("speed", p.maxSpeed, 0.0f, 30.0f);
+            p.maxAcceleration = field("accel", p.maxAcceleration, 0.0f, 100.0f);
+            p.separation = field("separation", p.separation, 0.0f, 20.0f);
+            p.avoidanceQuality = static_cast<int>(field("quality", float(p.avoidanceQuality), 0.0f, 3.0f));
+            lua_getfield(L, 2, "model");
+            if (lua_isinteger(L, -1)) c.model = uint32_t(lua_tointeger(L, -1));
+            lua_pop(L, 1);
+            if (c.model) {
+                const ModelData* d = nullptr;
+                for (const ModelInstance& m : m_models)
+                    if (m.id == c.model && models) d = models->model(models->instanceModel(c.model));
+                if (!d) return luaL_error(L, "crowd.add: model %d is not one a script spawned", int(c.model));
+                auto clip = [&](const char* key) {
+                    lua_getfield(L, 2, key);
+                    int found = -1;
+                    if (lua_isstring(L, -1)) {
+                        const std::string want = lua_tostring(L, -1);
+                        for (size_t k = 0; k < d->animations.size(); ++k)
+                            if (d->animations[k].name == want) found = int(k);
+                        if (found < 0) {
+                            lua_pop(L, 1);
+                            luaL_error(L, "crowd.add: the model has no clip named '%s' (see models.clips)", want.c_str());
+                        }
+                    }
+                    lua_pop(L, 1);
+                    return found;
+                };
+                c.walk = clip("walk");
+                c.idle = clip("idle");
+            }
+        }
+        c.id = m_crowd->add(pos, p);
+        if (!c.id) {
+            lua_pushnil(L);
+            lua_pushstring(L, m_crowd->count() >= size_t(m_crowd->capacity()) ? "the crowd is full (1024 agents)" : "that point is off the navmesh");
+            return 2;
+        }
+        c.source = m_vm->currentSource();
+        if (c.idle >= 0 && models) models->playAnimation(c.model, c.idle, true);
+        m_crowdMembers.push_back(c);
+        lua_pushinteger(L, lua_Integer(c.id));
+        return 1;
+    });
+    vm.registerFunction("crowd", "remove", [this, member](lua_State* L) {
+        const ai::Crowd::AgentId id = member(L, 1, "crowd.remove").id;
+        m_crowd->remove(id);
+        std::erase_if(m_crowdMembers, [&](const CrowdMember& c) { return c.id == id; });
+        return 0;
+    });
+    // crowd.go(id, pos) -> true; false when the point is off the mesh.
+    vm.registerFunction("crowd", "go", [this, member](lua_State* L) {
+        lua_pushboolean(L, m_crowd->moveTo(member(L, 1, "crowd.go").id, ScriptVM::toVec3(L, 2)));
+        return 1;
+    });
+    // crowd.goAll(pos): every agent of this script to one place (they spread around it).
+    vm.registerFunction("crowd", "goAll", [this](lua_State* L) {
+        const glm::vec3 to = ScriptVM::toVec3(L, 1);
+        int sent = 0;
+        for (const CrowdMember& c : m_crowdMembers)
+            if (c.source == m_vm->currentSource() && m_crowd->moveTo(c.id, to)) ++sent;
+        lua_pushinteger(L, sent);
+        return 1;
+    });
+    vm.registerFunction("crowd", "steer", [this, member](lua_State* L) {
+        lua_pushboolean(L, m_crowd->setVelocity(member(L, 1, "crowd.steer").id, ScriptVM::toVec3(L, 2)));
+        return 1;
+    });
+    vm.registerFunction("crowd", "stop", [this, member](lua_State* L) {
+        m_crowd->stop(member(L, 1, "crowd.stop").id);
+        return 0;
+    });
+    vm.registerFunction("crowd", "position", [this, member](lua_State* L) {
+        ScriptVM::pushVec3(L, m_crowd->position(member(L, 1, "crowd.position").id));
+        return 1;
+    });
+    vm.registerFunction("crowd", "velocity", [this, member](lua_State* L) {
+        ScriptVM::pushVec3(L, m_crowd->velocity(member(L, 1, "crowd.velocity").id));
+        return 1;
+    });
+    vm.registerFunction("crowd", "arrived", [this, member](lua_State* L) {
+        lua_pushboolean(L, m_crowd->arrived(member(L, 1, "crowd.arrived").id, static_cast<float>(luaL_optnumber(L, 2, 0.5))));
+        return 1;
+    });
+    vm.registerFunction("crowd", "count", [this](lua_State* L) {
+        lua_pushinteger(L, lua_Integer(m_crowdMembers.size()));
+        return 1;
+    });
+    vm.registerFunction("crowd", "list", [this](lua_State* L) {
+        lua_createtable(L, int(m_crowdMembers.size()), 0);
+        int n = 0;
+        for (const CrowdMember& c : m_crowdMembers) {
+            lua_pushinteger(L, lua_Integer(c.id));
+            lua_rawseti(L, -2, ++n);
+        }
+        return 1;
+    });
+}
+
+void ScriptModule::stepCrowd(float dt) {
+    if (!m_crowd || m_crowdMembers.empty()) return;
+    m_crowd->update(dt);
+    auto* models = m_app->getModule<ModelModule>();
+    if (!models) return;
+    for (CrowdMember& c : m_crowdMembers) {
+        if (!c.model) continue;
+        const glm::vec3 pos = m_crowd->position(c.id), vel = m_crowd->velocity(c.id);
+        const float speed = glm::length(glm::vec2(vel.x, vel.z));
+        // Face where it walks; standing, it keeps its last heading.
+        if (speed > 0.1f) c.yaw = std::atan2(vel.x, vel.z);
+        const glm::mat4 old = models->transform(c.model);
+        const glm::vec3 scale(glm::length(glm::vec3(old[0])), glm::length(glm::vec3(old[1])), glm::length(glm::vec3(old[2])));
+        glm::mat4 t = glm::translate(glm::mat4(1.0f), pos);
+        t = glm::rotate(t, c.yaw, glm::vec3(0, 1, 0));
+        models->setTransform(c.model, glm::scale(t, scale));
+        const bool walking = speed > 0.2f;
+        if (walking != c.walking) {
+            const int clip = walking ? c.walk : c.idle;
+            if (clip >= 0) models->playAnimation(c.model, clip, true);
+            c.walking = walking;
+        }
+    }
+}
+
 // ---------------------------------------------------------------- ai.* (creatures on script models)
 void ScriptModule::bindCreatures() {
     auto* models = m_app->getModule<ModelModule>();
@@ -1488,6 +1641,8 @@ void ScriptModule::bindCreatures() {
 }
 
 void ScriptModule::forgetCreature(uint32_t instance) {
+    for (CrowdMember& c : m_crowdMembers)
+        if (c.model == instance) c.model = 0; // the agent walks on without it
     m_ai->remove(instance);
     m_creatureClips.erase(instance);
 }
@@ -1551,6 +1706,9 @@ void ScriptModule::releaseScript(const std::string& source) {
                 models->remove(m.id);
             }
     m_models.erase(std::remove_if(m_models.begin(), m_models.end(), [&](const ModelInstance& m) { return mine(m.source); }), m_models.end());
+    for (const CrowdMember& c : m_crowdMembers)
+        if (mine(c.source) && m_crowd) m_crowd->remove(c.id);
+    std::erase_if(m_crowdMembers, [&](const CrowdMember& c) { return mine(c.source); });
 
 #if KKE_ENABLE_FEMFX
     if (auto* femfx = m_app->getModule<PhysicsModule>())

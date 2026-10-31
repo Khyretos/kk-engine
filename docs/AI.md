@@ -210,6 +210,18 @@ Without a navmesh everything still works on open ground (steering only),
 with `addObstacle` circles for trees and posts and `groundHeight` for
 hills.
 
+## Crowds
+
+`kke::ai::Crowd` (kke/ai/Crowd.h, ENG-F73) runs DetourCrowd on a
+`NavMesh`: up to `maxAgents` agents, each with a target (`moveTo`) or a
+velocity (`setVelocity`), steering with obstacle avoidance (four quality
+levels) and separation, along a path corridor it keeps optimising.
+`update(dt)` moves them all. Measured in tests/test_crowd.cpp: 200 agents
+crossing a 60 m square through a 6 m gap take about 0.4 ms an update
+(RelWithDebInfo, Ryzen 9800X3D) and nobody overlaps anybody by more than a
+few centimetres. Lua: `crowd.*` (SCRIPTING.md "Crowds"), which also moves
+a model per agent and plays its walk and idle clips.
+
 ## Behaviour trees
 
 `kke/ai/BehaviorTree.h` (ENG-F71) is the layer for scripted behaviour: a

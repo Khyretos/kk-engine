@@ -9,6 +9,8 @@
 #include <string>
 #include <vector>
 
+class dtNavMesh;
+
 namespace kke::ai {
 
 // Navigation mesh: where agents can walk, and paths across it. Built with
@@ -123,6 +125,9 @@ public:
     // The mesh as triangles for debug drawing (lifted a little off the ground).
     void debugTriangles(std::vector<glm::vec3>& out, float lift = 0.05f) const;
     size_t polygonCount() const;
+
+    // Detour's own mesh (kke::ai::Crowd steers on it); null when not built.
+    dtNavMesh* detour() const;
 
 private:
     struct Impl;

@@ -151,7 +151,7 @@ by area. The goal is parity with the big engines and more.
 | ENG-F70 | AI | Pathfinding around dynamic obstacles. Done: tiled navmeshes with box and cylinder obstacles (DetourTileCache), agents re-path when it changes (docs/AI.md); Lua `nav.*` builds one from the level's collision and finds paths, and Lua `ai.*` creatures walk it with their clips. Not yet: off-mesh links, area costs. | 🟡 |
 | ENG-F71 | AI | Behaviour trees: sequence, selector, reactive (pre-empting) variants, parallel, random, decorators (repeat, retry, cooldown, timeout, delay...) and leaves over a typed blackboard, built in C++ or from JSON with errors by path (`kke/ai/BehaviorTree.h`), and Lua `bt.*` with Lua functions as leaves (docs/AI.md "Behaviour trees"). Not yet: a node-graph editor, a utility selector node. | ✅ |
 | ENG-F72 | AI | Utility AI (docs/AI.md) | ✅ |
-| ENG-F73 | AI | Crowds of hundreds of agents (flocking exists) | 🟡 |
+| ENG-F73 | AI | Crowds of hundreds of agents: `kke::ai::Crowd` on DetourCrowd (avoidance, separation, up to 1024), Lua `crowd.*` moving models with walk/idle clips; 200 agents ≈ 0.4 ms an update (AI.md "Crowds"). GPU-instanced crowd rendering not done | ✅ local |
 | ENG-F74 | AI | Navmesh baking (Recast) | ✅ |
 | ENG-F75 | World | Terrain sculpting. Done: raise, lower, smooth, flatten and paint brushes, from Lua while the game runs (docs/TERRAIN.md). Not yet: an editor tool for them, saving sculpted terrain with the level. | 🟡 |
 | ENG-F76 | World | Heightmap terrain. Done: chunks with distance LOD and skirts, a Jolt height field for collision, four colour layers with rock on slopes, from a seed or a greyscale picture, Lua `terrain.*` (docs/TERRAIN.md). Not yet: textured layers, holes. | 🟡 |

@@ -97,6 +97,7 @@ input.held("id")     -- true every frame it's down
 input.value("id")    -- 0..1 (or -1..1 for an axis)
 input.haptic("impact")  -- rumble the pad: impact, light, explosion, footstep, heartbeat, alarm, shoot, brake (docs/INPUT.md "Haptics")
 input.hapticLevel("engine", 0.5)  -- a steady rumble until set to 0
+crowd.add(pos, { model = m, walk = "Walk", idle = "Idle" }); crowd.goAll(target)  -- hundreds of walkers (needs nav.build())
 input.define("id", "Label", "G", "rb")  -- 4th: controller button ("a","b","x","y","lb","rb","lt","rt","start","dpad_up"...)
 -- Button prompts: a picture of the button on the device in use (keyboard, Xbox, PlayStation, Switch, Deck, touch)
 ui.rml(doc, "hint", input.promptText("{jump} jump  {id} do the thing"))  -- {action} or {a}, {key:Space}, {touch:tap}

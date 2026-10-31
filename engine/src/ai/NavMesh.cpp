@@ -612,4 +612,6 @@ size_t NavMesh::polygonCount() const {
     return n;
 }
 
+dtNavMesh* NavMesh::detour() const { return m ? m->mesh : nullptr; }
+
 } // namespace kke::ai

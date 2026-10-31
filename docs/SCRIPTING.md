@@ -368,6 +368,29 @@ nav.remove(cart)                                                -- paths go thro
   script that built it. C++ gets it with `ScriptModule::navMesh()` (for an
   `ai::AiWorld`).
 
+## Crowds
+
+`crowd.*` walks hundreds of people on the navmesh at once (ENG-F73,
+DetourCrowd): each steers around the others and the walls. Cheaper than
+`ai.add` per head: no minds, just going somewhere. Give an agent a model
+and it moves, turns and plays its walk and idle clips by itself.
+
+```lua
+nav.build()
+local fan = models.spawn(fanModel, { pos = Vec(0, 0, 0) })
+local id = crowd.add(Vec(0, 0, 0), { speed = 1.4, radius = 0.35, model = fan, walk = "Walk", idle = "Idle" })
+crowd.go(id, Vec(20, 0, 5))        -- false when the point is off the navmesh
+crowd.goAll(Vec(20, 0, 5))         -- every agent this script added; they spread around it
+crowd.steer(id, Vec(1, 0, 0))      -- walk with a velocity instead (followers, flocks)
+crowd.stop(id)
+crowd.arrived(id)                  -- within 0.5 m (or the radius given) of where it was sent
+local p, v = crowd.position(id), crowd.velocity(id)
+crowd.remove(id); crowd.count(); crowd.list()
+```
+
+Up to 1024 agents; 300 cost about half a millisecond a frame. A new
+`nav.build` starts a new, empty crowd (the old agents go with the old mesh).
+
 ## Creatures
 
 `ai.add` gives a model a mind: it walks the navmesh (when `nav.build` made

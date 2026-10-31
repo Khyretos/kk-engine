@@ -17,6 +17,7 @@
 #include "kke/ScriptWorld.h"
 #include "kke/ScriptVM.h"
 #include "kke/ai/AiWorld.h"
+#include "kke/ai/Crowd.h"
 #include "kke/ai/NavMesh.h"
 #include "kke/modules/ModelModule.h"
 
@@ -180,6 +181,8 @@ private:
     void bindAudio(); // audio.sound/play/music/bus/duck (ScriptBindings.cpp)
     void bindNav(); // nav.* pathfinding (ScriptBindings.cpp)
     void bindCreatures();  // ai.* over script-spawned models (ScriptBindings.cpp)
+    void bindCrowd();      // crowd.* DetourCrowd agents (ScriptBindings.cpp)
+    void stepCrowd(float dt);
     void stepCreatures(float dt); // moves them, plays their clips, runs the ai hooks
     void forgetCreature(uint32_t instance);
     void bindCamera(); // ScriptCamera.cpp
@@ -232,6 +235,17 @@ private:
     std::unordered_map<std::string, int> m_soundIds;
     std::string m_musicSource;                   // the script that started the music
     std::unique_ptr<ai::NavMesh> m_nav;         // nav.build's
+    // crowd.* (ENG-F73): made on the first crowd.add, on the navmesh of the moment.
+    std::unique_ptr<ai::Crowd> m_crowd;
+    struct CrowdMember {
+        ai::Crowd::AgentId id = 0;
+        std::string source;
+        uint32_t model = 0;    // a models.spawn instance it moves, 0 = none
+        int walk = -1, idle = -1; // its clips
+        bool walking = false;
+        float yaw = 0.0f;
+    };
+    std::vector<CrowdMember> m_crowdMembers;
     std::string m_navSource;                    // the script that built it
     struct NavObstacle { ai::NavMesh::ObstacleId id; std::string source; };
     std::vector<NavObstacle> m_navObstacles;

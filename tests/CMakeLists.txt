@@ -82,6 +82,7 @@ add_executable(kke_tests
     test_contact_shadows.cpp
     test_upscale.cpp
     test_haptics.cpp
+    test_crowd.cpp
     test_cooked_file.cpp
     test_viewports.cpp
     test_lobby.cpp

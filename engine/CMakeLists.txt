@@ -95,6 +95,7 @@ set(ENGINE_SOURCES
     src/ai/Utility.cpp
     src/ai/BehaviorTree.cpp
     src/ai/NavMesh.cpp
+    src/ai/Crowd.cpp
     src/ai/Species.cpp
     src/ai/AiWorld.cpp
     src/ai/AiScript.cpp
