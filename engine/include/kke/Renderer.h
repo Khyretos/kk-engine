@@ -174,6 +174,15 @@ public:
     void setOcclusionSingleView(bool single) { m_occlusionSingleView = single; }
     const DepthMap* occlusionMap();
     float renderScale() const { return m_renderScale; }
+    // How a scene drawn below render scale 1 is brought up to the screen
+    // (ENG-F14): FSR 1-style (edge-adaptive, sharpened; the default) or
+    // plain bilinear. Sharpness in stops: 0 the most, 2 none (0.2 default).
+    enum class Upscaler { Bilinear, Fsr1 };
+    void setUpscaler(Upscaler u, float sharpness) {
+        m_upscaler = u;
+        m_upscaleSharpness = sharpness;
+    }
+    Upscaler upscaler() const { return m_upscaler; }
     // Size of the 3D image: extent() times the render scale.
     VkExtent2D renderExtent() const;
 
@@ -286,6 +295,8 @@ private:
     glm::vec3 m_clearSrgb{0.152f, 0.152f, 0.248f}; // linear 0.02, 0.02, 0.05
     glm::vec3 m_clearScene{0.0f}; // sceneClearColor(m_clearSrgb, m_post)
     PostParams m_post;
+    Upscaler m_upscaler = Upscaler::Fsr1;
+    float m_upscaleSharpness = 0.2f;
     std::array<glm::vec4, 3> m_colorRows{ glm::vec4(1, 0, 0, 0), glm::vec4(0, 1, 0, 0), glm::vec4(0, 0, 1, 0) };
 
     void createSyncObjects();

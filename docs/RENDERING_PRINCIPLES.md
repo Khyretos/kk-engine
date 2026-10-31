@@ -197,6 +197,15 @@ slope-scaled bias, texel-snapped light projection (no shimmer when the
 camera moves), then cascades as already planned in #20:
 [#38](https://github.com/Khyretos/kk-engine/issues/38).
 
+**Upscaling (ENG-F14, 2026-10-31).** Below render scale 1 the tone-map
+pass brings the scene up FSR 1-style (`shaders/upscale_fsr1.glsl`, written
+from AMD's published algorithm): a 12-tap edge-adaptive Lanczos-2 (EASU)
+with deringing, then RCAS-style sharpening from the four nearest source
+texels, both on the HDR light through a reversible tone map so bright
+pixels don't ring. One pass, no extra image; nothing temporal (§7). The
+setting `upscaler` is `fsr1` (default) or `bilinear`, `upscaleSharpness`
+0 (most) to 2 (none), 0.2 by default; `KKE_UPSCALER` overrides.
+
 **Contact shadows (ENG-F16, 2026-10-31).** The setting `contactShadows`
 (on by default; `KKE_CONTACT_SHADOWS=0/1`) adds the small shadows a shadow
 map is too coarse for: under a foot, where a crate meets the floor. After

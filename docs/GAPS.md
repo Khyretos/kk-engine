@@ -92,7 +92,7 @@ by area. The goal is parity with the big engines and more.
 | ENG-F11 | Rendering | GPU particle/VFX system. GPU particles in closed form (G18), and since F11 stepped on the GPU when they attract, swirl (`turbulence`: divergence-free curl waves) or collide (against the last frame's depth, no colliders needed); 100,000 for +0.08 ms. Not yet: ribbons and trails, sorted see-through GPU particles. | 🟡 |
 | ENG-F12 | Rendering | Decals: applied inside the shading of every lit surface from per-cell lists (no G-buffer, no clipped meshes), so they are lit, shadowed and reflected like the surface, keep MSAA and cost nothing where there are none; six built-in textures, PNGs from assets/decals, `decal.*` in Lua (docs/DECALS.md). | ✅ |
 | ENG-F13 | Rendering | Occlusion culling: a small farthest-depth map of each frame read back by the CPU two frames later, so models hidden behind others are not skinned, uploaded or drawn, with the CPU's instancing kept (`occlusionCulling`, off by default; worth it in dense scenes). Not yet: GPU-driven indirect draws. | ✅ |
-| ENG-F14 | Rendering | Upscalers such as FSR (render scale exists) | 🟡 |
+| ENG-F14 | Rendering | Upscalers: FSR 1-style (edge-adaptive EASU + RCAS-style sharpening, in the tone-map pass, HDR through a reversible tone map) below render scale 1; `graphics.upscaler` fsr1/bilinear, `upscaleSharpness`, KKE_UPSCALER (RENDERING_PRINCIPLES.md). Temporal upscalers (FSR 2+) not done | ✅ local |
 | ENG-F15 | Lighting | Light probes with baking | ⬜ |
 | ENG-F16 | Lighting | Contact shadows: a screen-space march towards the sun after each frame, read reprojected by the lit shaders; on by default, any GPU (RENDERING_PRINCIPLES.md) | ✅ local |
 | ENG-F17 | Lighting | Light portals | ⬜ |

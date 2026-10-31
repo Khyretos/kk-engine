@@ -176,6 +176,7 @@ set(ENGINE_SOURCES
     src/ClusteredLights.cpp
     src/ShadowRays.cpp
     src/ContactShadows.cpp
+    src/Upscale.cpp
     src/Taa.cpp
     src/VolumetricFog.cpp
     src/BehindPass.cpp

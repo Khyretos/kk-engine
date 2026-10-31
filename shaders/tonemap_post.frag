@@ -7,6 +7,8 @@
 // filters it up), applies exposure, the curve and the look once per pixel,
 // and writes display-linear colour that the sRGB swapchain encodes, or on
 // a UNORM (10-bit) swapchain the sRGB-encoded colour itself (tone.z).
+// Below render scale 1 the scene light is upscaled FSR 1-style first
+// (ENG-F14, upscale_fsr1.glsl) unless the upscaler is set to bilinear.
 // Per pixel, spatial only: no dithering, nothing temporal
 // (docs/RENDERING_PRINCIPLES.md §7).
 
@@ -24,7 +26,10 @@ layout(push_constant) uniform Post {
     vec4 colorRow0;  // docs/ACCESSIBILITY.md: the colour-blind correction's rows (kke::Accessibility::colorMatrixRows);
     vec4 colorRow1;  // colorRow0.w = 1 when it is on
     vec4 colorRow2;
+    vec4 upscale;    // x = 1: FSR 1-style upscaling (ENG-F14, render scale below 1), y = sharpness in stops (0 = most)
 } post;
+
+#include "upscale_fsr1.glsl"
 
 layout(location = 0) in vec2 inUv;
 layout(location = 0) out vec4 outColor;
@@ -54,7 +59,7 @@ vec3 lutApply(vec3 c, int size) {
 }
 
 void main() {
-    vec3 light = texture(uScene, inUv).rgb;
+    vec3 light = post.upscale.x > 0.5 ? fsrUpscale(inUv, post.upscale.y) : texture(uScene, inUv).rgb;
     if (post.tone.w > 0.0) light = mix(light, texture(uBloom, inUv).rgb, post.tone.w);
     vec3 c = toneMapLook(light, post.tone, post.lookSlope, post.lookOffset, post.lookPower);
     int lutSize = int(post.lookPower.a + 0.5);

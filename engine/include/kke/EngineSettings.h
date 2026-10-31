@@ -57,6 +57,10 @@ struct EngineSettings {
         std::string shadowRays = "off";
         // Contact shadows (kke/ContactShadows.h): short sun shadows where things touch.
         bool contactShadows = true;
+        // How a scene drawn below render scale 1 reaches the screen (ENG-F14):
+        // "fsr1" (edge-adaptive and sharpened) or "bilinear"; sharpness 0 (most) to 2 (none).
+        std::string upscaler = "fsr1";
+        float upscaleSharpness = 0.2f;
         float brightness = 1.0f;       // multiplies ambient light
         float uiScale = 1.0f;          // see UiModule::setUiScale()
         bool showDebugOverlay = false; // the ImGui developer panels (F1 in the showcase)

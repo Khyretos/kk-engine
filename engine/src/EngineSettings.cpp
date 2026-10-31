@@ -37,6 +37,8 @@ void EngineSettings::sanitize() {
     if (graphics.frameRateLimit > 0.0f && graphics.frameRateLimit < 15.0f) graphics.frameRateLimit = 15.0f;
     graphics.fieldOfView = std::clamp(graphics.fieldOfView, 30.0f, 120.0f);
     graphics.brightness = std::clamp(graphics.brightness, 0.0f, 3.0f);
+    if (graphics.upscaler != "fsr1" && graphics.upscaler != "bilinear") graphics.upscaler = "fsr1";
+    graphics.upscaleSharpness = std::clamp(graphics.upscaleSharpness, 0.0f, 2.0f);
     graphics.uiScale = std::clamp(graphics.uiScale, 0.5f, 2.5f);
     graphics.lodBias = std::clamp(graphics.lodBias, 0.25f, 4.0f);
     graphics.msaa = graphics.msaa >= 8 ? 8 : graphics.msaa >= 4 ? 4 : graphics.msaa >= 2 ? 2 : 1;
@@ -67,7 +69,7 @@ bool EngineSettings::operator==(const EngineSettings& o) const {
            graphics.frameRateLimit == o.graphics.frameRateLimit && graphics.fieldOfView == o.graphics.fieldOfView &&
            graphics.shadows == o.graphics.shadows && graphics.shadowResolution == o.graphics.shadowResolution && graphics.msaa == o.graphics.msaa &&
            graphics.globalIllumination == o.graphics.globalIllumination && graphics.reflections == o.graphics.reflections &&
-           graphics.volumetricFog == o.graphics.volumetricFog && graphics.smaa == o.graphics.smaa && graphics.taa == o.graphics.taa && graphics.bloom == o.graphics.bloom && graphics.depthOfField == o.graphics.depthOfField && graphics.motionBlur == o.graphics.motionBlur && graphics.occlusionCulling == o.graphics.occlusionCulling && graphics.autoLod == o.graphics.autoLod && graphics.lodBias == o.graphics.lodBias && graphics.shadowRays == o.graphics.shadowRays && graphics.contactShadows == o.graphics.contactShadows && graphics.brightness == o.graphics.brightness &&
+           graphics.volumetricFog == o.graphics.volumetricFog && graphics.smaa == o.graphics.smaa && graphics.taa == o.graphics.taa && graphics.bloom == o.graphics.bloom && graphics.depthOfField == o.graphics.depthOfField && graphics.motionBlur == o.graphics.motionBlur && graphics.occlusionCulling == o.graphics.occlusionCulling && graphics.autoLod == o.graphics.autoLod && graphics.lodBias == o.graphics.lodBias && graphics.shadowRays == o.graphics.shadowRays && graphics.contactShadows == o.graphics.contactShadows && graphics.upscaler == o.graphics.upscaler && graphics.upscaleSharpness == o.graphics.upscaleSharpness && graphics.brightness == o.graphics.brightness &&
            graphics.uiScale == o.graphics.uiScale && graphics.showDebugOverlay == o.graphics.showDebugOverlay &&
            audio.master == o.audio.master && audio.music == o.audio.music && audio.effects == o.audio.effects &&
            audio.muteWhenUnfocused == o.audio.muteWhenUnfocused &&
@@ -92,7 +94,7 @@ std::string settingsToJson(const EngineSettings& s) {
     j["graphics"] = {
         {"fullscreen", s.graphics.fullscreen}, {"vsync", s.graphics.vsync},
         {"frameRateLimit", s.graphics.frameRateLimit}, {"fieldOfView", s.graphics.fieldOfView},
-        {"autoLod", s.graphics.autoLod}, {"lodBias", s.graphics.lodBias}, {"shadows", s.graphics.shadows}, {"shadowResolution", s.graphics.shadowResolution}, {"msaa", s.graphics.msaa}, {"globalIllumination", s.graphics.globalIllumination}, {"reflections", s.graphics.reflections}, {"volumetricFog", s.graphics.volumetricFog}, {"smaa", s.graphics.smaa}, {"taa", s.graphics.taa}, {"bloom", s.graphics.bloom}, {"depthOfField", s.graphics.depthOfField}, {"motionBlur", s.graphics.motionBlur}, {"occlusionCulling", s.graphics.occlusionCulling}, {"shadowRays", s.graphics.shadowRays}, {"contactShadows", s.graphics.contactShadows}, {"brightness", s.graphics.brightness},
+        {"autoLod", s.graphics.autoLod}, {"lodBias", s.graphics.lodBias}, {"shadows", s.graphics.shadows}, {"shadowResolution", s.graphics.shadowResolution}, {"msaa", s.graphics.msaa}, {"globalIllumination", s.graphics.globalIllumination}, {"reflections", s.graphics.reflections}, {"volumetricFog", s.graphics.volumetricFog}, {"smaa", s.graphics.smaa}, {"taa", s.graphics.taa}, {"bloom", s.graphics.bloom}, {"depthOfField", s.graphics.depthOfField}, {"motionBlur", s.graphics.motionBlur}, {"occlusionCulling", s.graphics.occlusionCulling}, {"shadowRays", s.graphics.shadowRays}, {"contactShadows", s.graphics.contactShadows}, {"upscaler", s.graphics.upscaler}, {"upscaleSharpness", s.graphics.upscaleSharpness}, {"brightness", s.graphics.brightness},
         {"uiScale", s.graphics.uiScale}, {"showDebugOverlay", s.graphics.showDebugOverlay},
     };
     j["audio"] = {
@@ -153,6 +155,8 @@ EngineSettings settingsFromJson(const std::string& text, const EngineSettings& d
     readIfPresent(g, "lodBias", s.graphics.lodBias);
     readIfPresent(g, "shadowRays", s.graphics.shadowRays);
     readIfPresent(g, "contactShadows", s.graphics.contactShadows);
+    readIfPresent(g, "upscaler", s.graphics.upscaler);
+    readIfPresent(g, "upscaleSharpness", s.graphics.upscaleSharpness);
     readIfPresent(g, "brightness", s.graphics.brightness);
     readIfPresent(g, "uiScale", s.graphics.uiScale);
     readIfPresent(g, "showDebugOverlay", s.graphics.showDebugOverlay);

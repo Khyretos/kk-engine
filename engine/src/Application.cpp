@@ -221,6 +221,10 @@ Application::Application(const std::string& title, uint32_t width, uint32_t heig
     } else {
         updateSceneDepthReadable(); // on by default: the march reads the depth
     }
+    if (const char* env = dev::env("KKE_UPSCALER"); env && *env) {
+        m_upscalerEnv = env;
+        setUpscaler(env, 0.2f);
+    }
     if (const char* env = dev::env("KKE_BLOOM"); env && *env) {
         m_bloomEnv = env[0] == '1';
         setBloom(*m_bloomEnv);
@@ -1720,6 +1724,11 @@ void Application::setContactShadows(bool on) {
     m_contactShadowsOn = m_contactShadowsEnv ? *m_contactShadowsEnv : on;
     updateSceneDepthReadable();
     if (!m_contactShadowsOn && m_contactShadowPass) m_contactShadowPass->invalidate();
+}
+
+void Application::setUpscaler(const std::string& name, float sharpness) {
+    const std::string& use = m_upscalerEnv.empty() ? name : m_upscalerEnv;
+    m_renderer->setUpscaler(use == "bilinear" ? Renderer::Upscaler::Bilinear : Renderer::Upscaler::Fsr1, std::clamp(sharpness, 0.0f, 2.0f));
 }
 
 void Application::setBloom(bool on) { m_renderer->setBloom(m_bloomEnv ? *m_bloomEnv : on); }

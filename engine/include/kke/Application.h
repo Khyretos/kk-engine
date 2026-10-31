@@ -377,6 +377,9 @@ public:
     // the frame's depth where things touch; any GPU, one view. On by default:
     // the graphics setting "contactShadows" or KKE_CONTACT_SHADOWS=0/1.
     void setContactShadows(bool on);
+    // ENG-F14: "fsr1" (default) or "bilinear" below render scale 1, sharpness
+    // 0 (most) to 2 (none). KKE_UPSCALER=fsr1|bilinear wins.
+    void setUpscaler(const std::string& name, float sharpness);
     bool contactShadows() const { return m_contactShadowsOn; }
     ContactShadowSettings& contactShadowSettings() { return m_contactShadowSettings; }
     TaaSettings& taaSettings() { return m_taaSettings; }
@@ -594,6 +597,7 @@ private:
     std::unique_ptr<ContactShadowPass> m_contactShadowPass; // made the first frame contact shadows are on
     bool m_contactShadowsOn = true;
     std::optional<bool> m_contactShadowsEnv; // KKE_CONTACT_SHADOWS
+    std::string m_upscalerEnv;               // KKE_UPSCALER
     ContactShadowSettings m_contactShadowSettings;
     std::unique_ptr<ClusterLightPass> m_clusterLights; // made the first time there are many lights (ENG-F08)
     // Decals (ENG-F12): every one placed, their textures, their per-cell lists and per frame their records.

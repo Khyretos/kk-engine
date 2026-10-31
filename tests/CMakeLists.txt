@@ -80,6 +80,7 @@ add_executable(kke_tests
     test_bench_recorder.cpp
     test_test_harness.cpp
     test_contact_shadows.cpp
+    test_upscale.cpp
     test_cooked_file.cpp
     test_viewports.cpp
     test_lobby.cpp

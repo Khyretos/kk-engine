@@ -811,12 +811,13 @@ void Renderer::destroyPostPass() {
 
 namespace {
 // shaders/tonemap_post.frag's push constants: the curve and look, then the
-// colour-blind correction's rows. 112 bytes: inside the 128 Vulkan promises.
+// colour-blind correction's rows, then the upscaler (ENG-F14). 128 bytes: all Vulkan promises.
 struct PostPush {
     PostParams post;
     glm::vec4 colorRow0, colorRow1, colorRow2;
+    glm::vec4 upscale; // x = 1: FSR 1-style, y = sharpness (stops)
 };
-static_assert(sizeof(PostPush) == 112, "the tone-map pass's push constants");
+static_assert(sizeof(PostPush) == 128, "the tone-map pass's push constants");
 } // namespace
 
 // One full-screen triangle: this frame's scene image through the tone
@@ -860,7 +861,8 @@ void Renderer::drawPostPass(VkCommandBuffer cmd) {
     post.tone.w = m_bloomSource && m_bloom ? m_bloom->settings().strength : 0.0f;
     post.lookPower.a = m_lutTexture ? static_cast<float>(m_lutTexture->size()) : 0.0f;
     post.tone.z = m_swapChain->encodesSrgb() ? 0.0f : 1.0f; // a UNORM (10-bit) swapchain: the shader encodes sRGB
-    PostPush push{ post, m_colorRows[0], m_colorRows[1], m_colorRows[2] };
+    const bool fsr = m_upscaler == Upscaler::Fsr1 && scaled();
+    PostPush push{ post, m_colorRows[0], m_colorRows[1], m_colorRows[2], glm::vec4(fsr ? 1.0f : 0.0f, m_upscaleSharpness, 0.0f, 0.0f) };
     vkCmdPushConstants(cmd, m_postPipeline->layout(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PostPush), &push);
     vkCmdDraw(cmd, 3, 1, 0, 0);
 }
