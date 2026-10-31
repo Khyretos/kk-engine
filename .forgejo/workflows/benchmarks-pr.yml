@@ -79,7 +79,7 @@ env:
 
 jobs:
   benchmarks:
-    runs-on: ubuntu-latest
+    runs-on: linux-big
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     timeout-minutes: 60

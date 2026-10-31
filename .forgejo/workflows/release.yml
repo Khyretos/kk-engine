@@ -104,7 +104,7 @@ env:
 
 jobs:
   linux:
-    runs-on: ubuntu-latest
+    runs-on: linux-big
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
@@ -189,7 +189,7 @@ jobs:
           if-no-files-found: error
 
   windows:
-    runs-on: ubuntu-latest
+    runs-on: linux-big
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
@@ -247,7 +247,7 @@ jobs:
   # (docs/ANDROID.md), signed with the
   # project key when the repository has it (ANDROID_KEYSTORE_* secrets).
   android:
-    runs-on: ubuntu-latest
+    runs-on: linux-big
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:

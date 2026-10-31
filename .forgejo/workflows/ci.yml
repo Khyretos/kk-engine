@@ -113,6 +113,9 @@ jobs:
   # (ubuntu-latest); the tests draw on lavapipe, so none needs a GPU. Kees picks
   # which PCs take shared jobs on the CI queue page. Only main's benchmarks (one
   # machine, comparable numbers) and the VM tests (KVM) stay on soucouyant.
+  # The heavy C++ builds (Kees, 2026-10-31) go to linux-big, the workers with
+  # room for them (kireserver, soucouyant): on the 3-CPU WSL VM the coverage
+  # job took 95 minutes against 39 on soucouyant.
   #
   # Every third-party library, tool, image, font and action must be listed,
   # with its licence, in docs/DEPENDENCIES.md: this fails when one is added
@@ -147,7 +150,7 @@ jobs:
   # warnings and its tests passing (DevTools.* checks the debug switches
   # really are ignored).
   shipping-build:
-    runs-on: ubuntu-latest
+    runs-on: linux-big
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
@@ -176,7 +179,7 @@ jobs:
         run: ./build-ship/bin/kke_tests
 
   build-test-and-coverage:
-    runs-on: ubuntu-latest
+    runs-on: linux-big
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
@@ -380,7 +383,7 @@ jobs:
   # configure or build log, whoever's code it is in. The Release workflow
   # (release.yml) packages this same configuration.
   release-build:
-    runs-on: ubuntu-latest
+    runs-on: linux-big
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
@@ -419,7 +422,7 @@ jobs:
   # GCC in places) and packed into the demos APK, with zero warnings. The
   # APK is kept as a run artifact for trying on a phone (docs/ANDROID.md).
   android:
-    runs-on: ubuntu-latest
+    runs-on: linux-big
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     steps:
