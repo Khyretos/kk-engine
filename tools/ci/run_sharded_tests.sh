@@ -15,7 +15,10 @@
 # it fails, otherwise only its summary.
 set -uo pipefail
 
-[ $# -ge 2 ] || { echo "usage: $0 <test binary> <shards> [gtest args...]" >&2; exit 2; }
+[ $# -ge 2 ] || {
+	echo "usage: $0 <test binary> <shards> [gtest args...]" >&2
+	exit 2
+}
 bin=$(realpath "$1")
 shards=$2
 shift 2
@@ -30,33 +33,33 @@ trap 'rm -rf "$work"' EXIT
 
 pids=()
 for ((i = 0; i < shards; i++)); do
-  dir="$work/shard$i"
-  mkdir -p "$dir/tmp" "$dir/home"
-  GTEST_TOTAL_SHARDS=$shards GTEST_SHARD_INDEX=$i TMPDIR="$dir/tmp" HOME="$dir/home" \
-    "$bin" "$@" > "$dir/log" 2>&1 &
-  pids+=($!)
+	dir="$work/shard$i"
+	mkdir -p "$dir/tmp" "$dir/home"
+	GTEST_TOTAL_SHARDS=$shards GTEST_SHARD_INDEX=$i TMPDIR="$dir/tmp" HOME="$dir/home" \
+		"$bin" "$@" >"$dir/log" 2>&1 &
+	pids+=($!)
 done
 
 failed=0
 ran=0
 for ((i = 0; i < shards; i++)); do
-  wait "${pids[$i]}"
-  code=$?
-  log="$work/shard$i/log"
-  n=$(grep -oP '^\[==========\] \K\d+(?= tests? from .* ran\.)' "$log" || echo 0)
-  ran=$((ran + n))
-  if [ "$code" -ne 0 ]; then
-    echo "== shard $i/$shards: FAILED (exit $code)"
-    cat "$log"
-    failed=1
-  else
-    echo "== shard $i/$shards: $n tests, $(grep -E '^\[  PASSED  \]' "$log")"
-  fi
+	wait "${pids[$i]}"
+	code=$?
+	log="$work/shard$i/log"
+	n=$(grep -oP '^\[==========\] \K\d+(?= tests? from .* ran\.)' "$log" || echo 0)
+	ran=$((ran + n))
+	if [ "$code" -ne 0 ]; then
+		echo "== shard $i/$shards: FAILED (exit $code)"
+		cat "$log"
+		failed=1
+	else
+		echo "== shard $i/$shards: $n tests, $(grep -E '^\[  PASSED  \]' "$log")"
+	fi
 done
 
 echo "$ran of $expected tests ran in $shards shards"
 if [ "$ran" -ne "$expected" ]; then
-  echo "::error title=Sharded tests::$ran tests ran, the binary lists $expected"
-  failed=1
+	echo "::error title=Sharded tests::$ran tests ran, the binary lists $expected"
+	failed=1
 fi
 exit $failed
