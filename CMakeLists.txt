@@ -412,7 +412,7 @@ set_target_properties(meshoptimizer PROPERTIES POSITION_INDEPENDENT_CODE ON)
 FetchContent_Declare(
     miniaudio
     GIT_REPOSITORY https://github.com/mackron/miniaudio.git
-    GIT_TAG        0.11.22
+    GIT_TAG        0.11.26
     GIT_SHALLOW    TRUE
     SOURCE_SUBDIR  kke-no-cmake # fetch only: its own CMakeLists builds examples/tests we don't want
 )
