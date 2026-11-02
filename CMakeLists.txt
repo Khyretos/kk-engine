@@ -319,7 +319,7 @@ FetchContent_MakeAvailable(spdlog)
 FetchContent_Declare(
     ufbx
     GIT_REPOSITORY https://github.com/ufbx/ufbx.git
-    GIT_TAG        v0.23.0
+    GIT_TAG        v0.23.1
     GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(ufbx)
