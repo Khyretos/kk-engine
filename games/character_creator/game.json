@@ -5,5 +5,12 @@
   "version": "0.1.0",
   "tags": ["demo", "character", "creator", "makehuman"],
   "engine_version": "0.3",
-  "modules": ["Input", "Models", "UI", "OrbitCamera", "CharacterCreator", "Stats"]
+  "modules": [
+    "Input",
+    "Models",
+    "UI",
+    "OrbitCamera",
+    "CharacterCreator",
+    "Stats"
+  ]
 }
