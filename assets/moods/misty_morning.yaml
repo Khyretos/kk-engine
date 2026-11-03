@@ -2,7 +2,7 @@
 title: Misty morning
 description: Thick ground fog that thins with height, a pale sun.
 sky:
-  image: misty_morning      # Poly Haven "Kloofendal Misty Morning (Pure Sky)", CC0
+  image: misty_morning # Poly Haven "Kloofendal Misty Morning (Pure Sky)", CC0
   ambientStrength: 0.5
 sun:
   azimuth: 115

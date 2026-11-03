@@ -2,7 +2,7 @@
 title: Golden hour
 description: Low, warm sun, long shadows, a soft golden haze.
 sky:
-  image: late_afternoon     # Poly Haven "Qwantani Late Afternoon (Pure Sky)", CC0
+  image: late_afternoon # Poly Haven "Qwantani Late Afternoon (Pure Sky)", CC0
   ambientStrength: 0.3
 sun:
   azimuth: 140

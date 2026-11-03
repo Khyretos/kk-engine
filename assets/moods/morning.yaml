@@ -2,9 +2,9 @@
 title: Morning
 description: Low sun, clean pale sky, cool shadows.
 sky:
-  image: morning            # Poly Haven "Qwantani Mid Morning (Pure Sky)", CC0
+  image: morning # Poly Haven "Qwantani Mid Morning (Pure Sky)", CC0
   ambientStrength: 0.32
-  ambientSaturation: 0.4    # a pale sky: keep the shadows from turning teal
+  ambientSaturation: 0.4 # a pale sky: keep the shadows from turning teal
 sun:
   azimuth: 110
   intensity: 2.5

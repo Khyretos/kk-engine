@@ -2,7 +2,7 @@
 title: Cinematic
 description: Warm low sun, teal shadows and orange light, as in the films.
 sky:
-  image: late_afternoon     # Poly Haven "Qwantani Late Afternoon (Pure Sky)", CC0
+  image: late_afternoon # Poly Haven "Qwantani Late Afternoon (Pure Sky)", CC0
   ambientStrength: 0.3
 sun:
   azimuth: 140
