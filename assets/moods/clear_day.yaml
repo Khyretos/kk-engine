@@ -2,7 +2,7 @@
 title: Clear day
 description: Bright sun, blue sky with puffy clouds, a little haze far away.
 sky:
-  image: clear_day          # Poly Haven "Kloofendal 48d Partly Cloudy (Pure Sky)", CC0
+  image: clear_day # Poly Haven "Kloofendal 48d Partly Cloudy (Pure Sky)", CC0
   ambientStrength: 0.3
 sun:
   azimuth: 135

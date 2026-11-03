@@ -18,7 +18,7 @@ name: Release
 
 on:
   push:
-    tags: ['v*']
+    tags: ["v*"]
   workflow_dispatch:
     inputs:
       version:
@@ -233,7 +233,7 @@ jobs:
           Get-Content ($results[0].FullName -replace '\.json$', '.txt')
           $global:LASTEXITCODE = 0
       - name: Unit tests on Windows
-        timeout-minutes: 10  # a hang must fail the run, not hold it for 6 hours
+        timeout-minutes: 10 # a hang must fail the run, not hold it for 6 hours
         shell: pwsh
         run: |
           Set-Location $env:PKG_DIR
