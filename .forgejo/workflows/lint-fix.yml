@@ -11,7 +11,7 @@ enable-email-notifications: true
 on:
   workflow_dispatch:
   schedule:
-    - cron: "30 2 * * *"   # nightly 02:30
+    - cron: "30 2 * * *" # nightly 02:30
 
 jobs:
   fix:

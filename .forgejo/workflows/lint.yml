@@ -31,10 +31,10 @@ jobs:
           EXTENDS: ${{ github.server_url }}/khyretos/kompas-ci/raw/branch/main/mega-linter.base.yml
           CONFIG_PROPERTIES_TO_APPEND: DISABLE_LINTERS
           APPLY_FIXES: none
-          DISABLE_ERRORS: "true"    # report only; set to "false" to fail the check on errors
+          DISABLE_ERRORS: "true" # report only; set to "false" to fail the check on errors
           SHOW_ELAPSED_TIME: "true"
           FILEIO_REPORTER: "false"
-          JSON_REPORTER: "true"          # read by the summary step
+          JSON_REPORTER: "true" # read by the summary step
           MARKDOWN_SUMMARY_REPORTER: "false"
         run: /entrypoint.sh
       - name: Post a readable summary on the PR (updates its own earlier comment)

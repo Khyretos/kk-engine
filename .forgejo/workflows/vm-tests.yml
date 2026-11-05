@@ -99,7 +99,7 @@ env:
   GIT_CONFIG_KEY_25: url.https://git.kreative-kompas.com/khyretos/mirror-wayland.git.insteadOf
   GIT_CONFIG_VALUE_25: https://gitlab.freedesktop.org/wayland/wayland.git
   KKE_VM_DIR: /srv/kke-vm
-  KKE_VM_CPUS: "8"       # of 16 threads; the job's own build is done by then
+  KKE_VM_CPUS: "8" # of 16 threads; the job's own build is done by then
   KKE_VM_MEM_MB: "8192"
   VERSION: vm-test
 
