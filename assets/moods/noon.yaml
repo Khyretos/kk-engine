@@ -2,7 +2,7 @@
 title: Noon
 description: The sun almost straight up, a deep blue sky.
 sky:
-  image: noon               # Poly Haven "Qwantani Noon (Pure Sky)", CC0
+  image: noon # Poly Haven "Qwantani Noon (Pure Sky)", CC0
   ambientStrength: 0.28
 sun:
   azimuth: 150

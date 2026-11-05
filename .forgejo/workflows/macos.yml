@@ -68,7 +68,7 @@ env:
   GIT_CONFIG_VALUE_24: https://github.com/zeux/volk.git
   GIT_CONFIG_KEY_25: url.https://git.kreative-kompas.com/khyretos/mirror-wayland.git.insteadOf
   GIT_CONFIG_VALUE_25: https://gitlab.freedesktop.org/wayland/wayland.git
-  KKE_JOBS: "4"   # 2 cores, 4 threads, 8 GB RAM
+  KKE_JOBS: "4" # 2 cores, 4 threads, 8 GB RAM
   VERSION: macos-test
 
 jobs:

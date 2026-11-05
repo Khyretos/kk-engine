@@ -32,7 +32,7 @@ jobs:
           path: build/bin
 
   macos:
-    runs-on: macos-latest   # Apple Silicon: FEMFX (x86 AVX) is off until its SIMDe port
+    runs-on: macos-latest # Apple Silicon: FEMFX (x86 AVX) is off until its SIMDe port
     steps:
       - uses: actions/checkout@v4
       - name: Tools
