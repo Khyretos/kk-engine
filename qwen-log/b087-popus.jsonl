@@ -1,0 +1,2 @@
+{"name": "b087-popus", "out": "cmake/patch_opus.cmake", "gpu_seconds": 26.5, "tokens": 1340, "prompt_tokens": 6146, "skills": ["work-habits", "shared/SKILL", "worker/cpp-games/SKILL", "_model-notes/qwen3/SKILL"], "lines": 49, "model": "qwen3.5:9b-q8_0-64k", "at": "2026-10-13T14:57:47"}
+{"name": "b087-popus", "out": "cmake/patch_opus.cmake", "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_b087.py popus", "check_attempts": 1, "check_passed": true, "at": "2026-10-13T14:57:48"}

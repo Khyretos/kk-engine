@@ -1,0 +1,17 @@
+[
+  {
+    "mode": "patch",
+    "focus": [
+      "^class\\ SkyRenderer;$",
+      "^\\ \\ \\ \\ ReflectionSettings\\ m_reflectionSettings;$"
+    ],
+    "name": "f02c-applicatio1",
+    "role": "worker/cpp-games",
+    "out": "engine/include/kke/Application.h",
+    "prompt": "Kreative Kompas Engine (C++20, Vulkan, forward renderer): ENG-F02 part 4 adds refraction: with reflections on, the 3D pass pauses before the see-through surfaces, a compute pass (kke::BehindPass) copies the scene drawn so far with each pixel's distance from the camera, and drawTranslucent's first pass reads that copy where the refracted ray leads (translucent_refract.frag).  Make these 2 edits in engine/include/kke/Application.h, each its own SEARCH/REPLACE block.\nEdit 1. Your SEARCH block is exactly these lines:\n```\nclass SkyRenderer;\nclass ScreenGiPass;\nclass ReflectionPass;\nclass DynamicMeshRenderer;\nstruct Mood;\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\nclass SkyRenderer;\nclass ScreenGiPass;\nclass ReflectionPass;\nclass BehindPass;\nclass DynamicMeshRenderer;\nstruct Mood;\n```\nEdit 2. Your SEARCH block is exactly these lines:\n```\n    ReflectionSettings m_reflectionSettings;\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n    // Refraction (ENG-F02 part 4): on with reflections (one view), unless\n    // KKE_REFRACTIONS=0. The scene before the see-through surfaces.\n    std::unique_ptr<BehindPass> m_behindPass;\n    bool m_refractionsOff = false;\n    ReflectionSettings m_reflectionSettings;\n```\nChange nothing else; do not copy or move any other line.\n",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g09.py f02capplicatio1",
+    "precheck": false,
+    "context": [],
+    "max_tokens": 865
+  }
+]

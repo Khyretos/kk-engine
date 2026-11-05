@@ -1,0 +1,2 @@
+{"name": "mac-wf", "out": ".forgejo/workflows/macos.yml", "gpu_seconds": 34.3, "tokens": 1885, "prompt_tokens": 7912, "skills": ["work-habits", "shared/SKILL", "worker/cpp-games/SKILL", "_model-notes/qwen3/SKILL", "shared/processes"], "lines": 93, "model": "qwen3.5:9b-q8_0-64k", "at": "2026-10-13T14:53:27"}
+{"name": "mac-wf", "out": ".forgejo/workflows/macos.yml", "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_mac.py wf", "check_attempts": 1, "check_passed": true, "at": "2026-10-13T14:53:27"}

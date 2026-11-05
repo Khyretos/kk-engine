@@ -1,0 +1,17 @@
+[
+  {
+    "name": "g04-lbs",
+    "role": "worker/cpp-games",
+    "mode": "patch",
+    "out": "engine/src/LightingBuffer.cpp",
+    "prompt": "ENG-G04 point-light shadows. Until now only the directional key light (lights[0]) casts shadows, through cascaded shadow maps (class kke::ShadowMap). Now each point light that casts shadows gets a cube of 6 faces around it (+X, -X, +Y, -Y, +Z, -Z), each a perspective view a little wider than 90 degrees, drawn into its own tile of a second ShadowMap (the point map): tile = light * ShadowMap::kPointFaces + face. C++20, glm, Vulkan (depth 0..1, clip-space Y flipped by proj[1][1] *= -1.0f like computeLightViewProj). struct LightingUBOData mirrors shaders/lighting_ubo.glsl byte for byte; the GLSL block just gained three members at its end: `vec4 pointShadowOn; mat4 pointShadowViewProj[24]; vec4 pointShadowTiles[24];`. Two edits, nothing else:\n1. Your SEARCH block is exactly these lines:\n```\n    glm::vec4 cascadeScaleOffset[ShadowMap::kCascades]; // cascade c's clip xy = the far cascade's xy * (x, y) + (z, w)\n```\nand your REPLACE block is those same lines followed by the new lines. Change nothing else; do not copy or move any other line.\nThe three new members, each with a short `//` comment at the end of its line:\n`    glm::vec4 pointShadowOn;` / `    glm::mat4 pointShadowViewProj[ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces];` / `    glm::vec4 pointShadowTiles[ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces];`\n2. The static_assert line below the struct: add `+ 16 + ShadowMap::kMaxPointShadows * ShadowMap::kPointFaces * (64 + 16)` to the right-hand side of the `==` (before `, \"must match shaders/lighting_ubo.glsl\"`), and directly after that static_assert line add the line\n`static_assert(ShadowMap::kMaxPointShadows == Lighting::kMaxLights, \"one point map slot per light\");`",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g04.py lbs",
+    "precheck": false,
+    "context": [],
+    "max_tokens": 2500,
+    "focus": [
+      "glm::vec4 cascadeScaleOffset\\[ShadowMap::kCascades\\];",
+      "^static_assert\\(sizeof\\(LightingUBOData\\)"
+    ]
+  }
+]

@@ -1,0 +1,2 @@
+{"name": "b087-psql", "out": "cmake/patch_sqlite.cmake", "gpu_seconds": 20.3, "tokens": 1023, "prompt_tokens": 5907, "skills": ["work-habits", "shared/SKILL", "worker/cpp-games/SKILL", "_model-notes/qwen3/SKILL"], "lines": 32, "model": "qwen3.5:9b-q8_0-64k", "at": "2026-10-13T14:58:08"}
+{"name": "b087-psql", "out": "cmake/patch_sqlite.cmake", "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_b087.py psql", "check_attempts": 1, "check_passed": true, "at": "2026-10-13T14:58:26"}

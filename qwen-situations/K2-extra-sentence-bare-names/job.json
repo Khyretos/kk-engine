@@ -1,0 +1,12 @@
+[
+  {
+    "name": "b068-bugs",
+    "role": "worker/docs",
+    "mode": "patch",
+    "out": "BUGS.md",
+    "focus": ["BUG-068", "BUG-066"],
+    "prompt": "The bug is fixed: SM_Prop_Barrel_01 is now only in the barrel block (engine/src/PlayBlocks.cpp), so blockOf() returns barrel for it and Barrel recipes fire. The test PlayBlocks.EveryMeshBelongsToOneBlock checks that no mesh is in two blocks.\nIn BUGS.md, the BUG-068 row has 4 cells: ID, Area, Symptom, Status. Change ONLY its Status cell (the last one) to 'Fixed 2026-10-12: ' followed by one sentence on the fix, naming engine/src/PlayBlocks.cpp and the test PlayBlocks.EveryMeshBelongsToOneBlock. Follow the style of BUG-066's 'Fixed 2026-09-27: ...' cell. Keep the row on one line.",
+    "check": "python3 /tmp/claude-1000/-media-development/689ef2e5-dd4c-4322-9e2b-ee59fe58d080/scratchpad/jobs/chk_b068doc.py",
+    "precheck": false
+  }
+]
