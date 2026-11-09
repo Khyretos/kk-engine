@@ -48,7 +48,7 @@ jobs:
   linux:
     runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Install system dependencies
         run: |
@@ -134,7 +134,7 @@ jobs:
     outputs:
       source_dir: ${{ steps.src.outputs.dir }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       # Tests read data files from the source tree by the absolute path
       # they were compiled with (KKE_SOURCE_DIR); windows-test recreates it.
@@ -182,7 +182,7 @@ jobs:
     needs: windows
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       # Some tests read files from the source tree (shaders, scenes, fonts)
       # at the Linux build machine's absolute path, which Windows resolves
       # on the current drive: link that path to this checkout.
@@ -246,7 +246,7 @@ jobs:
   android:
     runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Android NDK r28c and SDK packages
         run: |

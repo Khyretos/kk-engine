@@ -112,7 +112,7 @@ jobs:
       image: git.kreative-kompas.com/khyretos/kke-vm:1
       options: --device /dev/kvm --volume /srv/kke-vm:/srv/kke-vm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Restore the compile cache (mingw-release)
         uses: https://code.forgejo.org/actions/cache@v4
@@ -179,7 +179,7 @@ jobs:
       image: git.kreative-kompas.com/khyretos/kke-vm:1
       options: --device /dev/kvm --volume /srv/kke-vm:/srv/kke-vm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Restore the compile cache (android-x86_64)
         uses: https://code.forgejo.org/actions/cache@v4

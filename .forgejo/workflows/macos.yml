@@ -76,7 +76,7 @@ jobs:
     runs-on: macos-amd64
     timeout-minutes: 480
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Tools: verify availability before configuring.
       - name: Tools

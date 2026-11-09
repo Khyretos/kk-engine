@@ -108,7 +108,7 @@ jobs:
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:2
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Restore the compile cache (release)
         uses: https://code.forgejo.org/actions/cache@v4
@@ -193,7 +193,7 @@ jobs:
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:2
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Restore the compile cache (mingw-release)
         uses: https://code.forgejo.org/actions/cache@v4
@@ -251,7 +251,7 @@ jobs:
     container:
       image: git.kreative-kompas.com/khyretos/kke-ci:2
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Restore the compile cache (android-arm64)
         uses: https://code.forgejo.org/actions/cache@v4
