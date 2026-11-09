@@ -30,7 +30,7 @@ jobs:
   site:
     runs-on: ubuntu-latest
     container:
-      image: python:3.12-bookworm
+      image: python:3.15-bookworm
     steps:
       - name: Check out (plain git; this image has no Node for actions/checkout)
         run: |
