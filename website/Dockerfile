@@ -16,7 +16,7 @@ ARG SITE_URL=https://engine.kreative-kompas.com/
 RUN hugo --minify --gc --baseURL "${SITE_URL}" -d /out
 
 # --- The docs (the same MkDocs site as GitHub Pages, served at /docs/) ---
-FROM python:3.12-slim AS docs
+FROM python:3.15-slim AS docs
 ENV NO_MKDOCS_2_WARNING=true PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_ROOT_USER_ACTION=ignore
 WORKDIR /src
 COPY tools/docs_site/requirements.txt tools/docs_site/requirements.txt
@@ -31,7 +31,7 @@ ARG SITE_URL=https://engine.kreative-kompas.com/
 RUN KKE_DOCS_SITE_URL="${SITE_URL}docs/" mkdocs build --strict -d /out/docs
 
 # --- Serve (unprivileged nginx on port 8080) ---
-FROM nginxinc/nginx-unprivileged:1.27-alpine
+FROM nginxinc/nginx-unprivileged:1.31-alpine
 COPY website/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=site /out /usr/share/nginx/html
 COPY --from=docs /out/docs /usr/share/nginx/html/docs

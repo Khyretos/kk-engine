@@ -13,7 +13,7 @@
 # it needs no libfuse2 on the player's PC (libfuse 3 is built into it, and it
 # finds fusermount3 or fusermount itself). mksquashfs (squashfs-tools,
 # a build tool here, nothing of it ships) makes the image. docs/DEPENDENCIES.md.
-FROM alpine:3.21
+FROM alpine:3.24
 
 # The runtime's build dependencies (type2-runtime's Dockerfile) plus git,
 # squashfs-tools and desktop-file-utils for the packing step.
