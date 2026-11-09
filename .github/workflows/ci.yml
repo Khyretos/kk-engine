@@ -229,7 +229,7 @@ jobs:
 
       - name: Upload coverage HTML report
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-report
           path: coverage_html/
@@ -317,7 +317,7 @@ jobs:
       - name: No warnings anywhere
         run: tools/ci/check_warnings.sh configure.log build.log apk.log
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: kke-android-arm64
           path: dist/*.apk

@@ -123,7 +123,7 @@ jobs:
           fi
           exit $failed
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: kk-engine-linux
           path: dist/*
@@ -164,7 +164,7 @@ jobs:
       - name: Package
         run: tools/packaging/package.sh --bin build/bin --platform windows --version "$VERSION" --out dist --deps build/_deps --strip x86_64-w64-mingw32-strip
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: kk-engine-windows
           path: dist/*
@@ -172,7 +172,7 @@ jobs:
 
       # The test binary is not part of the package; the next job runs it
       # on real Windows.
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: kke-tests-windows
           path: build/bin/kke_tests.exe
@@ -197,10 +197,10 @@ jobs:
           New-Item -ItemType Junction -Path $link -Target $env:GITHUB_WORKSPACE | Out-Null
           if (-not (Test-Path (Join-Path $link 'shaders'))) { throw "source tree not reachable at $link" }
           Write-Output "source tree linked at $link"
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: kke-tests-windows
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: kk-engine-windows
       # The tests run inside the unpacked package: that is where the DLLs
@@ -286,7 +286,7 @@ jobs:
       - name: No warnings anywhere
         run: tools/ci/check_warnings.sh configure.log build.log apk.log
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: kk-engine-android
           path: dist/*
@@ -299,7 +299,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           pattern: kk-engine-*
           path: dist
