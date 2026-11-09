@@ -14,7 +14,7 @@
   <meta property="og:image" content="{{ "images/banner.webp" | absURL }}">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="preload" href="{{ "fonts/inter-latin-wght.woff2" | relURL }}" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
   {{ $css := resources.Get "css/site.css" | minify | fingerprint }}
   <link rel="stylesheet" href="{{ $css.RelPermalink }}" integrity="{{ $css.Data.Integrity }}">
   <script>
