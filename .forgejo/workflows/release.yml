@@ -106,7 +106,7 @@ jobs:
   linux:
     runs-on: linux-big
     container:
-      image: git.kreative-kompas.com/khyretos/kke-ci:1
+      image: git.kreative-kompas.com/khyretos/kke-ci:2
     steps:
       - uses: actions/checkout@v4
 
@@ -191,7 +191,7 @@ jobs:
   windows:
     runs-on: linux-big
     container:
-      image: git.kreative-kompas.com/khyretos/kke-ci:1
+      image: git.kreative-kompas.com/khyretos/kke-ci:2
     steps:
       - uses: actions/checkout@v4
 
@@ -249,7 +249,7 @@ jobs:
   android:
     runs-on: linux-big
     container:
-      image: git.kreative-kompas.com/khyretos/kke-ci:1
+      image: git.kreative-kompas.com/khyretos/kke-ci:2
     steps:
       - uses: actions/checkout@v4
 

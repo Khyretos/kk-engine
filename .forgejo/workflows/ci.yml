@@ -123,7 +123,7 @@ jobs:
   dependencies:
     runs-on: ubuntu-latest
     container:
-      image: git.kreative-kompas.com/khyretos/kke-ci:1
+      image: git.kreative-kompas.com/khyretos/kke-ci:2
     steps:
       - uses: actions/checkout@v4
       - name: Every dependency is in docs/DEPENDENCIES.md
@@ -139,7 +139,7 @@ jobs:
   std-includes:
     runs-on: ubuntu-latest
     container:
-      image: git.kreative-kompas.com/khyretos/kke-ci:1
+      image: git.kreative-kompas.com/khyretos/kke-ci:2
     steps:
       - uses: actions/checkout@v4
       - name: Every standard name has its header included
@@ -152,7 +152,7 @@ jobs:
   shipping-build:
     runs-on: linux-big
     container:
-      image: git.kreative-kompas.com/khyretos/kke-ci:1
+      image: git.kreative-kompas.com/khyretos/kke-ci:2
     steps:
       - uses: actions/checkout@v4
 
@@ -181,7 +181,7 @@ jobs:
   build-test-and-coverage:
     runs-on: linux-big
     container:
-      image: git.kreative-kompas.com/khyretos/kke-ci:1
+      image: git.kreative-kompas.com/khyretos/kke-ci:2
     steps:
       - uses: actions/checkout@v4
 
@@ -385,7 +385,7 @@ jobs:
   release-build:
     runs-on: linux-big
     container:
-      image: git.kreative-kompas.com/khyretos/kke-ci:1
+      image: git.kreative-kompas.com/khyretos/kke-ci:2
     steps:
       - uses: actions/checkout@v4
 
@@ -424,7 +424,7 @@ jobs:
   android:
     runs-on: linux-big
     container:
-      image: git.kreative-kompas.com/khyretos/kke-ci:1
+      image: git.kreative-kompas.com/khyretos/kke-ci:2
     steps:
       - uses: actions/checkout@v4
 

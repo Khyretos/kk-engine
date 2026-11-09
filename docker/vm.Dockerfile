@@ -9,7 +9,7 @@
 #   docker build -f docker/vm.Dockerfile -t git.kreative-kompas.com/khyretos/kke-vm:<n> .
 #   docker push git.kreative-kompas.com/khyretos/kke-vm:<n>
 # Bump <n> on every change to this file and in vm-tests.yml.
-ARG CI_IMAGE=git.kreative-kompas.com/khyretos/kke-ci:1
+ARG CI_IMAGE=git.kreative-kompas.com/khyretos/kke-ci:2
 FROM ${CI_IMAGE}
 
 ARG DEBIAN_FRONTEND=noninteractive
