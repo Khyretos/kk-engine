@@ -662,7 +662,7 @@ if(KKE_ENABLE_NET AND KKE_ENABLE_VOICE)
     FetchContent_Declare(
         rnnoise
         GIT_REPOSITORY https://github.com/xiph/rnnoise.git
-        GIT_TAG        v0.1.1
+        GIT_TAG        v0.2
         GIT_SHALLOW    TRUE
         SOURCE_SUBDIR  kke-no-cmake
     )
