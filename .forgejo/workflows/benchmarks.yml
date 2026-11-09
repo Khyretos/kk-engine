@@ -95,7 +95,7 @@ jobs:
       image: git.kreative-kompas.com/khyretos/kke-ci:1
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Restore the compile cache (release)
         uses: https://code.forgejo.org/actions/cache@v4

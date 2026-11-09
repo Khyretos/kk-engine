@@ -32,7 +32,7 @@ jobs:
   dependencies:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Every dependency is in docs/DEPENDENCIES.md
         run: python3 -W error tools/ci/check_dependencies.py
       - name: Every game.json lists the modules its game adds
@@ -44,7 +44,7 @@ jobs:
   std-includes:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Every standard name has its header included
         run: python3 -W error tools/ci/check_std_includes.py
 
@@ -55,7 +55,7 @@ jobs:
   shipping-build:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install system dependencies
         run: |
@@ -81,7 +81,7 @@ jobs:
   build-test-and-coverage:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Install system dependencies
         run: |
@@ -242,7 +242,7 @@ jobs:
   release-build:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Install system dependencies
         run: |
@@ -278,7 +278,7 @@ jobs:
   android:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       # r28c: r27c's toolchain files ask for CMake < 3.10, which CMake 4
       # warns about; r29's clang 21 can't compile the fmt inside spdlog 1.14.
