@@ -1,21 +1,15 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "local>khyretos/renovate"
-  ],
+  "extends": ["local>khyretos/renovate"],
   "packageRules": [
     {
       "description": "ImGui 1.92+ changed the Vulkan backend API (ImGui_ImplVulkan_LoadFunctions arguments, InitInfo.RenderPass/MSAASamples moved): engine/src/DebugUi.cpp needs a port. Kees ports it himself (2026-11-09); lift then.",
-      "matchPackageNames": [
-        "ocornut/imgui"
-      ],
+      "matchPackageNames": ["ocornut/imgui"],
       "allowedVersions": "<1.92"
     },
     {
       "description": "rnnoise 0.2 changed its source layout, so the engine's add_library list breaks (CMakeLists.txt:686). Kees ports it himself (2026-11-09); lift then.",
-      "matchPackageNames": [
-        "xiph/rnnoise"
-      ],
+      "matchPackageNames": ["xiph/rnnoise"],
       "allowedVersions": "<0.2"
     }
   ]
