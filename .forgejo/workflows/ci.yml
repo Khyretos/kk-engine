@@ -372,7 +372,7 @@ jobs:
 
       - name: Upload coverage HTML report
         if: always()
-        uses: https://code.forgejo.org/forgejo/upload-artifact@v4
+        uses: https://code.forgejo.org/forgejo/upload-artifact@v5
         with:
           name: coverage-report
           path: coverage_html/
@@ -467,7 +467,7 @@ jobs:
       - name: No warnings anywhere
         run: tools/ci/check_warnings.sh configure.log build.log apk.log
 
-      - uses: https://code.forgejo.org/forgejo/upload-artifact@v4
+      - uses: https://code.forgejo.org/forgejo/upload-artifact@v5
         with:
           name: kke-android-arm64
           path: dist/*.apk
