@@ -1,7 +1,7 @@
 # Benchmark image for the hardware profiles (docs/BENCHMARKS.md). The
 # source tree is mounted at /src, not copied; build once with the "build"
 # service, then run any profile (benchmarks/docker/compose.yml).
-FROM ubuntu:24.04
+FROM ubuntu:26.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
