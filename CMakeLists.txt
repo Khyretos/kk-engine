@@ -90,7 +90,7 @@ if(NOT Vulkan_FOUND)
     FetchContent_Declare(
         vulkan_headers
         GIT_REPOSITORY https://github.com/KhronosGroup/Vulkan-Headers.git
-        GIT_TAG        v1.3.290
+        GIT_TAG        v1.4.368
         GIT_SHALLOW    TRUE
     )
     FetchContent_MakeAvailable(vulkan_headers)
@@ -109,7 +109,7 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/zeux/volk.git
     # 1.4.304: first release whose cmake_minimum_required has a policy
     # range, so CMake 4 doesn't warn "Compatibility with CMake < 3.10".
-    GIT_TAG        vulkan-sdk-1.4.304.0
+    GIT_TAG        vulkan-sdk-1.4.363.0
     GIT_SHALLOW    TRUE
 )
 set(VOLK_STATIC_DEFINES "")
@@ -121,7 +121,7 @@ FetchContent_MakeAvailable(volk)
 FetchContent_Declare(
     vma
     GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
-    GIT_TAG        v3.1.0
+    GIT_TAG        v3.5.0
     GIT_SHALLOW    TRUE
     SYSTEM
 )
@@ -146,7 +146,7 @@ set(SDL_AUDIO OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
     SDL3
     GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
-    GIT_TAG        release-3.4.16
+    GIT_TAG        release-3.4.20
     GIT_SHALLOW    TRUE
 )
 # SDL's Wayland protocol XML needs wayland-scanner 1.26+ (see the file).
@@ -208,7 +208,7 @@ target_include_directories(stb SYSTEM INTERFACE ${stb_SOURCE_DIR})
 FetchContent_Declare(
     imgui
     GIT_REPOSITORY https://github.com/ocornut/imgui.git
-    GIT_TAG        v1.91.6
+    GIT_TAG        v1.93.0
     GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(imgui)
@@ -254,7 +254,7 @@ if(NOT Freetype_FOUND AND NOT FREETYPE_FOUND)
     FetchContent_Declare(
         freetype
         GIT_REPOSITORY https://github.com/freetype/freetype.git
-        GIT_TAG        VER-2-14-3 # 2.14: no CMake < 3.10 deprecation warning
+        GIT_TAG        VER-2-15-0 # 2.14: no CMake < 3.10 deprecation warning
         GIT_SHALLOW    TRUE
         OVERRIDE_FIND_PACKAGE
     )
@@ -290,7 +290,7 @@ FetchContent_MakeAvailable(rmlui)
 FetchContent_Declare(
     nlohmann_json
     GIT_REPOSITORY https://github.com/nlohmann/json.git
-    GIT_TAG        v3.11.3
+    GIT_TAG        v3.12.0
     GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(nlohmann_json)
@@ -304,7 +304,7 @@ FetchContent_MakeAvailable(nlohmann_json)
 FetchContent_Declare(
     spdlog
     GIT_REPOSITORY https://github.com/gabime/spdlog.git
-    GIT_TAG        v1.14.1
+    GIT_TAG        v1.17.0
     GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(spdlog)
@@ -341,7 +341,7 @@ endif()
 FetchContent_Declare(
     monocypher
     GIT_REPOSITORY https://github.com/LoupVaillant/Monocypher.git
-    GIT_TAG        4.0.2
+    GIT_TAG        4.0.3
     GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(monocypher)
@@ -441,7 +441,7 @@ if(KKE_ENABLE_TESTS)
     FetchContent_Declare(
         googletest
         GIT_REPOSITORY https://github.com/google/googletest.git
-        GIT_TAG        v1.15.2
+        GIT_TAG        v1.18.0
         GIT_SHALLOW    TRUE
     )
     # Static, whatever RmlUi's BUILD_SHARED_LIBS=ON cache option says:
@@ -597,7 +597,7 @@ if(KKE_ENABLE_VALKEY)
     FetchContent_Declare(
         hiredis
         GIT_REPOSITORY https://github.com/redis/hiredis.git
-        GIT_TAG        v1.2.0
+        GIT_TAG        v1.5.0
         GIT_SHALLOW    TRUE
         SOURCE_SUBDIR  kke-no-cmake
     )
@@ -637,7 +637,7 @@ if(KKE_ENABLE_NET AND KKE_ENABLE_VOICE)
     FetchContent_Declare(
         opus
         GIT_REPOSITORY https://github.com/xiph/opus.git
-        GIT_TAG        v1.5.2
+        GIT_TAG        v1.6.1
         GIT_SHALLOW    TRUE
         # GCC 16 Release warnings in silk/decode_indices.c (BUG-087; see the script).
         PATCH_COMMAND  ${CMAKE_COMMAND} -DOPUS_SOURCE_DIR=<SOURCE_DIR> -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patch_opus.cmake
