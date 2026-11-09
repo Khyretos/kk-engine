@@ -93,7 +93,13 @@ demos:
     # explodes: fireballs, smoke, sparks, pieces and dents all at once.
     seconds: 30
     synty: true
-    env: { KKE_FLY_AUTOPILOT: "1", KKE_FLY_MODE: "dogfight", KKE_FLY_CPUS: "5", KKE_FLY_BENCH: "pileup" }
+    env:
+      {
+        KKE_FLY_AUTOPILOT: "1",
+        KKE_FLY_MODE: "dogfight",
+        KKE_FLY_CPUS: "5",
+        KKE_FLY_BENCH: "pileup",
+      }
 
   - id: procedural_demo
     exe: procedural_demo

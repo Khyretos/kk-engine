@@ -10,8 +10,8 @@
 x-bench: &bench
   build: { context: ., dockerfile: Dockerfile }
   image: kke-bench
-  volumes: [ "../..:/src" ]
-  command: [ "run" ]
+  volumes: ["../..:/src"]
+  command: ["run"]
   memswap_limit: -1
 
 x-software-gpu: &software-gpu
@@ -21,7 +21,7 @@ x-software-gpu: &software-gpu
 services:
   build:
     <<: *bench
-    command: [ "build" ]
+    command: ["build"]
 
   # The floor KKE promises to run on: 1 core, 2 GB, no GPU.
   floor-1c-2g:
@@ -36,14 +36,24 @@ services:
     cpuset: "0"
     mem_limit: 2g
     memswap_limit: 2g
-    environment: { <<: *software-gpu, KKE_PROFILE: laptop-1c-2g-vram512, KKE_VRAM_BUDGET_MB: "512" }
+    environment:
+      {
+        <<: *software-gpu,
+        KKE_PROFILE: laptop-1c-2g-vram512,
+        KKE_VRAM_BUDGET_MB: "512",
+      }
 
   dual-2c-2g-vram1g:
     <<: *bench
     cpuset: "0-1"
     mem_limit: 2g
     memswap_limit: 2g
-    environment: { <<: *software-gpu, KKE_PROFILE: dual-2c-2g-vram1g, KKE_VRAM_BUDGET_MB: "1024" }
+    environment:
+      {
+        <<: *software-gpu,
+        KKE_PROFILE: dual-2c-2g-vram1g,
+        KKE_VRAM_BUDGET_MB: "1024",
+      }
 
   mid-4c-8g:
     <<: *bench
@@ -69,17 +79,23 @@ services:
     cpuset: "0-7"
     mem_limit: 16g
     memswap_limit: 16g
-    environment: { <<: *software-gpu, KKE_PROFILE: steam-deck, KKE_TARGET: steam-deck, KKE_VRAM_BUDGET_MB: "1024" }
+    environment:
+      {
+        <<: *software-gpu,
+        KKE_PROFILE: steam-deck,
+        KKE_TARGET: steam-deck,
+        KKE_VRAM_BUDGET_MB: "1024",
+      }
 
   # Real GPUs passed through (whole machine otherwise).
   intel-arc:
     <<: *bench
-    devices: [ "/dev/dri:/dev/dri" ]
+    devices: ["/dev/dri:/dev/dri"]
     environment: { KKE_PROFILE: intel-arc }
 
   amd:
     <<: *bench
-    devices: [ "/dev/dri:/dev/dri", "/dev/kfd:/dev/kfd" ]
+    devices: ["/dev/dri:/dev/dri", "/dev/kfd:/dev/kfd"]
     environment: { KKE_PROFILE: amd }
 
   # Needs nvidia-container-toolkit on the host.
@@ -89,7 +105,14 @@ services:
     deploy:
       resources:
         reservations:
-          devices: [ { driver: nvidia, count: all, capabilities: [ gpu, graphics, utility ] } ]
+          devices:
+            [
+              {
+                driver: nvidia,
+                count: all,
+                capabilities: [gpu, graphics, utility],
+              },
+            ]
 
   # Your own limits: KKE_CPUSET=0-2 KKE_MEM=3g KKE_VRAM_BUDGET_MB=768 docker compose ... run --rm custom
   custom:
@@ -97,7 +120,7 @@ services:
     cpuset: "${KKE_CPUSET:-0}"
     mem_limit: "${KKE_MEM:-2g}"
     memswap_limit: "${KKE_MEM:-2g}"
-    devices: [ "${KKE_GPU_DEVICE:-/dev/null}:${KKE_GPU_DEVICE:-/dev/null}" ]
+    devices: ["${KKE_GPU_DEVICE:-/dev/null}:${KKE_GPU_DEVICE:-/dev/null}"]
     environment:
       KKE_PROFILE: custom
       KKE_VRAM_BUDGET_MB: "${KKE_VRAM_BUDGET_MB:-}"

@@ -2,7 +2,7 @@
 title: Overcast
 description: A thick cloud cover, soft shadows, calm and a bit moody.
 sky:
-  image: overcast           # Poly Haven "Kloofendal Overcast (Pure Sky)", CC0
+  image: overcast # Poly Haven "Kloofendal Overcast (Pure Sky)", CC0
   ambientStrength: 0.75
 sun:
   azimuth: 140

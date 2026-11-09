@@ -12,19 +12,19 @@ services:
     image: kke-server
     container_name: kke-server
     build: { context: ../.., dockerfile: docker/server/Dockerfile }
-    ports: [ "27960:27960/udp" ]
-    volumes: [ "./data:/data" ]
+    ports: ["27960:27960/udp"]
+    volumes: ["./data:/data"]
     environment:
       KKE_SERVER_NAME: "My KKE server"
-      KKE_SERVER_PASSWORD: ""                  # set one to keep it private
+      KKE_SERVER_PASSWORD: "" # set one to keep it private
       KKE_SERVER_MAX_PLAYERS: "16"
-      KKE_SERVER_ROLES: "players,leaderboard"  # add scripts to run the game's sv_*.lua from ./data/scripts
+      KKE_SERVER_ROLES: "players,leaderboard" # add scripts to run the game's sv_*.lua from ./data/scripts
       KKE_SERVER_MOTD: "Welcome!"
       # KKE_SERVER_STORAGE: "valkey://valkey:6379"   # or postgres://kke:change-me@postgres/kke (docs/STORAGE.md)
       # KKE_SERVER_PUBLIC: "true"               # list it on the directories below
       # KKE_SERVER_DIRECTORIES: "directory.example.org:27950"
       # KKE_SERVER_RELAY: "relay.example.org"   # a join code: players type it, no port forwarding (docs/SERVER_HOSTING.md "Join codes")
-    stdin_open: true   # the console, through docker attach
+    stdin_open: true # the console, through docker attach
     tty: true
     restart: unless-stopped
     stop_grace_period: 15s

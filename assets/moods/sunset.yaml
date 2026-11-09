@@ -2,7 +2,7 @@
 title: Sunset
 description: Orange sun low on the horizon, purple shadows.
 sky:
-  image: sunset             # Poly Haven "Qwantani Sunset (Pure Sky)", CC0
+  image: sunset # Poly Haven "Qwantani Sunset (Pure Sky)", CC0
   ambientStrength: 0.35
 sun:
   azimuth: 130

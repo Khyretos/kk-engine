@@ -16,19 +16,19 @@ services:
   linux:
     build: { context: docker, dockerfile: linux.Dockerfile }
     image: kke-build-linux
-    volumes: [ ".:/src" ]
-    command: [ "linux" ]
+    volumes: [".:/src"]
+    command: ["linux"]
   windows:
     build: { context: docker, dockerfile: windows.Dockerfile }
     image: kke-build-windows
-    volumes: [ ".:/src" ]
-    command: [ "windows" ]
+    volumes: [".:/src"]
+    command: ["windows"]
   android:
     build: { context: docker, dockerfile: android.Dockerfile }
     image: kke-build-android
-    volumes: [ ".:/src" ]
-    command: [ "android" ]
+    volumes: [".:/src"]
+    command: ["android"]
   appimage:
     build: { context: docker, dockerfile: appimage.Dockerfile }
     image: kke-build-appimage
-    volumes: [ ".:/src" ]
+    volumes: [".:/src"]

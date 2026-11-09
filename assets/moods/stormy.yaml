@@ -2,7 +2,7 @@
 title: Stormy
 description: Dark, heavy clouds, a cold wind, the sun only just getting through.
 sky:
-  image: stormy             # Poly Haven "Wasteland Clouds (Pure Sky)", CC0
+  image: stormy # Poly Haven "Wasteland Clouds (Pure Sky)", CC0
   intensity: 0.8
   ambientStrength: 0.45
 sun:
