@@ -176,7 +176,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     container:
-      image: git.kreative-kompas.com/khyretos/kke-ci:1
+      image: git.kreative-kompas.com/khyretos/kke-ci:2
     steps:
       - uses: https://code.forgejo.org/forgejo/download-artifact@v4
         with:

@@ -92,7 +92,7 @@ jobs:
   benchmarks:
     runs-on: soucouyant
     container:
-      image: git.kreative-kompas.com/khyretos/kke-ci:1
+      image: git.kreative-kompas.com/khyretos/kke-ci:2
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
