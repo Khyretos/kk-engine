@@ -30,7 +30,7 @@ jobs:
   # with its licence, in docs/DEPENDENCIES.md: this fails when one is added
   # without its row.
   dependencies:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v5
       - name: Every dependency is in docs/DEPENDENCIES.md
@@ -42,7 +42,7 @@ jobs:
   # still pulls many headers in through others; GCC 15/16 (Arch, Fedora)
   # don't, so a missing #include <algorithm> builds here and fails there.
   std-includes:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v5
       - name: Every standard name has its header included
@@ -53,7 +53,7 @@ jobs:
   # warnings and its tests passing (DevTools.* checks the debug switches
   # really are ignored).
   shipping-build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v4
 
@@ -79,7 +79,7 @@ jobs:
         run: ./build-ship/bin/kke_tests
 
   build-test-and-coverage:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v5
 
@@ -240,7 +240,7 @@ jobs:
   # configure or build log, whoever's code it is in. The Release workflow
   # (release.yml) packages this same configuration.
   release-build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v5
 
@@ -276,7 +276,7 @@ jobs:
   # GCC in places) and packed into the demos APK, with zero warnings. The
   # APK is kept as a run artifact for trying on a phone (docs/ANDROID.md).
   android:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v5
 

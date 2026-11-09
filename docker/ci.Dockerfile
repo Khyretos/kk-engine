@@ -14,7 +14,7 @@
 # change to this file; never overwrite a tag CI already uses.
 # BASE only changes for a test build behind a TLS-intercepting proxy (an
 # ubuntu:24.04 with that proxy's CA added); CI images use the default.
-ARG BASE=ubuntu:24.04
+ARG BASE=ubuntu:26.04
 FROM ${BASE}
 
 ARG DEBIAN_FRONTEND=noninteractive

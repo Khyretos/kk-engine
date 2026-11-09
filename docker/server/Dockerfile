@@ -8,7 +8,7 @@
 # list and leaderboards live in /data/save. For the physics role, mount the
 # scenes and the asset packs (KKE_ASSETS_DIR); they are never in the image.
 
-FROM ubuntu:24.04 AS build
+FROM ubuntu:26.04 AS build
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential cmake ninja-build git ca-certificates pkg-config \
@@ -29,7 +29,7 @@ RUN cmake -S . -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release \
     && tools/packaging/third_party_licenses.sh --platform linux --deps /build/_deps > /out/THIRD_PARTY_LICENSES.txt \
     && ldd /out/kke_server | awk '$3 ~ /^\/build\// { print $3 }' | xargs -r -I{} cp -L {} /out/lib/
 
-FROM ubuntu:24.04
+FROM ubuntu:26.04
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends libfreetype6 libpq5 \
     && rm -rf /var/lib/apt/lists/* \

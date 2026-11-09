@@ -5,7 +5,7 @@
 # The packages match .github/workflows/release.yml (ALSA for sound, libdecor
 # for Wayland window borders). The source tree is mounted, not copied, so
 # rebuilding the image is only needed when this file changes.
-FROM ubuntu:24.04
+FROM ubuntu:26.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \

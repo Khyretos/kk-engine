@@ -3,7 +3,7 @@
 # `docker compose run --rm android` builds the engine and every game, then
 # packs them into dist/android/kke-demos.apk (android/build_apk.py,
 # docs/ANDROID.md). FEMFX stays off on ARM until its SIMDe port.
-FROM ubuntu:24.04
+FROM ubuntu:26.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
