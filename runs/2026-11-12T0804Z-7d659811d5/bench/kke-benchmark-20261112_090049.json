@@ -1,0 +1,768 @@
+{
+ "demos": [
+  {
+   "env": {
+    "KKE_DEMO_AUTOPILOT": "1"
+   },
+   "exe": "kke_demo",
+   "exit": "exited with code 1 (0x00000001)",
+   "exit_code": 1,
+   "id": "showcase_walk",
+   "log": {
+    "errors": 1,
+    "file": "run_20261112_090049\\logs\\showcase_walk.log",
+    "lines": 1,
+    "messages": [
+     {
+      "count": 1,
+      "level": "error",
+      "text": "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+     }
+    ],
+    "tail": [
+     "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+    ],
+    "warnings": 0
+   },
+   "status": "crashed",
+   "title": "Showcase: the course by autopilot",
+   "wall_s": 0.6
+  },
+  {
+   "env": {
+    "KKE_STRESS_TEST": "1"
+   },
+   "exe": "kke_demo",
+   "exit": "exited with code 1 (0x00000001)",
+   "exit_code": 1,
+   "id": "showcase_stress",
+   "log": {
+    "errors": 1,
+    "file": "run_20261112_090049\\logs\\showcase_stress.log",
+    "lines": 1,
+    "messages": [
+     {
+      "count": 1,
+      "level": "error",
+      "text": "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+     }
+    ],
+    "tail": [
+     "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+    ],
+    "warnings": 0
+   },
+   "status": "crashed",
+   "title": "Showcase: stress test (300 crates, impacts)",
+   "wall_s": 0.1
+  },
+  {
+   "env": {},
+   "exe": "physics_demo",
+   "exit": "exited with code 1 (0x00000001)",
+   "exit_code": 1,
+   "id": "physics_demo",
+   "log": {
+    "errors": 1,
+    "file": "run_20261112_090049\\logs\\physics_demo.log",
+    "lines": 1,
+    "messages": [
+     {
+      "count": 1,
+      "level": "error",
+      "text": "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+     }
+    ],
+    "tail": [
+     "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+    ],
+    "warnings": 0
+   },
+   "status": "crashed",
+   "title": "Physics: rigid bodies and soft bodies",
+   "wall_s": 0.6
+  },
+  {
+   "env": {},
+   "exe": "melt_demo",
+   "exit": "exited with code 1 (0x00000001)",
+   "exit_code": 1,
+   "id": "melt_demo",
+   "log": {
+    "errors": 1,
+    "file": "run_20261112_090049\\logs\\melt_demo.log",
+    "lines": 1,
+    "messages": [
+     {
+      "count": 1,
+      "level": "error",
+      "text": "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+     }
+    ],
+    "tail": [
+     "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+    ],
+    "warnings": 0
+   },
+   "status": "crashed",
+   "title": "Melt: particle fluid",
+   "wall_s": 0.6
+  },
+  {
+   "env": {
+    "KKE_JIGGLE_MOVE": "4"
+   },
+   "exe": "jiggle_demo",
+   "exit": "exited with code 1 (0x00000001)",
+   "exit_code": 1,
+   "id": "jiggle_demo",
+   "log": {
+    "errors": 1,
+    "file": "run_20261112_090049\\logs\\jiggle_demo.log",
+    "lines": 1,
+    "messages": [
+     {
+      "count": 1,
+      "level": "error",
+      "text": "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+     }
+    ],
+    "tail": [
+     "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+    ],
+    "warnings": 0
+   },
+   "status": "crashed",
+   "title": "Jiggle: soft-body characters on tour",
+   "wall_s": 0.6
+  },
+  {
+   "env": {},
+   "exe": "sea_demo",
+   "exit": "exited with code 1 (0x00000001)",
+   "exit_code": 1,
+   "id": "sea_demo",
+   "log": {
+    "errors": 1,
+    "file": "run_20261112_090049\\logs\\sea_demo.log",
+    "lines": 1,
+    "messages": [
+     {
+      "count": 1,
+      "level": "error",
+      "text": "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+     }
+    ],
+    "tail": [
+     "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+    ],
+    "warnings": 0
+   },
+   "status": "crashed",
+   "title": "Sea: ocean and floating bodies",
+   "wall_s": 0.6
+  },
+  {
+   "env": {
+    "KKE_AUDIO_DEMO_TOUR": "1"
+   },
+   "exe": "audio_demo",
+   "exit": "exited with code 1 (0x00000001)",
+   "exit_code": 1,
+   "id": "audio_demo",
+   "log": {
+    "errors": 1,
+    "file": "run_20261112_090049\\logs\\audio_demo.log",
+    "lines": 1,
+    "messages": [
+     {
+      "count": 1,
+      "level": "error",
+      "text": "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+     }
+    ],
+    "tail": [
+     "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+    ],
+    "warnings": 0
+   },
+   "status": "crashed",
+   "title": "Audio: spatial sound tour",
+   "wall_s": 0.6
+  },
+  {
+   "env": {},
+   "exe": "rmlui_demo",
+   "exit": "exited with code 1 (0x00000001)",
+   "exit_code": 1,
+   "id": "rmlui_demo",
+   "log": {
+    "errors": 1,
+    "file": "run_20261112_090049\\logs\\rmlui_demo.log",
+    "lines": 1,
+    "messages": [
+     {
+      "count": 1,
+      "level": "error",
+      "text": "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+     }
+    ],
+    "tail": [
+     "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+    ],
+    "warnings": 0
+   },
+   "status": "crashed",
+   "title": "UI: RmlUi menus",
+   "wall_s": 0.6
+  },
+  {
+   "env": {},
+   "exe": "imgui_demo",
+   "exit": "exited with code 1 (0x00000001)",
+   "exit_code": 1,
+   "id": "imgui_demo",
+   "log": {
+    "errors": 1,
+    "file": "run_20261112_090049\\logs\\imgui_demo.log",
+    "lines": 1,
+    "messages": [
+     {
+      "count": 1,
+      "level": "error",
+      "text": "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+     }
+    ],
+    "tail": [
+     "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+    ],
+    "warnings": 0
+   },
+   "status": "crashed",
+   "title": "UI: Dear ImGui panels",
+   "wall_s": 0.5
+  },
+  {
+   "art": "stand-in (no Synty packs)",
+   "env": {
+    "KKE_SANDBOX_MODE": "play"
+   },
+   "exe": "sandbox",
+   "exit": "exited with code 1 (0x00000001)",
+   "exit_code": 1,
+   "id": "sandbox",
+   "log": {
+    "errors": 1,
+    "file": "run_20261112_090049\\logs\\sandbox.log",
+    "lines": 1,
+    "messages": [
+     {
+      "count": 1,
+      "level": "error",
+      "text": "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+     }
+    ],
+    "tail": [
+     "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+    ],
+    "warnings": 0
+   },
+   "status": "crashed",
+   "title": "Sandbox: play mode",
+   "wall_s": 0.6
+  },
+  {
+   "art": "stand-in (no Synty packs)",
+   "env": {},
+   "exe": "synty_demo",
+   "exit": "exited with code 1 (0x00000001)",
+   "exit_code": 1,
+   "id": "synty_demo",
+   "log": {
+    "errors": 1,
+    "file": "run_20261112_090049\\logs\\synty_demo.log",
+    "lines": 1,
+    "messages": [
+     {
+      "count": 1,
+      "level": "error",
+      "text": "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+     }
+    ],
+    "tail": [
+     "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+    ],
+    "warnings": 0
+   },
+   "status": "crashed",
+   "title": "Synty scene",
+   "wall_s": 0.6
+  },
+  {
+   "env": {
+    "KKE_CLIMB_AUTOPILOT": "1",
+    "KKE_CLIMB_CPUS": "3"
+   },
+   "exe": "climb_race",
+   "exit": "exited with code 1 (0x00000001)",
+   "exit_code": 1,
+   "id": "climb_race",
+   "log": {
+    "errors": 1,
+    "file": "run_20261112_090049\\logs\\climb_race.log",
+    "lines": 1,
+    "messages": [
+     {
+      "count": 1,
+      "level": "error",
+      "text": "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+     }
+    ],
+    "tail": [
+     "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+    ],
+    "warnings": 0
+   },
+   "status": "crashed",
+   "title": "Climb Race: a race with 3 CPU climbers",
+   "wall_s": 0.6
+  },
+  {
+   "art": "stand-in (no Synty packs)",
+   "env": {
+    "KKE_FLY_AUTOPILOT": "1",
+    "KKE_FLY_BENCH": "pileup",
+    "KKE_FLY_CPUS": "5",
+    "KKE_FLY_MODE": "dogfight"
+   },
+   "exe": "flying_demo",
+   "exit": "exited with code 1 (0x00000001)",
+   "exit_code": 1,
+   "id": "flying_pileup",
+   "log": {
+    "errors": 1,
+    "file": "run_20261112_090049\\logs\\flying_pileup.log",
+    "lines": 1,
+    "messages": [
+     {
+      "count": 1,
+      "level": "error",
+      "text": "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+     }
+    ],
+    "tail": [
+     "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+    ],
+    "warnings": 0
+   },
+   "status": "crashed",
+   "title": "Flying: six planes head-on at full speed, every 7 s",
+   "wall_s": 0.6
+  },
+  {
+   "env": {
+    "KKE_PROC_HIT": "10"
+   },
+   "exe": "procedural_demo",
+   "exit": "exited with code 1 (0x00000001)",
+   "exit_code": 1,
+   "id": "procedural_demo",
+   "log": {
+    "errors": 1,
+    "file": "run_20261112_090049\\logs\\procedural_demo.log",
+    "lines": 1,
+    "messages": [
+     {
+      "count": 1,
+      "level": "error",
+      "text": "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+     }
+    ],
+    "tail": [
+     "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+    ],
+    "warnings": 0
+   },
+   "status": "crashed",
+   "title": "Procedural animation: gaits, look-at, a ragdoll hit",
+   "wall_s": 0.6
+  },
+  {
+   "env": {
+    "KKE_CLOTH_SCENE": "stress",
+    "KKE_CLOTH_TOUR": "0"
+   },
+   "exe": "cloth_demo",
+   "exit": "exited with code 1 (0x00000001)",
+   "exit_code": 1,
+   "id": "cloth_stress",
+   "log": {
+    "errors": 1,
+    "file": "run_20261112_090049\\logs\\cloth_stress.log",
+    "lines": 1,
+    "messages": [
+     {
+      "count": 1,
+      "level": "error",
+      "text": "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+     }
+    ],
+    "tail": [
+     "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+    ],
+    "warnings": 0
+   },
+   "status": "crashed",
+   "title": "Cloth: many sheets falling over balls",
+   "wall_s": 0.6
+  },
+  {
+   "env": {
+    "KKE_CLOTH_SCENE": "hair",
+    "KKE_CLOTH_TOUR": "0"
+   },
+   "exe": "cloth_demo",
+   "exit": "exited with code 1 (0x00000001)",
+   "exit_code": 1,
+   "id": "cloth_hair",
+   "log": {
+    "errors": 1,
+    "file": "run_20261112_090049\\logs\\cloth_hair.log",
+    "lines": 1,
+    "messages": [
+     {
+      "count": 1,
+      "level": "error",
+      "text": "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+     }
+    ],
+    "tail": [
+     "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+    ],
+    "warnings": 0
+   },
+   "status": "crashed",
+   "title": "Hair: strands in the wind",
+   "wall_s": 0.1
+  },
+  {
+   "env": {},
+   "exe": "cloth_demo",
+   "exit": "exited with code 1 (0x00000001)",
+   "exit_code": 1,
+   "id": "cloth_tour",
+   "log": {
+    "errors": 1,
+    "file": "run_20261112_090049\\logs\\cloth_tour.log",
+    "lines": 1,
+    "messages": [
+     {
+      "count": 1,
+      "level": "error",
+      "text": "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+     }
+    ],
+    "tail": [
+     "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+    ],
+    "warnings": 0
+   },
+   "status": "crashed",
+   "title": "Cloth and hair: all six scenes (14 s each)",
+   "wall_s": 0.1
+  },
+  {
+   "art": "stand-in (no Synty packs)",
+   "env": {
+    "KKE_FARM_AUTOPILOT": "1"
+   },
+   "exe": "farm_demo",
+   "exit": "exited with code 1 (0x00000001)",
+   "exit_code": 1,
+   "id": "farm_demo",
+   "log": {
+    "errors": 1,
+    "file": "run_20261112_090049\\logs\\farm_demo.log",
+    "lines": 1,
+    "messages": [
+     {
+      "count": 1,
+      "level": "error",
+      "text": "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+     }
+    ],
+    "tail": [
+     "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+    ],
+    "warnings": 0
+   },
+   "status": "crashed",
+   "title": "Farm: AI animals, farmer on autopilot",
+   "wall_s": 0.6
+  },
+  {
+   "art": "stand-in (no Synty packs)",
+   "env": {
+    "KKE_PET_DEMO": "1"
+   },
+   "exe": "pet_companion",
+   "exit": "exited with code 1 (0x00000001)",
+   "exit_code": 1,
+   "id": "pet_companion",
+   "log": {
+    "errors": 1,
+    "file": "run_20261112_090049\\logs\\pet_companion.log",
+    "lines": 1,
+    "messages": [
+     {
+      "count": 1,
+      "level": "error",
+      "text": "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+     }
+    ],
+    "tail": [
+     "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+    ],
+    "warnings": 0
+   },
+   "status": "crashed",
+   "title": "Pet companion: orders demo",
+   "wall_s": 0.6
+  },
+  {
+   "art": "stand-in (no Synty packs)",
+   "env": {
+    "KKE_PLATOON_DEMO": "1"
+   },
+   "exe": "platoon",
+   "exit": "exited with code 1 (0x00000001)",
+   "exit_code": 1,
+   "id": "platoon",
+   "log": {
+    "errors": 1,
+    "file": "run_20261112_090049\\logs\\platoon.log",
+    "lines": 1,
+    "messages": [
+     {
+      "count": 1,
+      "level": "error",
+      "text": "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+     }
+    ],
+    "tail": [
+     "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+    ],
+    "warnings": 0
+   },
+   "status": "crashed",
+   "title": "Platoon: squad orders demo",
+   "wall_s": 0.6
+  },
+  {
+   "env": {
+    "KKE_DUEL_BOTS": "1"
+   },
+   "exe": "duel",
+   "exit": "exited with code 1 (0x00000001)",
+   "exit_code": 1,
+   "id": "duel",
+   "log": {
+    "errors": 1,
+    "file": "run_20261112_090049\\logs\\duel.log",
+    "lines": 1,
+    "messages": [
+     {
+      "count": 1,
+      "level": "error",
+      "text": "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+     }
+    ],
+    "tail": [
+     "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+    ],
+    "warnings": 0
+   },
+   "status": "crashed",
+   "title": "Duel: two bots fighting",
+   "wall_s": 0.6
+  },
+  {
+   "art": "stand-in (no Synty packs)",
+   "env": {
+    "KKE_HORDE_BOT": "1"
+   },
+   "exe": "goblin_horde",
+   "exit": "exited with code 1 (0x00000001)",
+   "exit_code": 1,
+   "id": "goblin_horde",
+   "log": {
+    "errors": 1,
+    "file": "run_20261112_090049\\logs\\goblin_horde.log",
+    "lines": 1,
+    "messages": [
+     {
+      "count": 1,
+      "level": "error",
+      "text": "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+     }
+    ],
+    "tail": [
+     "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+    ],
+    "warnings": 0
+   },
+   "status": "crashed",
+   "title": "Goblin horde: crowd AI and ragdolls, bot hero",
+   "wall_s": 0.6
+  },
+  {
+   "art": "stand-in (no Synty packs)",
+   "env": {
+    "KKE_RACE_BENCH": "pileup"
+   },
+   "exe": "racing",
+   "exit": "exited with code 1 (0x00000001)",
+   "exit_code": 1,
+   "id": "racing_pileup",
+   "log": {
+    "errors": 1,
+    "file": "run_20261112_090049\\logs\\racing_pileup.log",
+    "lines": 1,
+    "messages": [
+     {
+      "count": 1,
+      "level": "error",
+      "text": "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+     }
+    ],
+    "tail": [
+     "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+    ],
+    "warnings": 0
+   },
+   "status": "crashed",
+   "title": "Racing: worst case, 24 cars head-on at 108 km/h",
+   "wall_s": 0.6
+  },
+  {
+   "art": "stand-in (no Synty packs)",
+   "env": {
+    "KKE_TENNIS_BENCH": "singles"
+   },
+   "exe": "tennis",
+   "exit": "exited with code 1 (0x00000001)",
+   "exit_code": 1,
+   "id": "tennis_singles",
+   "log": {
+    "errors": 1,
+    "file": "run_20261112_090049\\logs\\tennis_singles.log",
+    "lines": 1,
+    "messages": [
+     {
+      "count": 1,
+      "level": "error",
+      "text": "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+     }
+    ],
+    "tail": [
+     "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+    ],
+    "warnings": 0
+   },
+   "status": "crashed",
+   "title": "Tennis: busiest case, 100 people, 10 singles matches",
+   "wall_s": 0.6
+  },
+  {
+   "art": "stand-in (no Synty packs)",
+   "env": {
+    "KKE_TENNIS_BENCH": "doubles"
+   },
+   "exe": "tennis",
+   "exit": "exited with code 1 (0x00000001)",
+   "exit_code": 1,
+   "id": "tennis_doubles",
+   "log": {
+    "errors": 1,
+    "file": "run_20261112_090049\\logs\\tennis_doubles.log",
+    "lines": 1,
+    "messages": [
+     {
+      "count": 1,
+      "level": "error",
+      "text": "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+     }
+    ],
+    "tail": [
+     "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+    ],
+    "warnings": 0
+   },
+   "status": "crashed",
+   "title": "Tennis: busiest case, 100 people, 10 doubles matches",
+   "wall_s": 0.1
+  },
+  {
+   "env": {
+    "KKE_VIRTUAL_INPUT": "pad",
+    "KKE_VIRTUAL_PAD_SCRIPT": "0.5:lefty=-0.8,0.5:leftx=0.3,2.5:dpad_right,4:a,5:dpad_right,6:leftx=-0.6,7.5:dpad_right,8:rightx=0.5,10:dpad_right,10.5:rightx=0,11:a,12.5:dpad_right,13:leftx=0.6,15:dpad_right,15.5:dpad_up,17.5:dpad_right,18:lefty=0.8,18:leftx=0,20:dpad_right"
+   },
+   "exe": "cookbook",
+   "exit": "exited with code 1 (0x00000001)",
+   "exit_code": 1,
+   "id": "cookbook",
+   "log": {
+    "errors": 1,
+    "file": "run_20261112_090049\\logs\\cookbook.log",
+    "lines": 1,
+    "messages": [
+     {
+      "count": 1,
+      "level": "error",
+      "text": "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+     }
+    ],
+    "tail": [
+     "Fatal error: SDL_CreateWindow failed: Failed loading vulkan-1.dll: The specified module could not be found."
+    ],
+    "warnings": 0
+   },
+   "status": "crashed",
+   "title": "Cookbook: Lua recipes",
+   "wall_s": 0.7
+  }
+ ],
+ "duration_s": 14.0,
+ "finished": "2026-11-12 09:01:02",
+ "format": "kke-benchmark/1",
+ "results_file": "kke-benchmark-20261112_090049.json",
+ "run": {
+  "demos": 26,
+  "quick": false,
+  "synty_art": "not found: those demos use stand-in art"
+ },
+ "started": "2026-11-12 09:00:49",
+ "status_counts": {
+  "crashed": 26
+ },
+ "system": {
+  "build_type": "Release",
+  "compiler": "gcc 13-posix",
+  "cpu": "Intel(R) Core(TM) i5-4590 CPU @ 3.30GHz",
+  "cpu_logical_cores": "4",
+  "cpu_usable_cores": "4",
+  "display": "1920x1080 @ 60 Hz",
+  "engine_commit": "7d659811d5",
+  "engine_version": "windows-native",
+  "hardware_target": "desktop",
+  "host": "DESKTOP-387PPHP",
+  "os": "Windows",
+  "os_version": "Windows 10.0.19044",
+  "platform_backend": "desktop",
+  "ram_mb": "16312"
+ },
+ "vulkan": {
+  "loader": "missing",
+  "problem": "No Vulkan driver was found. Update the graphics driver (NVIDIA, AMD or Intel's own site), or the GPU is too old for Vulkan."
+ }
+}
