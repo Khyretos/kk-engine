@@ -1,0 +1,1 @@
+Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension

@@ -1,0 +1,216 @@
+Kreative Kompas Engine benchmark
+
+26 demos, about 15 minutes. Each opens its own window and plays by itself:
+please don't touch the mouse or keyboard, and keep other programs closed.
+Results go to C:\forgejo-runner\work\2a5af08fb084dc8f\hostexecutor\results\bench
+
+Warning: Vulkan is installed but refused to start (VkResult -9). Update the graphics driver.
+
+[1/26] Showcase: the course by autopilot
+    crashed: exited with code 1 (0x00000001)
+[2/26] Showcase: stress test (300 crates, impacts)
+    crashed: exited with code 1 (0x00000001)
+[3/26] Physics: rigid bodies and soft bodies
+    crashed: exited with code 1 (0x00000001)
+[4/26] Melt: particle fluid
+    crashed: exited with code 1 (0x00000001)
+[5/26] Jiggle: soft-body characters on tour
+    crashed: exited with code 1 (0x00000001)
+[6/26] Sea: ocean and floating bodies
+    crashed: exited with code 1 (0x00000001)
+[7/26] Audio: spatial sound tour
+    crashed: exited with code 1 (0x00000001)
+[8/26] UI: RmlUi menus
+    crashed: exited with code 1 (0x00000001)
+[9/26] UI: Dear ImGui panels
+    crashed: exited with code 1 (0x00000001)
+[10/26] Sandbox: play mode
+    crashed: exited with code 1 (0x00000001)
+[11/26] Synty scene
+    crashed: exited with code 1 (0x00000001)
+[12/26] Climb Race: a race with 3 CPU climbers
+    crashed: exited with code 1 (0x00000001)
+[13/26] Flying: six planes head-on at full speed, every 7 s
+    crashed: exited with code 1 (0x00000001)
+[14/26] Procedural animation: gaits, look-at, a ragdoll hit
+    crashed: exited with code 1 (0x00000001)
+[15/26] Cloth: many sheets falling over balls
+    crashed: exited with code 1 (0x00000001)
+[16/26] Hair: strands in the wind
+    crashed: exited with code 1 (0x00000001)
+[17/26] Cloth and hair: all six scenes (14 s each)
+    crashed: exited with code 1 (0x00000001)
+[18/26] Farm: AI animals, farmer on autopilot
+    crashed: exited with code 1 (0x00000001)
+[19/26] Pet companion: orders demo
+    crashed: exited with code 1 (0x00000001)
+[20/26] Platoon: squad orders demo
+    crashed: exited with code 1 (0x00000001)
+[21/26] Duel: two bots fighting
+    crashed: exited with code 1 (0x00000001)
+[22/26] Goblin horde: crowd AI and ragdolls, bot hero
+    crashed: exited with code 1 (0x00000001)
+[23/26] Racing: worst case, 24 cars head-on at 108 km/h
+    crashed: exited with code 1 (0x00000001)
+[24/26] Tennis: busiest case, 100 people, 10 singles matches
+    crashed: exited with code 1 (0x00000001)
+[25/26] Tennis: busiest case, 100 people, 10 doubles matches
+    crashed: exited with code 1 (0x00000001)
+[26/26] Cookbook: Lua recipes
+    crashed: exited with code 1 (0x00000001)
+
+Kreative Kompas Engine benchmark, 2026-11-12 01:02:21
+Engine windows-native (7d659811d5), Release build
+
+Machine
+  OS       Windows 10.0.19044
+  CPU      Intel(R) Core(TM) i5-4590 CPU @ 3.30GHz, 4 threads
+  RAM      16312 MB
+  GPU      unknown (unknown, unknown MB)
+  Driver   unknown, Vulkan unknown
+  Display  1920x1080 @ 60 Hz
+
+  PROBLEM: Vulkan is installed but refused to start (VkResult -9). Update the graphics driver.
+
+Demo                                        Result          FPS     1% low  p99 ms  Hitches  Warnings
+----------------------------------------------------------------------------------------------------
+Showcase: the course by autopilot           crashed         -       -       -       -        1
+Showcase: stress test (300 crates, impacts) crashed         -       -       -       -        1
+Physics: rigid bodies and soft bodies       crashed         -       -       -       -        1
+Melt: particle fluid                        crashed         -       -       -       -        1
+Jiggle: soft-body characters on tour        crashed         -       -       -       -        1
+Sea: ocean and floating bodies              crashed         -       -       -       -        1
+Audio: spatial sound tour                   crashed         -       -       -       -        1
+UI: RmlUi menus                             crashed         -       -       -       -        1
+UI: Dear ImGui panels                       crashed         -       -       -       -        1
+Sandbox: play mode                          crashed         -       -       -       -        1
+Synty scene                                 crashed         -       -       -       -        1
+Climb Race: a race with 3 CPU climbers      crashed         -       -       -       -        1
+Flying: six planes head-on at full speed, e~crashed         -       -       -       -        1
+Procedural animation: gaits, look-at, a rag~crashed         -       -       -       -        1
+Cloth: many sheets falling over balls       crashed         -       -       -       -        1
+Hair: strands in the wind                   crashed         -       -       -       -        1
+Cloth and hair: all six scenes (14 s each)  crashed         -       -       -       -        1
+Farm: AI animals, farmer on autopilot       crashed         -       -       -       -        1
+Pet companion: orders demo                  crashed         -       -       -       -        1
+Platoon: squad orders demo                  crashed         -       -       -       -        1
+Duel: two bots fighting                     crashed         -       -       -       -        1
+Goblin horde: crowd AI and ragdolls, bot he~crashed         -       -       -       -        1
+Racing: worst case, 24 cars head-on at 108 ~crashed         -       -       -       -        1
+Tennis: busiest case, 100 people, 10 single~crashed         -       -       -       -        1
+Tennis: busiest case, 100 people, 10 double~crashed         -       -       -       -        1
+Cookbook: Lua recipes                       crashed         -       -       -       -        1
+
+Results: smooth = the slowest 1% of frames still >= 55 fps, playable >= 30, struggles >= 15, too slow below.
+The demos run uncapped (no vsync) to show what this machine can do.
+
+Details
+
+* Showcase: the course by autopilot: crashed (exited with code 1 (0x00000001))
+    log: Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+    | Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+
+* Showcase: stress test (300 crates, impacts): crashed (exited with code 1 (0x00000001))
+    log: Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+    | Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+
+* Physics: rigid bodies and soft bodies: crashed (exited with code 1 (0x00000001))
+    log: Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+    | Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+
+* Melt: particle fluid: crashed (exited with code 1 (0x00000001))
+    log: Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+    | Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+
+* Jiggle: soft-body characters on tour: crashed (exited with code 1 (0x00000001))
+    log: Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+    | Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+
+* Sea: ocean and floating bodies: crashed (exited with code 1 (0x00000001))
+    log: Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+    | Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+
+* Audio: spatial sound tour: crashed (exited with code 1 (0x00000001))
+    log: Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+    | Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+
+* UI: RmlUi menus: crashed (exited with code 1 (0x00000001))
+    log: Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+    | Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+
+* UI: Dear ImGui panels: crashed (exited with code 1 (0x00000001))
+    log: Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+    | Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+
+* Sandbox: play mode: crashed (exited with code 1 (0x00000001))
+    log: Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+    | Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+
+* Synty scene: crashed (exited with code 1 (0x00000001))
+    log: Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+    | Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+
+* Climb Race: a race with 3 CPU climbers: crashed (exited with code 1 (0x00000001))
+    log: Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+    | Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+
+* Flying: six planes head-on at full speed, every 7 s: crashed (exited with code 1 (0x00000001))
+    log: Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+    | Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+
+* Procedural animation: gaits, look-at, a ragdoll hit: crashed (exited with code 1 (0x00000001))
+    log: Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+    | Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+
+* Cloth: many sheets falling over balls: crashed (exited with code 1 (0x00000001))
+    log: Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+    | Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+
+* Hair: strands in the wind: crashed (exited with code 1 (0x00000001))
+    log: Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+    | Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+
+* Cloth and hair: all six scenes (14 s each): crashed (exited with code 1 (0x00000001))
+    log: Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+    | Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+
+* Farm: AI animals, farmer on autopilot: crashed (exited with code 1 (0x00000001))
+    log: Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+    | Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+
+* Pet companion: orders demo: crashed (exited with code 1 (0x00000001))
+    log: Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+    | Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+
+* Platoon: squad orders demo: crashed (exited with code 1 (0x00000001))
+    log: Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+    | Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+
+* Duel: two bots fighting: crashed (exited with code 1 (0x00000001))
+    log: Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+    | Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+
+* Goblin horde: crowd AI and ragdolls, bot hero: crashed (exited with code 1 (0x00000001))
+    log: Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+    | Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+
+* Racing: worst case, 24 cars head-on at 108 km/h: crashed (exited with code 1 (0x00000001))
+    log: Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+    | Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+
+* Tennis: busiest case, 100 people, 10 singles matches: crashed (exited with code 1 (0x00000001))
+    log: Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+    | Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+
+* Tennis: busiest case, 100 people, 10 doubles matches: crashed (exited with code 1 (0x00000001))
+    log: Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+    | Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+
+* Cookbook: Lua recipes: crashed (exited with code 1 (0x00000001))
+    log: Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+    | Fatal error: SDL_CreateWindow failed: Installed Vulkan doesn't implement the VK_KHR_surface extension
+
+Please send the file kke-benchmark-20261112_010221.json (the .json next to this one) back.
+
+Done: 0 of 26 demos ran fine.
+Results: C:\forgejo-runner\work\2a5af08fb084dc8f\hostexecutor\results\bench\kke-benchmark-20261112_010221.json

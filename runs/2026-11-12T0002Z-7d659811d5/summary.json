@@ -1,0 +1,178 @@
+{
+ "platform": "Windows",
+ "passed": false,
+ "failed": [
+  "26 benchmark run(s) did not finish cleanly"
+ ],
+ "facts": {
+  "Runner": "Kees's PC (native, lavapipe)"
+ },
+ "unit_tests": {
+  "tests": 1356,
+  "failures": 0,
+  "errors": 0,
+  "failed": []
+ },
+ "benchmark": {
+  "file": "C:\\forgejo-runner\\work\\2a5af08fb084dc8f\\hostexecutor\\results\\bench\\kke-benchmark-20261112_010221.json",
+  "demos": [
+   {
+    "id": "showcase_walk",
+    "status": "crashed",
+    "fps_avg": null,
+    "reason": "exited with code 1 (0x00000001)"
+   },
+   {
+    "id": "showcase_stress",
+    "status": "crashed",
+    "fps_avg": null,
+    "reason": "exited with code 1 (0x00000001)"
+   },
+   {
+    "id": "physics_demo",
+    "status": "crashed",
+    "fps_avg": null,
+    "reason": "exited with code 1 (0x00000001)"
+   },
+   {
+    "id": "melt_demo",
+    "status": "crashed",
+    "fps_avg": null,
+    "reason": "exited with code 1 (0x00000001)"
+   },
+   {
+    "id": "jiggle_demo",
+    "status": "crashed",
+    "fps_avg": null,
+    "reason": "exited with code 1 (0x00000001)"
+   },
+   {
+    "id": "sea_demo",
+    "status": "crashed",
+    "fps_avg": null,
+    "reason": "exited with code 1 (0x00000001)"
+   },
+   {
+    "id": "audio_demo",
+    "status": "crashed",
+    "fps_avg": null,
+    "reason": "exited with code 1 (0x00000001)"
+   },
+   {
+    "id": "rmlui_demo",
+    "status": "crashed",
+    "fps_avg": null,
+    "reason": "exited with code 1 (0x00000001)"
+   },
+   {
+    "id": "imgui_demo",
+    "status": "crashed",
+    "fps_avg": null,
+    "reason": "exited with code 1 (0x00000001)"
+   },
+   {
+    "id": "sandbox",
+    "status": "crashed",
+    "fps_avg": null,
+    "reason": "exited with code 1 (0x00000001)"
+   },
+   {
+    "id": "synty_demo",
+    "status": "crashed",
+    "fps_avg": null,
+    "reason": "exited with code 1 (0x00000001)"
+   },
+   {
+    "id": "climb_race",
+    "status": "crashed",
+    "fps_avg": null,
+    "reason": "exited with code 1 (0x00000001)"
+   },
+   {
+    "id": "flying_pileup",
+    "status": "crashed",
+    "fps_avg": null,
+    "reason": "exited with code 1 (0x00000001)"
+   },
+   {
+    "id": "procedural_demo",
+    "status": "crashed",
+    "fps_avg": null,
+    "reason": "exited with code 1 (0x00000001)"
+   },
+   {
+    "id": "cloth_stress",
+    "status": "crashed",
+    "fps_avg": null,
+    "reason": "exited with code 1 (0x00000001)"
+   },
+   {
+    "id": "cloth_hair",
+    "status": "crashed",
+    "fps_avg": null,
+    "reason": "exited with code 1 (0x00000001)"
+   },
+   {
+    "id": "cloth_tour",
+    "status": "crashed",
+    "fps_avg": null,
+    "reason": "exited with code 1 (0x00000001)"
+   },
+   {
+    "id": "farm_demo",
+    "status": "crashed",
+    "fps_avg": null,
+    "reason": "exited with code 1 (0x00000001)"
+   },
+   {
+    "id": "pet_companion",
+    "status": "crashed",
+    "fps_avg": null,
+    "reason": "exited with code 1 (0x00000001)"
+   },
+   {
+    "id": "platoon",
+    "status": "crashed",
+    "fps_avg": null,
+    "reason": "exited with code 1 (0x00000001)"
+   },
+   {
+    "id": "duel",
+    "status": "crashed",
+    "fps_avg": null,
+    "reason": "exited with code 1 (0x00000001)"
+   },
+   {
+    "id": "goblin_horde",
+    "status": "crashed",
+    "fps_avg": null,
+    "reason": "exited with code 1 (0x00000001)"
+   },
+   {
+    "id": "racing_pileup",
+    "status": "crashed",
+    "fps_avg": null,
+    "reason": "exited with code 1 (0x00000001)"
+   },
+   {
+    "id": "tennis_singles",
+    "status": "crashed",
+    "fps_avg": null,
+    "reason": "exited with code 1 (0x00000001)"
+   },
+   {
+    "id": "tennis_doubles",
+    "status": "crashed",
+    "fps_avg": null,
+    "reason": "exited with code 1 (0x00000001)"
+   },
+   {
+    "id": "cookbook",
+    "status": "crashed",
+    "fps_avg": null,
+    "reason": "exited with code 1 (0x00000001)"
+   }
+  ],
+  "gpu": null
+ }
+}
