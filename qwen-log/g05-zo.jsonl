@@ -1,0 +1,2 @@
+{"name": "g05-zo", "out": "engine/src/ShadowMap.cpp", "mode": "patch", "gpu_seconds": 4.3, "tokens": 191, "prompt_tokens": 2443, "skills": ["work-habits", "shared/SKILL", "worker/cpp-games/SKILL", "_model-notes/qwen3/SKILL"], "lines": 1, "attempts": 1, "model": "qwen3.5:9b-q8_0-64k", "at": "2026-10-13T07:38:19"}
+{"name": "g05-zo", "out": "engine/src/ShadowMap.cpp", "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g05c.py zo", "check_attempts": 1, "check_passed": true, "at": "2026-10-13T07:38:27"}

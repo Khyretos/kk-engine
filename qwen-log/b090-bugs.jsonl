@@ -1,0 +1,2 @@
+{"name": "b090-bugs", "out": "BUGS.md", "mode": "patch", "gpu_seconds": 14.8, "tokens": 790, "prompt_tokens": 4590, "skills": ["work-habits", "shared/SKILL", "worker/docs/SKILL", "_model-notes/qwen3/SKILL", "shared/processes"], "lines": 0, "attempts": 1, "model": "qwen3.5:9b-q8_0-64k", "at": "2026-10-13T15:30:09"}
+{"name": "b090-bugs", "out": "BUGS.md", "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_b090.py bugs", "check_attempts": 1, "check_passed": true, "at": "2026-10-13T15:30:09"}

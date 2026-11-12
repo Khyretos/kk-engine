@@ -1,0 +1,13 @@
+[
+  {
+    "name": "g08-data",
+    "role": "worker/cpp-games",
+    "mode": "patch",
+    "out": "engine/src/GpuSkin.cpp",
+    "prompt": "ENG-G08: skinned meshes are skinned on the GPU. A compute shader (shaders/skin.comp) reads each model mesh's bind vertices and each instance's skin matrices and jiggle zones from storage buffers and writes kke::Vertex (11 floats: position, overlay position = bind position, normal, uv) into the vertex buffer the draw passes already read. kke/GpuSkin.h packs those buffers on the CPU and holds a CPU copy of the shader's maths for the tests. C++20, glm, Vulkan, GLSL 450 std430. Add `void packSkinData(const std::vector<glm::mat4>& skin, const std::vector<SkinJiggleOffset>& zones, std::vector<glm::vec4>& out)` (declared in kke/GpuSkin.h, in context) after packSkinBind and before `} // namespace kke`. Keep every line already there. One short `//` line above it. Body:\n`out.clear();`, `out.reserve(skin.size() * kSkinVec4sPerBone + zones.size() * kSkinVec4sPerZone);`; for each `const glm::mat4& m : skin`, `for (int c = 0; c < 4; ++c) out.push_back(m[c]);`; then for each `const SkinJiggleOffset& z : zones`, push_back `glm::vec4(z.center, z.radius)` and then `glm::vec4(z.offset, 0.0f)`.",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g08.py data",
+    "precheck": false,
+    "context": ["engine/include/kke/GpuSkin.h"],
+    "max_tokens": 1200
+  }
+]

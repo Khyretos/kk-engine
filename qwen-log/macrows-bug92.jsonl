@@ -1,0 +1,2 @@
+{"name": "macrows-bug92", "out": ".scratch/bug92.md", "gpu_seconds": 11.4, "tokens": 352, "prompt_tokens": 5071, "skills": ["work-habits", "shared/SKILL", "worker/docs/SKILL", "_model-notes/qwen3/SKILL", "shared/processes"], "lines": 1, "model": "qwen3.5:9b-q8_0-64k", "at": "2026-10-13T16:10:43"}
+{"name": "macrows-bug92", "out": ".scratch/bug92.md", "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_macrows.py bug92", "check_attempts": 1, "check_passed": true, "at": "2026-10-13T16:10:43"}

@@ -1,0 +1,14 @@
+[
+  {
+    "name": "win-doc",
+    "role": "worker/docs",
+    "mode": "patch",
+    "out": "docs/VM_TESTS.md",
+    "focus": ["^## Graphics in a VM"],
+    "prompt": "Add a section `## Windows natively on Kees's PC` to docs/VM_TESTS.md directly before `## Graphics in a VM: why lavapipe` (blank line before and after). Plain words, under 220 words, short paragraphs, code names in backticks. Say exactly these facts and nothing else:\n1. `.forgejo/workflows/windows-native.yml` runs nightly and by hand. soucouyant cross-builds and packages the Windows zip as the VM job does; Kees's PC (a Forgejo runner with `runs-on: windows`) downloads it and runs the unit tests and every demo natively with `tools/vm/windows/native_test.ps1`.\n2. `kke_vm.py summarize` turns the results into the same `summary.md` as the VM test; the run's artifact is `windows-native`.\n3. The first full run (2026-10-13) passed: 1,038 unit tests and 21 demos, in minutes instead of the VM's hours. Vulkan there is lavapipe on the CPU too: the PC's Intel HD 4600 has no Vulkan driver.\n4. The PC needs Python, git and Node.js (for the checkout and artifact steps), and runs PowerShell scripts with `-ExecutionPolicy Bypass` from `cmd` steps.\n5. The VM job stays as the fallback for when the PC is off, and as a clean-install check before a release.\nChange nothing else.",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_windoc.py",
+    "precheck": false,
+    "context": [],
+    "max_tokens": 1500
+  }
+]

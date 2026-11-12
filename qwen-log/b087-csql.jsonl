@@ -1,0 +1,2 @@
+{"name": "b087-csql", "out": "CMakeLists.txt", "mode": "patch", "gpu_seconds": 5.4, "tokens": 266, "prompt_tokens": 2709, "skills": ["work-habits", "shared/SKILL", "worker/cpp-games/SKILL", "_model-notes/qwen3/SKILL"], "lines": 1, "attempts": 1, "model": "qwen3.5:9b-q8_0-64k", "at": "2026-10-13T14:58:40"}
+{"name": "b087-csql", "out": "CMakeLists.txt", "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_b087.py csql", "check_attempts": 1, "check_passed": true, "at": "2026-10-13T14:58:57"}

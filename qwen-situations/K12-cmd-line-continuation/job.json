@@ -1,0 +1,12 @@
+[
+  {
+    "name": "win-workflow",
+    "role": "worker/cpp-games",
+    "out": ".forgejo/workflows/windows-native.yml",
+    "max_tokens": 3000,
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_winwf.py",
+    "precheck": false,
+    "context": [".forgejo/workflows/vm-tests.yml"],
+    "prompt": "Write a new Forgejo Actions workflow, .forgejo/workflows/windows-native.yml, named `Windows (native)`. It tests the Windows package on Kees's PC (a runner with the label `windows`, running on the host with Node.js, Python, git and lavapipe Vulkan) instead of in the VM; vm-tests.yml (given) shows the VM version. Start with a comment block of 3-6 lines saying that, and that the VM job stays as the fallback.\nTriggers: `workflow_dispatch` with a boolean input `quick` (description \"Quick benchmark run (fewer demos, 8 s each)\", default false), and `schedule` with cron \"0 4 * * *\" (nightly). `concurrency: group: windows-native, cancel-in-progress: false`. env: KKE_JOBS \"8\" and VERSION windows-native.\nJob `build`: runs-on soucouyant, timeout-minutes 120, container image git.kreative-kompas.com/khyretos/kke-vm:1 (no options). Steps: actions/checkout@v4; then the same Configure (MinGW-w64 cross), Build, No warnings anywhere and Package steps as vm-tests.yml's windows job, copied as they are; then a step `Source tree for the tests` that runs `git archive --format=tar HEAD > dist/src.tar` and `cp build/bin/kke_tests.exe dist/`; then https://code.forgejo.org/forgejo/upload-artifact@v4 with name windows-build and path dist/.\nJob `test`: needs build, runs-on windows, timeout-minutes 240, `defaults: run: shell: cmd`, no container. Steps: actions/checkout@v4; https://code.forgejo.org/forgejo/download-artifact@v4 with name windows-build and path dist; a step `Tests and demos` that runs `powershell -NoProfile -ExecutionPolicy Bypass -File tools\\vm\\windows\\native_test.ps1 -Package dist\\kk-engine-%VERSION%-windows-x86_64.zip -Tests dist\\kke_tests.exe -SourceTar dist\\src.tar -SourceDir /workspace/khyretos/kk-engine -Work %RUNNER_TEMP%\\kke-run -Results results %QUICK%` with env QUICK set to `${{ inputs.quick && '-Quick' || '' }}`; a step `Summary` with `if: always()` that runs `python tools\\vm\\kke_vm.py summarize --results results --out results --platform Windows --fact \"Runner=Kees's PC (native, lavapipe)\"`; and https://code.forgejo.org/forgejo/upload-artifact@v4 with `if: always()`, name windows-native and path results/.\nAnswer with the whole file."
+  }
+]

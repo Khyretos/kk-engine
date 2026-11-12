@@ -1,0 +1,16 @@
+[
+  {
+    "name": "g07-slc",
+    "role": "worker/cpp-games",
+    "mode": "new",
+    "out": "engine/src/ScriptLights.cpp",
+    "prompt": "ENG-G07: the engine goes from 4 lights to 16 (kke::Lighting::kMaxLights). Light 0 stays the sun (directional, cascaded shadows). Point lights gain an optional range (Light::range, 0 = reaches everywhere as before) with a smooth falloff; at most ShadowMap::kMaxPointShadows (4) point lights cast shadows, each in a point-shadow slot (Lighting::pointShadowSlots: the first 4 casting lights in order). Lua scripts place lamps with light.*. C++20, glm, Vulkan, GLSL 450 std140. Write the new file engine/src/ScriptLights.cpp: the six member functions of kke::ScriptLights (header shown in context; Lighting and Light are in kke/Application.h, also shown). Start with `#include \"kke/ScriptLights.h\"` and `#include <algorithm>`, then `namespace kke {` ... `} // namespace kke`. No other includes, no comments beyond one short line per function. Bodies:\n- add: for `int i = 1; i < Lighting::kMaxLights; ++i`: skip i when `lighting.lights[i].enabled` or when an entry of m_entries has slot i. For the first i left: `Light& l = lighting.lights[i];` set `l = Light{};` then enabled = true, isDirectional = false, position, color, intensity, range from desc, castsShadows = desc.shadows; `m_entries.push_back({i, owner});` and return i. When none is left return -1.\n- owns: true when an entry has this slot and this owner.\n- remove: when slot is in 0 .. Lighting::kMaxLights - 1 set `lighting.lights[slot].enabled = false;`; then erase the entries with that slot (std::remove_if + erase).\n- releaseAll: for each entry of owner set its light's enabled = false; then erase every entry of owner (std::remove_if + erase).\n- clear: set enabled = false on every entry's light, then `m_entries.clear();`.\n- count: std::count_if over m_entries for owner, cast to size_t.",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g07.py slc",
+    "precheck": false,
+    "context": [
+      "engine/include/kke/ScriptLights.h",
+      "engine/include/kke/Application.h"
+    ],
+    "max_tokens": 2500
+  }
+]

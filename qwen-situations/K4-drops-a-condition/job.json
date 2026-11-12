@@ -1,0 +1,12 @@
+[
+  {
+    "name": "b074-climb",
+    "role": "worker/cpp-games",
+    "mode": "patch",
+    "out": "games/climb_race/ClimbRaceModule.cpp",
+    "focus": ["^#include", "float envFloat", "bool envOn", "KKE_CLIMB_INTRO"],
+    "prompt": "BUG-074: developer switches must be read with kke::dev::env(name) from \"kke/DevTools.h\" (it returns the variable in developer builds and nullptr in shipping builds, so players can't use them), not std::getenv. Net.cpp in climb_race already does it: `if (const char* wait = kke::dev::env(\"KKE_CLIMB_WAIT\")) ...`. In games/climb_race/ClimbRaceModule.cpp replace the three std::getenv calls with kke::dev::env: the one in envFloat(), the one in envOn(), and `std::getenv(\"KKE_CLIMB_INTRO\")`. Add `#include \"kke/DevTools.h\"` next to the file's other \"kke/...\" includes, in alphabetical order. Keep <cstdlib> (std::atof still needs it). Change nothing else.",
+    "check": "python3 /tmp/claude-1000/-media-development/689ef2e5-dd4c-4322-9e2b-ee59fe58d080/scratchpad/jobs/chk_b074.py climb",
+    "precheck": false
+  }
+]

@@ -1,0 +1,18 @@
+[
+  {
+    "mode": "patch",
+    "focus": [
+      "^\\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\ \\{\\ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,\\ 5\\ \\*\\ kSlotCount\\ \\}\\ \\}\\ \\};$",
+      "^\\ \\ \\ \\ std::array<VkDescriptorImageInfo,\\ 5>\\ info\\{\\};$",
+      "^\\ \\ \\ \\ std::array<VkWriteDescriptorSet,\\ 5>\\ write\\{\\};$"
+    ],
+    "name": "f02c-lightingbu2",
+    "role": "worker/cpp-games",
+    "out": "engine/src/LightingBuffer.cpp",
+    "prompt": "Kreative Kompas Engine (C++20, Vulkan, forward renderer): ENG-F02 part 4 adds refraction: with reflections on, the 3D pass pauses before the see-through surfaces, a compute pass (kke::BehindPass) copies the scene drawn so far with each pixel's distance from the camera, and drawTranslucent's first pass reads that copy where the refracted ray leads (translucent_refract.frag).  Make these 3 edits in engine/src/LightingBuffer.cpp, each its own SEARCH/REPLACE block.\nEdit 1. Your SEARCH block is exactly these lines:\n```\n                                                          { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 5 * kSlotCount } } };\n    VkDescriptorPoolCreateInfo poolInfo{};\n    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;\n    poolInfo.maxSets = kSlotCount;\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n                                                          { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 6 * kSlotCount } } };\n    VkDescriptorPoolCreateInfo poolInfo{};\n    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;\n    poolInfo.maxSets = kSlotCount;\n```\nEdit 2. Your SEARCH block is exactly these lines:\n```\n    std::array<VkDescriptorImageInfo, 5> info{};\n    info[0] = { map.sampler(), map.imageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };\n    info[1] = gi ? VkDescriptorImageInfo{ m_giSampler, m_giLight, VK_IMAGE_LAYOUT_GENERAL }\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n    std::array<VkDescriptorImageInfo, 6> info{};\n    info[0] = { map.sampler(), map.imageView(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };\n    info[1] = gi ? VkDescriptorImageInfo{ m_giSampler, m_giLight, VK_IMAGE_LAYOUT_GENERAL }\n```\nEdit 3. Your SEARCH block is exactly these lines:\n```\n    std::array<VkWriteDescriptorSet, 5> write{};\n    for (uint32_t i = 0; i < 5; ++i) {\n        write[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;\n        write[i].dstSet = m_descriptorSets[slot];\n        write[i].dstBinding = 1 + i;\n```\nand your REPLACE block is exactly these lines, copied as they are:\n```\n    info[5] = m_behind && m_behindSampler ? VkDescriptorImageInfo{ m_behindSampler, m_behind, VK_IMAGE_LAYOUT_GENERAL } : none;\n    std::array<VkWriteDescriptorSet, 6> write{};\n    for (uint32_t i = 0; i < 6; ++i) {\n        write[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;\n        write[i].dstSet = m_descriptorSets[slot];\n        write[i].dstBinding = 1 + i;\n```\nChange nothing else; do not copy or move any other line.\n",
+    "check": "python3 ${KKE_TOOLS:-/home/khyretos/Server-Docker/Personal-projects/kreative-kompanion-tasks/kk-engine-tools}/jobs/chk_g09.py f02clightingbu2",
+    "precheck": false,
+    "context": [],
+    "max_tokens": 1405
+  }
+]

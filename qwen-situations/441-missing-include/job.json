@@ -1,0 +1,18 @@
+[
+  {
+    "name": "r1h-shader-r1",
+    "role": "worker/cpp-games",
+    "mode": "file",
+    "out": "engine/src/rhi/VulkanPipeline.cpp",
+    "prompt": "Kreative Kompas Engine (C++20, Vulkan): R1h moves shader and pipeline creation behind the render hardware interface (docs/plans/rhi.md). rhi::Device has createShaderModule(SPIR-V words) and createGraphicsPipeline(rhi::GraphicsPipelineDesc) (kke/rhi/GraphicsPipeline.h, kke/rhi/Device.h); VulkanGpuDevice (kke/rhi/VulkanDevice.h) implements them on Vulkan. The pipelines must come out exactly as kke::Pipeline's constructor in engine/src/Pipeline.cpp made them before: that code is the reference. Write engine/src/rhi/VulkanPipeline.cpp: VulkanShaderModule's constructor (VkShaderModuleCreateInfo with codeSize = spirv.size() * 4 and pCode = spirv.data(); vkCreateShaderModule on `device` wrapped in VK_CHECK, like loadShaderModule in engine/src/ShaderUtils.cpp), its destructor (vkDestroyShaderModule when m_module is not null) and VulkanGpuDevice::createShaderModule(spirv), which returns std::make_unique<VulkanShaderModule>(m_device.device(), spirv). m_device in VulkanGpuDevice is a kke::VulkanDevice&; include kke/VulkanDevice.h and kke/VulkanCheck.h. No stubs, no exceptions of your own.\nAnswer with the file's contents only, in one ```cpp fence: no shell commands and no other file.",
+    "check": "sh /home/khyretos/kk-engine-scratch/kchk.sh /home/khyretos/Docker/Personal-projects/kk-wt-r1h 'RhiDevice.*'",
+    "precheck": false,
+    "context": [
+      "engine/include/kke/rhi/VulkanDevice.h",
+      "engine/src/ShaderUtils.cpp",
+      "engine/src/rhi/VulkanPipeline.cpp"
+    ],
+    "max_tokens": 1500,
+    "review": false
+  }
+]
