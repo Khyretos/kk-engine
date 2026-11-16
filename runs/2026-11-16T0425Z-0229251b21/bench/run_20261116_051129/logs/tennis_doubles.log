@@ -1,0 +1,129 @@
+[2026-11-16 05:23:40.866][engine][Application][Tennis][info]: Hardware target: desktop (no specific device recognised); platform backend: desktop
+[2026-11-16 05:23:40.866][engine][Application][Tennis][info]: UI profile: desktop
+[2026-11-16 05:23:40.866][engine][Governor][Tennis][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 1.00
+[2026-11-16 05:23:40.871][engine][VulkanDevice][Tennis][info]: using device: llvmpipe (LLVM 23.1.2, 256 bits)
+[2026-11-16 05:23:40.871][engine][VulkanDevice][Tennis][info]: inline ray tracing (VK_KHR_ray_query): on
+[2026-11-16 05:23:40.947][engine][SwapChain][Tennis][info]: colour output: format 50 (8-bit sRGB)
+[2026-11-16 05:23:40.947][engine][Application][Tennis][info]: Hardware target: software-gpu (the only Vulkan device is a CPU: llvmpipe (LLVM 23.1.2, 256 bits))
+[2026-11-16 05:23:40.947][engine][Governor][Tennis][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+[2026-11-16 05:23:40.948][engine][Application][Tennis][info]: MSAA 1x (software rasteriser)
+[2026-11-16 05:23:41.039][engine][Application][Tennis][info]: mood 'clear_day' (assets/moods/clear_day.yaml)
+[2026-11-16 05:23:41.039][engine][Benchmark][Tennis][info]: benchmark: 5 s warm-up, then 45 s measured, uncapped (no vsync, no frame cap)
+[2026-11-16 05:23:41.040][engine][Settings][Tennis][info]: no settings file at 'settings.json' (using defaults)
+[2026-11-16 05:23:41.040][engine][Governor][Tennis][info]: budget: 2 worker thread(s), frame cap 0, background cap 15, render scale 0.75
+[2026-11-16 05:23:41.072][engine][ClothGpu][Tennis][info]: no compute queue of its own on this GPU: cloth pairs are searched on the CPU (KKE_CLOTH_GPU=shared to try the graphics queue)
+[2026-11-16 05:23:41.072][engine][RigidBodies][Tennis][info]: Jolt rigid-body world ready (65536 max bodies)
+[2026-11-16 05:23:41.072][engine][Physics][Tennis][info]: Task system: 2 worker(s) (4 usable cores)
+[2026-11-16 05:23:41.072][engine][Physics][Tennis][info]: FEMFX constraint solver memory: 67.2 MB
+[2026-11-16 05:23:41.143][engine][Physics][Tennis][info]: FEMFX scene created (ground + 0 object(s), cap=512)
+[rmlui] Loaded font face 'Noto Sans' [regular] from 'assets/fonts/NotoSans-Regular.ttf'.
+[rmlui] Loaded font face 'Noto Sans' [bold] from 'assets/fonts/NotoSans-Bold.ttf'.
+[rmlui] Loaded font face 'Noto Sans' [italic] from 'assets/fonts/NotoSans-Italic.ttf'.
+[rmlui] Loaded font face 'Noto Color Emoji' [regular] from 'assets/fonts/NotoColorEmoji.ttf'.
+[ui] RmlUi initialised with real Vulkan rendering (text via glyph textures, <img>/background-image via stb_image, both real now -- see RmlVulkanRenderInterface.h)
+[2026-11-16 05:23:41.355][engine][Audio][Tennis][info]: Audio ready: 48000 Hz, 32 voices, output: Speakers (Realtek High Definition Audio) (WASAPI)
+[2026-11-16 05:23:41.381][engine][Voice][Tennis][info]: Voice chat ready: Opus 24 kbit/s, microphone: NULL Capture Device, noise suppression, echo cancellation
+[2026-11-16 05:23:41.732][engine][Models][Tennis][info]: loaded 'C:\forgejo-runner\work\a1436a3807f6985b\tmp\kke-run\pkg\assets\animations\UAL1_Standard.fbx': 2 mesh part(s), 13744 triangles, 2 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:41.737][engine][Tennis][Tennis][info]: people: no Synty packs (assets/synty or KKE_ASSETS_DIR), so everyone is the mannequin
+[2026-11-16 05:23:41.742][engine][Models][Tennis][info]: loaded 'tennis/person': 2 mesh part(s), 13744 triangles, 2 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:41.747][engine][Tennis][Tennis][info]: UAL2.fbx not found (assets/animations, or the 'Universal Animation Library 2' pack in the asset folder): players turn to run sideways instead of side-stepping
+[2026-11-16 05:23:41.781][engine][Tennis][Tennis][info]: sport center: 10 courts, 120 FEMFX walls and nets for the balls, 112 Jolt bodies
+[2026-11-16 05:23:41.806][engine][Tennis][Tennis][info]: sport center: 0 people here, 60 in the crowd, CPU players on the free courts: yes
+[2026-11-16 05:23:41.813][engine][Models][Tennis][info]: loaded 'tennis/person/0ed0bf0990e70d70dd0730d90590ff073033': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:41.822][engine][Models][Tennis][info]: loaded 'tennis/person/0de0ab0800e80b308b0eb0eb0e60a8099070': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:41.830][engine][Models][Tennis][info]: loaded 'tennis/person/0ed0bf09907b0800d80730d90590ff073033': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:41.839][engine][Models][Tennis][info]: loaded 'tennis/person/0de0ab0800d50c80e80eb0eb0e60a8099070': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:41.846][engine][Tennis][Tennis][info]: doubles match on court 1: Slice (CPU) (team 1), Ace (CPU) (team 2), Slice (CPU) (team 1), Ace (CPU) (team 2); first to 6 games
+[2026-11-16 05:23:41.853][engine][Models][Tennis][info]: loaded 'tennis/person/06b04502b0b809d09909e0610d90ff073033': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:41.861][engine][Models][Tennis][info]: loaded 'tennis/person/0f50cc0b00d109b06a0eb0eb0e602609e09e': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:41.870][engine][Models][Tennis][info]: loaded 'tennis/person/0ed0bf0990b00ef0b70730d90590ff073033': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:41.878][engine][Models][Tennis][info]: loaded 'tennis/person/0de0ab08008e0820c60eb0eb0e60a8099070': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:41.883][engine][Tennis][Tennis][info]: doubles match on court 2: Lobster (CPU) (team 1), Smash (CPU) (team 2), Slice (CPU) (team 1), Ace (CPU) (team 2); first to 6 games
+[2026-11-16 05:23:41.891][engine][Models][Tennis][info]: loaded 'tennis/person/0ed0bf0990f008c0970730d90590ff073033': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:41.899][engine][Models][Tennis][info]: loaded 'tennis/person/0de0ab0800a00cc0c00eb0eb0e60a8099070': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:41.907][engine][Models][Tennis][info]: loaded 'tennis/person/0ed0bf0990e807306a0730d90590ff073033': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:41.916][engine][Models][Tennis][info]: loaded 'tennis/person/08c05c0380ed08a0d10590a60ff0590a60ff': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:41.921][engine][Tennis][Tennis][info]: doubles match on court 3: Slice (CPU) (team 1), Ace (CPU) (team 2), Slice (CPU) (team 1), Chip (CPU) (team 2); first to 6 games
+[2026-11-16 05:23:41.928][engine][Models][Tennis][info]: loaded 'tennis/person/0f50cc0b009a0be0e80eb0eb0e60a8099070': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:41.937][engine][Models][Tennis][info]: loaded 'tennis/person/0f50cc0b008f07c09b0eb0eb0e602609e09e': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:41.945][engine][Models][Tennis][info]: loaded 'tennis/person/08c05c0380930ac0d30590a60ff0590a60ff': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:41.954][engine][Models][Tennis][info]: loaded 'tennis/person/0f50cc0b00d50860c70eb0eb0e60a8099070': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:41.958][engine][Tennis][Tennis][info]: doubles match on court 4: Rally (CPU) (team 1), Smash (CPU) (team 2), Chip (CPU) (team 1), Rally (CPU) (team 2); first to 6 games
+[2026-11-16 05:23:41.966][engine][Models][Tennis][info]: loaded 'tennis/person/0f50cc0b00d909c08d0eb0eb0e602609e09e': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:41.975][engine][Models][Tennis][info]: loaded 'tennis/person/06b04502b08b0e30b609e0610d90ff073033': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:41.983][engine][Models][Tennis][info]: loaded 'tennis/person/0de0ab08006606806a0eb0eb0e60a8099070': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:41.991][engine][Models][Tennis][info]: loaded 'tennis/person/08c05c0380780f409c0590a60ff0590a60ff': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:41.996][engine][Tennis][Tennis][info]: doubles match on court 5: Smash (CPU) (team 1), Lobster (CPU) (team 2), Ace (CPU) (team 1), Chip (CPU) (team 2); first to 6 games
+[2026-11-16 05:23:42.004][engine][Models][Tennis][info]: loaded 'tennis/person/06b04502b0a30ef0830730d9059038052085': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:42.013][engine][Models][Tennis][info]: loaded 'tennis/person/06b04502b06d0cb07109e0610d90ff073033': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:42.022][engine][Models][Tennis][info]: loaded 'tennis/person/08c05c0380870b30cf0590a60ff0590a60ff': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:42.030][engine][Models][Tennis][info]: loaded 'tennis/person/0ed0bf0990950b60970730d90590ff073033': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:42.035][engine][Tennis][Tennis][info]: doubles match on court 6: Spin (CPU) (team 1), Lobster (CPU) (team 2), Chip (CPU) (team 1), Slice (CPU) (team 2); first to 6 games
+[2026-11-16 05:23:42.042][engine][Models][Tennis][info]: loaded 'tennis/person/08c05c03806a0ad0be0590a60ff0590a60ff': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:42.051][engine][Models][Tennis][info]: loaded 'tennis/person/04d03001f08209a0b40590a60ff038052085': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:42.060][engine][Models][Tennis][info]: loaded 'tennis/person/0f50cc0b009806b0710eb0eb0e60a8099070': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:42.068][engine][Models][Tennis][info]: loaded 'tennis/person/0ed0bf0990820830a00730d90590ff073033': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:42.073][engine][Tennis][Tennis][info]: doubles match on court 7: Chip (CPU) (team 1), Deuce (CPU) (team 2), Rally (CPU) (team 1), Slice (CPU) (team 2); first to 6 games
+[2026-11-16 05:23:42.081][engine][Models][Tennis][info]: loaded 'tennis/person/0f50cc0b00bf0690ca0eb0eb0e60a8099070': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:42.089][engine][Models][Tennis][info]: loaded 'tennis/person/0ed0bf0990e70680a10730d90590ff073033': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:42.097][engine][Models][Tennis][info]: loaded 'tennis/person/06b04502b0880680a20730d9059038052085': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:42.106][engine][Models][Tennis][info]: loaded 'tennis/person/0f50cc0b00a10900950eb0eb0e60a8099070': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:42.110][engine][Tennis][Tennis][info]: doubles match on court 8: Rally (CPU) (team 1), Slice (CPU) (team 2), Spin (CPU) (team 1), Rally (CPU) (team 2); first to 6 games
+[2026-11-16 05:23:42.118][engine][Models][Tennis][info]: loaded 'tennis/person/06b04502b0b50eb0af09e0610d90ff073033': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:42.127][engine][Models][Tennis][info]: loaded 'tennis/person/0f50cc0b00e00670c30eb0eb0e60a8099070': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:42.135][engine][Models][Tennis][info]: loaded 'tennis/person/06b04502b0ec07d0810730d9059038052085': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:42.144][engine][Models][Tennis][info]: loaded 'tennis/person/0de0ab0800c10cb0e50eb0eb0e60a8099070': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:42.148][engine][Tennis][Tennis][info]: doubles match on court 9: Lobster (CPU) (team 1), Rally (CPU) (team 2), Spin (CPU) (team 1), Ace (CPU) (team 2); first to 6 games
+[2026-11-16 05:23:42.156][engine][Models][Tennis][info]: loaded 'tennis/person/06b04502b0cf0c507409e0610d90ff073033': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:42.165][engine][Models][Tennis][info]: loaded 'tennis/person/06b04502b08d06f0ef09e0610d90ff073033': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:42.173][engine][Models][Tennis][info]: loaded 'tennis/person/04d03001f0880e80e70380520850ff0d1038': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:42.182][engine][Models][Tennis][info]: loaded 'tennis/person/0f50cc0b00710ac0ed0eb0eb0e60a8099070': 8 mesh part(s), 13744 triangles, 4 material(s), 66 bone(s), 43 animation(s), bounds (-0.97,0.00,-0.21)..(0.97,1.83,0.16)
+[2026-11-16 05:23:42.186][engine][Tennis][Tennis][info]: doubles match on court 10: Lobster (CPU) (team 1), Lobster (CPU) (team 2), Drive (CPU) (team 1), Rally (CPU) (team 2); first to 6 games
+[2026-11-16 05:23:42.186][engine][Tennis][Tennis][info]: benchmark (doubles): 10 matches, 40 players, 50 watching, 10 walking; FEMFX: 10 balls and 40 string beds
+[2026-11-16 05:23:42.190][engine][Governor][Tennis][info]: budget: 2 worker thread(s), frame cap 0, background cap 0, render scale 0.75
+[2026-11-16 05:23:42.191][engine][Input][Tennis][info]: touch controls: stick left, look look.rate, button tennis.topspin, button tennis.flat, button tennis.slice, button tennis.lob, pause
+[2026-11-16 05:23:42.566][engine][Physics][Tennis][info]: perf: 0.7 fps, 0.0 ticks/s, step avg 0.00 ms max 0.00 ms, render prep 0.72 ms, 50 object(s) / 50 piece(s), 50 awake piece(s), 1920 faces drawn
+[2026-11-16 05:23:47.013][engine][Physics][Tennis][info]: perf: 0.2 fps, 0.2 ticks/s, step avg 40.59 ms max 40.59 ms, render prep 0.46 ms, 50 object(s) / 50 piece(s), 50 awake piece(s), 1920 faces drawn
+[2026-11-16 05:23:48.498][engine][Physics][Tennis][info]: perf: 2.0 fps, 2.0 ticks/s, step avg 39.33 ms max 39.60 ms, render prep 0.35 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:23:49.903][engine][Physics][Tennis][info]: perf: 2.1 fps, 2.1 ticks/s, step avg 31.06 ms max 32.51 ms, render prep 0.13 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:23:51.213][engine][Physics][Tennis][info]: perf: 2.3 fps, 2.3 ticks/s, step avg 32.79 ms max 32.87 ms, render prep 0.13 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:23:52.586][engine][Physics][Tennis][info]: perf: 2.2 fps, 2.2 ticks/s, step avg 33.31 ms max 33.43 ms, render prep 0.13 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:23:53.614][engine][Physics][Tennis][info]: perf: 1.9 fps, 1.9 ticks/s, step avg 33.31 ms max 33.35 ms, render prep 0.13 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:23:54.712][engine][Physics][Tennis][info]: perf: 1.8 fps, 1.8 ticks/s, step avg 33.39 ms max 33.44 ms, render prep 0.13 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:23:55.816][engine][Physics][Tennis][info]: perf: 1.8 fps, 1.8 ticks/s, step avg 33.47 ms max 33.73 ms, render prep 0.13 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:23:57.027][engine][Physics][Tennis][info]: perf: 3.3 fps, 3.3 ticks/s, step avg 32.96 ms max 33.31 ms, render prep 0.13 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:23:58.054][engine][Physics][Tennis][info]: perf: 2.9 fps, 2.9 ticks/s, step avg 32.86 ms max 33.07 ms, render prep 0.13 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:23:59.141][engine][Physics][Tennis][info]: perf: 2.8 fps, 2.8 ticks/s, step avg 34.28 ms max 35.05 ms, render prep 0.13 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:24:00.230][engine][Physics][Tennis][info]: perf: 2.8 fps, 2.8 ticks/s, step avg 32.46 ms max 32.70 ms, render prep 0.13 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:24:01.326][engine][Physics][Tennis][info]: perf: 3.6 fps, 3.6 ticks/s, step avg 32.62 ms max 32.83 ms, render prep 0.13 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:24:02.484][engine][Physics][Tennis][info]: perf: 4.3 fps, 4.3 ticks/s, step avg 32.44 ms max 32.60 ms, render prep 0.13 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:24:03.636][engine][Physics][Tennis][info]: perf: 4.3 fps, 4.3 ticks/s, step avg 32.86 ms max 33.05 ms, render prep 0.13 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:24:04.872][engine][Physics][Tennis][info]: perf: 4.0 fps, 4.0 ticks/s, step avg 32.75 ms max 33.10 ms, render prep 0.13 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:24:05.951][engine][Physics][Tennis][info]: perf: 2.8 fps, 2.8 ticks/s, step avg 32.73 ms max 32.77 ms, render prep 0.13 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:24:07.090][engine][Physics][Tennis][info]: perf: 3.5 fps, 3.5 ticks/s, step avg 32.65 ms max 33.13 ms, render prep 0.13 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:24:08.252][engine][Physics][Tennis][info]: perf: 4.3 fps, 4.3 ticks/s, step avg 32.75 ms max 32.83 ms, render prep 0.13 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:24:09.411][engine][Physics][Tennis][info]: perf: 4.3 fps, 4.3 ticks/s, step avg 33.01 ms max 33.85 ms, render prep 0.13 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:24:10.491][engine][Physics][Tennis][info]: perf: 2.8 fps, 2.8 ticks/s, step avg 32.87 ms max 33.10 ms, render prep 0.13 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:24:11.580][engine][Physics][Tennis][info]: perf: 2.8 fps, 2.8 ticks/s, step avg 33.06 ms max 33.34 ms, render prep 0.13 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:24:12.622][engine][Physics][Tennis][info]: perf: 2.9 fps, 2.9 ticks/s, step avg 32.78 ms max 32.97 ms, render prep 0.13 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:24:13.681][engine][Physics][Tennis][info]: perf: 2.8 fps, 2.8 ticks/s, step avg 32.40 ms max 32.56 ms, render prep 0.13 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:24:15.165][engine][Physics][Tennis][info]: perf: 2.0 fps, 2.0 ticks/s, step avg 32.42 ms max 32.67 ms, render prep 0.13 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:24:16.376][engine][Physics][Tennis][info]: perf: 1.7 fps, 1.7 ticks/s, step avg 33.26 ms max 33.64 ms, render prep 0.13 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:24:17.478][engine][Physics][Tennis][info]: perf: 1.8 fps, 1.8 ticks/s, step avg 33.20 ms max 33.20 ms, render prep 0.13 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:24:18.783][engine][Physics][Tennis][info]: perf: 2.3 fps, 2.3 ticks/s, step avg 33.21 ms max 33.69 ms, render prep 0.13 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:24:20.129][engine][Physics][Tennis][info]: perf: 3.0 fps, 3.0 ticks/s, step avg 29.66 ms max 34.04 ms, render prep 0.13 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:24:21.151][engine][Physics][Tennis][info]: perf: 2.9 fps, 2.9 ticks/s, step avg 28.21 ms max 28.35 ms, render prep 0.13 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:24:22.222][engine][Physics][Tennis][info]: perf: 2.8 fps, 2.8 ticks/s, step avg 28.25 ms max 28.27 ms, render prep 0.12 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:24:23.251][engine][Physics][Tennis][info]: perf: 2.9 fps, 2.9 ticks/s, step avg 28.20 ms max 28.23 ms, render prep 0.13 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:24:24.385][engine][Physics][Tennis][info]: perf: 3.5 fps, 3.5 ticks/s, step avg 28.34 ms max 28.64 ms, render prep 0.12 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:24:25.505][engine][Physics][Tennis][info]: perf: 3.6 fps, 3.6 ticks/s, step avg 28.23 ms max 28.24 ms, render prep 0.12 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:24:26.664][engine][Physics][Tennis][info]: perf: 3.5 fps, 3.5 ticks/s, step avg 28.38 ms max 28.65 ms, render prep 0.13 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:24:28.053][engine][Physics][Tennis][info]: perf: 2.9 fps, 2.9 ticks/s, step avg 28.30 ms max 28.37 ms, render prep 0.12 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:24:29.327][engine][Physics][Tennis][info]: perf: 2.4 fps, 2.4 ticks/s, step avg 28.24 ms max 28.26 ms, render prep 0.13 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:24:30.545][engine][Physics][Tennis][info]: perf: 2.5 fps, 2.5 ticks/s, step avg 28.23 ms max 28.29 ms, render prep 0.13 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:24:31.733][engine][Physics][Tennis][info]: perf: 2.5 fps, 2.5 ticks/s, step avg 28.23 ms max 28.26 ms, render prep 0.13 ms, 50 object(s) / 50 piece(s), 10 awake piece(s), 1920 faces drawn
+[2026-11-16 05:24:33.029][engine][Benchmark][Tennis][info]: benchmark: 6 screenshot(s) in C:/forgejo-runner/work/a1436a3807f6985b/hostexecutor/results/bench/run_20261116_051129/reports/shots
+[2026-11-16 05:24:33.030][engine][Benchmark][Tennis][info]: benchmark: 108 frames, 2.9 fps avg, 1.6 fps 1% low, 1 hitch(es), verdict too slow; report C:\forgejo-runner\work\a1436a3807f6985b\hostexecutor\results\bench\run_20261116_051129\reports\tennis_doubles.json
+[2026-11-16 05:24:33.036][engine][Voice][Tennis][info]: Voice chat: sent 0 frames, played 0, concealed 0; late 0, skipped 0, playback underruns 0
+[2026-11-16 05:24:33.045][engine][Audio][Tennis][info]: Audio: 68 impacts played, 27 skipped (cooldown/cap), 0 breaks, 0 footsteps, voices dropped 52 stolen 0; room RT60 1.24 s wet 0.00
+[2026-11-16 05:24:33.142][engine][Physics][Tennis][info]: FEMFX scene destroyed
