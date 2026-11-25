@@ -1,0 +1,2706 @@
+{
+ "broken_modules": [],
+ "config": {
+  "fixed_update_hz": "60",
+  "frame_cap": "none",
+  "game": "Kreative Kompas Engine - Cloth Demo",
+  "hitch_rule": "frame > 2.00 x median of the last 61 frames and > median + 8 ms",
+  "measure_s": 84.0,
+  "mood": "studio",
+  "msaa": "1",
+  "render_resolution": "960x540",
+  "render_scale": "0.75",
+  "suite_item": "cloth_tour",
+  "uncapped": true,
+  "vsync": "off",
+  "warmup_s": 2.0,
+  "worker_threads": "2"
+ },
+ "events": [
+  {
+   "t_s": -2.0,
+   "what": "cloth scene Fabrics, protection Full"
+  },
+  {
+   "t_s": -2.0,
+   "what": "window resized to 1280x720"
+  }
+ ],
+ "events_not_listed": 0,
+ "format": "kke-benchmark-game/1",
+ "hitches": [
+  {
+   "cause": "simulate took 190.9 ms (usually 22.5 ms), mostly ClothDemo fixedUpdate() 190.7 ms",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 278.767,
+   "gpu_ms": 86.755,
+   "median_ms": 135.541,
+   "rss_delta_mb": 0.133,
+   "rss_mb": 253.848,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.011,
+    "gpu_wait": 0.054,
+    "idle": 0.008,
+    "present": 79.684,
+    "record": 0.593,
+    "simulate": 190.881,
+    "update": 7.536
+   },
+   "t_s": 2.404,
+   "time": "2026-11-25 05:21:25.221",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "ClothDemo",
+     "ms": 190.688
+    },
+    {
+     "call": "update",
+     "module": "ClothDemo",
+     "ms": 7.528
+    },
+    {
+     "call": "renderUi",
+     "module": "UI",
+     "ms": 0.197
+    }
+   ]
+  },
+  {
+   "cause": "simulate took 168.7 ms (usually 67.1 ms), mostly ClothDemo fixedUpdate() 168.5 ms",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 299.604,
+   "gpu_ms": 80.923,
+   "median_ms": 143.706,
+   "rss_delta_mb": -1.07,
+   "rss_mb": 265.563,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.01,
+    "gpu_wait": 0.052,
+    "idle": 0.008,
+    "present": 127.629,
+    "record": 0.665,
+    "simulate": 168.666,
+    "update": 2.575
+   },
+   "t_s": 12.961,
+   "time": "2026-11-25 05:21:35.778",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "ClothDemo",
+     "ms": 168.514
+    },
+    {
+     "call": "update",
+     "module": "ClothDemo",
+     "ms": 2.567
+    },
+    {
+     "call": "renderUi",
+     "module": "UI",
+     "ms": 0.223
+    }
+   ]
+  },
+  {
+   "cause": "present took 365.2 ms (usually 101.1 ms)",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 405.986,
+   "gpu_ms": 108.673,
+   "median_ms": 135.439,
+   "rss_delta_mb": -5.129,
+   "rss_mb": 265.41,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.015,
+    "gpu_wait": 0.055,
+    "idle": 0.008,
+    "present": 365.208,
+    "record": 0.672,
+    "simulate": 37.266,
+    "update": 2.761
+   },
+   "t_s": 22.132,
+   "time": "2026-11-25 05:21:44.949",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "ClothDemo",
+     "ms": 37.1
+    },
+    {
+     "call": "update",
+     "module": "ClothDemo",
+     "ms": 2.753
+    },
+    {
+     "call": "renderOverlay",
+     "module": "UI",
+     "ms": 0.23
+    }
+   ]
+  },
+  {
+   "cause": "simulate took 163.8 ms (usually 38.3 ms), mostly ClothDemo fixedUpdate() 163.6 ms",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 269.47,
+   "gpu_ms": 84.222,
+   "median_ms": 128.666,
+   "rss_delta_mb": 0.992,
+   "rss_mb": 268.469,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.01,
+    "gpu_wait": 0.06,
+    "idle": 0.008,
+    "present": 102.472,
+    "record": 0.592,
+    "simulate": 163.768,
+    "update": 2.561
+   },
+   "t_s": 36.681,
+   "time": "2026-11-25 05:21:59.497",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "ClothDemo",
+     "ms": 163.596
+    },
+    {
+     "call": "update",
+     "module": "ClothDemo",
+     "ms": 2.554
+    },
+    {
+     "call": "renderOverlay",
+     "module": "UI",
+     "ms": 0.197
+    }
+   ]
+  },
+  {
+   "cause": "simulate took 172.1 ms (usually 38.8 ms), mostly ClothDemo fixedUpdate() 171.9 ms",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 262.552,
+   "gpu_ms": 101.266,
+   "median_ms": 128.666,
+   "rss_delta_mb": 0.777,
+   "rss_mb": 269.246,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.018,
+    "gpu_wait": 0.054,
+    "idle": 0.009,
+    "present": 87.214,
+    "record": 0.598,
+    "simulate": 172.102,
+    "update": 2.558
+   },
+   "t_s": 37.101,
+   "time": "2026-11-25 05:21:59.917",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "ClothDemo",
+     "ms": 171.948
+    },
+    {
+     "call": "update",
+     "module": "ClothDemo",
+     "ms": 2.551
+    },
+    {
+     "call": "renderUi",
+     "module": "UI",
+     "ms": 0.201
+    }
+   ]
+  },
+  {
+   "cause": "simulate took 222.2 ms (usually 40.4 ms), mostly ClothDemo fixedUpdate() 222.0 ms",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 352.056,
+   "gpu_ms": 78.796,
+   "median_ms": 127.937,
+   "rss_delta_mb": -0.992,
+   "rss_mb": 267.547,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.01,
+    "gpu_wait": 0.058,
+    "idle": 0.007,
+    "present": 126.556,
+    "record": 0.681,
+    "simulate": 222.174,
+    "update": 2.571
+   },
+   "t_s": 38.696,
+   "time": "2026-11-25 05:22:01.512",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "ClothDemo",
+     "ms": 222.009
+    },
+    {
+     "call": "update",
+     "module": "ClothDemo",
+     "ms": 2.563
+    },
+    {
+     "call": "renderUi",
+     "module": "UI",
+     "ms": 0.226
+    }
+   ]
+  },
+  {
+   "cause": "simulate took 130.2 ms (usually 41.5 ms), mostly ClothDemo fixedUpdate() 130.0 ms",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 259.392,
+   "gpu_ms": 81.747,
+   "median_ms": 127.201,
+   "rss_delta_mb": 0.078,
+   "rss_mb": 269.418,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.01,
+    "gpu_wait": 0.054,
+    "idle": 0.007,
+    "present": 125.958,
+    "record": 0.609,
+    "simulate": 130.182,
+    "update": 2.574
+   },
+   "t_s": 40.408,
+   "time": "2026-11-25 05:22:03.225",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "ClothDemo",
+     "ms": 130.018
+    },
+    {
+     "call": "update",
+     "module": "ClothDemo",
+     "ms": 2.566
+    },
+    {
+     "call": "renderUi",
+     "module": "UI",
+     "ms": 0.202
+    }
+   ]
+  },
+  {
+   "cause": "simulate took 164.9 ms (usually 42.0 ms), mostly ClothDemo fixedUpdate() 164.7 ms",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 290.975,
+   "gpu_ms": 74.249,
+   "median_ms": 127.937,
+   "rss_delta_mb": 0.828,
+   "rss_mb": 269.348,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.01,
+    "gpu_wait": 0.062,
+    "idle": 0.008,
+    "present": 122.829,
+    "record": 0.616,
+    "simulate": 164.887,
+    "update": 2.564
+   },
+   "t_s": 40.992,
+   "time": "2026-11-25 05:22:03.809",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "ClothDemo",
+     "ms": 164.727
+    },
+    {
+     "call": "update",
+     "module": "ClothDemo",
+     "ms": 2.557
+    },
+    {
+     "call": "renderUi",
+     "module": "UI",
+     "ms": 0.204
+    }
+   ]
+  },
+  {
+   "cause": "simulate took 170.9 ms (usually 46.0 ms), mostly ClothDemo fixedUpdate() 170.7 ms",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 278.988,
+   "gpu_ms": 88.914,
+   "median_ms": 137.819,
+   "rss_delta_mb": 0.051,
+   "rss_mb": 272.762,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.016,
+    "gpu_wait": 0.061,
+    "idle": 0.008,
+    "present": 104.876,
+    "record": 0.61,
+    "simulate": 170.858,
+    "update": 2.56
+   },
+   "t_s": 47.385,
+   "time": "2026-11-25 05:22:10.202",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "ClothDemo",
+     "ms": 170.698
+    },
+    {
+     "call": "update",
+     "module": "ClothDemo",
+     "ms": 2.552
+    },
+    {
+     "call": "renderUi",
+     "module": "UI",
+     "ms": 0.212
+    }
+   ]
+  },
+  {
+   "cause": "simulate took 192.8 ms (usually 47.0 ms), mostly ClothDemo fixedUpdate() 192.6 ms",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 350.563,
+   "gpu_ms": 89.5,
+   "median_ms": 137.819,
+   "rss_delta_mb": 0.055,
+   "rss_mb": 272.879,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.009,
+    "gpu_wait": 0.048,
+    "idle": 0.008,
+    "present": 154.218,
+    "record": 0.757,
+    "simulate": 192.814,
+    "update": 2.709
+   },
+   "t_s": 48.897,
+   "time": "2026-11-25 05:22:11.714",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "ClothDemo",
+     "ms": 192.646
+    },
+    {
+     "call": "update",
+     "module": "ClothDemo",
+     "ms": 2.701
+    },
+    {
+     "call": "renderOverlay",
+     "module": "UI",
+     "ms": 0.256
+    }
+   ]
+  },
+  {
+   "cause": "simulate took 189.0 ms (usually 47.7 ms), mostly ClothDemo fixedUpdate() 188.9 ms",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 280.125,
+   "gpu_ms": 87.859,
+   "median_ms": 135.741,
+   "rss_delta_mb": -1.074,
+   "rss_mb": 272.773,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.01,
+    "gpu_wait": 0.056,
+    "idle": 0.007,
+    "present": 87.859,
+    "record": 0.597,
+    "simulate": 189.035,
+    "update": 2.56
+   },
+   "t_s": 49.855,
+   "time": "2026-11-25 05:22:12.672",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "ClothDemo",
+     "ms": 188.875
+    },
+    {
+     "call": "update",
+     "module": "ClothDemo",
+     "ms": 2.552
+    },
+    {
+     "call": "renderUi",
+     "module": "UI",
+     "ms": 0.197
+    }
+   ]
+  },
+  {
+   "cause": "simulate took 168.7 ms (usually 48.2 ms), mostly ClothDemo fixedUpdate() 168.6 ms",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 337.076,
+   "gpu_ms": 86.982,
+   "median_ms": 135.741,
+   "rss_delta_mb": -0.133,
+   "rss_mb": 272.711,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.017,
+    "gpu_wait": 0.051,
+    "idle": 0.008,
+    "present": 148.722,
+    "record": 0.61,
+    "simulate": 168.747,
+    "update": 18.922
+   },
+   "t_s": 50.44,
+   "time": "2026-11-25 05:22:13.257",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "ClothDemo",
+     "ms": 168.59
+    },
+    {
+     "call": "update",
+     "module": "ClothDemo",
+     "ms": 18.913
+    },
+    {
+     "call": "renderUi",
+     "module": "UI",
+     "ms": 0.202
+    }
+   ]
+  },
+  {
+   "cause": "simulate took 163.9 ms (usually 48.6 ms), mostly ClothDemo fixedUpdate() 163.7 ms",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 307.298,
+   "gpu_ms": 101.337,
+   "median_ms": 137.819,
+   "rss_delta_mb": 0.07,
+   "rss_mb": 272.781,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.009,
+    "gpu_wait": 0.086,
+    "idle": 0.007,
+    "present": 112.464,
+    "record": 0.935,
+    "simulate": 163.915,
+    "update": 29.882
+   },
+   "t_s": 50.777,
+   "time": "2026-11-25 05:22:13.594",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "ClothDemo",
+     "ms": 163.736
+    },
+    {
+     "call": "update",
+     "module": "ClothDemo",
+     "ms": 29.872
+    },
+    {
+     "call": "renderUi",
+     "module": "UI",
+     "ms": 0.332
+    }
+   ]
+  },
+  {
+   "cause": "simulate took 214.5 ms (usually 49.2 ms), mostly ClothDemo fixedUpdate() 214.3 ms",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 331.178,
+   "gpu_ms": 84.536,
+   "median_ms": 152.816,
+   "rss_delta_mb": 0.031,
+   "rss_mb": 272.762,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.009,
+    "gpu_wait": 2.649,
+    "idle": 0.007,
+    "present": 109.635,
+    "record": 1.505,
+    "simulate": 214.458,
+    "update": 2.914
+   },
+   "t_s": 51.907,
+   "time": "2026-11-25 05:22:14.723",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "ClothDemo",
+     "ms": 214.3
+    },
+    {
+     "call": "update",
+     "module": "ClothDemo",
+     "ms": 2.907
+    },
+    {
+     "call": "renderOverlay",
+     "module": "UI",
+     "ms": 0.263
+    }
+   ]
+  },
+  {
+   "cause": "simulate took 175.2 ms (usually 50.0 ms), mostly ClothDemo fixedUpdate() 175.1 ms",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 283.575,
+   "gpu_ms": 76.693,
+   "median_ms": 135.741,
+   "rss_delta_mb": -0.922,
+   "rss_mb": 272.785,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.009,
+    "gpu_wait": 0.049,
+    "idle": 0.007,
+    "present": 105.1,
+    "record": 0.603,
+    "simulate": 175.233,
+    "update": 2.574
+   },
+   "t_s": 54.331,
+   "time": "2026-11-25 05:22:17.148",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "ClothDemo",
+     "ms": 175.064
+    },
+    {
+     "call": "update",
+     "module": "ClothDemo",
+     "ms": 2.566
+    },
+    {
+     "call": "renderUi",
+     "module": "UI",
+     "ms": 0.205
+    }
+   ]
+  },
+  {
+   "cause": "simulate took 170.9 ms (usually 50.8 ms), mostly ClothDemo fixedUpdate() 170.7 ms",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 283.492,
+   "gpu_ms": 76.616,
+   "median_ms": 137.819,
+   "rss_delta_mb": 0.137,
+   "rss_mb": 272.656,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.011,
+    "gpu_wait": 0.063,
+    "idle": 0.008,
+    "present": 108.641,
+    "record": 0.733,
+    "simulate": 170.864,
+    "update": 3.173
+   },
+   "t_s": 55.841,
+   "time": "2026-11-25 05:22:18.658",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "ClothDemo",
+     "ms": 170.692
+    },
+    {
+     "call": "update",
+     "module": "ClothDemo",
+     "ms": 3.165
+    },
+    {
+     "call": "renderOverlay",
+     "module": "UI",
+     "ms": 0.276
+    }
+   ]
+  },
+  {
+   "cause": "simulate took 139.2 ms (usually 51.4 ms), mostly ClothDemo fixedUpdate() 139.1 ms",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 276.981,
+   "gpu_ms": 77.981,
+   "median_ms": 138.46,
+   "rss_delta_mb": 0.938,
+   "rss_mb": 272.77,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.009,
+    "gpu_wait": 0.047,
+    "idle": 0.007,
+    "present": 134.447,
+    "record": 0.609,
+    "simulate": 139.246,
+    "update": 2.615
+   },
+   "t_s": 56.798,
+   "time": "2026-11-25 05:22:19.614",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "ClothDemo",
+     "ms": 139.087
+    },
+    {
+     "call": "update",
+     "module": "ClothDemo",
+     "ms": 2.608
+    },
+    {
+     "call": "renderUi",
+     "module": "UI",
+     "ms": 0.202
+    }
+   ]
+  },
+  {
+   "cause": "simulate took 227.7 ms (usually 51.7 ms), mostly ClothDemo fixedUpdate() 227.6 ms",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 338.671,
+   "gpu_ms": 133.163,
+   "median_ms": 141.246,
+   "rss_delta_mb": 0.02,
+   "rss_mb": 272.789,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.016,
+    "gpu_wait": 0.055,
+    "idle": 0.008,
+    "present": 107.692,
+    "record": 0.608,
+    "simulate": 227.733,
+    "update": 2.559
+   },
+   "t_s": 57.223,
+   "time": "2026-11-25 05:22:20.039",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "ClothDemo",
+     "ms": 227.575
+    },
+    {
+     "call": "update",
+     "module": "ClothDemo",
+     "ms": 2.548
+    },
+    {
+     "call": "renderUi",
+     "module": "UI",
+     "ms": 0.203
+    }
+   ]
+  },
+  {
+   "cause": "simulate took 168.6 ms (usually 52.6 ms), mostly ClothDemo fixedUpdate() 168.4 ms",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 304.218,
+   "gpu_ms": 81.159,
+   "median_ms": 144.131,
+   "rss_delta_mb": 0.91,
+   "rss_mb": 272.738,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.014,
+    "gpu_wait": 0.056,
+    "idle": 0.008,
+    "present": 116.422,
+    "record": 0.619,
+    "simulate": 168.568,
+    "update": 18.532
+   },
+   "t_s": 58.772,
+   "time": "2026-11-25 05:22:21.589",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "ClothDemo",
+     "ms": 168.406
+    },
+    {
+     "call": "update",
+     "module": "ClothDemo",
+     "ms": 18.523
+    },
+    {
+     "call": "renderUi",
+     "module": "UI",
+     "ms": 0.201
+    }
+   ]
+  },
+  {
+   "cause": "simulate took 176.1 ms (usually 53.3 ms), mostly ClothDemo fixedUpdate() 175.9 ms",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 315.678,
+   "gpu_ms": 79.836,
+   "median_ms": 141.863,
+   "rss_delta_mb": -0.859,
+   "rss_mb": 271.809,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.009,
+    "gpu_wait": 0.056,
+    "idle": 0.008,
+    "present": 112.329,
+    "record": 0.663,
+    "simulate": 176.083,
+    "update": 26.53
+   },
+   "t_s": 61.16,
+   "time": "2026-11-25 05:22:23.976",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "ClothDemo",
+     "ms": 175.92
+    },
+    {
+     "call": "update",
+     "module": "ClothDemo",
+     "ms": 26.521
+    },
+    {
+     "call": "renderUi",
+     "module": "UI",
+     "ms": 0.214
+    }
+   ]
+  },
+  {
+   "cause": "simulate took 229.4 ms (usually 54.1 ms), mostly ClothDemo fixedUpdate() 229.2 ms",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 352.7,
+   "gpu_ms": 85.931,
+   "median_ms": 143.558,
+   "rss_delta_mb": -0.957,
+   "rss_mb": 272.004,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.01,
+    "gpu_wait": 0.05,
+    "idle": 0.007,
+    "present": 120.01,
+    "record": 0.622,
+    "simulate": 229.387,
+    "update": 2.614
+   },
+   "t_s": 62.422,
+   "time": "2026-11-25 05:22:25.239",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "ClothDemo",
+     "ms": 229.229
+    },
+    {
+     "call": "update",
+     "module": "ClothDemo",
+     "ms": 2.608
+    },
+    {
+     "call": "renderUi",
+     "module": "UI",
+     "ms": 0.209
+    }
+   ]
+  },
+  {
+   "cause": "simulate took 212.0 ms (usually 54.8 ms), mostly ClothDemo fixedUpdate() 211.8 ms",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 301.728,
+   "gpu_ms": 81.141,
+   "median_ms": 142.155,
+   "rss_delta_mb": -0.012,
+   "rss_mb": 271.75,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.01,
+    "gpu_wait": 0.059,
+    "idle": 0.007,
+    "present": 86.477,
+    "record": 0.621,
+    "simulate": 211.966,
+    "update": 2.587
+   },
+   "t_s": 63.296,
+   "time": "2026-11-25 05:22:26.112",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "ClothDemo",
+     "ms": 211.775
+    },
+    {
+     "call": "update",
+     "module": "ClothDemo",
+     "ms": 2.58
+    },
+    {
+     "call": "renderUi",
+     "module": "UI",
+     "ms": 0.205
+    }
+   ]
+  },
+  {
+   "cause": "simulate took 202.0 ms (usually 55.9 ms), mostly ClothDemo fixedUpdate() 201.8 ms",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 300.524,
+   "gpu_ms": 77.635,
+   "median_ms": 148.122,
+   "rss_delta_mb": -0.883,
+   "rss_mb": 271.902,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.01,
+    "gpu_wait": 0.051,
+    "idle": 0.008,
+    "present": 95.162,
+    "record": 0.649,
+    "simulate": 201.978,
+    "update": 2.667
+   },
+   "t_s": 65.134,
+   "time": "2026-11-25 05:22:27.950",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "ClothDemo",
+     "ms": 201.815
+    },
+    {
+     "call": "update",
+     "module": "ClothDemo",
+     "ms": 2.659
+    },
+    {
+     "call": "renderUi",
+     "module": "UI",
+     "ms": 0.211
+    }
+   ]
+  },
+  {
+   "cause": "simulate took 299.3 ms (usually 56.8 ms), mostly ClothDemo fixedUpdate() 282.8 ms",
+   "events": [],
+   "fixed_steps": 2,
+   "frame_ms": 433.937,
+   "gpu_ms": 122.282,
+   "median_ms": 149.083,
+   "rss_delta_mb": 0.051,
+   "rss_mb": 272.809,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.01,
+    "gpu_wait": 0.048,
+    "idle": 0.009,
+    "present": 131.329,
+    "record": 0.63,
+    "simulate": 299.274,
+    "update": 2.638
+   },
+   "t_s": 68.427,
+   "time": "2026-11-25 05:22:31.243",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "ClothDemo",
+     "ms": 282.761
+    },
+    {
+     "call": "fixedUpdate",
+     "module": "ClothDemo",
+     "ms": 16.285
+    },
+    {
+     "call": "update",
+     "module": "ClothDemo",
+     "ms": 2.631
+    }
+   ]
+  },
+  {
+   "cause": "simulate took 206.6 ms (usually 57.4 ms), mostly ClothDemo fixedUpdate() 206.4 ms",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 317.352,
+   "gpu_ms": 108.836,
+   "median_ms": 151.359,
+   "rss_delta_mb": -0.141,
+   "rss_mb": 272.668,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.011,
+    "gpu_wait": 0.053,
+    "idle": 0.008,
+    "present": 107.506,
+    "record": 0.601,
+    "simulate": 206.59,
+    "update": 2.583
+   },
+   "t_s": 68.861,
+   "time": "2026-11-25 05:22:31.677",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "ClothDemo",
+     "ms": 206.415
+    },
+    {
+     "call": "update",
+     "module": "ClothDemo",
+     "ms": 2.576
+    },
+    {
+     "call": "renderUi",
+     "module": "UI",
+     "ms": 0.2
+    }
+   ]
+  },
+  {
+   "cause": "simulate took 207.5 ms (usually 57.9 ms), mostly ClothDemo fixedUpdate() 207.4 ms",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 312.725,
+   "gpu_ms": 93.161,
+   "median_ms": 151.359,
+   "rss_delta_mb": -0.961,
+   "rss_mb": 271.77,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.009,
+    "gpu_wait": 0.101,
+    "idle": 0.008,
+    "present": 100.007,
+    "record": 0.655,
+    "simulate": 207.544,
+    "update": 4.402
+   },
+   "t_s": 69.872,
+   "time": "2026-11-25 05:22:32.689",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "ClothDemo",
+     "ms": 207.39
+    },
+    {
+     "call": "update",
+     "module": "ClothDemo",
+     "ms": 4.393
+    },
+    {
+     "call": "renderOverlay",
+     "module": "UI",
+     "ms": 0.205
+    }
+   ]
+  },
+  {
+   "cause": "simulate took 163.2 ms (usually 59.5 ms), mostly ClothDemo fixedUpdate() 163.1 ms",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 324.56,
+   "gpu_ms": 76.797,
+   "median_ms": 149.083,
+   "rss_delta_mb": 1.02,
+   "rss_mb": 272.883,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.016,
+    "gpu_wait": 0.047,
+    "idle": 0.008,
+    "present": 154.461,
+    "record": 0.647,
+    "simulate": 163.224,
+    "update": 6.157
+   },
+   "t_s": 75.622,
+   "time": "2026-11-25 05:22:38.438",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "ClothDemo",
+     "ms": 163.066
+    },
+    {
+     "call": "update",
+     "module": "ClothDemo",
+     "ms": 6.149
+    },
+    {
+     "call": "renderUi",
+     "module": "UI",
+     "ms": 0.211
+    }
+   ]
+  },
+  {
+   "cause": "simulate took 200.4 ms (usually 61.4 ms), mostly ClothDemo fixedUpdate() 200.3 ms",
+   "events": [],
+   "fixed_steps": 1,
+   "frame_ms": 311.808,
+   "gpu_ms": 86.966,
+   "median_ms": 149.16,
+   "rss_delta_mb": 1.016,
+   "rss_mb": 276.258,
+   "severity": "freeze",
+   "stages_ms": {
+    "events": 0.009,
+    "gpu_wait": 0.052,
+    "idle": 0.008,
+    "present": 106.987,
+    "record": 0.609,
+    "simulate": 200.421,
+    "update": 3.722
+   },
+   "t_s": 83.629,
+   "time": "2026-11-25 05:22:46.446",
+   "top_calls": [
+    {
+     "call": "fixedUpdate",
+     "module": "ClothDemo",
+     "ms": 200.265
+    },
+    {
+     "call": "update",
+     "module": "ClothDemo",
+     "ms": 3.715
+    },
+    {
+     "call": "renderOverlay",
+     "module": "UI",
+     "ms": 0.205
+    }
+   ]
+  }
+ ],
+ "hitches_not_listed": 0,
+ "load_s": 0.517,
+ "modules": [
+  {
+   "avg_ms_per_frame": 65.891,
+   "init_ms": 206.646,
+   "name": "ClothDemo",
+   "worst_call": "fixedUpdate",
+   "worst_call_ms": 282.761,
+   "worst_frame_ms": 301.803
+  },
+  {
+   "avg_ms_per_frame": 0.437,
+   "init_ms": 86.873,
+   "name": "UI",
+   "worst_call": "renderUi",
+   "worst_call_ms": 2.741,
+   "worst_frame_ms": 2.968
+  },
+  {
+   "avg_ms_per_frame": 0.123,
+   "init_ms": 4.005,
+   "name": "DemoPanel",
+   "worst_call": "frameStart",
+   "worst_call_ms": 0.181,
+   "worst_frame_ms": 0.183
+  },
+  {
+   "avg_ms_per_frame": 0.028,
+   "init_ms": 52.028,
+   "name": "Input",
+   "worst_call": "frameStart",
+   "worst_call_ms": 0.054,
+   "worst_frame_ms": 0.059
+  },
+  {
+   "avg_ms_per_frame": 0.012,
+   "init_ms": 0.013,
+   "name": "OrbitCamera",
+   "worst_call": "renderShadow",
+   "worst_call_ms": 0.043,
+   "worst_frame_ms": 0.055
+  },
+  {
+   "avg_ms_per_frame": 0.008,
+   "init_ms": 0.0,
+   "name": "Stats",
+   "worst_call": "renderUi",
+   "worst_call_ms": 0.067,
+   "worst_frame_ms": 0.069
+  },
+  {
+   "avg_ms_per_frame": 0.003,
+   "init_ms": 11.831,
+   "name": "GameShell",
+   "worst_call": "frameStart",
+   "worst_call_ms": 0.003,
+   "worst_frame_ms": 0.005
+  },
+  {
+   "avg_ms_per_frame": 0.002,
+   "init_ms": 0.002,
+   "name": "DebugControl",
+   "worst_call": "fixedUpdate",
+   "worst_call_ms": 0.03,
+   "worst_frame_ms": 0.032
+  }
+ ],
+ "per_second": {
+  "columns": [
+   "t_s",
+   "fps",
+   "frame_avg_ms",
+   "frame_max_ms",
+   "gpu_avg_ms",
+   "events_avg_ms",
+   "simulate_avg_ms",
+   "update_avg_ms",
+   "gpu_wait_avg_ms",
+   "record_avg_ms",
+   "present_avg_ms",
+   "idle_avg_ms",
+   "rss_mb",
+   "hitches"
+  ],
+  "rows": [
+   [
+    0.0,
+    7.227,
+    138.368,
+    179.875,
+    116.633,
+    0.011,
+    16.642,
+    2.605,
+    0.045,
+    0.704,
+    118.352,
+    0.008,
+    246.398,
+    0
+   ],
+   [
+    1.0,
+    7.61,
+    131.41,
+    147.256,
+    104.27,
+    0.011,
+    25.714,
+    5.847,
+    0.052,
+    0.667,
+    99.111,
+    0.008,
+    251.535,
+    0
+   ],
+   [
+    2.0,
+    5.655,
+    176.85,
+    278.767,
+    91.79,
+    0.011,
+    82.478,
+    3.567,
+    0.05,
+    0.65,
+    90.086,
+    0.008,
+    253.797,
+    1
+   ],
+   [
+    3.0,
+    6.207,
+    161.111,
+    242.543,
+    92.731,
+    0.01,
+    69.923,
+    2.59,
+    0.055,
+    0.68,
+    87.846,
+    0.008,
+    255.133,
+    0
+   ],
+   [
+    4.0,
+    5.986,
+    167.07,
+    207.205,
+    85.068,
+    0.01,
+    66.41,
+    3.339,
+    0.05,
+    0.66,
+    96.593,
+    0.008,
+    261.914,
+    0
+   ],
+   [
+    5.0,
+    4.976,
+    200.969,
+    266.683,
+    83.438,
+    0.012,
+    98.116,
+    3.267,
+    0.051,
+    0.639,
+    98.876,
+    0.007,
+    261.98,
+    0
+   ],
+   [
+    6.0,
+    4.542,
+    220.145,
+    272.079,
+    105.388,
+    0.011,
+    109.505,
+    8.899,
+    0.051,
+    0.662,
+    101.009,
+    0.007,
+    261.887,
+    0
+   ],
+   [
+    7.0,
+    5.267,
+    189.86,
+    264.9,
+    95.704,
+    0.011,
+    82.962,
+    2.602,
+    0.063,
+    0.677,
+    103.538,
+    0.008,
+    262.254,
+    0
+   ],
+   [
+    8.0,
+    7.033,
+    142.192,
+    165.779,
+    112.289,
+    0.011,
+    35.15,
+    6.21,
+    0.053,
+    0.687,
+    100.073,
+    0.008,
+    262.035,
+    0
+   ],
+   [
+    9.0,
+    5.268,
+    189.817,
+    270.578,
+    96.625,
+    0.011,
+    87.076,
+    7.866,
+    0.068,
+    0.739,
+    94.048,
+    0.008,
+    265.566,
+    0
+   ],
+   [
+    10.0,
+    7.857,
+    127.269,
+    140.312,
+    83.743,
+    0.011,
+    39.032,
+    2.631,
+    0.054,
+    0.679,
+    84.855,
+    0.008,
+    265.566,
+    0
+   ],
+   [
+    11.0,
+    4.099,
+    243.968,
+    269.233,
+    100.219,
+    0.012,
+    135.243,
+    2.592,
+    0.06,
+    0.667,
+    105.385,
+    0.008,
+    265.625,
+    0
+   ],
+   [
+    12.0,
+    4.192,
+    238.561,
+    299.604,
+    87.332,
+    0.011,
+    137.565,
+    2.593,
+    0.063,
+    0.657,
+    97.663,
+    0.008,
+    265.563,
+    1
+   ],
+   [
+    13.0,
+    6.249,
+    160.032,
+    219.554,
+    109.623,
+    0.012,
+    59.914,
+    3.831,
+    0.052,
+    0.675,
+    95.54,
+    0.008,
+    265.625,
+    0
+   ],
+   [
+    14.0,
+    6.78,
+    147.496,
+    170.665,
+    112.542,
+    0.01,
+    28.449,
+    4.958,
+    0.053,
+    0.662,
+    113.355,
+    0.008,
+    265.563,
+    0
+   ],
+   [
+    15.0,
+    7.158,
+    139.704,
+    200.196,
+    97.949,
+    0.011,
+    36.159,
+    2.59,
+    0.056,
+    0.658,
+    100.222,
+    0.008,
+    265.629,
+    0
+   ],
+   [
+    16.0,
+    7.906,
+    126.479,
+    163.889,
+    103.668,
+    0.011,
+    19.864,
+    5.126,
+    0.065,
+    0.695,
+    100.71,
+    0.008,
+    265.59,
+    0
+   ],
+   [
+    17.0,
+    8.083,
+    123.712,
+    159.219,
+    90.625,
+    0.011,
+    21.34,
+    2.962,
+    0.053,
+    0.691,
+    98.647,
+    0.008,
+    265.602,
+    0
+   ],
+   [
+    18.0,
+    7.147,
+    139.917,
+    161.198,
+    102.134,
+    0.01,
+    32.554,
+    5.031,
+    0.056,
+    0.729,
+    101.529,
+    0.008,
+    265.598,
+    0
+   ],
+   [
+    19.0,
+    7.146,
+    139.936,
+    175.536,
+    109.098,
+    0.012,
+    22.063,
+    2.588,
+    0.051,
+    0.66,
+    114.555,
+    0.008,
+    266.668,
+    0
+   ],
+   [
+    20.0,
+    7.453,
+    134.183,
+    176.575,
+    108.61,
+    0.011,
+    27.701,
+    5.003,
+    0.052,
+    0.623,
+    100.785,
+    0.008,
+    270.527,
+    0
+   ],
+   [
+    21.0,
+    6.815,
+    146.724,
+    179.401,
+    105.4,
+    0.011,
+    24.713,
+    9.355,
+    0.054,
+    0.608,
+    111.976,
+    0.008,
+    270.539,
+    0
+   ],
+   [
+    22.0,
+    4.334,
+    230.758,
+    405.986,
+    186.71,
+    0.011,
+    37.71,
+    2.648,
+    0.057,
+    0.702,
+    189.622,
+    0.008,
+    270.527,
+    1
+   ],
+   [
+    23.0,
+    7.372,
+    135.649,
+    162.222,
+    93.348,
+    0.01,
+    34.677,
+    2.59,
+    0.053,
+    0.63,
+    97.681,
+    0.007,
+    265.594,
+    0
+   ],
+   [
+    24.0,
+    9.209,
+    108.587,
+    123.727,
+    88.344,
+    0.011,
+    19.962,
+    2.983,
+    0.054,
+    0.705,
+    84.863,
+    0.008,
+    265.117,
+    0
+   ],
+   [
+    25.0,
+    7.77,
+    128.703,
+    172.551,
+    99.244,
+    0.01,
+    16.628,
+    4.267,
+    0.05,
+    0.61,
+    107.131,
+    0.008,
+    265.332,
+    0
+   ],
+   [
+    26.0,
+    7.053,
+    141.78,
+    184.73,
+    105.419,
+    0.01,
+    32.521,
+    2.602,
+    0.054,
+    0.635,
+    105.95,
+    0.008,
+    269.637,
+    0
+   ],
+   [
+    27.0,
+    6.918,
+    144.551,
+    172.513,
+    99.679,
+    0.011,
+    38.317,
+    4.315,
+    0.053,
+    0.672,
+    101.175,
+    0.008,
+    268.68,
+    0
+   ],
+   [
+    28.0,
+    7.258,
+    137.773,
+    164.428,
+    101.216,
+    0.01,
+    26.953,
+    7.947,
+    0.055,
+    0.863,
+    101.936,
+    0.008,
+    267.441,
+    0
+   ],
+   [
+    29.0,
+    7.113,
+    140.587,
+    166.336,
+    103.698,
+    0.011,
+    28.734,
+    2.655,
+    0.056,
+    0.624,
+    108.5,
+    0.008,
+    269.383,
+    0
+   ],
+   [
+    30.0,
+    8.307,
+    120.385,
+    175.577,
+    106.451,
+    0.012,
+    17.302,
+    2.601,
+    0.056,
+    0.67,
+    99.736,
+    0.008,
+    268.406,
+    0
+   ],
+   [
+    31.0,
+    7.197,
+    138.952,
+    170.322,
+    102.557,
+    0.01,
+    31.006,
+    4.794,
+    0.057,
+    0.739,
+    102.339,
+    0.008,
+    268.539,
+    0
+   ],
+   [
+    32.0,
+    8.927,
+    112.016,
+    170.786,
+    83.68,
+    0.011,
+    16.145,
+    2.591,
+    0.056,
+    0.613,
+    92.591,
+    0.008,
+    269.293,
+    0
+   ],
+   [
+    33.0,
+    7.197,
+    138.946,
+    157.797,
+    110.189,
+    0.01,
+    27.384,
+    3.121,
+    2.076,
+    0.619,
+    105.727,
+    0.008,
+    267.465,
+    0
+   ],
+   [
+    34.0,
+    7.89,
+    126.745,
+    164.903,
+    96.637,
+    0.01,
+    21.539,
+    2.597,
+    0.056,
+    0.647,
+    101.888,
+    0.008,
+    269.375,
+    0
+   ],
+   [
+    35.0,
+    7.742,
+    129.162,
+    156.644,
+    98.067,
+    0.011,
+    28.464,
+    2.639,
+    0.053,
+    0.637,
+    97.351,
+    0.008,
+    269.508,
+    0
+   ],
+   [
+    36.0,
+    6.639,
+    150.622,
+    269.47,
+    96.629,
+    0.012,
+    52.131,
+    3.479,
+    0.055,
+    0.646,
+    94.291,
+    0.008,
+    268.469,
+    1
+   ],
+   [
+    37.0,
+    5.428,
+    184.227,
+    262.552,
+    97.31,
+    0.012,
+    88.896,
+    5.778,
+    0.055,
+    0.615,
+    88.862,
+    0.008,
+    269.172,
+    1
+   ],
+   [
+    38.0,
+    4.873,
+    205.231,
+    352.056,
+    81.773,
+    0.011,
+    102.027,
+    2.578,
+    0.057,
+    0.647,
+    99.903,
+    0.008,
+    267.547,
+    1
+   ],
+   [
+    39.0,
+    7.12,
+    140.441,
+    229.162,
+    92.428,
+    0.011,
+    56.06,
+    2.583,
+    0.057,
+    0.663,
+    81.059,
+    0.008,
+    269.293,
+    0
+   ],
+   [
+    40.0,
+    5.591,
+    178.868,
+    290.975,
+    83.917,
+    0.011,
+    76.464,
+    2.615,
+    0.055,
+    0.634,
+    99.081,
+    0.008,
+    269.348,
+    2
+   ],
+   [
+    41.0,
+    5.986,
+    167.059,
+    218.517,
+    96.025,
+    0.011,
+    69.117,
+    3.722,
+    0.059,
+    0.654,
+    93.488,
+    0.007,
+    269.363,
+    0
+   ],
+   [
+    42.0,
+    5.918,
+    168.972,
+    256.649,
+    100.913,
+    0.01,
+    73.517,
+    2.702,
+    0.054,
+    0.616,
+    92.066,
+    0.008,
+    272.723,
+    0
+   ],
+   [
+    43.0,
+    5.173,
+    193.304,
+    264.696,
+    85.63,
+    0.011,
+    98.769,
+    2.894,
+    0.052,
+    0.608,
+    90.962,
+    0.008,
+    272.84,
+    0
+   ],
+   [
+    44.0,
+    5.836,
+    171.348,
+    261.165,
+    88.458,
+    0.011,
+    75.455,
+    3.931,
+    0.053,
+    0.616,
+    91.274,
+    0.008,
+    272.938,
+    0
+   ],
+   [
+    45.0,
+    5.285,
+    189.211,
+    251.42,
+    101.099,
+    0.011,
+    92.415,
+    2.588,
+    0.099,
+    0.625,
+    93.465,
+    0.008,
+    272.848,
+    0
+   ],
+   [
+    46.0,
+    7.473,
+    133.818,
+    202.182,
+    78.692,
+    0.011,
+    48.334,
+    2.618,
+    0.054,
+    0.617,
+    82.176,
+    0.008,
+    272.828,
+    0
+   ],
+   [
+    47.0,
+    5.166,
+    193.555,
+    278.988,
+    89.912,
+    0.012,
+    87.809,
+    2.574,
+    0.059,
+    0.632,
+    102.46,
+    0.008,
+    272.863,
+    1
+   ],
+   [
+    48.0,
+    5.041,
+    198.388,
+    350.563,
+    97.617,
+    0.011,
+    90.126,
+    2.631,
+    0.053,
+    0.646,
+    104.913,
+    0.008,
+    272.879,
+    1
+   ],
+   [
+    49.0,
+    5.632,
+    177.545,
+    280.125,
+    105.362,
+    0.012,
+    88.955,
+    2.582,
+    0.053,
+    0.651,
+    85.284,
+    0.007,
+    272.773,
+    1
+   ],
+   [
+    50.0,
+    4.213,
+    237.386,
+    337.076,
+    87.582,
+    0.011,
+    109.421,
+    14.221,
+    0.06,
+    0.701,
+    112.964,
+    0.008,
+    272.781,
+    2
+   ],
+   [
+    51.0,
+    5.202,
+    192.215,
+    331.178,
+    107.398,
+    0.011,
+    87.076,
+    2.657,
+    0.486,
+    0.773,
+    101.205,
+    0.008,
+    272.762,
+    1
+   ],
+   [
+    52.0,
+    6.811,
+    146.817,
+    235.854,
+    93.617,
+    0.011,
+    56.639,
+    2.577,
+    0.057,
+    0.629,
+    86.892,
+    0.013,
+    272.707,
+    0
+   ],
+   [
+    53.0,
+    6.716,
+    148.891,
+    260.879,
+    80.221,
+    0.011,
+    58.588,
+    4.774,
+    0.053,
+    0.627,
+    84.831,
+    0.008,
+    272.805,
+    0
+   ],
+   [
+    54.0,
+    5.043,
+    198.29,
+    283.575,
+    101.527,
+    0.01,
+    88.686,
+    2.652,
+    0.056,
+    0.666,
+    106.214,
+    0.008,
+    272.68,
+    1
+   ],
+   [
+    55.0,
+    5.354,
+    186.775,
+    283.492,
+    91.941,
+    0.011,
+    79.724,
+    2.678,
+    0.054,
+    0.64,
+    103.66,
+    0.008,
+    272.656,
+    1
+   ],
+   [
+    56.0,
+    5.262,
+    190.037,
+    276.981,
+    101.897,
+    0.011,
+    86.771,
+    5.768,
+    0.059,
+    0.629,
+    96.79,
+    0.008,
+    272.77,
+    1
+   ],
+   [
+    57.0,
+    5.003,
+    199.877,
+    338.671,
+    100.646,
+    0.011,
+    102.205,
+    3.948,
+    0.055,
+    0.628,
+    93.022,
+    0.008,
+    268.91,
+    1
+   ],
+   [
+    58.0,
+    4.988,
+    200.476,
+    304.218,
+    89.699,
+    0.012,
+    93.823,
+    6.742,
+    0.055,
+    0.613,
+    99.222,
+    0.008,
+    272.738,
+    1
+   ],
+   [
+    59.0,
+    6.693,
+    149.399,
+    238.4,
+    96.358,
+    0.012,
+    55.61,
+    3.041,
+    0.056,
+    0.692,
+    89.981,
+    0.008,
+    272.77,
+    0
+   ],
+   [
+    60.0,
+    5.782,
+    172.948,
+    275.626,
+    87.86,
+    0.01,
+    69.034,
+    7.877,
+    0.056,
+    0.672,
+    95.291,
+    0.008,
+    272.668,
+    0
+   ],
+   [
+    61.0,
+    4.529,
+    220.816,
+    315.678,
+    96.131,
+    0.011,
+    120.51,
+    7.392,
+    0.056,
+    0.658,
+    92.181,
+    0.008,
+    272.961,
+    1
+   ],
+   [
+    62.0,
+    3.956,
+    252.787,
+    352.7,
+    93.247,
+    0.012,
+    136.446,
+    3.703,
+    0.058,
+    0.638,
+    111.922,
+    0.008,
+    272.004,
+    1
+   ],
+   [
+    63.0,
+    4.706,
+    212.511,
+    301.728,
+    95.091,
+    0.016,
+    116.399,
+    3.597,
+    0.101,
+    0.614,
+    91.776,
+    0.007,
+    271.984,
+    1
+   ],
+   [
+    64.0,
+    5.72,
+    174.827,
+    251.24,
+    97.286,
+    0.011,
+    72.954,
+    2.923,
+    0.055,
+    0.673,
+    98.204,
+    0.008,
+    272.785,
+    0
+   ],
+   [
+    65.0,
+    5.359,
+    186.613,
+    300.524,
+    97.205,
+    0.009,
+    90.033,
+    2.604,
+    0.056,
+    0.634,
+    93.269,
+    0.008,
+    271.797,
+    1
+   ],
+   [
+    66.0,
+    7.123,
+    140.396,
+    215.83,
+    80.505,
+    0.011,
+    51.872,
+    3.011,
+    0.056,
+    0.634,
+    84.805,
+    0.008,
+    271.746,
+    0
+   ],
+   [
+    67.0,
+    4.839,
+    206.656,
+    283.778,
+    94.913,
+    0.013,
+    100.446,
+    5.297,
+    0.066,
+    0.936,
+    99.892,
+    0.008,
+    272.758,
+    0
+   ],
+   [
+    68.0,
+    3.653,
+    273.748,
+    433.937,
+    106.778,
+    0.012,
+    151.895,
+    2.713,
+    0.053,
+    0.78,
+    118.287,
+    0.008,
+    272.668,
+    2
+   ],
+   [
+    69.0,
+    4.966,
+    201.357,
+    312.725,
+    104.282,
+    0.011,
+    102.163,
+    2.974,
+    0.063,
+    0.643,
+    95.495,
+    0.008,
+    271.77,
+    1
+   ],
+   [
+    70.0,
+    4.745,
+    210.765,
+    248.161,
+    101.593,
+    0.011,
+    97.994,
+    2.597,
+    0.057,
+    0.623,
+    109.476,
+    0.008,
+    271.824,
+    0
+   ],
+   [
+    71.0,
+    5.115,
+    195.516,
+    276.858,
+    88.885,
+    0.012,
+    100.796,
+    3.044,
+    0.055,
+    0.622,
+    90.981,
+    0.008,
+    272.746,
+    0
+   ],
+   [
+    72.0,
+    7.241,
+    138.098,
+    211.933,
+    92.376,
+    0.011,
+    48.736,
+    3.157,
+    0.057,
+    0.631,
+    85.498,
+    0.008,
+    272.781,
+    0
+   ],
+   [
+    73.0,
+    6.746,
+    148.239,
+    209.848,
+    82.565,
+    0.012,
+    59.88,
+    2.587,
+    0.058,
+    0.627,
+    85.068,
+    0.007,
+    272.844,
+    0
+   ],
+   [
+    74.0,
+    5.131,
+    194.883,
+    286.34,
+    94.021,
+    0.011,
+    84.29,
+    9.376,
+    0.055,
+    0.737,
+    100.406,
+    0.008,
+    272.797,
+    0
+   ],
+   [
+    75.0,
+    4.421,
+    226.18,
+    324.56,
+    93.738,
+    0.011,
+    91.068,
+    20.294,
+    0.052,
+    0.627,
+    114.119,
+    0.008,
+    272.883,
+    1
+   ],
+   [
+    76.0,
+    6.305,
+    158.603,
+    205.631,
+    103.148,
+    0.011,
+    50.71,
+    8.962,
+    0.057,
+    0.622,
+    98.233,
+    0.007,
+    272.207,
+    0
+   ],
+   [
+    77.0,
+    4.602,
+    217.274,
+    296.657,
+    97.592,
+    0.012,
+    117.959,
+    7.271,
+    0.061,
+    0.661,
+    91.303,
+    0.008,
+    276.191,
+    0
+   ],
+   [
+    78.0,
+    5.236,
+    191.001,
+    310.982,
+    93.543,
+    0.01,
+    94.046,
+    2.601,
+    0.058,
+    0.656,
+    93.622,
+    0.008,
+    276.426,
+    0
+   ],
+   [
+    79.0,
+    7.886,
+    126.804,
+    146.921,
+    80.41,
+    0.01,
+    41.077,
+    3.034,
+    0.057,
+    0.671,
+    81.947,
+    0.008,
+    275.215,
+    0
+   ],
+   [
+    80.0,
+    4.249,
+    235.331,
+    286.0,
+    106.543,
+    0.011,
+    114.884,
+    5.09,
+    0.056,
+    1.394,
+    113.888,
+    0.008,
+    276.234,
+    0
+   ],
+   [
+    81.0,
+    5.662,
+    176.618,
+    284.925,
+    86.407,
+    0.01,
+    86.999,
+    2.588,
+    0.056,
+    0.636,
+    86.322,
+    0.008,
+    276.113,
+    0
+   ],
+   [
+    82.0,
+    6.317,
+    158.291,
+    237.601,
+    92.134,
+    0.011,
+    67.844,
+    3.477,
+    0.054,
+    0.643,
+    86.254,
+    0.008,
+    276.18,
+    0
+   ],
+   [
+    83.0,
+    4.421,
+    226.186,
+    311.808,
+    95.668,
+    0.011,
+    113.602,
+    2.8,
+    2.141,
+    0.618,
+    107.006,
+    0.008,
+    276.258,
+    1
+   ]
+  ]
+ },
+ "screenshots": [
+  {
+   "file": "shots/cloth_tour_worst-frame_406ms_at-22.1s.jpg",
+   "kind": "worst-frame",
+   "t_s": 22.1,
+   "value": 406.0
+  },
+  {
+   "file": "shots/cloth_tour_slowest-second_3fps_at-12.2s.jpg",
+   "kind": "slowest-second",
+   "t_s": 12.2,
+   "value": 2.7
+  },
+  {
+   "file": "shots/cloth_tour_fastest-second_9fps_at-25.1s.jpg",
+   "kind": "fastest-second",
+   "t_s": 25.1,
+   "value": 9.2
+  },
+  {
+   "file": "shots/cloth_tour_view-1-of-3_at-8.5s.jpg",
+   "kind": "view-1-of-3",
+   "t_s": 8.5,
+   "value": 0.0
+  },
+  {
+   "file": "shots/cloth_tour_view-2-of-3_at-42.1s.jpg",
+   "kind": "view-2-of-3",
+   "t_s": 42.1,
+   "value": 0.0
+  },
+  {
+   "file": "shots/cloth_tour_view-3-of-3_at-75.6s.jpg",
+   "kind": "view-3-of-3",
+   "t_s": 75.6,
+   "value": 0.0
+  }
+ ],
+ "stages_ms": {
+  "events": {
+   "avg": 0.011,
+   "max": 0.042,
+   "p50": 0.01,
+   "p95": 0.017,
+   "p99": 0.019
+  },
+  "gpu_wait": {
+   "avg": 0.108,
+   "max": 12.194,
+   "p50": 0.055,
+   "p95": 0.065,
+   "p99": 0.275
+  },
+  "idle": {
+   "avg": 0.008,
+   "max": 0.04,
+   "p50": 0.008,
+   "p95": 0.009,
+   "p99": 0.009
+  },
+  "present": {
+   "avg": 97.971,
+   "max": 365.208,
+   "p50": 91.844,
+   "p95": 131.641,
+   "p99": 158.058
+  },
+  "record": {
+   "avg": 0.669,
+   "max": 4.389,
+   "p50": 0.63,
+   "p95": 0.786,
+   "p99": 1.271
+  },
+  "simulate": {
+   "avg": 61.85,
+   "max": 299.274,
+   "p50": 42.052,
+   "p95": 172.94,
+   "p99": 214.458
+  },
+  "update": {
+   "avg": 4.083,
+   "max": 43.211,
+   "p50": 2.586,
+   "p95": 14.595,
+   "p99": 33.033
+  }
+ },
+ "summary": {
+  "fps_0_1pct_low": 2.304,
+  "fps_1pct_low": 2.59,
+  "fps_avg": 6.072,
+  "frame_ms": {
+   "avg": 164.701,
+   "max": 433.937,
+   "p50": 140.434,
+   "p95": 283.778,
+   "p99": 350.563
+  },
+  "frames": 486,
+  "gpu_ms": {
+   "avg": 96.643,
+   "max": 363.763,
+   "p50": 90.444,
+   "p95": 131.007,
+   "p99": 159.61
+  },
+  "hitches": {
+   "count": 28,
+   "freeze": 28,
+   "major": 0,
+   "minor": 0,
+   "per_minute": 20.988,
+   "time_lost_ms": 4845.994
+  },
+  "memory_mb": {
+   "end": 276.258,
+   "peak": 276.605,
+   "start": 210.059
+  },
+  "screenshot_frames": 24,
+  "seconds": 84.189,
+  "sim_behind_frames": 486,
+  "verdict": "too slow"
+ },
+ "system": {
+  "build_type": "Release",
+  "compiler": "gcc 13-posix",
+  "cpu": "Intel(R) Core(TM) i5-4590 CPU @ 3.30GHz",
+  "cpu_logical_cores": "4",
+  "cpu_usable_cores": "4",
+  "display": "1920x1080 @ 60 Hz",
+  "engine_commit": "0229251b21",
+  "engine_version": "windows-native",
+  "gpu": "llvmpipe (LLVM 23.1.2, 256 bits)",
+  "gpu_driver": "llvmpipe Mesa 26.2.4 (git-9a0169f2a7) (LLVM 23.1.2)",
+  "gpu_driver_version": "109060100",
+  "gpu_memory_mb": "16312",
+  "gpu_pci_id": "10005:0000",
+  "gpu_type": "cpu (software)",
+  "hardware_target": "desktop",
+  "host": "DESKTOP-387PPHP",
+  "os": "Windows",
+  "os_version": "Windows 10.0.19044",
+  "platform_backend": "desktop",
+  "ram_mb": "16312",
+  "vulkan_api_version": "1.4.354"
+ }
+}
